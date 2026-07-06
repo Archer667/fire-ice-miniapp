@@ -60,6 +60,44 @@ fire-ice/
 ```
 بات را باز کن → دکمهٔ منو → 🎮 بازی داخل تلگرام!
 
+## راه‌اندازی روی Railway (همه‌چیز یک‌جا)
+
+Railway نمی‌تواند Backend و Frontend را در یک سرویس اجرا کند — باید **دو سرویس جدا** در همان پروژهٔ Railway بسازید.
+
+### سرویس ۱ — Backend
+1. New Service → Deploy from GitHub Repo → همان ریپو
+2. Settings → **Root Directory: `backend`**
+3. `Procfile` همراه پروژه هست (`uvicorn main:app --host 0.0.0.0 --port $PORT`) — نیازی به تنظیم دستی Start Command نیست
+4. Variables:
+   ```
+   BOT_TOKEN=...
+   MONGODB_URI=...
+   DB_NAME=fire_ice
+   ADMIN_IDS=...
+   CORS_ORIGINS=آدرس-سرویس-فرانت‌اند-Railway  (بعد از ساخت سرویس ۲ پر کن)
+   ```
+5. Settings → Networking → **Generate Domain** → آدرس را کپی کن، مثلاً `https://fire-ice-backend-production.up.railway.app`
+
+### سرویس ۲ — Frontend
+1. همان پروژهٔ Railway → New Service → Deploy from GitHub Repo → همان ریپو
+2. Settings → **Root Directory: `frontend`**
+3. `Procfile` همراه پروژه هست (`npm run start` → `vite preview --host 0.0.0.0 --port $PORT`)
+4. Variables:
+   ```
+   VITE_API_URL=آدرس-سرویس-Backend-از-مرحلهٔ-قبل   (مثلاً https://fire-ice-backend-production.up.railway.app)
+   ```
+   (چون `VITE_API_URL` موقع build خوانده می‌شود، هر بار عوضش کردی باید Redeploy بزنی)
+5. Settings → Networking → **Generate Domain** → این آدرس همان آدرسی است که به بات تلگرام می‌دهی
+
+### وصل کردن دو سرویس به هم
+- برو توی سرویس Backend → Variables → `CORS_ORIGINS` را برابر آدرس سرویس Frontend بگذار
+- برو توی سرویس Frontend → Variables → `VITE_API_URL` را برابر آدرس سرویس Backend بگذار
+- هر دو سرویس را Redeploy کن
+
+### تست
+- `آدرس-Backend/api/health` → باید `{"ok":true}` بدهد (خود ریشهٔ `/` بک‌اند عمداً 404 می‌دهد، طبیعی است)
+- `آدرس-Frontend/` → باید صفحهٔ بازی باز شود
+
 ## تست بدون سرور
 `VITE_API_URL` را خالی بگذار → حالت mock: کل UI با دیتای نمایشی کار می‌کند.
 تست لوکال backend: در `.env` بگذار `DEV_MODE=true` — آنگاه هدر `X-Dev-User: 1:نام` جای تلگرام را می‌گیرد.
