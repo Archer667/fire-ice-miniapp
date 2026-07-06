@@ -1,0 +1,20 @@
+const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
+const I = ({ s = 21, children }) => <svg width={s} height={s} viewBox="0 0 24 24" {...p}>{children}</svg>;
+
+export const Keep   = (o) => <I {...o}><path d="M5 21V10l2-2V5h2.2v2h1.6V5h2.4v2h1.6V5H17v3l2 2v11"/><path d="M9.8 21v-4.6a2.2 2.2 0 014.4 0V21"/></I>;
+export const Map    = (o) => <I {...o}><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></I>;
+export const Swords = (o) => <I {...o}><path d="M4.5 4.5l15 15M19.5 4.5l-15 15M14 6.5l3.5 3.5M6.5 14l3.5 3.5"/></I>;
+export const Crown  = (o) => <I {...o}><path d="M4 9l4 3.5L12 6l4 6.5L20 9l-1.6 9H5.6L4 9z"/></I>;
+export const Mail   = (o) => <I {...o}><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 8l9 5.5L21 8"/></I>;
+export const Coin   = (o) => <I {...o}><circle cx="12" cy="12" r="7.5"/><path d="M12 8.5v7M9.8 10.2h3.4a1.6 1.6 0 010 3.2H10.6a1.6 1.6 0 000 3.2h3.6"/></I>;
+export const Wheat  = (o) => <I {...o}><path d="M12 3v18M12 7c-3 0-4.5-1.5-4.5-4 3 0 4.5 1.5 4.5 4zM12 7c3 0 4.5-1.5 4.5-4-3 0-4.5 1.5-4.5 4zM12 13c-3 0-5-1.5-5-4.5 3 0 5 1.7 5 4.5zM12 13c3 0 5-1.5 5-4.5-3 0-5 1.7-5 4.5z"/></I>;
+export const People = (o) => <I {...o}><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="16.5" cy="9" r="2.6"/><path d="M15.5 15.2c2.8.2 5 2 5 4.8"/></I>;
+export const Pick   = (o) => <I {...o}><path d="M4 15l6-6 3 3-6 6-3-3zM13 6l2-2 5 5-2 2M11 8l5 5"/></I>;
+export const Rock   = (o) => <I {...o}><path d="M7 20l-3.5-5L8 8h5l4 4-2 8H7z"/><path d="M13 8l3-4 4.5 6-2.5 2"/></I>;
+export const Build  = (o) => <I {...o}><path d="M3 21h18M6 21V8l6-4 6 4v13"/><path d="M10 21v-5h4v5"/></I>;
+export const Shield = (o) => <I {...o}><path d="M12 3l7 4v5c0 4.4-3 8-7 9-4-1-7-4.6-7-9V7l7-4z"/></I>;
+export const Eye    = (o) => <I {...o}><circle cx="12" cy="12" r="3"/><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/></I>;
+export const Heart  = (o) => <I {...o}><path d="M12 21s-7-4.6-9.5-9A5.4 5.4 0 0112 6.5 5.4 5.4 0 0121.5 12C19 16.4 12 21 12 21z"/></I>;
+export const Send   = (o) => <I {...o}><path d="M21 3L10 14M21 3l-7 19-4-8-8-4 19-7z"/></I>;
+export const Plus   = (o) => <I {...o}><path d="M12 5v14M5 12h14"/></I>;
+export const Back   = (o) => <I {...o}><path d="M15 6l-6 6 6 6"/></I>;
