@@ -1,7 +1,7 @@
 import { getInitData } from './telegram.js';
 
 const BASE = import.meta.env.VITE_API_URL || '';
-export const MOCK = !BASE;
+export const MOCK = import.meta.env.VITE_MOCK === 'true';
 
 async function req(path, opts = {}) {
   const res = await fetch(BASE + path, {
