@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from config import CORS_ORIGINS
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS
 from routers import players, war, map as map_router, ravens, leaderboard, admin
@@ -29,3 +31,8 @@ async def health():
 async def gamedata():
     """دیتای ثابت برای Frontend — اقلیم‌ها، نیروها، ساختمان‌ها"""
     return {"regions": REGIONS, "troops": COMMON_TROOPS, "buildings": BUILDINGS}
+
+# فایل‌های build شدهٔ Frontend (اگر موجود باشند) را از همین سرویس سرو کن
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="static")
