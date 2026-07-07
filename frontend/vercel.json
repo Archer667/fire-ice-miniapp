@@ -1,1 +1,6 @@
-{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+{
+  "rewrites": [
+    { "source": "/telegram-web-app.js", "destination": "https://telegram.org/js/telegram-web-app.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
