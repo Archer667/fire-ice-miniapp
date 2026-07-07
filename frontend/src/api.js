@@ -21,9 +21,10 @@ async function req(path, opts = {}) {
 }
 
 /* ---------- دیتای mock برای حالت بدون سرور ---------- */
-import { REGIONS_STATIC } from './gamedata.js';
+import { REGIONS_STATIC, BUILDINGS } from './gamedata.js';
 
 const mockMe = { registered: false };
+const mockConstruction = { buildings: {}, queue: null };
 const M = {
   gamedata: { regions: REGIONS_STATIC },
   me: () => mockMe,
@@ -63,17 +64,26 @@ const M = {
     { mine: false, text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.' },
     { mine: true, text: 'شمال دربارهٔ پیشنهادت می‌اندیشد، لرد لنیستر.' },
   ],
+  construction: () => ({ buildings: mockConstruction.buildings, queue: mockConstruction.queue, resources: mockMe.resources }),
+  buildStart: (id) => {
+    const b = BUILDINGS.find(x => x.id === id);
+    Object.entries(b.cost).forEach(([k, v]) => { mockMe.resources[k] = (mockMe.resources[k] || 0) - v; });
+    mockConstruction.queue = { building_id: id, finishes_at: new Date(Date.now() + b.hours * 3600 * 1000).toISOString() };
+    return { buildings: mockConstruction.buildings, queue: mockConstruction.queue, resources: mockMe.resources };
+  },
 };
 
 /* ---------- API عمومی ---------- */
 export const api = {
-  gamedata:  () => MOCK ? M.gamedata : req('/api/gamedata'),
-  me:        () => MOCK ? M.me() : req('/api/players/me'),
-  register:  (b) => MOCK ? M.register(b) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
-  map:       () => MOCK ? M.map() : req('/api/map'),
-  submitWar: (b) => MOCK ? { ok: true } : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
-  leaderboard: () => MOCK ? M.leaderboard() : req('/api/leaderboard'),
-  inbox:     () => MOCK ? M.inbox() : req('/api/ravens/inbox'),
-  thread:    (name) => MOCK ? M.thread() : req('/api/ravens/thread/' + encodeURIComponent(name)),
-  sendRaven: (b) => MOCK ? { ok: true } : req('/api/ravens/send', { method: 'POST', body: JSON.stringify(b) }),
+  gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
+  me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
+  register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
+  map:       () => MOCK ? Promise.resolve(M.map()) : req('/api/map'),
+  submitWar: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
+  leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
+  inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
+  thread:    (name) => MOCK ? Promise.resolve(M.thread()) : req('/api/ravens/thread/' + encodeURIComponent(name)),
+  sendRaven: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/ravens/send', { method: 'POST', body: JSON.stringify(b) }),
+  construction: () => MOCK ? Promise.resolve(M.construction()) : req('/api/construction'),
+  buildStart: (building_id) => MOCK ? Promise.resolve(M.buildStart(building_id)) : req('/api/construction/start', { method: 'POST', body: JSON.stringify({ building_id }) }),
 };

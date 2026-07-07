@@ -36,3 +36,23 @@ export const COMMON_TROOPS = [
   { id: 'spearman',  name: 'نیزه‌دار',          cost: 1 },
 ];
 export const SPECIAL_COST = 4;
+
+export const BUILDINGS = [
+  { id: 'gold_mine',   name: 'معدن طلا',         cat: 'production', cost: { gold: 400, stone: 100 }, hours: 12 },
+  { id: 'stone_mine',  name: 'معدن سنگ',         cat: 'production', cost: { gold: 150 }, hours: 4 },
+  { id: 'iron_mine',   name: 'معدن آهن',         cat: 'production', cost: { gold: 200 }, hours: 6 },
+  { id: 'market',      name: 'بازار',             cat: 'production', cost: { gold: 250 }, hours: 6 },
+  { id: 'farm',        name: 'مزرعه',             cat: 'production', cost: { gold: 100 }, hours: 3 },
+  { id: 'ranch',       name: 'دامداری',           cat: 'production', cost: { gold: 150 }, hours: 4 },
+  { id: 'treasury',    name: 'خزانه',             cat: 'storage', cost: { gold: 300, stone: 150 }, hours: 8 },
+  { id: 'granary',     name: 'انبار غله',         cat: 'storage', cost: { gold: 200, stone: 50 }, hours: 5 },
+  { id: 'warehouse',   name: 'انبار',             cat: 'storage', cost: { gold: 200, stone: 80 }, hours: 5 },
+  { id: 'camp_sword',  name: 'کمپ شمشیرزن',       cat: 'camp', cost: { gold: 250, iron: 50 }, hours: 6 },
+  { id: 'camp_spear',  name: 'کمپ نیزه‌داران',     cat: 'camp', cost: { gold: 200, iron: 30 }, hours: 5 },
+  { id: 'camp_archer', name: 'کمپ کمانداران',      cat: 'camp', cost: { gold: 200, iron: 20 }, hours: 5 },
+  { id: 'camp_lcav',   name: 'کمپ سوارهٔ سبک',    cat: 'camp', cost: { gold: 350, iron: 60 }, hours: 8 },
+  { id: 'camp_hcav',   name: 'کمپ سوارهٔ سنگین',  cat: 'camp', cost: { gold: 500, iron: 120 }, hours: 12 },
+  { id: 'wall',        name: 'دیوار دفاعی',       cat: 'defense', cost: { gold: 400, stone: 300 }, hours: 14 },
+  { id: 'watchtower',  name: 'برج نگهبانی',       cat: 'defense', cost: { gold: 250, stone: 120 }, hours: 7 },
+  { id: 'port',        name: 'بندر',              cat: 'defense', cost: { gold: 600, stone: 200 }, hours: 16 },
+];

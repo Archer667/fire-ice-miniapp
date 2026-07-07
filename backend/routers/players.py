@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players
-from game import now, apply_production
+from game import now, apply_production, apply_construction
 from game_data import REGIONS
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS
 
@@ -34,6 +34,8 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "is_port": body.castle in region["ports"],
         "resources": dict(STARTING_RESOURCES),
         "troops": {},
+        "buildings": {},
+        "construction": None,
         "points": 100,
         "created_at": now(),
         "last_tick": now(),
@@ -47,11 +49,14 @@ async def me(user: dict = Depends(get_user)):
     if not p:
         return {"registered": False}
     p = apply_production(p)
+    apply_construction(p)
     await players.update_one({"tg_id": user["id"]},
-        {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
+        {"$set": {"resources": p["resources"], "last_tick": p["last_tick"],
+                   "buildings": p.get("buildings", {}), "construction": p.get("construction")}})
     day = min(SEASON_LENGTH_DAYS, ( (now() - p["created_at"]).days % SEASON_LENGTH_DAYS ) + 1)
     rank = 1 + await players.count_documents({"points": {"$gt": p["points"]}})
     total = await players.count_documents({})
+    construction = p.get("construction")
     return {
         "registered": True,
         "name": p["name"],
@@ -61,6 +66,11 @@ async def me(user: dict = Depends(get_user)):
         "is_port": p["is_port"],
         "resources": p["resources"],
         "troops": p.get("troops", {}),
+        "buildings": p.get("buildings", {}),
+        "construction": None if not construction else {
+            "building_id": construction["building_id"],
+            "finishes_at": construction["finishes_at"].isoformat(),
+        },
         "points": p["points"],
         "rank": rank, "total_players": total,
         "day": day, "season_length": SEASON_LENGTH_DAYS,
