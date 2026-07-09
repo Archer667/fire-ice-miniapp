@@ -25,7 +25,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
               <Icon s={18} /> {label}
             </div>
           ))}
-          {EXTRA_PAGES.map(({ index, Icon, label }) => (
+          {EXTRA_PAGES.filter(p => !p.adminOnly || me?.admin_role).map(({ index, Icon, label }) => (
             <div key={index} className={`sidemenu-item ${tab === index ? 'on' : ''}`}
                  onClick={() => { haptic(); onChange(index); onClose(); }}>
               <Icon s={18} /> {label}

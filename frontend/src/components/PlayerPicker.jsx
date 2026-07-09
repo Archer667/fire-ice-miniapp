@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { haptic } from '../telegram.js';
 import { Close } from './Icons.jsx';
 
-export default function PlayerPicker({ value, onChange, placeholder = 'اسم لرد یا قلعه را جست‌وجو کن...' }) {
+export default function PlayerPicker({ value, onChange, placeholder = 'اسم لرد یا قلعه را جست‌وجو کن...', single = false }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -22,7 +22,7 @@ export default function PlayerPicker({ value, onChange, placeholder = 'اسم ل
 
   const pick = (p) => {
     haptic();
-    onChange([...value, p]);
+    onChange(single ? [p] : [...value, p]);
     setQuery('');
     setResults([]);
     setOpen(false);

@@ -3,6 +3,7 @@ import hashlib, hmac, json, time
 from urllib.parse import parse_qsl
 from fastapi import Header, HTTPException
 from config import BOT_TOKEN, DEV_MODE, ADMIN_IDS
+from db import admin_roles
 
 def _validate_init_data(init_data: str) -> dict:
     parsed = dict(parse_qsl(init_data, keep_blank_values=True))
@@ -34,7 +35,26 @@ async def get_user(
         raise HTTPException(401, "توکن تلگرام ارسال نشده")
     return _validate_init_data(authorization[4:])
 
+async def get_admin_role(user: dict) -> str | None:
+    """"full" = ادمین کامل (از ADMIN_IDS)، "limited" = ادمین محدودی که یک ادمین کامل
+    تعیین کرده (فقط سناریوها و مقام‌ها)، None = ادمین نیست"""
+    if user["id"] in ADMIN_IDS:
+        return "full"
+    doc = await admin_roles.find_one({"tg_id": user["id"]})
+    return doc["role"] if doc else None
+
 async def get_admin(user: dict) -> dict:
-    if user["id"] not in ADMIN_IDS:
+    """ادمین کامل یا محدود — برای اکشن‌های مشترک (سناریوها، مقام‌ها)"""
+    role = await get_admin_role(user)
+    if not role:
         raise HTTPException(403, "دسترسی ادمین نداری")
+    user["admin_role"] = role
+    return user
+
+async def get_full_admin(user: dict) -> dict:
+    """فقط ادمین کامل — برای مدیریت ادمین‌ها و رای‌گیری"""
+    role = await get_admin_role(user)
+    if role != "full":
+        raise HTTPException(403, "این بخش فقط برای ادمین کامل است")
+    user["admin_role"] = role
     return user

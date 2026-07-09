@@ -1,7 +1,7 @@
 import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth import get_user
+from auth import get_user, get_admin_role
 from db import players
 from game import now, apply_production
 from game_data import REGIONS
@@ -76,9 +76,11 @@ async def me(user: dict = Depends(get_user)):
             break
 
     popularity = p.get("popularity", POPULARITY_START)
+    admin_role = await get_admin_role(user)
     return {
         "registered": True,
         "name": p["name"],
+        "admin_role": admin_role,
         "gender": p.get("gender", "lord"),
         "title": p.get("title", DEFAULT_TITLE.get(p.get("gender", "lord"))),
         "rank_label": rank_label,

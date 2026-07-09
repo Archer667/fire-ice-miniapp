@@ -1,5 +1,5 @@
 import { haptic } from '../telegram.js';
-import { Keep, Build, Map, Swords, Crown, Mail, Heart } from './Icons.jsx';
+import { Keep, Build, Map, Swords, Crown, Mail, Heart, Shield } from './Icons.jsx';
 
 // آیکن‌های ردیف پایین — تا اینجا محدود نگه داشته می‌شود که شلوغ نشود
 export const NAV_ITEMS = [
@@ -15,6 +15,7 @@ const RAVENS_INDEX = NAV_ITEMS.length - 1;
 // صفحه‌هایی که فقط از منوی کشویی/دستورها قابل‌دسترسی‌اند (توی نوار پایین جا نمی‌شوند)
 export const EXTRA_PAGES = [
   { index: 6, Icon: Heart, label: 'دیپلماسی' },
+  { index: 7, Icon: Shield, label: 'پنل ادمین', adminOnly: true },
 ];
 
 export const PAGE_TITLES = [...NAV_ITEMS.map(i => i.label), ...EXTRA_PAGES.map(p => p.label)];

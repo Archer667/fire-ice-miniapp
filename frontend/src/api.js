@@ -68,6 +68,7 @@ const M = {
       region_name: REGIONS_STATIC[b.region].name, castle: b.castle,
       is_port: REGIONS_STATIC[b.region].ports.includes(b.castle),
       gender: b.gender, title: DEFAULT_TITLE[b.gender], rank_label: null,
+      admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
       resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wine: 0 },
       points: 100, alliance_count: 0, popularity: POPULARITY_START, tax_rate: TAX_RATE_DEFAULT,
       max_tax_rate: maxTaxRate(POPULARITY_START),
@@ -210,6 +211,17 @@ const M = {
     if (!text.trim()) throw new Error('نامه خالی است');
     return { ok: true, sent_to: toTgIds.length };
   },
+  // ادمین در حالت mock پیاده نشده — این اپ دمو تک‌بازیکنه و پنل ادمین به بک‌اند واقعی نیاز دارد
+  adminPending: () => [],
+  adminVerdict: () => ({ ok: true }),
+  adminSetWarden: () => ({ ok: true }),
+  adminSetKing: () => ({ ok: true }),
+  adminSetEpithet: () => ({ ok: true }),
+  adminCreatePoll: () => ({ ok: true }),
+  adminClosePoll: () => ({ ok: true }),
+  adminListAdmins: () => [],
+  adminAddAdmin: () => ({ ok: true }),
+  adminRemoveAdmin: () => ({ ok: true }),
 };
 
 /* ---------- API عمومی ---------- */
@@ -240,4 +252,23 @@ export const api = {
   polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
   vote:  (id, option) => MOCK ? Promise.resolve(M.vote(id, option)) : req(`/api/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option }) }),
   searchPlayers: (q) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q)),
+
+  /* ---------- پنل ادمین ---------- */
+  adminPending: () => MOCK ? Promise.resolve(M.adminPending()) : req('/api/admin/pending'),
+  adminVerdict: (id, action, verdict, pointsDelta) => MOCK ? Promise.resolve(M.adminVerdict())
+    : req(`/api/admin/${id}/${action}`, { method: 'POST', body: JSON.stringify({ verdict, points_delta: pointsDelta || 0 }) }),
+  adminSetWarden: (group, tgId) => MOCK ? Promise.resolve(M.adminSetWarden())
+    : req('/api/titles/warden', { method: 'POST', body: JSON.stringify({ group, tg_id: tgId }) }),
+  adminSetKing: (tgId) => MOCK ? Promise.resolve(M.adminSetKing())
+    : req('/api/titles/king', { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),
+  adminSetEpithet: (tgId, title) => MOCK ? Promise.resolve(M.adminSetEpithet())
+    : req('/api/titles/epithet', { method: 'POST', body: JSON.stringify({ tg_id: tgId, title }) }),
+  adminCreatePoll: (question, options, eligibleTgIds) => MOCK ? Promise.resolve(M.adminCreatePoll())
+    : req('/api/polls/admin/create', { method: 'POST', body: JSON.stringify({ question, options, eligible_tg_ids: eligibleTgIds }) }),
+  adminClosePoll: (id) => MOCK ? Promise.resolve(M.adminClosePoll()) : req(`/api/polls/admin/${id}/close`, { method: 'POST' }),
+  adminListAdmins: () => MOCK ? Promise.resolve(M.adminListAdmins()) : req('/api/admin/admins'),
+  adminAddAdmin: (tgId) => MOCK ? Promise.resolve(M.adminAddAdmin())
+    : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),
+  adminRemoveAdmin: (tgId) => MOCK ? Promise.resolve(M.adminRemoveAdmin())
+    : req(`/api/admin/admins/${tgId}`, { method: 'DELETE' }),
 };

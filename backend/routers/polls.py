@@ -1,7 +1,7 @@
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth import get_user, get_admin
+from auth import get_user, get_full_admin
 from db import polls, players
 from game import now
 
@@ -56,7 +56,8 @@ async def vote(poll_id: str, body: VoteBody, user: dict = Depends(get_user)):
     return _brief(p, user["id"])
 
 async def admin_user(user: dict = Depends(get_user)):
-    return await get_admin(user)
+    """ساخت/بستن رای‌گیری فقط با ادمین کامل"""
+    return await get_full_admin(user)
 
 class CreatePollBody(BaseModel):
     question: str
