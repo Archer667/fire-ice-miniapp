@@ -3,55 +3,61 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Send, Plus, Back } from '../components/Icons.jsx';
+import PlayerPicker from '../components/PlayerPicker.jsx';
 
 export default function Ravens() {
   const { toast } = useGame();
   const [inbox, setInbox] = useState(null);
-  const [openWith, setOpenWith] = useState(null);   // نام لرد
+  const [openWith, setOpenWith] = useState(null);   // {tg_id, name}
   const [thread, setThread] = useState([]);
   const [text, setText] = useState('');
-  const [composeTo, setComposeTo] = useState('');
+  const [composeTargets, setComposeTargets] = useState([]);
   const [composing, setComposing] = useState(false);
 
   const loadInbox = () => api.inbox().then(setInbox).catch(e => toast(e.message));
   useEffect(() => { loadInbox(); }, []);
 
-  const openThread = async (name) => {
+  const openThread = async (m) => {
     haptic();
-    setOpenWith(name);
-    try { setThread(await api.thread(name)); } catch (e) { toast(e.message); }
+    setOpenWith({ tg_id: m.with_tg_id, name: m.with_name });
+    try { setThread(await api.thread(m.with_name)); } catch (e) { toast(e.message); }
   };
 
   const send = async () => {
     const t = text.trim();
     if (!t) return;
+    const toTgIds = composing ? composeTargets.map(p => p.tg_id) : [openWith.tg_id];
+    if (!toTgIds.length) { toast('حداقل یک گیرنده انتخاب کن'); return; }
     try {
-      // ارسال با نامِ لرد: backend قلعه می‌خواهد؛ در نسخهٔ ساده نام قلعه = ورودی compose
-      await api.sendRaven({ to_castle: composing ? composeTo.trim() : openWith, text: t });
+      await api.sendRaven(toTgIds, t);
       haptic('medium');
-      setThread(prev => [...prev, { mine: true, text: t }]);
+      if (!composing) setThread(prev => [...prev, { mine: true, text: t }]);
       setText('');
-      if (composing) { setComposing(false); toast('کلاغ پر کشید'); loadInbox(); }
+      if (composing) {
+        setComposing(false); setComposeTargets([]);
+        toast(toTgIds.length > 1 ? `کلاغ برای ${toTgIds.length.toLocaleString('fa-IR')} لرد پر کشید` : 'کلاغ پر کشید');
+        loadInbox();
+      }
     } catch (e) { toast(e.message); }
   };
 
   /* ---------- نمای گفتگو ---------- */
   if (openWith || composing) return (
     <>
-      <div className="back up" onClick={() => { setOpenWith(null); setComposing(false); loadInbox(); }}>
+      <div className="back up" onClick={() => { setOpenWith(null); setComposing(false); setComposeTargets([]); loadInbox(); }}>
         <Back s={15} /> بازگشت به صندوق نامه
       </div>
       {composing ? (
         <>
           <div className="page-title up">کلاغ تازه</div>
-          <div className="page-sub up">نام قلعهٔ گیرنده را بنویس — کلاغ راهش را بلد است</div>
+          <div className="page-sub up">یک یا چند لرد را جست‌وجو و انتخاب کن — کلاغ راهش را بلد است</div>
           <div className="card up u1">
-            <label className="f" style={{ marginTop: 0 }}>قلعهٔ گیرنده</label>
-            <input value={composeTo} onChange={e => setComposeTo(e.target.value)} placeholder="مثلاً: کسترلی راک" />
+            <label className="f" style={{ marginTop: 0 }}>گیرنده(ها)</label>
+            <PlayerPicker value={composeTargets} onChange={setComposeTargets} />
           </div>
         </>
       ) : (
-        <div className="page-title up">{openWith}</div>
+        <div className="page-title up">{openWith.name}</div>
       )}
       <div className="thread up u1" style={{ marginTop: 12 }}>
         {thread.map((m, i) => (
@@ -79,7 +85,7 @@ export default function Ravens() {
           </div>
         )}
         {inbox.map((m, i) => (
-          <div key={i} className="mailrow" onClick={() => openThread(m.with_name)}>
+          <div key={i} className="mailrow" onClick={() => openThread(m)}>
             <div className="mava">{m.with_name.charAt(0)}</div>
             <div className="mt">
               <div className="mn">{m.with_name}{m.unread > 0 && <span className="dot" />}</div>

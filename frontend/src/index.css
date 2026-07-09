@@ -90,6 +90,28 @@ select option { background: #0b1224; }
 textarea { min-height: 96px; resize: vertical; line-height: 1.9; }
 label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); margin: 16px 2px 8px; }
 
+/* جست‌وجوی لرد/قلعه با امکان انتخاب چندتایی */
+.ppicker { position: relative; }
+.ppicker-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.ppicker-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 700; color: var(--az2);
+  background: rgba(77,163,255,0.12); border: 1px solid rgba(96,178,255,0.25);
+  padding: 6px 10px; border-radius: 99px;
+}
+.ppicker-chip i { display: flex; color: var(--mid); cursor: pointer; }
+.ppicker-results {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30;
+  max-height: 220px; overflow-y: auto; border-radius: 16px;
+  background: rgba(10,16,32,0.97); backdrop-filter: blur(24px);
+  border: 1px solid var(--edge-hi); box-shadow: 0 20px 44px rgba(2,6,18,0.5);
+}
+.ppicker-row { padding: 12px 14px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+.ppicker-row:not(:last-child) { border-bottom: 1px solid rgba(160,195,255,0.07); }
+.ppicker-row small { color: var(--low); font-size: 10.5px; font-weight: 500; }
+.ppicker-row:active { background: rgba(77,163,255,0.08); }
+.ppicker-empty { padding: 14px; text-align: center; font-size: 12px; color: var(--low); }
+
 /* onboarding */
 .hero { text-align: center; padding: 40px 0 28px; }
 .hero .mark {

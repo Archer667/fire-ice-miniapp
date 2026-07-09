@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Wine, Heart, Crown, Scroll } from '../components/Icons.jsx';
+import PlayerPicker from '../components/PlayerPicker.jsx';
 import { REGIONS_STATIC, ALLIANCE_TYPES, WARDEN_GROUPS, FEAST_COST } from '../gamedata.js';
 
 const STATUS_FA = { pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده' };
@@ -12,7 +13,7 @@ export default function Diplomacy() {
   const [titles, setTitles] = useState(null);
   const [alliances, setAlliances] = useState(null);
   const [polls, setPolls] = useState(null);
-  const [toCastle, setToCastle] = useState('');
+  const [targets, setTargets] = useState([]);
   const [type, setType] = useState('non_aggression');
   const [busy, setBusy] = useState(false);
   const [feastBusy, setFeastBusy] = useState(false);
@@ -48,14 +49,14 @@ export default function Diplomacy() {
   };
 
   const propose = async () => {
-    if (!toCastle.trim()) { toast('نام قلعهٔ طرف مقابل را بنویس'); return; }
+    if (targets.length === 0) { toast('حداقل یک لرد را برای پیشنهاد انتخاب کن'); return; }
     setBusy(true);
     try {
-      await api.diplomacyPropose(toCastle.trim(), type);
+      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type);
       haptic('medium');
-      setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - ALLIANCE_TYPES[type].wine_cost } });
-      toast('پیشنهاد پیمان با کلاغ ارسال شد');
-      setToCastle('');
+      setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - ALLIANCE_TYPES[type].wine_cost * (res.sent_to || targets.length) } });
+      toast(`پیشنهاد پیمان با کلاغ به ${res.sent_to || targets.length} لرد ارسال شد`);
+      setTargets([]);
       load();
     } catch (e) { toast(e.message); }
     setBusy(false);
@@ -88,16 +89,16 @@ export default function Diplomacy() {
 
       <div className="sect up u2">پیشنهاد پیمان تازه</div>
       <div className="card up u2">
-        <label className="f" style={{ marginTop: 0 }}>قلعهٔ طرف مقابل</label>
-        <input value={toCastle} onChange={e => setToCastle(e.target.value)} placeholder="مثلاً: ریورران" />
+        <label className="f" style={{ marginTop: 0 }}>لرد(ها)ی طرف مقابل</label>
+        <PlayerPicker value={targets} onChange={setTargets} />
         <label className="f">نوع پیمان</label>
         <select value={type} onChange={e => setType(e.target.value)}>
           {Object.entries(ALLIANCE_TYPES).map(([id, t]) => (
-            <option key={id} value={id}>{t.name} — {t.wine_cost.toLocaleString('fa-IR')} شراب</option>
+            <option key={id} value={id}>{t.name} — {t.wine_cost.toLocaleString('fa-IR')} شراب هرکدام</option>
           ))}
         </select>
         <button className="btn" style={{ marginTop: 14 }} disabled={busy} onClick={propose}>
-          {busy ? 'در حال ارسال...' : 'ارسال پیشنهاد با کلاغ'}
+          {busy ? 'در حال ارسال...' : `ارسال پیشنهاد با کلاغ${targets.length ? ` (${targets.length.toLocaleString('fa-IR')} نفر)` : ''}`}
         </button>
       </div>
 

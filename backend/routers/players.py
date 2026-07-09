@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
@@ -95,6 +96,26 @@ async def me(user: dict = Depends(get_user)):
         "rank": rank, "total_players": total,
         "day": day, "season_length": SEASON_LENGTH_DAYS,
     }
+
+@router.get("/search")
+async def search(q: str = "", user: dict = Depends(get_user)):
+    """جست‌وجوی لردها بر اساس نام یا قلعه — برای انتخاب گیرندهٔ کلاغ/پیمان"""
+    q = q.strip()
+    if len(q) < 2:
+        return []
+    pattern = re.escape(q)
+    cur = players.find(
+        {"tg_id": {"$ne": user["id"]}, "$or": [
+            {"name": {"$regex": pattern, "$options": "i"}},
+            {"castle": {"$regex": pattern, "$options": "i"}},
+        ]},
+        {"tg_id": 1, "name": 1, "castle": 1, "region": 1, "title": 1},
+    ).limit(20)
+    return [{
+        "tg_id": p["tg_id"], "name": p["name"], "castle": p["castle"],
+        "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
+        "title": p.get("title"),
+    } async for p in cur]
 
 class TaxBody(BaseModel):
     rate: int

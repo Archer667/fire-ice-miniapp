@@ -11,7 +11,7 @@ from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPU
 router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
 
 class ProposeBody(BaseModel):
-    to_castle: str
+    to_tg_ids: list[int]
     type: str
 
 @router.post("/propose")
@@ -21,37 +21,45 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     me = await players.find_one({"tg_id": user["id"]})
     if not me:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    target = await players.find_one({"castle": body.to_castle})
-    if not target:
-        raise HTTPException(404, "این قلعه لردی ندارد")
-    if target["tg_id"] == user["id"]:
-        raise HTTPException(400, "نمی‌توانی با خودت پیمان ببندی")
 
-    existing = await alliances.find_one({
-        "type": body.type, "status": {"$in": ["pending", "accepted"]},
-        "$or": [
-            {"from_id": user["id"], "to_id": target["tg_id"]},
-            {"from_id": target["tg_id"], "to_id": user["id"]},
-        ],
-    })
-    if existing:
-        raise HTTPException(409, "پیمانی از همین نوع بین شما از قبل هست")
+    target_ids = [tid for tid in dict.fromkeys(body.to_tg_ids) if tid != user["id"]]
+    if not target_ids:
+        raise HTTPException(400, "هیچ گیرنده‌ای انتخاب نشده")
+    targets = await players.find({"tg_id": {"$in": target_ids}}).to_list(len(target_ids))
+    if not targets:
+        raise HTTPException(404, "هیچ‌کدام از گیرنده‌های انتخابی پیدا نشدند")
+
+    # حذف کسانی که همین الان پیمانی از همین نوع باهاشون در جریان است
+    valid_targets = []
+    for t in targets:
+        existing = await alliances.find_one({
+            "type": body.type, "status": {"$in": ["pending", "accepted"]},
+            "$or": [
+                {"from_id": user["id"], "to_id": t["tg_id"]},
+                {"from_id": t["tg_id"], "to_id": user["id"]},
+            ],
+        })
+        if not existing:
+            valid_targets.append(t)
+    if not valid_targets:
+        raise HTTPException(409, "با همهٔ گیرنده‌های انتخابی، پیمانی از همین نوع از قبل داری")
 
     me = apply_production(me)
-    cost = {"wine": ALLIANCE_TYPES[body.type]["wine_cost"]}
-    if not can_afford(me["resources"], cost):
-        raise HTTPException(400, "شراب کافی برای این پیمان نداری")
-    pay(me["resources"], cost)
+    unit_cost = ALLIANCE_TYPES[body.type]["wine_cost"]
+    total_cost = {"wine": unit_cost * len(valid_targets)}
+    if not can_afford(me["resources"], total_cost):
+        raise HTTPException(400, f"شراب کافی برای پیشنهاد به {len(valid_targets)} نفر نداری")
+    pay(me["resources"], total_cost)
     await players.update_one({"tg_id": user["id"]},
         {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
 
-    await alliances.insert_one({
+    await alliances.insert_many([{
         "from_id": user["id"], "from_name": me["name"],
-        "to_id": target["tg_id"], "to_name": target["name"],
-        "type": body.type, "wine_cost": cost["wine"],
+        "to_id": t["tg_id"], "to_name": t["name"],
+        "type": body.type, "wine_cost": unit_cost,
         "status": "pending", "created_at": now(),
-    })
-    return {"ok": True}
+    } for t in valid_targets])
+    return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):

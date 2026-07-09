@@ -36,6 +36,13 @@ const mockPolls = [
   { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
     status: 'open', tally: [3, 1], total_votes: 4, eligible: true, my_vote: null },
 ];
+const MOCK_PLAYERS = [
+  { tg_id: 9001, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region_name: 'کراون‌لندز', title: 'ملکه' },
+  { tg_id: 9002, name: 'تایوین لنیستر', castle: 'کسترلی راک', region_name: 'وسترلندز', title: 'لرد' },
+  { tg_id: 9003, name: 'مارگری تایرل', castle: 'های‌گاردن', region_name: 'ریچ', title: 'لیدی' },
+  { tg_id: 9004, name: 'یارا گریجوی', castle: 'پایک', region_name: 'جزایر آهن', title: 'لیدی' },
+  { tg_id: 9005, name: 'ادموری تالی', castle: 'ریورران', region_name: 'ریورلندز', title: 'لرد' },
+];
 
 function mockResolve() {
   const now = Date.now();
@@ -92,9 +99,9 @@ const M = {
     { rank: 4, name: mockMe.name || 'تو', castle: mockMe.castle || '—', region: mockMe.region_name || '—', points: 100, me: true },
   ],
   inbox: () => [
-    { with_name: 'تایوین لنیستر', last_text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان.', last_at: '', unread: 1 },
-    { with_name: 'مارگری تایرل', last_text: 'ریچ آمادهٔ فروش گندم است. ۲۰۰ واحد در برابر ۱۵۰ طلا؟', last_at: '', unread: 1 },
-    { with_name: 'یارا گریجوی', last_text: 'آنچه مرده است هرگز نمی‌میرد.', last_at: '', unread: 0 },
+    { with_tg_id: 9002, with_name: 'تایوین لنیستر', last_text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان.', last_at: '', unread: 1 },
+    { with_tg_id: 9003, with_name: 'مارگری تایرل', last_text: 'ریچ آمادهٔ فروش گندم است. ۲۰۰ واحد در برابر ۱۵۰ طلا؟', last_at: '', unread: 1 },
+    { with_tg_id: 9004, with_name: 'یارا گریجوی', last_text: 'آنچه مرده است هرگز نمی‌میرد.', last_at: '', unread: 0 },
   ],
   thread: () => [
     { mine: false, text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.' },
@@ -138,16 +145,20 @@ const M = {
     king: null,
   }),
   diplomacyMine: () => mockAlliances,
-  diplomacyPropose: (toCastle, type) => {
+  diplomacyPropose: (toTgIds, type) => {
     if (!ALLIANCE_TYPES[type]) throw new Error('نوع پیمان نامعتبر');
-    const cost = ALLIANCE_TYPES[type].wine_cost;
-    if (!mockCanAfford({ wine: cost })) throw new Error('شراب کافی برای این پیمان نداری');
+    if (!toTgIds.length) throw new Error('هیچ گیرنده‌ای انتخاب نشده');
+    const cost = ALLIANCE_TYPES[type].wine_cost * toTgIds.length;
+    if (!mockCanAfford({ wine: cost })) throw new Error(`شراب کافی برای پیشنهاد به ${toTgIds.length} نفر نداری`);
     mockPay({ wine: cost });
-    mockAlliances.unshift({
-      id: String(mockAllianceSeq++), mine_proposed: true, other_name: toCastle,
-      type, type_name: ALLIANCE_TYPES[type].name, status: 'pending',
-    });
-    return { ok: true };
+    for (const tgId of toTgIds) {
+      const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+      mockAlliances.unshift({
+        id: String(mockAllianceSeq++), mine_proposed: true, other_name: p ? p.name : String(tgId),
+        type, type_name: ALLIANCE_TYPES[type].name, status: 'pending',
+      });
+    }
+    return { ok: true, sent_to: toTgIds.length };
   },
   diplomacyRespond: (id, accept) => {
     const a = mockAlliances.find(x => x.id === id);
@@ -189,6 +200,16 @@ const M = {
     p.my_vote = option;
     return { ...p };
   },
+  searchPlayers: (q) => {
+    if (q.trim().length < 2) return [];
+    const needle = q.trim().toLowerCase();
+    return MOCK_PLAYERS.filter(p => p.name.toLowerCase().includes(needle) || p.castle.toLowerCase().includes(needle));
+  },
+  sendRaven: (toTgIds, text) => {
+    if (!toTgIds.length) throw new Error('هیچ گیرنده‌ای انتخاب نشده');
+    if (!text.trim()) throw new Error('نامه خالی است');
+    return { ok: true, sent_to: toTgIds.length };
+  },
 };
 
 /* ---------- API عمومی ---------- */
@@ -202,19 +223,21 @@ export const api = {
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
   thread:    (name) => MOCK ? Promise.resolve(M.thread()) : req('/api/ravens/thread/' + encodeURIComponent(name)),
-  sendRaven: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/ravens/send', { method: 'POST', body: JSON.stringify(b) }),
+  sendRaven: (toTgIds, text) => MOCK ? Promise.resolve(M.sendRaven(toTgIds, text))
+    : req('/api/ravens/send', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, text }) }),
   buildings: () => MOCK ? Promise.resolve(M.buildings()) : req('/api/buildings'),
   buildBuilding:   (id) => MOCK ? Promise.resolve(M.buildAction(id, false)) : req('/api/buildings/build',   { method: 'POST', body: JSON.stringify({ building_id: id }) }),
   upgradeBuilding: (id) => MOCK ? Promise.resolve(M.buildAction(id, true))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id }) }),
   setTax:    (rate) => MOCK ? Promise.resolve(M.setTax(rate)) : req('/api/players/tax', { method: 'POST', body: JSON.stringify({ rate }) }),
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
-  diplomacyPropose: (toCastle, type) => MOCK ? Promise.resolve(M.diplomacyPropose(toCastle, type))
-    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_castle: toCastle, type }) }),
+  diplomacyPropose: (toTgIds, type) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type))
+    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   feast: () => MOCK ? Promise.resolve(M.feast()) : req('/api/diplomacy/feast', { method: 'POST' }),
   regionLeaderboard: () => MOCK ? Promise.resolve(M.regionLeaderboard()) : req('/api/leaderboard/regions'),
   polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
   vote:  (id, option) => MOCK ? Promise.resolve(M.vote(id, option)) : req(`/api/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option }) }),
+  searchPlayers: (q) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q)),
 };

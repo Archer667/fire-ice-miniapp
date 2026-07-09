@@ -7,7 +7,7 @@ from game import now
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
 class SendBody(BaseModel):
-    to_castle: str
+    to_tg_ids: list[int]
     text: str
 
 @router.post("/send")
@@ -15,21 +15,23 @@ async def send(body: SendBody, user: dict = Depends(get_user)):
     me = await players.find_one({"tg_id": user["id"]})
     if not me:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    target = await players.find_one({"castle": body.to_castle})
-    if not target:
-        raise HTTPException(404, "این قلعه لردی ندارد — کلاغ راه گم می‌کند")
-    if target["tg_id"] == user["id"]:
-        raise HTTPException(400, "برای خودت کلاغ نفرست")
     text = body.text.strip()
     if not text:
         raise HTTPException(400, "نامه خالی است")
+    to_ids = [tid for tid in dict.fromkeys(body.to_tg_ids) if tid != user["id"]]
+    if not to_ids:
+        raise HTTPException(400, "هیچ گیرنده‌ای انتخاب نشده")
 
-    await messages.insert_one({
-        "from_id": user["id"], "to_id": target["tg_id"],
-        "from_name": me["name"], "to_name": target["name"],
+    targets = await players.find({"tg_id": {"$in": to_ids}}).to_list(len(to_ids))
+    if not targets:
+        raise HTTPException(404, "هیچ‌کدام از گیرنده‌ها پیدا نشدند")
+
+    await messages.insert_many([{
+        "from_id": user["id"], "to_id": t["tg_id"],
+        "from_name": me["name"], "to_name": t["name"],
         "text": text[:1000], "read": False, "created_at": now(),
-    })
-    return {"ok": True}
+    } for t in targets])
+    return {"ok": True, "sent_to": len(targets)}
 
 @router.get("/inbox")
 async def inbox(user: dict = Depends(get_user)):
@@ -40,6 +42,7 @@ async def inbox(user: dict = Depends(get_user)):
         other = m["to_id"] if m["from_id"] == user["id"] else m["from_id"]
         if other not in convos:
             convos[other] = {
+                "with_tg_id": other,
                 "with_name": m["to_name"] if m["from_id"] == user["id"] else m["from_name"],
                 "last_text": m["text"],
                 "last_at": m["created_at"].isoformat(),
