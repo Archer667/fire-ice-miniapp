@@ -30,6 +30,13 @@ REGIONS = {
                "ports": ["کینگز لندینگ"]},
 }
 
+# ---- والی‌نشین‌ها: هر سه اقلیم زیر یک والی ----
+WARDEN_GROUPS = {
+    "south":   {"name": "والی جنوب",  "regions": ["reach", "dorne", "storm"]},
+    "central": {"name": "والی مرکز",  "regions": ["west", "crown", "river"]},
+    "north":   {"name": "والی شمال",  "regions": ["north", "iron", "vale"]},
+}
+
 COMMON_TROOPS = {
     "infantry":  {"name": "پیاده‌نظام",       "cost": 2},
     "spearman":  {"name": "نیزه‌دار",          "cost": 1},
@@ -41,15 +48,18 @@ SPECIAL_TROOP_COST = 4
 
 BUILDINGS = {
     # --- اقتصادی: تولید و ذخیرهٔ منابع ---
-    "stone_mine":  {"name": "معدن سنگ",   "cost": {"gold": 150}, "hours": 4,  "type": "economy"},
-    "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200}, "hours": 6,  "type": "economy"},
-    "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100}, "hours": 12, "type": "economy"},
-    "market":      {"name": "بازار",       "cost": {"gold": 250, "wood": 0}, "hours": 6,  "type": "economy"},
-    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150}, "hours": 8,  "type": "economy"},
-    "farm":        {"name": "مزرعه",       "cost": {"gold": 100}, "hours": 3,  "type": "economy"},
-    "ranch":       {"name": "دامداری",     "cost": {"gold": 150}, "hours": 4,  "type": "economy"},
-    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50}, "hours": 5,  "type": "economy"},
-    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80}, "hours": 5,  "type": "economy"},
+    # «produces» = مقدار افزوده به تولید روزانه به‌ازای هر سطح
+    # «cap_bonus» = مقدار افزوده به سقف ذخیره‌سازی به‌ازای هر سطح
+    "stone_mine":  {"name": "معدن سنگ",   "cost": {"gold": 150}, "hours": 4,  "type": "economy", "produces": {"stone": 8}},
+    "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200}, "hours": 6,  "type": "economy", "produces": {"iron": 6}},
+    "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100}, "hours": 12, "type": "economy", "produces": {"gold": 12}},
+    "market":      {"name": "بازار",       "cost": {"gold": 250}, "hours": 6,  "type": "economy", "produces": {"gold": 3}},
+    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150}, "hours": 8,  "type": "economy", "cap_bonus": {"gold": 40}},
+    "farm":        {"name": "مزرعه",       "cost": {"gold": 100}, "hours": 3,  "type": "economy", "produces": {"food": 10}},
+    "ranch":       {"name": "دامداری",     "cost": {"gold": 150}, "hours": 4,  "type": "economy", "produces": {"food": 6}},
+    "winery":      {"name": "می‌کده",      "cost": {"gold": 220, "food": 60}, "hours": 6,  "type": "economy", "produces": {"wine": 5}},
+    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 40}},
+    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80}, "hours": 5,  "type": "economy", "cap_bonus": {"stone": 15, "iron": 15}},
 
     # --- نظامی: پادگان هر یگان (پیش‌نیاز استخدام) ---
     "camp_sword":  {"name": "پادگان پیاده‌نظام",   "cost": {"gold": 250, "iron": 50},  "hours": 6,  "type": "barracks", "unit": "infantry"},
@@ -69,6 +79,13 @@ BUILDINGS = {
     "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200}, "hours": 16, "type": "defense"},
     "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300}, "hours": 14, "type": "defense"},
     "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120}, "hours": 7,  "type": "defense"},
+}
+
+# ---- قراردادهای سیاسی — شراب نقشی در بستن هر پیمان دارد ----
+ALLIANCE_TYPES = {
+    "non_aggression": {"name": "پیمان عدم‌تجاوز", "wine_cost": 20},
+    "trade":          {"name": "پیمان تجاری",      "wine_cost": 30},
+    "full_alliance":  {"name": "اتحاد کامل",       "wine_cost": 60},
 }
 
 # ---- سیستم ارتقای ساختمان‌ها ----

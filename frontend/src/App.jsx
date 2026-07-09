@@ -9,13 +9,15 @@ import MapPage from './pages/MapPage.jsx';
 import War from './pages/War.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
 import Ravens from './pages/Ravens.jsx';
+import Diplomacy from './pages/Diplomacy.jsx';
 import Header from './components/Header.jsx';
 import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
 import Toast from './components/Toast.jsx';
 
-// ترتیب باید با NAV_ITEMS در NavBar.jsx یکی باشد — هر صفحهٔ جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, MapPage, War, Leaderboard, Ravens];
+// ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
+// جدید همین‌جا و آنجا اضافه شود
+const PAGES = [Dashboard, Buildings, MapPage, War, Leaderboard, Ravens, Diplomacy];
 
 export default function App() {
   const { me, setMe, toast } = useGame();

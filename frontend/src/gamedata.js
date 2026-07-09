@@ -46,6 +46,7 @@ export const BUILDINGS_STATIC = {
   treasury:    { name: 'خزانه',       cost: { gold: 300, stone: 150 },  hours: 8,  type: 'economy' },
   farm:        { name: 'مزرعه',       cost: { gold: 100 },              hours: 3,  type: 'economy' },
   ranch:       { name: 'دامداری',     cost: { gold: 150 },              hours: 4,  type: 'economy' },
+  winery:      { name: 'می‌کده',      cost: { gold: 220, food: 60 },    hours: 6,  type: 'economy' },
   granary:     { name: 'انبار غله',   cost: { gold: 200, stone: 50 },   hours: 5,  type: 'economy' },
   warehouse:   { name: 'انبار',        cost: { gold: 200, stone: 80 },   hours: 5,  type: 'economy' },
   // پادگان هر یگان
@@ -80,4 +81,28 @@ export function buildingHours(id, level) {
   const base = BUILDINGS_STATIC[id].hours;
   const mult = 1 + (level - 1) * LEVEL_HOURS_STEP;
   return Math.round(base * mult * 10) / 10;
+}
+
+export const WARDEN_GROUPS = {
+  south:   { name: 'والی جنوب', regions: ['reach', 'dorne', 'storm'] },
+  central: { name: 'والی مرکز', regions: ['west', 'crown', 'river'] },
+  north:   { name: 'والی شمال', regions: ['north', 'iron', 'vale'] },
+};
+
+export const ALLIANCE_TYPES = {
+  non_aggression: { name: 'پیمان عدم‌تجاوز', wine_cost: 20 },
+  trade:          { name: 'پیمان تجاری',      wine_cost: 30 },
+  full_alliance:  { name: 'اتحاد کامل',       wine_cost: 60 },
+};
+
+export const DEFAULT_TITLE = { lord: 'لرد جوان', lady: 'لیدی جوان' };
+export const POPULARITY_START = 50;
+export const POPULARITY_MAX = 100;
+export const TAX_RATE_DEFAULT = 10;
+export const TAX_RATE_BASE_MAX = 20;
+export const FEAST_COST = { wine: 40, food: 80 };
+export const FEAST_POPULARITY_GAIN = 8;
+
+export function maxTaxRate(popularity) {
+  return Math.max(0, TAX_RATE_BASE_MAX + Math.floor((popularity - POPULARITY_START) / 5));
 }

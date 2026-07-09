@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Coin, Wheat, People, Pick, Rock, Build, Swords, Eye, Heart } from '../components/Icons.jsx';
+import { api } from '../api.js';
+import { Coin, Wheat, People, Pick, Rock, Wine, Build, Swords, Eye, Heart } from '../components/Icons.jsx';
 
 const RES_META = {
   gold:  { name: 'طلا', d: 'معدن طلا · بازار', Icon: Coin,  max: 2000 },
@@ -8,12 +10,28 @@ const RES_META = {
   men:   { name: 'نیروی انسانی', d: 'ظرفیت استخدام', Icon: People, max: 1000 },
   iron:  { name: 'آهن', d: 'معدن آهن', Icon: Pick, max: 500 },
   stone: { name: 'سنگ', d: 'معدن سنگ', Icon: Rock, max: 500 },
+  wine:  { name: 'شراب', d: 'می‌کده · ضیافت و پیمان‌ها', Icon: Wine, max: 300 },
 };
 
+const RANK_LABEL_FA = { overlord: 'بالادستی اقلیم', warden: 'والی', king: 'پادشاه/ملکه' };
+
 export default function Dashboard({ goTo }) {
-  const { me, toast } = useGame();
+  const { me, setMe, toast } = useGame();
   const dayPct = Math.round((me.day / me.season_length) * 100);
   const C = 2 * Math.PI * 19;
+  const [taxBusy, setTaxBusy] = useState(false);
+
+  const changeTax = async (delta) => {
+    const rate = Math.max(0, Math.min(me.max_tax_rate, me.tax_rate + delta));
+    if (rate === me.tax_rate) return;
+    setTaxBusy(true);
+    try {
+      await api.setTax(rate);
+      haptic();
+      setMe({ ...me, tax_rate: rate });
+    } catch (e) { toast(e.message); }
+    setTaxBusy(false);
+  };
 
   return (
     <>
@@ -39,16 +57,19 @@ export default function Dashboard({ goTo }) {
         <div className="me-row">
           <div className="ava">{me.name.charAt(0)}</div>
           <div>
-            <div className="nm">{me.name}</div>
+            <div className="nm">{me.name}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">{me.castle} · {me.region_name}{me.is_port ? ' · بندر' : ''}</div>
-            <div className="rk">رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد</div>
+            <div className="rk">
+              رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد
+              {me.rank_label && RANK_LABEL_FA[me.rank_label] ? ` · ${RANK_LABEL_FA[me.rank_label]}` : ''}
+            </div>
           </div>
         </div>
         <div className="stats">
           <div className="st"><div className="v">{Object.values(me.troops || {}).reduce((a, b) => a + b, 0).toLocaleString('fa-IR')}</div><div className="k">سپاه</div></div>
           <div className="st"><div className="v">{me.points.toLocaleString('fa-IR')}</div><div className="k">امتیاز</div></div>
           <div className="st"><div className="v">۱</div><div className="k">قلعه</div></div>
-          <div className="st"><div className="v">۰</div><div className="k">اتحاد</div></div>
+          <div className="st"><div className="v">{(me.alliance_count ?? 0).toLocaleString('fa-IR')}</div><div className="k">اتحاد</div></div>
         </div>
       </div>
 
@@ -68,12 +89,30 @@ export default function Dashboard({ goTo }) {
         })}
       </div>
 
+      <div className="sect up u2">محبوبیت و مالیات</div>
+      <div className="card up u2">
+        <div className="res">
+          <div className="ic"><Heart s={18} /></div>
+          <div className="n">محبوبیت<small>با برگزاری ضیافت در دیپلماسی بالا می‌رود</small></div>
+          <div className="bar"><i style={{ width: (me.popularity ?? 0) + '%' }} /></div>
+          <div className="val">{(me.popularity ?? 0).toLocaleString('fa-IR')}٪</div>
+        </div>
+        <div className="tax-row">
+          <span>نرخ مالیات <small>(سقف {me.max_tax_rate.toLocaleString('fa-IR')}٪ با این محبوبیت)</small></span>
+          <div className="tax-stepper">
+            <button disabled={taxBusy || me.tax_rate <= 0} onClick={() => changeTax(-1)}>−</button>
+            <b>{me.tax_rate.toLocaleString('fa-IR')}٪</b>
+            <button disabled={taxBusy || me.tax_rate >= me.max_tax_rate} onClick={() => changeTax(1)}>+</button>
+          </div>
+        </div>
+      </div>
+
       <div className="sect up u3">فرمان‌ها</div>
       <div className="qgrid up u3">
         <div className="q" onClick={() => { haptic(); goTo(1); }}><div className="qi"><Build s={19} /></div>ساختمان‌ها</div>
         <div className="q" onClick={() => { haptic(); goTo(3); }}><div className="qi"><Swords s={19} /></div>لشکرکشی</div>
         <div className="q" onClick={() => toast('جاسوسی — فاز ۲')}><div className="qi"><Eye s={19} /></div>جاسوسی</div>
-        <div className="q" onClick={() => toast('دیپلماسی — فاز ۲')}><div className="qi"><Heart s={19} /></div>دیپلماسی</div>
+        <div className="q" onClick={() => { haptic(); goTo(6); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</div>
       </div>
     </>
   );

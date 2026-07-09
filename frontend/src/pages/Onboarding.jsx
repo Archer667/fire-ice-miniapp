@@ -9,6 +9,7 @@ export default function Onboarding() {
   const { setMe, toast } = useGame();
   const [step, setStep] = useState(1);
   const [name, setName] = useState(getTgUser()?.first_name || '');
+  const [gender, setGender] = useState('lord');
   const [regionId, setRegionId] = useState('north');
   const [castle, setCastle] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -24,11 +25,11 @@ export default function Onboarding() {
     if (!castle) { toast('قلعه‌ات را انتخاب کن'); return; }
     setBusy(true);
     try {
-      await api.register({ name: name.trim(), region: regionId, castle });
+      await api.register({ name: name.trim(), region: regionId, castle, gender });
       const me = await api.me();
       haptic('medium');
       setMe(me);
-      toast(`خوش آمدی به وستروس، لرد ${name.trim()}`);
+      toast(`خوش آمدی به وستروس، ${gender === 'lady' ? 'لیدی' : 'لرد'} ${name.trim()}`);
     } catch (e) { toast(e.message); }
     setBusy(false);
   };
@@ -44,6 +45,17 @@ export default function Onboarding() {
       <div className="up u1">
         <label className="f">نام کاراکتر</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="جان اسنو" />
+      </div>
+      <div className="up u1">
+        <label className="f">عنوان</label>
+        <div className="grid2">
+          <div className={`pick ${gender === 'lord' ? 'sel' : ''}`} onClick={() => { haptic(); setGender('lord'); }}>
+            <div className="n">لرد</div>
+          </div>
+          <div className={`pick ${gender === 'lady' ? 'sel' : ''}`} onClick={() => { haptic(); setGender('lady'); }}>
+            <div className="n">لیدی</div>
+          </div>
+        </div>
       </div>
       <div className="up u2">
         <label className="f">اقلیم خود را برگزین</label>

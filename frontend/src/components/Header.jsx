@@ -1,9 +1,9 @@
 import { haptic } from '../telegram.js';
 import { Menu } from './Icons.jsx';
-import { NAV_ITEMS } from './NavBar.jsx';
+import { PAGE_TITLES } from './NavBar.jsx';
 
 export default function Header({ tab, onOpenMenu }) {
-  const title = NAV_ITEMS[tab]?.label || 'وستروس';
+  const title = PAGE_TITLES[tab] || 'وستروس';
   return (
     <div className="header">
       <button className="hamburger" onClick={() => { haptic(); onOpenMenu(); }} aria-label="منو">

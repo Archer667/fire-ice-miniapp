@@ -17,7 +17,11 @@ export default function Leaderboard() {
         {rows.map(r => (
           <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
             <div className="rk">{r.rank.toLocaleString('fa-IR')}</div>
-            <div className="n">{r.name}{r.me ? ' — تو' : ''}<small>{r.castle} · {r.region}</small></div>
+            <div className="n">
+              {r.name}{r.me ? ' — تو' : ''}
+              {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
+              <small>{r.castle} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
+            </div>
             <div className="p">{r.points.toLocaleString('fa-IR')}</div>
           </div>
         ))}

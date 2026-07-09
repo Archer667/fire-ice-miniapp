@@ -106,6 +106,7 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .steps i.on { background: linear-gradient(90deg, var(--az2), var(--az)); }
 
 .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pick {
   background: var(--glass); border: 1px solid var(--edge);
   border-radius: 18px; padding: 14px 6px; text-align: center; cursor: pointer;
@@ -158,6 +159,24 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .me-row .nm { font-size: 18px; font-weight: 800; }
 .me-row .hs { font-size: 11.5px; color: var(--mid); margin-top: 3px; }
 .me-row .rk { display: inline-block; margin-top: 7px; font-size: 10.5px; font-weight: 700; color: var(--gold); background: rgba(255,209,102,0.1); border: 1px solid rgba(255,209,102,0.22); padding: 4px 10px; border-radius: 99px; }
+
+.title-tag {
+  display: inline-block; margin-inline-start: 8px; vertical-align: middle;
+  font-size: 10px; font-weight: 700; color: var(--az2);
+  background: rgba(77,163,255,0.12); border: 1px solid rgba(96,178,255,0.25);
+  padding: 3px 9px; border-radius: 99px;
+}
+
+.tax-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(160,195,255,0.07); font-size: 12px; color: var(--mid); }
+.tax-row small { display: block; color: var(--low); font-size: 10px; margin-top: 2px; }
+.tax-stepper { display: flex; align-items: center; gap: 10px; }
+.tax-stepper b { font-size: 14px; color: var(--hi); min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+.tax-stepper button {
+  width: 28px; height: 28px; border-radius: 10px; border: 1px solid var(--edge);
+  background: var(--glass); color: var(--hi); font-size: 16px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.tax-stepper button:disabled { opacity: 0.35; }
 
 .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-top: 14px; }
 .st { padding: 14px 6px; text-align: center; border-radius: 20px; background: var(--glass); border: 1px solid var(--edge); }
