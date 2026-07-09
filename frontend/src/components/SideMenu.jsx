@@ -19,18 +19,15 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         </div>
 
         <div className="sidemenu-list">
-          {NAV_ITEMS.map(({ Icon, label }, i) => (
-            <div key={i} className={`sidemenu-item ${tab === i ? 'on' : ''}`}
-                 onClick={() => { haptic(); onChange(i); onClose(); }}>
-              <Icon s={18} /> {label}
-            </div>
-          ))}
-          {EXTRA_PAGES.filter(p => !p.adminOnly || me?.admin_role).map(({ index, Icon, label }) => (
-            <div key={index} className={`sidemenu-item ${tab === index ? 'on' : ''}`}
-                 onClick={() => { haptic(); onChange(index); onClose(); }}>
-              <Icon s={18} /> {label}
-            </div>
-          ))}
+          {[...NAV_ITEMS, ...EXTRA_PAGES]
+            .filter(p => !p.adminOnly || me?.admin_role)
+            .sort((a, b) => a.index - b.index)
+            .map(({ index, Icon, label }) => (
+              <div key={index} className={`sidemenu-item ${tab === index ? 'on' : ''}`}
+                   onClick={() => { haptic(); onChange(index); onClose(); }}>
+                <Icon s={18} /> {label}
+              </div>
+            ))}
         </div>
 
         <div className="sidemenu-list">
