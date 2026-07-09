@@ -11,6 +11,7 @@ export default function Diplomacy() {
   const { me, setMe, toast } = useGame();
   const [titles, setTitles] = useState(null);
   const [alliances, setAlliances] = useState(null);
+  const [polls, setPolls] = useState(null);
   const [toCastle, setToCastle] = useState('');
   const [type, setType] = useState('non_aggression');
   const [busy, setBusy] = useState(false);
@@ -19,8 +20,17 @@ export default function Diplomacy() {
   const load = () => {
     api.titles().then(setTitles).catch(e => toast(e.message));
     api.diplomacyMine().then(setAlliances).catch(e => toast(e.message));
+    api.polls().then(setPolls).catch(e => toast(e.message));
   };
   useEffect(() => { load(); }, []);
+
+  const castVote = async (pollId, option) => {
+    try {
+      const updated = await api.vote(pollId, option);
+      haptic('medium');
+      setPolls(prev => prev.map(p => p.id === pollId ? updated : p));
+    } catch (e) { toast(e.message); }
+  };
 
   const doFeast = async () => {
     setFeastBusy(true);
@@ -107,6 +117,41 @@ export default function Diplomacy() {
                 <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => respond(a.id, true)}>پذیرفتن</button>
                 <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => respond(a.id, false)}>رد</button>
               </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="sect up u2">رای‌گیری</div>
+      <div className="up u2">
+        {(!polls || polls.length === 0) && (
+          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
+            الان هیچ رای‌گیری‌ای باز نیست — ادمین می‌تواند برای انتخاب بالادستی، والی یا پادشاه/ملکه یکی باز کند
+          </div>
+        )}
+        {polls && polls.map(p => (
+          <div className="card poll" key={p.id}>
+            <div className="poll-q">
+              {p.question}
+              <span className={`poll-status ${p.status}`}>{p.status === 'open' ? 'باز' : 'بسته'}</span>
+            </div>
+            {p.options.map((opt, i) => {
+              const pct = p.total_votes ? Math.round((p.tally[i] / p.total_votes) * 100) : 0;
+              const mine = p.my_vote === i;
+              const canVote = p.status === 'open' && p.eligible;
+              return (
+                <div key={i} className={`poll-opt ${mine ? 'mine' : ''}`}
+                     onClick={() => canVote && castVote(p.id, i)} style={canVote ? {} : { cursor: 'default' }}>
+                  <div className="poll-opt-bar"><i style={{ width: pct + '%' }} /></div>
+                  <div className="poll-opt-row">
+                    <span>{opt}{mine ? ' ✓' : ''}</span>
+                    <span>{pct}٪ ({p.tally[i].toLocaleString('fa-IR')})</span>
+                  </div>
+                </div>
+              );
+            })}
+            {!p.eligible && p.status === 'open' && (
+              <div className="poll-note">واجد شرایط رای‌دادن در این نظرسنجی نیستی — فقط نتیجه را می‌بینی</div>
             )}
           </div>
         ))}

@@ -10,3 +10,4 @@ messages   = db.messages
 buildings  = db.buildings
 alliances  = db.alliances
 hierarchy  = db.hierarchy
+polls      = db.polls

@@ -197,6 +197,17 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--az2), var(--az)); }
 .bar.low i { background: linear-gradient(90deg, #ff8a95, var(--danger)); }
 
+/* تب‌های داخل صفحه (مثل لیدربرد اقلیم‌ها/لردها) */
+.tabs {
+  display: flex; gap: 6px; padding: 5px; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--edge); margin-bottom: 4px;
+}
+.tab {
+  flex: 1; text-align: center; padding: 10px; border-radius: 12px; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: var(--mid); transition: all 0.18s ease;
+}
+.tab.on { color: #cfe8ff; background: linear-gradient(150deg, rgba(77,163,255,0.22), rgba(56,120,255,0.07)); }
+
 .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .q {
   display: flex; align-items: center; gap: 12px;
@@ -267,6 +278,25 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .bld-cost .tm { margin-inline-start: auto; color: var(--low); }
 .bld-btn { margin-top: 10px; padding: 11px; font-size: 12.5px; }
 .bld-status { margin-top: 10px; font-size: 11px; color: var(--low); }
+
+/* رای‌گیری */
+.poll { margin-bottom: 10px; }
+.poll-q {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 13px; font-weight: 700; margin-bottom: 12px;
+}
+.poll-status {
+  flex-shrink: 0; font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
+  color: var(--low); background: rgba(160,195,255,0.08); border: 1px solid var(--edge);
+}
+.poll-status.open { color: var(--az2); background: rgba(77,163,255,0.12); border-color: rgba(96,178,255,0.25); }
+.poll-opt { position: relative; padding: 10px 12px; border-radius: 14px; margin-bottom: 8px; cursor: pointer;
+  background: rgba(148,182,255,0.05); border: 1px solid var(--edge); overflow: hidden; transition: border-color 0.18s ease; }
+.poll-opt.mine { border-color: rgba(96,178,255,0.55); }
+.poll-opt-bar { position: absolute; inset: 0; z-index: 0; }
+.poll-opt-bar i { display: block; height: 100%; background: linear-gradient(90deg, rgba(77,163,255,0.22), rgba(56,120,255,0.06)); transition: width 0.3s ease; }
+.poll-opt-row { position: relative; z-index: 1; display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
+.poll-note { margin-top: 4px; font-size: 10.5px; color: var(--low); }
 
 /* war */
 .troop { display: flex; align-items: center; gap: 12px; padding: 12px 0; }

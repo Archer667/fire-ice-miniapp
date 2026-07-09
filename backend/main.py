@@ -5,6 +5,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin,
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
+    polls as polls_router,
 )
 
 app = FastAPI(title="نغمه آتش و یخ — API", version="1.0")
@@ -27,6 +28,7 @@ app.include_router(admin.router)
 app.include_router(buildings_router.router)
 app.include_router(titles_router.router)
 app.include_router(diplomacy_router.router)
+app.include_router(polls_router.router)
 
 @app.get("/api/health")
 async def health():

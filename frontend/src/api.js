@@ -32,6 +32,10 @@ const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = []; // {id, mine_proposed, other_name, type, type_name, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
+const mockPolls = [
+  { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
+    status: 'open', tally: [3, 1], total_votes: 4, eligible: true, my_vote: null },
+];
 
 function mockResolve() {
   const now = Date.now();
@@ -164,6 +168,27 @@ const M = {
     mockLastFeast = now;
     return { ok: true, popularity: mockMe.popularity };
   },
+  regionLeaderboard: () => {
+    const rows = Object.entries(REGIONS_STATIC).map(([id, r]) => ({
+      region: id, name: r.name,
+      total_score: id === mockMe.region ? (mockMe.points ?? 100) : Math.round(Math.random() * 400),
+      lord_count: id === mockMe.region ? 1 : Math.round(2 + Math.random() * 4),
+      mine: id === mockMe.region,
+    }));
+    rows.sort((a, b) => b.total_score - a.total_score);
+    return rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  },
+  polls: () => mockPolls,
+  vote: (id, option) => {
+    const p = mockPolls.find(x => x.id === id);
+    if (!p) throw new Error('رای‌گیری پیدا نشد');
+    if (p.status !== 'open') throw new Error('این رای‌گیری بسته شده');
+    if (p.my_vote !== null && p.my_vote !== undefined) p.tally[p.my_vote]--;
+    else p.total_votes++;
+    p.tally[option]++;
+    p.my_vote = option;
+    return { ...p };
+  },
 };
 
 /* ---------- API عمومی ---------- */
@@ -189,4 +214,7 @@ export const api = {
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   feast: () => MOCK ? Promise.resolve(M.feast()) : req('/api/diplomacy/feast', { method: 'POST' }),
+  regionLeaderboard: () => MOCK ? Promise.resolve(M.regionLeaderboard()) : req('/api/leaderboard/regions'),
+  polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
+  vote:  (id, option) => MOCK ? Promise.resolve(M.vote(id, option)) : req(`/api/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option }) }),
 };

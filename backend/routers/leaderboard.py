@@ -21,3 +21,26 @@ async def leaderboard(user: dict = Depends(get_user)):
             "me": p["tg_id"] == user["id"],
         })
     return out
+
+@router.get("/regions")
+async def region_leaderboard(user: dict = Depends(get_user)):
+    """اقلیم‌ها بر اساس مجموع امتیاز همهٔ لردهایشان — انگیزهٔ تیمی به‌جای رقابت فردی"""
+    rows = await scored_players()
+    totals = {rid: {"total": 0, "count": 0} for rid in REGIONS}
+    my_region = None
+    for row in rows:
+        p = row["player"]
+        totals[p["region"]]["total"] += row["score"]
+        totals[p["region"]]["count"] += 1
+        if p["tg_id"] == user["id"]:
+            my_region = p["region"]
+
+    ranked = sorted(REGIONS.keys(), key=lambda rid: totals[rid]["total"], reverse=True)
+    out = []
+    for i, rid in enumerate(ranked):
+        out.append({
+            "rank": i + 1, "region": rid, "name": REGIONS[rid]["name"],
+            "total_score": totals[rid]["total"], "lord_count": totals[rid]["count"],
+            "mine": rid == my_region,
+        })
+    return out
