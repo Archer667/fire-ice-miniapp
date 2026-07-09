@@ -1,5 +1,5 @@
 const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const I = ({ s = 21, children }) => <svg width={s} height={s} viewBox="0 0 24 24" {...p}>{children}</svg>;
+const I = ({ s = 21, className, children }) => <svg width={s} height={s} viewBox="0 0 24 24" className={className} {...p}>{children}</svg>;
 
 export const Keep   = (o) => <I {...o}><path d="M5 21V10l2-2V5h2.2v2h1.6V5h2.4v2h1.6V5H17v3l2 2v11"/><path d="M9.8 21v-4.6a2.2 2.2 0 014.4 0V21"/></I>;
 export const Map    = (o) => <I {...o}><path d="M9 20l-6-2V4l6 2 6-2 6 2v14l-6-2-6 2z"/><path d="M9 6v14M15 4v14"/></I>;
@@ -23,3 +23,9 @@ export const Close  = (o) => <I {...o}><path d="M6 6l12 12M18 6L6 18"/></I>;
 export const Hammer = (o) => <I {...o}><path d="M14.5 6.5l3 3-7.5 7.5H7v-3l7.5-7.5z"/><path d="M13 5l4.5-2 3.5 3.5-2 4.5"/><path d="M4.5 19.5l2.5-2.5"/></I>;
 export const Wine   = (o) => <I {...o}><path d="M7 3h10l-1 6a4 4 0 01-8 0L7 3z"/><path d="M12 13v6M9 21h6"/></I>;
 export const Scroll = (o) => <I {...o}><path d="M6 4h10a2 2 0 012 2v13a2 2 0 01-2 2H8a2 2 0 01-2-2V4z"/><path d="M6 4a2 2 0 00-2 2v2h2"/><path d="M9 9h6M9 13h6"/></I>;
+
+/* آیکن‌های تزئینیِ فصل‌ها — پس‌زمینهٔ کم‌رنگ سکشن قلمرو */
+export const Blossom  = (o) => <I {...o}><path d="M4 20c4-6 8-10 16-16"/><circle cx="9" cy="15" r="1.6"/><circle cx="13" cy="10.5" r="1.6"/><circle cx="17" cy="6.5" r="1.6"/></I>;
+export const SunIcon  = (o) => <I {...o}><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></I>;
+export const Leaf     = (o) => <I {...o}><path d="M12 3c4 2 7 6 7 10a7 7 0 01-14 0c0-4 3-8 7-10z"/><path d="M12 3v18M12 10c-2-1-3.5-1-5 0M12 14c2.5-1.2 4.5-1 6 .3"/></I>;
+export const Snowflake = (o) => <I {...o}><path d="M12 2v20M2 12h20M4.5 4.5l15 15M19.5 4.5l-15 15"/></I>;
