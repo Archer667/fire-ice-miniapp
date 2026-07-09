@@ -1,9 +1,9 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players
-from game import now, apply_production, can_afford, pay
+from game import now, apply_production, can_afford, pay, normalize_building_state
 from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours
 
 router = APIRouter(prefix="/api/buildings", tags=["buildings"])
@@ -11,17 +11,20 @@ router = APIRouter(prefix="/api/buildings", tags=["buildings"])
 EMPTY_STATE = {"level": 0, "upgrade_to": None, "ready_at": None}
 
 def _resolve(p: dict) -> dict:
-    """ارتقاهای تمام‌شده را به‌صورت lazy نهایی می‌کند، مشابه apply_production"""
+    """ارتقاهای تمام‌شده را نهایی می‌کند و ساختار قدیمی‌تر (True/False به‌جای
+    دیکشنری سطح‌دار) را که از نسخه‌های پیش از سیستم سطح‌بندی مانده، اصلاح می‌کند"""
     b = p.setdefault("buildings", {})
-    for st in b.values():
-        ready = st.get("ready_at")
-        if ready and st.get("upgrade_to"):
+    for bid, raw in list(b.items()):
+        st = normalize_building_state(raw)
+        ready = st["ready_at"]
+        if ready and st["upgrade_to"]:
             if isinstance(ready, str):
-                ready = __import__("datetime").datetime.fromisoformat(ready)
+                ready = datetime.fromisoformat(ready)
             if ready <= now():
                 st["level"] = st["upgrade_to"]
                 st["upgrade_to"] = None
                 st["ready_at"] = None
+        b[bid] = st
     return p
 
 @router.get("")

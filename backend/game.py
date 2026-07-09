@@ -12,9 +12,17 @@ def now():
     # TypeError می‌دهد.
     return datetime.utcnow()
 
+def normalize_building_state(raw) -> dict:
+    """buildings[id] معمولاً {"level","upgrade_to","ready_at"} است، اما نسخه‌های
+    قدیمی‌تر بازی (پیش از سیستم سطح‌بندی) فقط True/False ذخیره می‌کردند —
+    این را هم برای سازگاری با داده‌های قدیمی در دیتابیس می‌پذیریم."""
+    if isinstance(raw, dict):
+        return {"level": raw.get("level", 0), "upgrade_to": raw.get("upgrade_to"), "ready_at": raw.get("ready_at")}
+    return {"level": 1, "upgrade_to": None, "ready_at": None} if raw else {"level": 0, "upgrade_to": None, "ready_at": None}
+
 def _building_levels(player: dict):
-    for bid, st in player.get("buildings", {}).items():
-        level = st.get("level", 0)
+    for bid, raw in player.get("buildings", {}).items():
+        level = normalize_building_state(raw)["level"]
         if level > 0 and bid in BUILDINGS:
             yield bid, level
 
