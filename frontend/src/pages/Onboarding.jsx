@@ -34,7 +34,7 @@ export default function Onboarding() {
   };
 
   if (step === 1) return (
-    <div className="view">
+    <div className="view view-noheader">
       <div className="hero up">
         <div className="mark"><Keep s={40} /></div>
         <h1>نغمه آتش و یخ</h1>
@@ -65,7 +65,7 @@ export default function Onboarding() {
   );
 
   return (
-    <div className="view">
+    <div className="view view-noheader">
       <div className="hero up" style={{ paddingBottom: 16 }}>
         <h1 style={{ fontSize: 21 }}>قلعه‌ای در {region.name}</h1>
         <p>{region.castles.length} قلعه و {region.ports.length} بندر · بندر = ناوگان</p>

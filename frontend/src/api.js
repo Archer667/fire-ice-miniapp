@@ -21,9 +21,26 @@ async function req(path, opts = {}) {
 }
 
 /* ---------- دیتای mock برای حالت بدون سرور ---------- */
-import { REGIONS_STATIC } from './gamedata.js';
+import { REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours } from './gamedata.js';
 
 const mockMe = { registered: false };
+const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
+
+function mockResolve() {
+  const now = Date.now();
+  for (const st of Object.values(mockBuildings)) {
+    if (st.upgrade_to && st.ready_at && new Date(st.ready_at).getTime() <= now) {
+      st.level = st.upgrade_to; st.upgrade_to = null; st.ready_at = null;
+    }
+  }
+}
+
+function mockCanAfford(cost) {
+  return Object.entries(cost).every(([k, v]) => (mockMe.resources?.[k] ?? 0) >= v);
+}
+function mockPay(cost) {
+  for (const [k, v] of Object.entries(cost)) mockMe.resources[k] -= v;
+}
 const M = {
   gamedata: { regions: REGIONS_STATIC },
   me: () => mockMe,
@@ -63,17 +80,52 @@ const M = {
     { mine: false, text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.' },
     { mine: true, text: 'شمال دربارهٔ پیشنهادت می‌اندیشد، لرد لنیستر.' },
   ],
+  buildings: () => {
+    mockResolve();
+    return Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
+      const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
+      const next = st.upgrade_to || (st.level < MAX_BUILDING_LEVEL ? st.level + 1 : null);
+      return {
+        id, name: meta.name, type: meta.type, unit: meta.unit,
+        level: st.level, max_level: MAX_BUILDING_LEVEL,
+        upgrading: !!st.upgrade_to, ready_at: st.ready_at,
+        next_level: next,
+        next_cost: next ? buildingCost(id, next) : null,
+        next_hours: next ? buildingHours(id, next) : null,
+      };
+    });
+  },
+  buildAction: (id, requireBuilt) => {
+    mockResolve();
+    const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
+    if (st.upgrade_to) throw new Error('این ساختمان هم‌اکنون در حال ساخت است');
+    if (requireBuilt && st.level === 0) throw new Error('اول این ساختمان را بنا کن');
+    if (!requireBuilt && st.level > 0) throw new Error('این ساختمان قبلاً بنا شده — آن را ارتقا بده');
+    if (st.level >= MAX_BUILDING_LEVEL) throw new Error('این ساختمان به بیشینهٔ سطح رسیده');
+    const target = st.level + 1;
+    const cost = buildingCost(id, target);
+    if (!mockCanAfford(cost)) throw new Error('منابع کافی نیست');
+    mockPay(cost);
+    st.upgrade_to = target;
+    st.ready_at = new Date(Date.now() + buildingHours(id, target) * 3600 * 1000).toISOString();
+    mockBuildings[id] = st;
+    return { ok: true, target_level: target, cost, ready_at: st.ready_at };
+  },
 };
 
 /* ---------- API عمومی ---------- */
+// در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
-  gamedata:  () => MOCK ? M.gamedata : req('/api/gamedata'),
-  me:        () => MOCK ? M.me() : req('/api/players/me'),
-  register:  (b) => MOCK ? M.register(b) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
-  map:       () => MOCK ? M.map() : req('/api/map'),
-  submitWar: (b) => MOCK ? { ok: true } : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
-  leaderboard: () => MOCK ? M.leaderboard() : req('/api/leaderboard'),
-  inbox:     () => MOCK ? M.inbox() : req('/api/ravens/inbox'),
-  thread:    (name) => MOCK ? M.thread() : req('/api/ravens/thread/' + encodeURIComponent(name)),
-  sendRaven: (b) => MOCK ? { ok: true } : req('/api/ravens/send', { method: 'POST', body: JSON.stringify(b) }),
+  gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
+  me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
+  register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
+  map:       () => MOCK ? Promise.resolve(M.map()) : req('/api/map'),
+  submitWar: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
+  leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
+  inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
+  thread:    (name) => MOCK ? Promise.resolve(M.thread()) : req('/api/ravens/thread/' + encodeURIComponent(name)),
+  sendRaven: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/ravens/send', { method: 'POST', body: JSON.stringify(b) }),
+  buildings: () => MOCK ? Promise.resolve(M.buildings()) : req('/api/buildings'),
+  buildBuilding:   (id) => MOCK ? Promise.resolve(M.buildAction(id, false)) : req('/api/buildings/build',   { method: 'POST', body: JSON.stringify({ building_id: id }) }),
+  upgradeBuilding: (id) => MOCK ? Promise.resolve(M.buildAction(id, true))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id }) }),
 };

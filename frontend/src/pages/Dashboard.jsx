@@ -1,6 +1,6 @@
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Coin, Wheat, People, Pick, Rock, Build, Shield, Eye, Heart } from '../components/Icons.jsx';
+import { Coin, Wheat, People, Pick, Rock, Build, Swords, Eye, Heart } from '../components/Icons.jsx';
 
 const RES_META = {
   gold:  { name: 'طلا', d: 'معدن طلا · بازار', Icon: Coin,  max: 2000 },
@@ -70,8 +70,8 @@ export default function Dashboard({ goTo }) {
 
       <div className="sect up u3">فرمان‌ها</div>
       <div className="qgrid up u3">
-        <div className="q" onClick={() => { haptic(); goTo(2); }}><div className="qi"><Build s={19} /></div>لشکرکشی</div>
-        <div className="q" onClick={() => toast('پادگان — فاز بعدی')}><div className="qi"><Shield s={19} /></div>پادگان</div>
+        <div className="q" onClick={() => { haptic(); goTo(1); }}><div className="qi"><Build s={19} /></div>ساختمان‌ها</div>
+        <div className="q" onClick={() => { haptic(); goTo(3); }}><div className="qi"><Swords s={19} /></div>لشکرکشی</div>
         <div className="q" onClick={() => toast('جاسوسی — فاز ۲')}><div className="qi"><Eye s={19} /></div>جاسوسی</div>
         <div className="q" onClick={() => toast('دیپلماسی — فاز ۲')}><div className="qi"><Heart s={19} /></div>دیپلماسی</div>
       </div>

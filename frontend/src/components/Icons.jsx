@@ -18,3 +18,6 @@ export const Heart  = (o) => <I {...o}><path d="M12 21s-7-4.6-9.5-9A5.4 5.4 0 01
 export const Send   = (o) => <I {...o}><path d="M21 3L10 14M21 3l-7 19-4-8-8-4 19-7z"/></I>;
 export const Plus   = (o) => <I {...o}><path d="M12 5v14M5 12h14"/></I>;
 export const Back   = (o) => <I {...o}><path d="M15 6l-6 6 6 6"/></I>;
+export const Menu   = (o) => <I {...o}><path d="M4 6h16M4 12h16M4 18h16"/></I>;
+export const Close  = (o) => <I {...o}><path d="M6 6l12 12M18 6L6 18"/></I>;
+export const Hammer = (o) => <I {...o}><path d="M14.5 6.5l3 3-7.5 7.5H7v-3l7.5-7.5z"/><path d="M13 5l4.5-2 3.5 3.5-2 4.5"/><path d="M4.5 19.5l2.5-2.5"/></I>;

@@ -36,3 +36,48 @@ export const COMMON_TROOPS = [
   { id: 'spearman',  name: 'نیزه‌دار',          cost: 1 },
 ];
 export const SPECIAL_COST = 4;
+
+export const BUILDINGS_STATIC = {
+  // اقتصادی
+  stone_mine:  { name: 'معدن سنگ',   cost: { gold: 150 },              hours: 4,  type: 'economy' },
+  iron_mine:   { name: 'معدن آهن',   cost: { gold: 200 },              hours: 6,  type: 'economy' },
+  gold_mine:   { name: 'معدن طلا',   cost: { gold: 400, stone: 100 },  hours: 12, type: 'economy' },
+  market:      { name: 'بازار',       cost: { gold: 250 },              hours: 6,  type: 'economy' },
+  treasury:    { name: 'خزانه',       cost: { gold: 300, stone: 150 },  hours: 8,  type: 'economy' },
+  farm:        { name: 'مزرعه',       cost: { gold: 100 },              hours: 3,  type: 'economy' },
+  ranch:       { name: 'دامداری',     cost: { gold: 150 },              hours: 4,  type: 'economy' },
+  granary:     { name: 'انبار غله',   cost: { gold: 200, stone: 50 },   hours: 5,  type: 'economy' },
+  warehouse:   { name: 'انبار',        cost: { gold: 200, stone: 80 },   hours: 5,  type: 'economy' },
+  // پادگان هر یگان
+  camp_sword:  { name: 'پادگان پیاده‌نظام',   cost: { gold: 250, iron: 50 },  hours: 6,  type: 'barracks', unit: 'infantry' },
+  camp_spear:  { name: 'پادگان نیزه‌داران',   cost: { gold: 200, iron: 30 },  hours: 5,  type: 'barracks', unit: 'spearman' },
+  camp_archer: { name: 'پادگان کمانداران',    cost: { gold: 200, iron: 20 },  hours: 5,  type: 'barracks', unit: 'archer' },
+  camp_lcav:   { name: 'پادگان سوارهٔ سبک',   cost: { gold: 350, iron: 60 },  hours: 8,  type: 'barracks', unit: 'light_cav' },
+  camp_hcav:   { name: 'پادگان سوارهٔ سنگین', cost: { gold: 500, iron: 120 }, hours: 12, type: 'barracks', unit: 'heavy_cav' },
+  // کارگاه تسلیحات هر یگان
+  armory_sword:  { name: 'کارگاه تسلیحات پیاده‌نظام',   cost: { gold: 200, iron: 80 },  hours: 6,  type: 'armory', unit: 'infantry' },
+  armory_spear:  { name: 'کارگاه تسلیحات نیزه‌داران',   cost: { gold: 160, iron: 60 },  hours: 5,  type: 'armory', unit: 'spearman' },
+  armory_archer: { name: 'کارگاه تسلیحات کمانداران',    cost: { gold: 160, iron: 50 },  hours: 5,  type: 'armory', unit: 'archer' },
+  armory_lcav:   { name: 'کارگاه تسلیحات سوارهٔ سبک',   cost: { gold: 280, iron: 100 }, hours: 8,  type: 'armory', unit: 'light_cav' },
+  armory_hcav:   { name: 'کارگاه تسلیحات سوارهٔ سنگین', cost: { gold: 400, iron: 180 }, hours: 12, type: 'armory', unit: 'heavy_cav' },
+  // دفاعی
+  port:        { name: 'بندر',         cost: { gold: 600, stone: 200 }, hours: 16, type: 'defense' },
+  wall:        { name: 'دیوار دفاعی', cost: { gold: 400, stone: 300 }, hours: 14, type: 'defense' },
+  watchtower:  { name: 'برج نگهبانی', cost: { gold: 250, stone: 120 }, hours: 7,  type: 'defense' },
+};
+
+export const MAX_BUILDING_LEVEL = 30;
+const LEVEL_COST_STEP = 0.15;
+const LEVEL_HOURS_STEP = 0.12;
+
+export function buildingCost(id, level) {
+  const base = BUILDINGS_STATIC[id].cost;
+  const mult = 1 + (level - 1) * LEVEL_COST_STEP;
+  return Object.fromEntries(Object.entries(base).filter(([, v]) => v).map(([k, v]) => [k, Math.max(1, Math.round(v * mult))]));
+}
+
+export function buildingHours(id, level) {
+  const base = BUILDINGS_STATIC[id].hours;
+  const mult = 1 + (level - 1) * LEVEL_HOURS_STEP;
+  return Math.round(base * mult * 10) / 10;
+}

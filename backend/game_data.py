@@ -40,21 +40,52 @@ COMMON_TROOPS = {
 SPECIAL_TROOP_COST = 4
 
 BUILDINGS = {
-    "stone_mine":  {"name": "معدن سنگ",   "cost": {"gold": 150}, "hours": 4},
-    "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200}, "hours": 6},
-    "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100}, "hours": 12},
-    "market":      {"name": "بازار",       "cost": {"gold": 250, "wood": 0}, "hours": 6},
-    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150}, "hours": 8},
-    "farm":        {"name": "مزرعه",       "cost": {"gold": 100}, "hours": 3},
-    "ranch":       {"name": "دامداری",     "cost": {"gold": 150}, "hours": 4},
-    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50}, "hours": 5},
-    "camp_sword":  {"name": "کمپ شمشیرزن",       "cost": {"gold": 250, "iron": 50}, "hours": 6},
-    "camp_spear":  {"name": "کمپ نیزه‌داران",     "cost": {"gold": 200, "iron": 30}, "hours": 5},
-    "camp_archer": {"name": "کمپ کمانداران",      "cost": {"gold": 200, "iron": 20}, "hours": 5},
-    "camp_lcav":   {"name": "کمپ سوارهٔ سبک",    "cost": {"gold": 350, "iron": 60}, "hours": 8},
-    "camp_hcav":   {"name": "کمپ سوارهٔ سنگین",  "cost": {"gold": 500, "iron": 120}, "hours": 12},
-    "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200}, "hours": 16},
-    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80}, "hours": 5},
-    "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300}, "hours": 14},
-    "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120}, "hours": 7},
+    # --- اقتصادی: تولید و ذخیرهٔ منابع ---
+    "stone_mine":  {"name": "معدن سنگ",   "cost": {"gold": 150}, "hours": 4,  "type": "economy"},
+    "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200}, "hours": 6,  "type": "economy"},
+    "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100}, "hours": 12, "type": "economy"},
+    "market":      {"name": "بازار",       "cost": {"gold": 250, "wood": 0}, "hours": 6,  "type": "economy"},
+    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150}, "hours": 8,  "type": "economy"},
+    "farm":        {"name": "مزرعه",       "cost": {"gold": 100}, "hours": 3,  "type": "economy"},
+    "ranch":       {"name": "دامداری",     "cost": {"gold": 150}, "hours": 4,  "type": "economy"},
+    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50}, "hours": 5,  "type": "economy"},
+    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80}, "hours": 5,  "type": "economy"},
+
+    # --- نظامی: پادگان هر یگان (پیش‌نیاز استخدام) ---
+    "camp_sword":  {"name": "پادگان پیاده‌نظام",   "cost": {"gold": 250, "iron": 50},  "hours": 6,  "type": "barracks", "unit": "infantry"},
+    "camp_spear":  {"name": "پادگان نیزه‌داران",   "cost": {"gold": 200, "iron": 30},  "hours": 5,  "type": "barracks", "unit": "spearman"},
+    "camp_archer": {"name": "پادگان کمانداران",    "cost": {"gold": 200, "iron": 20},  "hours": 5,  "type": "barracks", "unit": "archer"},
+    "camp_lcav":   {"name": "پادگان سوارهٔ سبک",   "cost": {"gold": 350, "iron": 60},  "hours": 8,  "type": "barracks", "unit": "light_cav"},
+    "camp_hcav":   {"name": "پادگان سوارهٔ سنگین", "cost": {"gold": 500, "iron": 120}, "hours": 12, "type": "barracks", "unit": "heavy_cav"},
+
+    # --- نظامی: کارگاه تسلیحات هر یگان (منبع سلاح، پیش‌نیاز دوم استخدام) ---
+    "armory_sword":  {"name": "کارگاه تسلیحات پیاده‌نظام",   "cost": {"gold": 200, "iron": 80},  "hours": 6,  "type": "armory", "unit": "infantry"},
+    "armory_spear":  {"name": "کارگاه تسلیحات نیزه‌داران",   "cost": {"gold": 160, "iron": 60},  "hours": 5,  "type": "armory", "unit": "spearman"},
+    "armory_archer": {"name": "کارگاه تسلیحات کمانداران",    "cost": {"gold": 160, "iron": 50},  "hours": 5,  "type": "armory", "unit": "archer"},
+    "armory_lcav":   {"name": "کارگاه تسلیحات سوارهٔ سبک",   "cost": {"gold": 280, "iron": 100}, "hours": 8,  "type": "armory", "unit": "light_cav"},
+    "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180}, "hours": 12, "type": "armory", "unit": "heavy_cav"},
+
+    # --- دفاعی و زیرساخت ---
+    "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200}, "hours": 16, "type": "defense"},
+    "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300}, "hours": 14, "type": "defense"},
+    "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120}, "hours": 7,  "type": "defense"},
 }
+
+# ---- سیستم ارتقای ساختمان‌ها ----
+# دورهٔ بازی ۳۰ روزه است؛ هر ساختمان تا ۳۰ سطح ارتقا می‌خورد و هر سطح بالاتر
+# هزینه و زمان بیشتری نسبت به سطح پایه می‌طلبد تا ارتقای کامل در طول یک دوره
+# چالش‌برانگیز اما ممکن باشد.
+MAX_BUILDING_LEVEL = 30
+LEVEL_COST_STEP = 0.15   # هر سطح ~۱۵٪ هزینهٔ پایه اضافه می‌شود
+LEVEL_HOURS_STEP = 0.12  # هر سطح ~۱۲٪ زمان پایه اضافه می‌شود
+
+def building_cost(building_id: str, level: int) -> dict:
+    """هزینهٔ ساخت/ارتقا به «level» (سطح ۱ = ساخت اولیه، هزینه = هزینهٔ پایه)"""
+    base = BUILDINGS[building_id]["cost"]
+    mult = 1 + (level - 1) * LEVEL_COST_STEP
+    return {k: max(1, round(v * mult)) for k, v in base.items() if v}
+
+def building_hours(building_id: str, level: int) -> float:
+    base = BUILDINGS[building_id]["hours"]
+    mult = 1 + (level - 1) * LEVEL_HOURS_STEP
+    return round(base * mult, 1)

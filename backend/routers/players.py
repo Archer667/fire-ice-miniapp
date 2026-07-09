@@ -34,6 +34,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "is_port": body.castle in region["ports"],
         "resources": dict(STARTING_RESOURCES),
         "troops": {},
+        "buildings": {},
         "points": 100,
         "created_at": now(),
         "last_tick": now(),
