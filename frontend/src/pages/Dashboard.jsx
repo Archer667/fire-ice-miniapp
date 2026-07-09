@@ -3,6 +3,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { api } from '../api.js';
 import { Coin, Wheat, People, Pick, Rock, Wine, Build, Swords, Eye, Heart } from '../components/Icons.jsx';
+import { SEASONS, seasonOf } from '../seasons.js';
 
 const RES_META = {
   gold:  { name: 'طلا', d: 'معدن طلا · بازار', Icon: Coin,  max: 2000 },
@@ -20,6 +21,8 @@ export default function Dashboard({ goTo }) {
   const dayPct = Math.round((me.day / me.season_length) * 100);
   const C = 2 * Math.PI * 19;
   const [taxBusy, setTaxBusy] = useState(false);
+  const season = seasonOf(me.day);
+  const { name: seasonName, tagline, from: seasonFrom, to: seasonTo } = SEASONS[season];
 
   const changeTax = async (delta) => {
     const rate = Math.max(0, Math.min(me.max_tax_rate, me.tax_rate + delta));
@@ -35,21 +38,21 @@ export default function Dashboard({ goTo }) {
 
   return (
     <>
-      <div className="season up">
+      <div className={`season up ${season}`}>
         <div className="ring">
           <svg width="46" height="46" viewBox="0 0 46 46">
             <circle cx="23" cy="23" r="19" fill="none" stroke="rgba(160,195,255,0.12)" strokeWidth="4" />
             <circle cx="23" cy="23" r="19" fill="none" stroke="url(#gr)" strokeWidth="4"
                     strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - dayPct / 100)} />
             <defs><linearGradient id="gr" x1="0" y1="0" x2="1" y2="1">
-              <stop stopColor="#38bdf8" /><stop offset="1" stopColor="#4da3ff" />
+              <stop stopColor={seasonFrom} /><stop offset="1" stopColor={seasonTo} />
             </linearGradient></defs>
           </svg>
           <div className="num">{me.day.toLocaleString('fa-IR')}</div>
         </div>
         <div>
-          <div className="t1">زمستان نزدیک است</div>
-          <div className="t2">روز {me.day.toLocaleString('fa-IR')} از {me.season_length.toLocaleString('fa-IR')} · دورهٔ نخست</div>
+          <div className="t1">{tagline}</div>
+          <div className="t2">روز {me.day.toLocaleString('fa-IR')} از {me.season_length.toLocaleString('fa-IR')} · {seasonName}</div>
         </div>
       </div>
 

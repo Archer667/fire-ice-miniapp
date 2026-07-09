@@ -163,7 +163,13 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
   background: linear-gradient(120deg, rgba(90,170,255,0.12), rgba(148,182,255,0.04));
   border: 1px solid var(--edge); backdrop-filter: blur(24px);
   box-shadow: inset 0 1px 0 rgba(210,230,255,0.1);
+  transition: background 0.4s ease, border-color 0.4s ease;
 }
+/* هر ۱۵ روز یک چرخهٔ فصلی کامل می‌شود — رنگ پس‌زمینه با فصل عوض می‌شود */
+.season.spring { background: linear-gradient(120deg, rgba(52,211,153,0.14), rgba(148,182,255,0.04)); border-color: rgba(52,211,153,0.22); }
+.season.summer { background: linear-gradient(120deg, rgba(251,191,36,0.16), rgba(148,182,255,0.04)); border-color: rgba(251,191,36,0.24); }
+.season.autumn { background: linear-gradient(120deg, rgba(251,146,60,0.16), rgba(148,182,255,0.04)); border-color: rgba(251,146,60,0.24); }
+.season.winter { background: linear-gradient(120deg, rgba(90,170,255,0.12), rgba(148,182,255,0.04)); border-color: var(--edge); }
 .ring { position: relative; width: 46px; height: 46px; flex-shrink: 0; }
 .ring svg { transform: rotate(-90deg); }
 .ring .num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; }
