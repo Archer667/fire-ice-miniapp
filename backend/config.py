@@ -9,6 +9,9 @@ DB_NAME     = os.getenv("DB_NAME", "fire_ice")
 ADMIN_IDS   = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 DEV_MODE    = os.getenv("DEV_MODE", "false").lower() == "true"
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+# Vercel روی هر دیپلوی/پریویو یک URL تصادفی می‌سازد — این regex اجازه می‌دهد
+# همهٔ پریویوهای یک پروژه بدون ویرایش دستی CORS_ORIGINS با هر پوش قبول شوند
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "") or None
 
 # ---- ثابت‌های اقتصاد بازی ----
 STARTING_RESOURCES = {"gold": 1000, "food": 800, "men": 500, "iron": 100, "stone": 100}

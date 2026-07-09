@@ -1,9 +1,12 @@
 """منطق مشترک: تولید روزانه، خرج منابع"""
-from datetime import datetime, timezone
+from datetime import datetime
 from config import DAILY_PRODUCTION, RESOURCE_CAPS
 
 def now():
-    return datetime.now(timezone.utc)
+    # naive UTC — با چیزی که MongoDB برای فیلدهای datetime برمی‌گرداند یکی است.
+    # اگر aware باشد، تفریق با مقداری که از دیتابیس خوانده شده (naive) خطای
+    # TypeError می‌دهد.
+    return datetime.utcnow()
 
 def apply_production(player: dict) -> dict:
     """تولید lazy: از آخرین آپدیت تا الان، روزانه حساب می‌شود"""

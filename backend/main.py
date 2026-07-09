@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from config import CORS_ORIGINS
+from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL
 from routers import players, war, map as map_router, ravens, leaderboard, admin, buildings as buildings_router
 
@@ -9,6 +9,7 @@ app = FastAPI(title="نغمه آتش و یخ — API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
