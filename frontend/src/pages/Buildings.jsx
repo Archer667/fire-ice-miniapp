@@ -8,9 +8,9 @@ const RES_ICON = { gold: Coin, iron: Pick, stone: Rock };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ' };
 
 const GROUPS = [
-  { key: 'economy',  label: 'ساختمان‌های اقتصادی', hint: 'تولید و ذخیرهٔ منابع' },
-  { key: 'barracks', label: 'پادگان یگان‌ها',        hint: 'پیش‌نیاز اول استخدام هر نیرو' },
-  { key: 'armory',   label: 'کارگاه‌های تسلیحات',    hint: 'پیش‌نیاز دوم استخدام — تسلیحات هر یگان' },
+  { key: 'economy',  label: 'ساختمان‌های اقتصادی', hint: 'منابعت رو تولید و ذخیره می‌کنن' },
+  { key: 'barracks', label: 'پادگان یگان‌ها',        hint: 'بدون این، اون نیرو رو استخدام نمی‌کنی' },
+  { key: 'armory',   label: 'کارگاه‌های تسلیحات',    hint: 'تسلیحاتی که همون نیرو بهش نیاز داره' },
   { key: 'defense',  label: 'دفاعی و زیرساخت',       hint: '' },
 ];
 
@@ -38,8 +38,8 @@ export default function Buildings() {
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, ...subtractCost(me.resources, res.cost) } });
       toast(row.level === 0
-        ? `ساخت «${row.name}» آغاز شد — سطح ۱`
-        : `ارتقای «${row.name}» به سطح ${res.target_level.toLocaleString('fa-IR')} آغاز شد`);
+        ? `ساخت «${row.name}» شروع شد — سطح ۱`
+        : `ارتقای «${row.name}» به سطح ${res.target_level.toLocaleString('fa-IR')} شروع شد`);
       await load();
     } catch (e) { toast(e.message); }
     setBusyId(null);
@@ -50,7 +50,7 @@ export default function Buildings() {
   return (
     <>
       <div className="page-title up">ساختمان‌های قلمرو</div>
-      <div className="page-sub up">هر ساختمان تا سطح {(30).toLocaleString('fa-IR')} ارتقا می‌پذیرد — هرچه سطح بالاتر، بازدهی و هزینه بیشتر</div>
+      <div className="page-sub up">تا سطح {(30).toLocaleString('fa-IR')} می‌تونی بالا ببریشون — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
 
       {GROUPS.map((g, gi) => {
         const items = rows.filter(r => r.type === g.key);
@@ -103,11 +103,11 @@ function BuildingRow({ row, busy, onAct }) {
             <span className="tm">{row.next_hours.toLocaleString('fa-IR')} ساعت</span>
           </div>
           <button className="btn ghost bld-btn" disabled={busy} onClick={onAct}>
-            {busy ? 'در حال ارسال...' : row.level === 0 ? 'بنا کردن' : `ارتقا به سطح ${row.next_level.toLocaleString('fa-IR')}`}
+            {busy ? 'در حال ارسال...' : row.level === 0 ? 'بساز' : `ارتقا به سطح ${row.next_level.toLocaleString('fa-IR')}`}
           </button>
         </>
       ) : (
-        <div className="bld-status">به بیشینهٔ سطح رسیده</div>
+        <div className="bld-status">به سقفش رسیده — از این بالاتر نمیشه</div>
       )}
     </div>
   );

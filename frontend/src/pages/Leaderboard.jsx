@@ -22,7 +22,7 @@ export default function Leaderboard() {
   return (
     <>
       <div className="page-title up">بازی تاج‌وتخت</div>
-      <div className="page-sub up">اقلیم‌ها به‌عنوان یک تیم، لردها به‌صورت فردی رقابت می‌کنند</div>
+      <div className="page-sub up">یا اقلیمت رو ببر بالا، یا خودت بدرخش — هرکی به روش خودش</div>
 
       <div className="tabs up u1">
         {TABS.map(t => (

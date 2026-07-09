@@ -74,7 +74,7 @@ export default function Diplomacy() {
   return (
     <>
       <div className="page-title up">دیپلماسی</div>
-      <div className="page-sub up">ضیافت، پیمان‌های سیاسی و سلسله‌مراتب قدرت وستروس</div>
+      <div className="page-sub up">ضیافت بگیر، پیمان ببند، ببین قدرت دست کیه</div>
 
       <div className="sect up u1">ضیافت</div>
       <div className="card up u1">
@@ -127,7 +127,7 @@ export default function Diplomacy() {
       <div className="up u2">
         {(!polls || polls.length === 0) && (
           <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-            الان هیچ رای‌گیری‌ای باز نیست — ادمین می‌تواند برای انتخاب بالادستی، والی یا پادشاه/ملکه یکی باز کند
+            فعلاً هیچ رای‌گیری‌ای باز نیست — هروقت ادمین یکی باز کنه، همین‌جا می‌بینیش
           </div>
         )}
         {polls && polls.map(p => (
@@ -152,7 +152,7 @@ export default function Diplomacy() {
               );
             })}
             {!p.eligible && p.status === 'open' && (
-              <div className="poll-note">واجد شرایط رای‌دادن در این نظرسنجی نیستی — فقط نتیجه را می‌بینی</div>
+              <div className="poll-note">این یکی رو نمی‌تونی رای بدی — فقط نتیجه‌اش رو می‌بینی</div>
             )}
           </div>
         ))}
@@ -162,7 +162,7 @@ export default function Diplomacy() {
       <div className="card up u3">
         <div className="res">
           <div className="ic"><Crown s={18} /></div>
-          <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها برگزیده می‌شود</small></div>
+          <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه</small></div>
           <div className="val">{titles?.king ? titles.king.title + ' ' + titles.king.name : '—'}</div>
         </div>
         {Object.entries(WARDEN_GROUPS).map(([gid, g]) => (
