@@ -7,6 +7,7 @@ from game import now, apply_production
 from game_data import REGIONS
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate
 from ranks import scored_players
+from routers.war import apply_campaign_upkeep
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -59,6 +60,7 @@ async def me(user: dict = Depends(get_user)):
     if not p:
         return {"registered": False}
     p = apply_production(p)
+    p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
     await players.update_one({"tg_id": user["id"]},
         {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
     day = min(SEASON_LENGTH_DAYS, ( (now() - p["created_at"]).days % SEASON_LENGTH_DAYS ) + 1)
@@ -128,6 +130,7 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
     p = apply_production(p)
+    p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
     cap = max_tax_rate(p.get("popularity", POPULARITY_START))
     if not (0 <= body.rate <= cap):
         raise HTTPException(400, f"نرخ مالیات باید بین ۰ تا {cap} درصد باشد")

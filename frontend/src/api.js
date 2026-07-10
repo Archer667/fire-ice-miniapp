@@ -25,6 +25,7 @@ import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
+  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -32,6 +33,9 @@ const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = []; // {id, mine_proposed, other_name, type, type_name, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
+const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, status, active, created_at, last_food_tick}
+let mockCampaignSeq = 1;
+const mockMapCastles = []; // {region, name, port, x, y, custom}
 const mockPolls = [
   { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
     status: 'open', tally: [3, 1], total_votes: 4, eligible: true, my_vote: null },
@@ -53,6 +57,23 @@ function mockResolve() {
   }
 }
 
+function mockResolveCampaigns() {
+  if (!mockMe.resources) return;
+  const nowMs = Date.now();
+  for (const c of mockCampaigns) {
+    if (!c.active) continue;
+    const last = new Date(c.last_food_tick).getTime();
+    const days = Math.floor((nowMs - last) / 86400000);
+    if (days <= 0) continue;
+    mockMe.resources.food = Math.max(0, (mockMe.resources.food ?? 0) - c.food_per_day * days);
+    c.last_food_tick = new Date(last + days * 86400000).toISOString();
+  }
+}
+
+function mockStationedOrigins() {
+  return mockCampaigns.filter(c => c.active && c.op_type === 'garrison').map(c => c.target_castle);
+}
+
 function mockCanAfford(cost) {
   return Object.entries(cost).every(([k, v]) => (mockMe.resources?.[k] ?? 0) >= v);
 }
@@ -61,7 +82,7 @@ function mockPay(cost) {
 }
 const M = {
   gamedata: { regions: REGIONS_STATIC },
-  me: () => mockMe,
+  me: () => { mockResolveCampaigns(); return mockMe; },
   register: (b) => {
     Object.assign(mockMe, {
       registered: true, name: b.name, region: b.region,
@@ -82,23 +103,166 @@ const M = {
     mockMe.tax_rate = rate;
     return { ok: true, tax_rate: rate };
   },
-  map: () => ({
-    regions: Object.entries(REGIONS_STATIC).map(([id, r]) => ({
-      id, name: r.name,
-      castles: [...r.castles.map(n => ({ name: n, owner: null, port: false })),
-                ...r.ports.map(n => ({ name: n, owner: null, port: true }))],
-    })),
-    campaigns: [
-      { from: 'کسترلی راک', to: 'ریورران', mine: false, revealed_minutes_ago: 23 },
-      { from: 'پایک', to: 'وایت هاربر', mine: false, revealed_minutes_ago: 61 },
-    ],
-  }),
+  map: () => {
+    mockResolveCampaigns();
+    const owners = {};
+    for (const p of MOCK_PLAYERS) {
+      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null };
+    }
+    if (mockMe.registered) {
+      owners[mockMe.castle] = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null };
+    }
+    const nowMs = Date.now();
+    return {
+      regions: Object.entries(REGIONS_STATIC).map(([id, r]) => {
+        const custom = mockMapCastles.filter(m => m.region === id && m.custom);
+        const coords = {};
+        for (const m of mockMapCastles.filter(m => m.region === id)) coords[m.name] = [m.x, m.y];
+        return {
+          id, name: r.name,
+          castles: [
+            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: false })),
+            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: true })),
+            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: c.port })),
+          ],
+          coords,
+        };
+      }),
+      campaigns: [
+        { from: 'کسترلی راک', to: 'ریورران', op_type: 'attack', mine: false, revealed_minutes_ago: 23 },
+        { from: 'پایک', to: 'وایت هاربر', op_type: 'naval_raid', mine: false, revealed_minutes_ago: 61 },
+        ...mockCampaigns.filter(c => c.active).map(c => ({
+          from: c.origin_castle, to: c.target_castle, op_type: c.op_type, mine: true,
+          revealed_minutes_ago: Math.floor((nowMs - new Date(c.created_at).getTime()) / 60000),
+        })),
+      ],
+    };
+  },
+  adminMapOptions: (region) => {
+    const r = REGIONS_STATIC[region];
+    if (!r) return [];
+    const placed = new Set(mockMapCastles.filter(m => m.region === region).map(m => m.name));
+    return [
+      ...r.castles.filter(n => !placed.has(n)).map(n => ({ name: n, port: false })),
+      ...r.ports.filter(n => !placed.has(n)).map(n => ({ name: n, port: true })),
+    ];
+  },
+  adminAddMapCastle: (body) => {
+    const r = REGIONS_STATIC[body.region];
+    if (!r) throw new Error('اقلیم نامعتبر');
+    if (!(body.x >= 0 && body.x <= 100 && body.y >= 0 && body.y <= 100)) throw new Error('مختصات نامعتبر');
+    const allNames = new Set(mockMapCastles.map(m => m.name));
+    for (const reg of Object.values(REGIONS_STATIC)) { reg.castles.forEach(n => allNames.add(n)); reg.ports.forEach(n => allNames.add(n)); }
+
+    let name, port, custom;
+    if (body.new_name && body.new_name.trim()) {
+      name = body.new_name.trim().slice(0, 40);
+      if (allNames.has(name)) throw new Error('این اسم قبلاً در بازی وجود دارد');
+      port = !!body.port; custom = true;
+    } else {
+      name = (body.name || '').trim();
+      if (![...r.castles, ...r.ports].includes(name)) throw new Error('این قلعه/بندر در دیتای این اقلیم نیست');
+      if (mockMapCastles.some(m => m.region === body.region && m.name === name)) throw new Error('این قلعه از قبل روی نقشه گذاشته شده');
+      port = r.ports.includes(name); custom = false;
+    }
+    mockMapCastles.push({ region: body.region, name, port, x: body.x, y: body.y, custom });
+    return { ok: true, name };
+  },
+  submitCampaign: (body) => {
+    mockResolveCampaigns();
+    const op = OP_TYPES.find(o => o.id === body.op_type);
+    if (!op) throw new Error('نوع عملیات نامعتبر');
+
+    const validOrigins = [mockMe.castle, ...mockStationedOrigins()];
+    if (!validOrigins.includes(body.origin_castle)) {
+      throw new Error('مبدا باید قلعهٔ خودت یا جایی باشد که لشکرت همین الان مستقر است');
+    }
+
+    let targetCastle = body.origin_castle;
+    if (op.needsTarget) {
+      if (!body.target_castle) throw new Error('مقصد را مشخص کن');
+      targetCastle = body.target_castle;
+      if (op.portOnly) {
+        const isPort = Object.values(REGIONS_STATIC).some(r => r.ports.includes(targetCastle))
+          || mockMapCastles.some(m => m.name === targetCastle && m.port);
+        if (!isPort) throw new Error('غارت دریایی فقط علیه اهداف بندری ممکن است');
+      }
+      if (body.op_type !== 'garrison' && (body.plan || '').trim().length < 50) {
+        throw new Error('سناریو خیلی کوتاه است — نقشه‌ات را شرح بده');
+      }
+    }
+
+    const specials = REGIONS_STATIC[mockMe.region]?.special || [];
+    let gold = 0, men = 0, food = 0;
+    for (const [tid, n] of Object.entries(body.troops || {})) {
+      if (!n || n <= 0) continue;
+      const common = COMMON_TROOPS.find(t => t.id === tid);
+      if (common) {
+        const req = TROOP_UNIT_BUILDINGS[tid];
+        if (req) {
+          const campLevel = mockBuildings[req.camp]?.level || 0;
+          const armoryLevel = mockBuildings[req.armory]?.level || 0;
+          if (campLevel <= 0 || armoryLevel <= 0) {
+            throw new Error(`برای گسیل ${common.name} باید ${BUILDINGS_STATIC[req.camp].name} و ${BUILDINGS_STATIC[req.armory].name} را ساخته باشی`);
+          }
+        }
+        gold += common.cost * n;
+        food += FOOD_COST_REGULAR * n;
+      } else if (specials.includes(tid)) {
+        gold += SPECIAL_COST * n;
+        food += FOOD_COST_SPECIAL * n;
+      } else {
+        throw new Error(`نیروی نامعتبر: ${tid}`);
+      }
+      men += n;
+    }
+    if (men <= 0) throw new Error('هیچ نیرویی گسیل نکرده‌ای');
+    if (!mockCanAfford({ gold })) throw new Error('خزانه کافی نیست');
+    if ((mockMe.resources.men ?? 0) < men) throw new Error('نفرات کافی نداری');
+
+    mockPay({ gold });
+    mockMe.resources.men -= men;
+
+    const nowIso = new Date().toISOString();
+    const doc = {
+      id: String(mockCampaignSeq++),
+      origin_castle: body.origin_castle, op_type: body.op_type, target_castle: targetCastle,
+      plan: body.plan || '', troops: body.troops,
+      gold_cost: gold, men_committed: men, food_per_day: food,
+      status: 'pending', verdict: '', active: true,
+      created_at: nowIso, last_food_tick: nowIso,
+    };
+    mockCampaigns.push(doc);
+    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food };
+  },
+  cancelCampaign: (id) => {
+    const c = mockCampaigns.find(x => x.id === id);
+    if (!c) throw new Error('لشکر پیدا نشد');
+    if (!c.active) throw new Error('این لشکر دیگر فعال نیست');
+    c.active = false; c.status = 'cancelled';
+    mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
+    return { ok: true };
+  },
+  warMine: () => {
+    mockResolveCampaigns();
+    const nowMs = Date.now();
+    return mockCampaigns.slice().reverse().map(c => ({
+      id: c.id,
+      op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+      origin: c.origin_castle, target: c.target_castle,
+      status: c.status, verdict: c.verdict, active: c.active,
+      gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
+      days_active: Math.max(0, Math.floor((nowMs - new Date(c.created_at).getTime()) / 86400000)),
+      created_at: c.created_at,
+    }));
+  },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
     { rank: 2, name: 'تایوین لنیستر', castle: 'کسترلی راک', region: 'وسترلندز', points: 2140 },
     { rank: 3, name: 'مارگری تایرل', castle: 'های‌گاردن', region: 'ریچ', points: 1990 },
     { rank: 4, name: mockMe.name || 'تو', castle: mockMe.castle || '—', region: mockMe.region_name || '—', points: 100, me: true },
   ],
+  ravensUnread: () => ({ count: 0 }),
   inbox: () => [
     { with_tg_id: 9002, with_name: 'تایوین لنیستر', last_text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان.', last_at: '', unread: 1 },
     { with_tg_id: 9003, with_name: 'مارگری تایرل', last_text: 'ریچ آمادهٔ فروش گندم است. ۲۰۰ واحد در برابر ۱۵۰ طلا؟', last_at: '', unread: 1 },
@@ -235,8 +399,13 @@ export const api = {
   me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
   register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
   map:       () => MOCK ? Promise.resolve(M.map()) : req('/api/map'),
-  submitWar: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
+  warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
+  submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
+  cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
+  adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
+  adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
+  ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
   thread:    (name) => MOCK ? Promise.resolve(M.thread()) : req('/api/ravens/thread/' + encodeURIComponent(name)),
   sendRaven: (toTgIds, text) => MOCK ? Promise.resolve(M.sendRaven(toTgIds, text))

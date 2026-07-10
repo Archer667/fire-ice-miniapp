@@ -33,6 +33,11 @@ async def send(body: SendBody, user: dict = Depends(get_user)):
     } for t in targets])
     return {"ok": True, "sent_to": len(targets)}
 
+@router.get("/unread")
+async def unread(user: dict = Depends(get_user)):
+    count = await messages.count_documents({"to_id": user["id"], "read": False})
+    return {"count": count}
+
 @router.get("/inbox")
 async def inbox(user: dict = Depends(get_user)):
     """آخرین نامهٔ هر مکاتبه + شمار خوانده‌نشده"""

@@ -20,6 +20,10 @@ RESOURCE_CAPS      = {"gold": 2000, "food": 2000, "men": 1000, "iron": 500, "sto
 CAMPAIGN_REVEAL_MINUTES = 15
 SEASON_LENGTH_DAYS = 30
 
+# ---- آذوقهٔ روزانهٔ لشکر — به‌ازای هر سرباز، تا وقتی لشکر فعال است ----
+FOOD_COST_REGULAR = 1   # سرباز عادی، غله در روز
+FOOD_COST_SPECIAL = 2   # نیروی ویژهٔ اقلیمی، غله در روز
+
 # ---- مالیات و محبوبیت ----
 TAX_RATE_DEFAULT = 10     # درصد، در ابتدای بازی
 TAX_RATE_BASE_MAX = 20    # سقف مالیات بدون احتساب بونوس محبوبیت

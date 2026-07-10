@@ -108,3 +108,19 @@ def building_hours(building_id: str, level: int) -> float:
     base = BUILDINGS[building_id]["hours"]
     mult = 1 + (level - 1) * LEVEL_HOURS_STEP
     return round(base * mult, 1)
+
+# ---- پیش‌نیاز اعزام هر نیروی عمومی: پادگان + کارگاه تسلیحات همان یگان ----
+# نیروهای ویژهٔ اقلیمی (special) این پیش‌نیاز را ندارند — ساختمان مربوطه در بازی تعریف نشده
+UNIT_REQUIREMENTS = {}
+for _bid, _b in BUILDINGS.items():
+    if _b.get("type") == "barracks":
+        UNIT_REQUIREMENTS.setdefault(_b["unit"], {})["camp"] = _bid
+    elif _b.get("type") == "armory":
+        UNIT_REQUIREMENTS.setdefault(_b["unit"], {})["armory"] = _bid
+
+def unit_requirements(troop_id: str):
+    """(camp_building_id, armory_building_id) برای یک نیروی عمومی، یا None اگر نیرو ویژه/نامعتبر است"""
+    req = UNIT_REQUIREMENTS.get(troop_id)
+    if not req:
+        return None
+    return req.get("camp"), req.get("armory")

@@ -5,7 +5,6 @@ import { api } from './api.js';
 import Onboarding from './pages/Onboarding.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Buildings from './pages/Buildings.jsx';
-import MapPage from './pages/MapPage.jsx';
 import War from './pages/War.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
 import Ravens from './pages/Ravens.jsx';
@@ -18,7 +17,8 @@ import Toast from './components/Toast.jsx';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, MapPage, War, Leaderboard, Ravens, Diplomacy, Admin];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin];
+const RAVENS_INDEX = 4;
 
 export default function App() {
   const { me, setMe, toast } = useGame();
@@ -41,7 +41,7 @@ export default function App() {
         <Onboarding />
       ) : (
         <>
-          <Header tab={tab} onOpenMenu={() => setMenuOpen(true)} />
+          <Header tab={tab} onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
           <div className="view" key={tab}><Page goTo={setTab} /></div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />

@@ -2,8 +2,9 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import scenarios, players, admin_roles
+from db import campaigns, players, admin_roles, map_castles
 from game import now
+from game_data import REGIONS
 from config import ADMIN_IDS
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -19,12 +20,12 @@ async def full_admin_user(user: dict = Depends(get_user)):
 @router.get("/pending")
 async def pending(user: dict = Depends(admin_user)):
     out = []
-    async for s in scenarios.find({"status": "pending"}).sort("created_at", 1):
+    async for s in campaigns.find({"status": "pending"}).sort("created_at", 1):
         out.append({
             "id": str(s["_id"]), "player": s["player_name"],
-            "from": s["from_castle"], "to": s["target_castle"],
+            "from": s["origin_castle"], "to": s["target_castle"],
             "op_type": s["op_type"], "plan": s["plan"],
-            "troops": s["troops"], "cost": s["cost"],
+            "troops": s["troops"], "cost": s["gold_cost"],
             "created_at": s["created_at"].isoformat(),
         })
     return out
@@ -35,10 +36,12 @@ class VerdictBody(BaseModel):
 
 @router.post("/{scenario_id}/approve")
 async def approve(scenario_id: str, body: VerdictBody, user: dict = Depends(admin_user)):
-    s = await scenarios.find_one({"_id": ObjectId(scenario_id)})
+    """تایید فقط داوری سناریو را ثبت می‌کند — لشکر همچنان فعال می‌ماند و آذوقه می‌خورد
+    تا خودِ لرد/لیدی لغوش کند"""
+    s = await campaigns.find_one({"_id": ObjectId(scenario_id)})
     if not s:
         raise HTTPException(404, "سناریو پیدا نشد")
-    await scenarios.update_one({"_id": s["_id"]},
+    await campaigns.update_one({"_id": s["_id"]},
         {"$set": {"status": "approved", "verdict": body.verdict}})
     if body.points_delta:
         await players.update_one({"tg_id": s["tg_id"]}, {"$inc": {"points": body.points_delta}})
@@ -46,14 +49,65 @@ async def approve(scenario_id: str, body: VerdictBody, user: dict = Depends(admi
 
 @router.post("/{scenario_id}/reject")
 async def reject(scenario_id: str, body: VerdictBody, user: dict = Depends(admin_user)):
-    s = await scenarios.find_one({"_id": ObjectId(scenario_id)})
+    """رد یعنی این لشکرکشی هرگز رخ نداده — طلا و نفرات به لرد برمی‌گردد و لشکر منحل می‌شود"""
+    s = await campaigns.find_one({"_id": ObjectId(scenario_id)})
     if not s:
         raise HTTPException(404, "سناریو پیدا نشد")
-    await scenarios.update_one({"_id": s["_id"]},
-        {"$set": {"status": "rejected", "verdict": body.verdict}})
-    # برگشت طلا هنگام رد
-    await players.update_one({"tg_id": s["tg_id"]}, {"$inc": {"resources.gold": s["cost"]}})
+    await campaigns.update_one({"_id": s["_id"]},
+        {"$set": {"status": "rejected", "verdict": body.verdict, "active": False}})
+    await players.update_one({"tg_id": s["tg_id"]},
+        {"$inc": {"resources.gold": s["gold_cost"], "resources.men": s["men_committed"]}})
     return {"ok": True}
+
+@router.get("/map/options")
+async def map_options(region: str, user: dict = Depends(admin_user)):
+    """اسم قلعه/بندرهای این اقلیم که هنوز روی نقشه مکان ندارند — برای پرکردن انتخابگر ادمین"""
+    if region not in REGIONS:
+        raise HTTPException(400, "اقلیم نامعتبر")
+    placed = {m["name"] async for m in map_castles.find({"region": region}, {"name": 1})}
+    r = REGIONS[region]
+    options = [{"name": c, "port": False} for c in r["castles"] if c not in placed]
+    options += [{"name": c, "port": True} for c in r["ports"] if c not in placed]
+    return options
+
+class MapCastleBody(BaseModel):
+    region: str
+    x: float
+    y: float
+    name: str | None = None       # انتخاب از دیتای موجودِ بازی
+    new_name: str | None = None   # قلعه/شهر کاملاً جدید
+    port: bool = False
+
+@router.post("/map/castles")
+async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
+    if body.region not in REGIONS:
+        raise HTTPException(400, "اقلیم نامعتبر")
+    if not (0 <= body.x <= 100 and 0 <= body.y <= 100):
+        raise HTTPException(400, "مختصات نامعتبر")
+
+    r = REGIONS[body.region]
+    all_names = {name async for doc in map_castles.find({}, {"name": 1}) for name in [doc["name"]]}
+    for reg in REGIONS.values():
+        all_names |= set(reg["castles"]) | set(reg["ports"])
+
+    if body.new_name and body.new_name.strip():
+        name = body.new_name.strip()[:40]
+        if name in all_names:
+            raise HTTPException(409, "این اسم قبلاً در بازی وجود دارد")
+        custom, port = True, body.port
+    else:
+        name = (body.name or "").strip()
+        if name not in r["castles"] + r["ports"]:
+            raise HTTPException(400, "این قلعه/بندر در دیتای این اقلیم نیست")
+        if await map_castles.find_one({"region": body.region, "name": name}):
+            raise HTTPException(409, "این قلعه از قبل روی نقشه گذاشته شده")
+        custom, port = False, name in r["ports"]
+
+    await map_castles.insert_one({
+        "region": body.region, "name": name, "port": port,
+        "x": body.x, "y": body.y, "custom": custom, "created_at": now(),
+    })
+    return {"ok": True, "name": name}
 
 @router.get("/admins")
 async def list_admins(user: dict = Depends(full_admin_user)):

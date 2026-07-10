@@ -36,6 +36,26 @@ export const COMMON_TROOPS = [
   { id: 'spearman',  name: 'نیزه‌دار',          cost: 1 },
 ];
 export const SPECIAL_COST = 4;
+export const FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
+export const FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
+
+// پیش‌نیاز اعزام هر نیروی عمومی: پادگان + کارگاه تسلیحاتِ همان یگان باید ساخته شده باشد
+export const TROOP_UNIT_BUILDINGS = {
+  heavy_cav: { camp: 'camp_hcav',   armory: 'armory_hcav' },
+  infantry:  { camp: 'camp_sword',  armory: 'armory_sword' },
+  light_cav: { camp: 'camp_lcav',   armory: 'armory_lcav' },
+  archer:    { camp: 'camp_archer', armory: 'armory_archer' },
+  spearman:  { camp: 'camp_spear',  armory: 'armory_spear' },
+};
+
+// گزینه‌های عملیات لشکرکشی
+export const OP_TYPES = [
+  { id: 'attack',     name: 'حملهٔ نظامی',                    needsTarget: true,  portOnly: false },
+  { id: 'siege',      name: 'محاصرهٔ قلعه',                    needsTarget: true,  portOnly: false },
+  { id: 'naval_raid', name: 'غارت دریایی (برای اهداف بندری)', needsTarget: true,  portOnly: true },
+  { id: 'garrison',   name: 'جای‌گیری',                        needsTarget: true,  portOnly: false },
+  { id: 'defense',    name: 'دفاعی',                          needsTarget: false, portOnly: false },
+];
 
 export const BUILDINGS_STATIC = {
   // اقتصادی

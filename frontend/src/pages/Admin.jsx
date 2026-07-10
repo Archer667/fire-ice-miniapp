@@ -4,7 +4,11 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Shield, Plus, Close } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
+import { MapFrame } from '../components/WesterosMap.jsx';
+import { REGION_COORDS } from '../mapCoords.js';
 import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
+
+const NEW_CASTLE = '__new__';
 
 export default function Admin() {
   const { me, toast } = useGame();
@@ -26,15 +30,51 @@ export default function Admin() {
   const [newAdminTarget, setNewAdminTarget] = useState([]);
   const [busy, setBusy] = useState(false);
 
+  const [mapRegion, setMapRegion] = useState('north');
+  const [mapData, setMapData] = useState(null);
+  const [mapOptions, setMapOptions] = useState(null);
+  const [pendingPin, setPendingPin] = useState(null); // {x,y}
+  const [pickName, setPickName] = useState('');
+  const [newCastleName, setNewCastleName] = useState('');
+  const [newCastlePort, setNewCastlePort] = useState(false);
+
   const loadPending = () => api.adminPending().then(setPending).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
+  const loadMapData = () => api.map().then(setMapData).catch(e => toast(e.message));
+  const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
 
   useEffect(() => {
     loadPending();
     loadPolls();
+    loadMapData();
     if (isFull) loadAdmins();
   }, []);
+
+  useEffect(() => {
+    loadMapOptions();
+    setPendingPin(null); setPickName(''); setNewCastleName(''); setNewCastlePort(false);
+  }, [mapRegion]);
+
+  const addMapCastle = async () => {
+    if (!pendingPin) return;
+    if (!pickName) { toast('یک قلعه/شهر را انتخاب کن'); return; }
+    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y };
+    if (pickName === NEW_CASTLE) {
+      if (!newCastleName.trim()) { toast('نام قلعه/شهر تازه را بنویس'); return; }
+      body.new_name = newCastleName.trim();
+      body.port = newCastlePort;
+    } else {
+      body.name = pickName;
+    }
+    try {
+      await api.adminAddMapCastle(body);
+      haptic('medium');
+      toast('قلعه/شهر به نقشه اضافه شد');
+      setPendingPin(null); setPickName(''); setNewCastleName(''); setNewCastlePort(false);
+      loadMapData(); loadMapOptions();
+    } catch (e) { toast(e.message); }
+  };
 
   const verdict = async (id, action) => {
     setBusy(true);
@@ -154,6 +194,52 @@ export default function Admin() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="sect up u2">افزودن قلعه/شهر به نقشه</div>
+      <div className="card up u2">
+        <label className="f" style={{ marginTop: 0 }}>اقلیم</label>
+        <select value={mapRegion} onChange={e => setMapRegion(e.target.value)}>
+          {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+        </select>
+        <div className="page-sub" style={{ margin: '10px 4px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
+        {mapData && (() => {
+          const r = mapData.regions.find(x => x.id === mapRegion);
+          if (!r) return null;
+          const coords = { ...(REGION_COORDS[r.id] || {}), ...(r.coords || {}) };
+          return (
+            <div className="mapview" style={{ marginTop: 4 }}>
+              <MapFrame region={r} coords={coords} pin={null}
+                        onFrameClick={(x, y) => { haptic(); setPendingPin({ x, y }); }} />
+            </div>
+          );
+        })()}
+        {pendingPin && (
+          <div style={{ marginTop: 12 }}>
+            <label className="f" style={{ marginTop: 0 }}>این نقطه کدام قلعه/شهر است؟</label>
+            <select value={pickName} onChange={e => setPickName(e.target.value)}>
+              <option value="">— انتخاب کن —</option>
+              {mapOptions && mapOptions.map(o => (
+                <option key={o.name} value={o.name}>{o.name}{o.port ? ' ⚓' : ''}</option>
+              ))}
+              <option value={NEW_CASTLE}>+ قلعه/شهر کاملاً جدید...</option>
+            </select>
+            {pickName === NEW_CASTLE && (
+              <>
+                <label className="f">نام تازه</label>
+                <input value={newCastleName} onChange={e => setNewCastleName(e.target.value)} placeholder="مثلاً: هارتزهیل" />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontSize: 12.5 }}>
+                  <input type="checkbox" checked={newCastlePort} onChange={e => setNewCastlePort(e.target.checked)} style={{ width: 'auto' }} />
+                  بندر است
+                </label>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn" style={{ padding: 11 }} onClick={addMapCastle}>افزودن به نقشه</button>
+              <button className="btn ghost" style={{ padding: 11 }} onClick={() => setPendingPin(null)}>انصراف</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="sect up u2">تعیین بالادستی</div>
