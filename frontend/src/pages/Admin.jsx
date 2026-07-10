@@ -14,7 +14,11 @@ export default function Admin() {
   const { me, toast } = useGame();
   const isFull = me.admin_role === 'full';
 
-  const [pending, setPending] = useState(null);
+  const [campaignsInfo, setCampaignsInfo] = useState(null);
+  const [battles, setBattles] = useState(null);
+  const [battleParticipants, setBattleParticipants] = useState([]);
+  const [battleText, setBattleText] = useState('');
+  const [battleBusy, setBattleBusy] = useState(false);
   const [overlordTarget, setOverlordTarget] = useState([]);
   const [overlordRegion, setOverlordRegion] = useState('north');
   const [wardenTarget, setWardenTarget] = useState([]);
@@ -28,7 +32,6 @@ export default function Admin() {
   const [polls, setPolls] = useState(null);
   const [admins, setAdmins] = useState(null);
   const [newAdminTarget, setNewAdminTarget] = useState([]);
-  const [busy, setBusy] = useState(false);
 
   const [mapRegion, setMapRegion] = useState('north');
   const [mapData, setMapData] = useState(null);
@@ -38,14 +41,16 @@ export default function Admin() {
   const [newCastleName, setNewCastleName] = useState('');
   const [newCastlePort, setNewCastlePort] = useState(false);
 
-  const loadPending = () => api.adminPending().then(setPending).catch(e => toast(e.message));
+  const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
+  const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
   const loadMapData = () => api.map().then(setMapData).catch(e => toast(e.message));
   const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
 
   useEffect(() => {
-    loadPending();
+    loadCampaigns();
+    loadBattles();
     loadPolls();
     loadMapData();
     if (isFull) loadAdmins();
@@ -76,15 +81,18 @@ export default function Admin() {
     } catch (e) { toast(e.message); }
   };
 
-  const verdict = async (id, action) => {
-    setBusy(true);
+  const sendBattleReport = async () => {
+    if (!battleParticipants.length) { toast('حداقل یک شرکت‌کننده انتخاب کن'); return; }
+    if (battleText.trim().length < 10) { toast('روایت جنگ خیلی کوتاه است'); return; }
+    setBattleBusy(true);
     try {
-      await api.adminVerdict(id, action, action === 'approve' ? 'تایید شد' : 'رد شد', 0);
+      await api.adminCreateBattleReport(battleParticipants.map(p => p.tg_id), battleText.trim());
       haptic('medium');
-      toast(action === 'approve' ? 'سناریو تایید شد' : 'سناریو رد شد');
-      loadPending();
+      toast('روایت جنگ برای شرکت‌کننده‌ها فرستاده شد');
+      setBattleParticipants([]); setBattleText('');
+      loadBattles();
     } catch (e) { toast(e.message); }
-    setBusy(false);
+    setBattleBusy(false);
   };
 
   const setOverlord = async () => {
@@ -174,24 +182,56 @@ export default function Admin() {
   return (
     <>
       <div className="page-title up">پنل ادمین</div>
-      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط سناریوها و مقام‌ها'}</div>
+      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، روایت جنگ و مقام‌ها'}</div>
 
-      <div className="sect up u1">سناریوهای در انتظار</div>
+      <div className="sect up u1">اطلاعات لشکرکشی‌ها</div>
       <div className="up u1">
-        {(!pending || pending.length === 0) && (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>سناریوی در انتظاری نیست</div>
+        {(!campaignsInfo || campaignsInfo.length === 0) && (
+          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
         )}
-        {pending && pending.map(s => (
+        {campaignsInfo && campaignsInfo.map(s => (
           <div className="card" key={s.id} style={{ marginBottom: 10 }}>
             <div className="res">
               <div className="ic"><Shield s={16} /></div>
-              <div className="n">{s.player}<small>{s.op_type} · {s.from} ← {s.to} · {s.cost.toLocaleString('fa-IR')} طلا</small></div>
+              <div className="n">
+                {s.player}
+                <small>
+                  {s.op_name} · {s.from} ← {s.to} · {s.gold_cost.toLocaleString('fa-IR')} طلا ·{' '}
+                  {s.men_committed.toLocaleString('fa-IR')} نفر · {s.food_per_day.toLocaleString('fa-IR')} غله/روز ·{' '}
+                  {s.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر
+                </small>
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0', lineHeight: 1.8 }}>{s.plan}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn" style={{ padding: 11 }} disabled={busy} onClick={() => verdict(s.id, 'approve')}>تایید</button>
-              <button className="btn ghost" style={{ padding: 11 }} disabled={busy} onClick={() => verdict(s.id, 'reject')}>رد</button>
+            <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+              نیروها: {s.troops.length ? s.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
             </div>
+            {s.plan && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0', lineHeight: 1.8 }}>{s.plan}</div>}
+            <div style={{ fontSize: 11, color: 'var(--low)' }}>
+              {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="sect up u2">روایت جنگ</div>
+      <div className="card up u2">
+        <label className="f" style={{ marginTop: 0 }}>شرکت‌کننده‌ها</label>
+        <PlayerPicker value={battleParticipants} onChange={setBattleParticipants} />
+        <label className="f">چه اتفاقی افتاد</label>
+        <textarea value={battleText} onChange={e => setBattleText(e.target.value)}
+                  placeholder="روایت کن بین چه کسانی بود و نتیجه‌اش چه شد..." />
+        <button className="btn" style={{ marginTop: 14 }} disabled={battleBusy} onClick={sendBattleReport}>
+          {battleBusy ? 'در حال ارسال...' : 'ارسال روایت به شرکت‌کننده‌ها'}
+        </button>
+      </div>
+      <div className="up u2">
+        {(!battles || battles.length === 0) && (
+          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز روایتی فرستاده نشده</div>
+        )}
+        {battles && battles.map(b => (
+          <div className="card" key={b.id} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--mid)', marginBottom: 6 }}>{b.participants.join(' · ')}</div>
+            <div style={{ fontSize: 12.5, lineHeight: 1.8 }}>{b.text}</div>
           </div>
         ))}
       </div>

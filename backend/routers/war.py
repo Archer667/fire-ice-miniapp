@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, map_castles
 from game import now, can_afford, pay, normalize_building_state
-from game_data import COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements
+from game_data import COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, travel_minutes
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 
 router = APIRouter(prefix="/api/war", tags=["war"])
@@ -38,6 +38,14 @@ async def all_castle_names_and_ports():
         if m.get("port"):
             ports.add(m["name"])
     return names, ports
+
+async def resolve_region(name: str) -> str | None:
+    """اقلیمی که یک قلعه/شهر در آن قرار دارد — چه از دیتای ثابت، چه آنچه ادمین اضافه کرده"""
+    for rid, r in REGIONS.items():
+        if name in r["castles"] or name in r["ports"]:
+            return rid
+    doc = await map_castles.find_one({"name": name})
+    return doc["region"] if doc else None
 
 def troop_food_and_gold(region: str, troops: dict, buildings: dict):
     """هزینهٔ طلا (یک‌باره)، نفرات کل، و آذوقهٔ روزانهٔ این ترکیب لشکر را حساب می‌کند.
@@ -129,6 +137,12 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     if p["resources"].get("men", 0) < men:
         raise HTTPException(400, "نفرات کافی نداری")
 
+    same_castle = target_castle == body.origin_castle
+    origin_region = await resolve_region(body.origin_castle) or p["region"]
+    target_region = (await resolve_region(target_castle) or origin_region) if not same_castle else origin_region
+    travel = travel_minutes(same_castle, origin_region, target_region)
+    arrival_at = now() + timedelta(minutes=travel)
+
     pay(p["resources"], {"gold": gold})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
@@ -139,11 +153,15 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "op_type": body.op_type, "target_castle": target_castle,
         "plan": body.plan.strip(), "troops": body.troops,
         "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
-        "status": "pending", "verdict": "", "active": True,
+        "travel_minutes": travel, "arrival_at": arrival_at,
+        "active": True,
         "created_at": now(), "last_food_tick": now(),
     }
     res = await campaigns.insert_one(doc)
-    return {"ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day}
+    return {
+        "ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men,
+        "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
+    }
 
 @router.post("/{campaign_id}/cancel")
 async def cancel(campaign_id: str, user: dict = Depends(get_user)):
@@ -162,13 +180,16 @@ async def mine(user: dict = Depends(get_user)):
     out = []
     async for c in cur:
         days_active = max(0, int((now() - c["created_at"]).total_seconds() // 86400))
+        arrival_at = c.get("arrival_at")
         out.append({
             "id": str(c["_id"]),
             "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "origin": c["origin_castle"], "target": c["target_castle"],
-            "status": c["status"], "verdict": c.get("verdict", ""), "active": c.get("active", False),
+            "active": c.get("active", False),
             "gold_cost": c["gold_cost"], "men_committed": c["men_committed"],
             "food_per_day": c["food_per_day"], "days_active": days_active,
+            "travel_minutes": c.get("travel_minutes", 0),
+            "arrived": (now() >= arrival_at) if arrival_at else True,
             "created_at": c["created_at"].isoformat(),
         })
     return out

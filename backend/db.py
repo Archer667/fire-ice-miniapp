@@ -8,6 +8,7 @@ players    = db.players
 scenarios  = db.scenarios
 campaigns  = db.campaigns
 map_castles = db.map_castles
+battle_reports = db.battle_reports
 messages   = db.messages
 buildings  = db.buildings
 alliances  = db.alliances

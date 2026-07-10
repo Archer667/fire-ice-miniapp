@@ -3,8 +3,17 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players, messages
 from game import now
+from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
 
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
+
+async def send_system_message(to_tg_id: int, to_name: str, text: str):
+    """پیام از طرف «شورای جنگ» — برای روایت نتیجهٔ نبردها که ادمین می‌نویسد"""
+    await messages.insert_one({
+        "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
+        "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
+        "text": text[:2000], "read": False, "created_at": now(),
+    })
 
 class SendBody(BaseModel):
     to_tg_ids: list[int]
@@ -59,14 +68,18 @@ async def inbox(user: dict = Depends(get_user)):
 
 @router.get("/thread/{other_name}")
 async def thread(other_name: str, user: dict = Depends(get_user)):
-    other = await players.find_one({"name": other_name})
-    if not other:
-        raise HTTPException(404, "لرد پیدا نشد")
+    if other_name == SYSTEM_SENDER_NAME:
+        other_tg_id = SYSTEM_SENDER_ID
+    else:
+        other = await players.find_one({"name": other_name})
+        if not other:
+            raise HTTPException(404, "لرد پیدا نشد")
+        other_tg_id = other["tg_id"]
     q = {"$or": [
-        {"from_id": user["id"], "to_id": other["tg_id"]},
-        {"from_id": other["tg_id"], "to_id": user["id"]},
+        {"from_id": user["id"], "to_id": other_tg_id},
+        {"from_id": other_tg_id, "to_id": user["id"]},
     ]}
-    await messages.update_many({"from_id": other["tg_id"], "to_id": user["id"]}, {"$set": {"read": True}})
+    await messages.update_many({"from_id": other_tg_id, "to_id": user["id"]}, {"$set": {"read": True}})
     out = []
     async for m in messages.find(q).sort("created_at", 1).limit(100):
         out.append({"mine": m["from_id"] == user["id"], "text": m["text"], "at": m["created_at"].isoformat()})

@@ -25,7 +25,7 @@ import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
-  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL,
+  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -33,9 +33,19 @@ const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = []; // {id, mine_proposed, other_name, type, type_name, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
-const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, status, active, created_at, last_food_tick}
+const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, active, created_at, last_food_tick, travel_minutes, arrival_at}
 let mockCampaignSeq = 1;
 const mockMapCastles = []; // {region, name, port, x, y, custom}
+const mockBattleReports = []; // {id, participants:[name], text, created_at}
+let mockBattleSeq = 1;
+
+function mockResolveRegion(name) {
+  for (const [rid, r] of Object.entries(REGIONS_STATIC)) {
+    if (r.castles.includes(name) || r.ports.includes(name)) return rid;
+  }
+  const custom = mockMapCastles.find(m => m.name === name);
+  return custom ? custom.region : null;
+}
 const mockPolls = [
   { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
     status: 'open', tally: [3, 1], total_votes: 4, eligible: true, my_vote: null },
@@ -129,11 +139,12 @@ const M = {
         };
       }),
       campaigns: [
-        { from: 'کسترلی راک', to: 'ریورران', op_type: 'attack', mine: false, revealed_minutes_ago: 23 },
-        { from: 'پایک', to: 'وایت هاربر', op_type: 'naval_raid', mine: false, revealed_minutes_ago: 61 },
+        { from: 'کسترلی راک', to: 'ریورران', op_type: 'attack', mine: false, revealed_minutes_ago: 23, travel_minutes: 45, arrived: true },
+        { from: 'پایک', to: 'وایت هاربر', op_type: 'naval_raid', mine: false, revealed_minutes_ago: 61, travel_minutes: 65, arrived: false },
         ...mockCampaigns.filter(c => c.active).map(c => ({
           from: c.origin_castle, to: c.target_castle, op_type: c.op_type, mine: true,
           revealed_minutes_ago: Math.floor((nowMs - new Date(c.created_at).getTime()) / 60000),
+          travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
         })),
       ],
     };
@@ -223,23 +234,28 @@ const M = {
     mockPay({ gold });
     mockMe.resources.men -= men;
 
+    const sameCastle = targetCastle === body.origin_castle;
+    const originRegion = mockResolveRegion(body.origin_castle) || mockMe.region;
+    const targetRegion = sameCastle ? originRegion : (mockResolveRegion(targetCastle) || originRegion);
+    const travel = travelMinutes(sameCastle, originRegion, targetRegion);
+
     const nowIso = new Date().toISOString();
     const doc = {
       id: String(mockCampaignSeq++),
       origin_castle: body.origin_castle, op_type: body.op_type, target_castle: targetCastle,
       plan: body.plan || '', troops: body.troops,
       gold_cost: gold, men_committed: men, food_per_day: food,
-      status: 'pending', verdict: '', active: true,
-      created_at: nowIso, last_food_tick: nowIso,
+      active: true, created_at: nowIso, last_food_tick: nowIso,
+      travel_minutes: travel, arrival_at: new Date(Date.now() + travel * 60000).toISOString(),
     };
     mockCampaigns.push(doc);
-    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food };
+    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food, travel_minutes: travel };
   },
   cancelCampaign: (id) => {
     const c = mockCampaigns.find(x => x.id === id);
     if (!c) throw new Error('لشکر پیدا نشد');
     if (!c.active) throw new Error('این لشکر دیگر فعال نیست');
-    c.active = false; c.status = 'cancelled';
+    c.active = false;
     mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
     return { ok: true };
   },
@@ -250,11 +266,37 @@ const M = {
       id: c.id,
       op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
       origin: c.origin_castle, target: c.target_castle,
-      status: c.status, verdict: c.verdict, active: c.active,
+      active: c.active,
       gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
       days_active: Math.max(0, Math.floor((nowMs - new Date(c.created_at).getTime()) / 86400000)),
+      travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
       created_at: c.created_at,
     }));
+  },
+  adminCampaigns: () => {
+    mockResolveCampaigns();
+    const nowMs = Date.now();
+    return mockCampaigns.slice().reverse().map(c => ({
+      id: c.id, player: mockMe.name,
+      from: c.origin_castle, to: c.target_castle,
+      op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+      plan: c.plan,
+      troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
+        name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+      })),
+      gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
+      travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
+      active: c.active, created_at: c.created_at,
+    }));
+  },
+  adminBattles: () => mockBattleReports.slice().reverse(),
+  adminCreateBattleReport: (participantTgIds, text) => {
+    if (!participantTgIds.length) throw new Error('حداقل یک شرکت‌کننده انتخاب کن');
+    const t = (text || '').trim();
+    if (!t) throw new Error('متن روایت خالی است');
+    const names = participantTgIds.map(id => MOCK_PLAYERS.find(p => p.tg_id === id)?.name || String(id));
+    mockBattleReports.push({ id: String(mockBattleSeq++), participants: names, text: t, created_at: new Date().toISOString() });
+    return { ok: true, sent_to: names.length };
   },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
@@ -378,9 +420,7 @@ const M = {
     if (!text.trim()) throw new Error('نامه خالی است');
     return { ok: true, sent_to: toTgIds.length };
   },
-  // ادمین در حالت mock پیاده نشده — این اپ دمو تک‌بازیکنه و پنل ادمین به بک‌اند واقعی نیاز دارد
-  adminPending: () => [],
-  adminVerdict: () => ({ ok: true }),
+  // مقام‌ها/رای‌گیری در حالت mock پیاده نشده — این اپ دمو تک‌بازیکنه و پنل ادمین کامل به بک‌اند واقعی نیاز دارد
   adminSetOverlord: () => ({ ok: true }),
   adminSetWarden: () => ({ ok: true }),
   adminSetKing: () => ({ ok: true }),
@@ -427,9 +467,10 @@ export const api = {
   searchPlayers: (q) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q)),
 
   /* ---------- پنل ادمین ---------- */
-  adminPending: () => MOCK ? Promise.resolve(M.adminPending()) : req('/api/admin/pending'),
-  adminVerdict: (id, action, verdict, pointsDelta) => MOCK ? Promise.resolve(M.adminVerdict())
-    : req(`/api/admin/${id}/${action}`, { method: 'POST', body: JSON.stringify({ verdict, points_delta: pointsDelta || 0 }) }),
+  adminCampaigns: () => MOCK ? Promise.resolve(M.adminCampaigns()) : req('/api/admin/campaigns'),
+  adminBattles: () => MOCK ? Promise.resolve(M.adminBattles()) : req('/api/admin/battles'),
+  adminCreateBattleReport: (participantTgIds, text) => MOCK ? Promise.resolve(M.adminCreateBattleReport(participantTgIds, text))
+    : req('/api/admin/battles', { method: 'POST', body: JSON.stringify({ participant_tg_ids: participantTgIds, text }) }),
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
     : req('/api/titles/overlord', { method: 'POST', body: JSON.stringify({ region, tg_id: tgId }) }),
   adminSetWarden: (group, tgId) => MOCK ? Promise.resolve(M.adminSetWarden())

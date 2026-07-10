@@ -85,7 +85,7 @@ export default function WesterosMap({ data, meCastle, onSelectTarget }) {
                         </div>
                       ) : <div className="pi-owner">بدون لرد — خالی</div>}
                       {onSelectTarget && (
-                        <button className="btn ghost pi-pick" onClick={() => onSelectTarget(c)}>انتخاب به‌عنوان مقصد</button>
+                        <button className="btn ghost pi-pick" onClick={() => onSelectTarget({ ...c, region: r.id })}>انتخاب به‌عنوان مقصد</button>
                       )}
                     </div>
                   );
@@ -96,7 +96,7 @@ export default function WesterosMap({ data, meCastle, onSelectTarget }) {
             {open === r.id && !hasMap && (
               <div className="region-castles">
                 {castles.map(c => (
-                  <div className="rc" key={c.name} onClick={() => onSelectTarget?.(c)} style={{ cursor: onSelectTarget ? 'pointer' : 'default' }}>
+                  <div className="rc" key={c.name} onClick={() => onSelectTarget?.({ ...c, region: r.id })} style={{ cursor: onSelectTarget ? 'pointer' : 'default' }}>
                     <span>{c.name}{c.port ? ' ⚓' : ''}</span>
                     {c.owner
                       ? <span className="own">{c.owner.name}</span>

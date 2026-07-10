@@ -48,6 +48,19 @@ export const TROOP_UNIT_BUILDINGS = {
   spearman:  { camp: 'camp_spear',  armory: 'armory_spear' },
 };
 
+// زمان سفر لشکر — بر مبنای فاصلهٔ اقلیمی، تقریبی روی محور شمال-جنوب نقشه (هم‌راستا با بک‌اند)
+export const REGION_ORDER = { north: 0, vale: 1, iron: 1, river: 1, west: 2, crown: 2, reach: 3, storm: 3, dorne: 4 };
+export const TRAVEL_SAME_REGION_MINUTES = 20;
+export const TRAVEL_CROSS_BASE_MINUTES = 40;
+export const TRAVEL_PER_HOP_MINUTES = 25;
+
+export function travelMinutes(sameCastle, originRegion, targetRegion) {
+  if (sameCastle) return 0;
+  if (originRegion === targetRegion) return TRAVEL_SAME_REGION_MINUTES;
+  const hop = Math.abs((REGION_ORDER[originRegion] ?? 2) - (REGION_ORDER[targetRegion] ?? 2));
+  return TRAVEL_CROSS_BASE_MINUTES + hop * TRAVEL_PER_HOP_MINUTES;
+}
+
 // گزینه‌های عملیات لشکرکشی
 export const OP_TYPES = [
   { id: 'attack',     name: 'حملهٔ نظامی',                    needsTarget: true,  portOnly: false },

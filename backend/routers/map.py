@@ -49,16 +49,20 @@ async def get_map(user: dict = Depends(get_user)):
             "coords": coords_by_region.get(rid, {}),
         })
 
-    # لشکرکشی‌های فعال و آشکارشده: ۱۵ دقیقه بعد از فرمان (فرمان خودت را همیشه می‌بینی)
+    # لشکرکشی‌های فعال و آشکارشده: ۳۰ دقیقه بعد از فرمان، زیر نقشه برای همه دیده می‌شوند
+    # (فرمان خودت را همیشه می‌بینی)
     reveal_before = now() - timedelta(minutes=CAMPAIGN_REVEAL_MINUTES)
     camps = []
     cur = campaigns.find({"active": True}).sort("created_at", -1).limit(50)
     async for s in cur:
         mine = s["tg_id"] == user["id"]
         if mine or s["created_at"] <= reveal_before:
+            arrival_at = s.get("arrival_at")
             camps.append({
                 "from": s["origin_castle"], "to": s["target_castle"], "op_type": s["op_type"],
                 "mine": mine,
                 "revealed_minutes_ago": int((now() - s["created_at"]).total_seconds() // 60) - (0 if mine else CAMPAIGN_REVEAL_MINUTES),
+                "travel_minutes": s.get("travel_minutes", 0),
+                "arrived": (now() >= arrival_at) if arrival_at else True,
             })
     return {"regions": regions, "campaigns": camps}

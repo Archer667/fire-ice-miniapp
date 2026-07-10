@@ -124,3 +124,19 @@ def unit_requirements(troop_id: str):
     if not req:
         return None
     return req.get("camp"), req.get("armory")
+
+# ---- زمان سفر لشکر — بر مبنای فاصلهٔ اقلیمی، تقریبی روی محور شمال-جنوب نقشه ----
+REGION_ORDER = {"north": 0, "vale": 1, "iron": 1, "river": 1, "west": 2, "crown": 2, "reach": 3, "storm": 3, "dorne": 4}
+TRAVEL_SAME_REGION_MINUTES = 20
+TRAVEL_CROSS_BASE_MINUTES = 40
+TRAVEL_PER_HOP_MINUTES = 25
+
+def travel_minutes(same_castle: bool, origin_region: str, target_region: str) -> int:
+    """زمان رسیدن لشکر (دقیقه): همان قلعه = بی‌درنگ، همان اقلیم = کوتاه،
+    اقلیم دیگر = پایه + فاصلهٔ اقلیمی روی محور شمال-جنوب"""
+    if same_castle:
+        return 0
+    if origin_region == target_region:
+        return TRAVEL_SAME_REGION_MINUTES
+    hop = abs(REGION_ORDER.get(origin_region, 2) - REGION_ORDER.get(target_region, 2))
+    return TRAVEL_CROSS_BASE_MINUTES + hop * TRAVEL_PER_HOP_MINUTES

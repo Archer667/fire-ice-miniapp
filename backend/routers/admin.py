@@ -1,11 +1,12 @@
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles
+from db import campaigns, players, admin_roles, map_castles, battle_reports
 from game import now
-from game_data import REGIONS
+from game_data import REGIONS, COMMON_TROOPS
 from config import ADMIN_IDS
+from routers.war import OP_TYPES
+from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -17,47 +18,67 @@ async def full_admin_user(user: dict = Depends(get_user)):
     """فقط ادمین کامل — برای مدیریت ادمین‌ها"""
     return await get_full_admin(user)
 
-@router.get("/pending")
-async def pending(user: dict = Depends(admin_user)):
+@router.get("/campaigns")
+async def list_campaigns(user: dict = Depends(admin_user)):
+    """اطلاعات کامل لشکرکشی‌ها برای ادمین — فقط نمایشی، بدون تایید/رد"""
     out = []
-    async for s in campaigns.find({"status": "pending"}).sort("created_at", 1):
+    cur = campaigns.find({}).sort("created_at", -1).limit(50)
+    async for s in cur:
+        troops = [
+            {"name": COMMON_TROOPS[tid]["name"] if tid in COMMON_TROOPS else tid, "count": n}
+            for tid, n in s["troops"].items() if n and n > 0
+        ]
+        arrival_at = s.get("arrival_at")
         out.append({
             "id": str(s["_id"]), "player": s["player_name"],
             "from": s["origin_castle"], "to": s["target_castle"],
-            "op_type": s["op_type"], "plan": s["plan"],
-            "troops": s["troops"], "cost": s["gold_cost"],
+            "op_type": s["op_type"], "op_name": OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
+            "plan": s["plan"], "troops": troops,
+            "gold_cost": s["gold_cost"], "men_committed": s["men_committed"], "food_per_day": s["food_per_day"],
+            "travel_minutes": s.get("travel_minutes", 0),
+            "arrived": (now() >= arrival_at) if arrival_at else True,
+            "active": s.get("active", False),
             "created_at": s["created_at"].isoformat(),
         })
     return out
 
-class VerdictBody(BaseModel):
-    verdict: str
-    points_delta: int = 0   # امتیازی که ادمین به بازیکن می‌دهد/می‌گیرد
+class BattleReportBody(BaseModel):
+    participant_tg_ids: list[int]
+    text: str
 
-@router.post("/{scenario_id}/approve")
-async def approve(scenario_id: str, body: VerdictBody, user: dict = Depends(admin_user)):
-    """تایید فقط داوری سناریو را ثبت می‌کند — لشکر همچنان فعال می‌ماند و آذوقه می‌خورد
-    تا خودِ لرد/لیدی لغوش کند"""
-    s = await campaigns.find_one({"_id": ObjectId(scenario_id)})
-    if not s:
-        raise HTTPException(404, "سناریو پیدا نشد")
-    await campaigns.update_one({"_id": s["_id"]},
-        {"$set": {"status": "approved", "verdict": body.verdict}})
-    if body.points_delta:
-        await players.update_one({"tg_id": s["tg_id"]}, {"$inc": {"points": body.points_delta}})
-    return {"ok": True}
+@router.get("/battles")
+async def list_battles(user: dict = Depends(admin_user)):
+    out = []
+    async for b in battle_reports.find({}).sort("created_at", -1).limit(30):
+        out.append({
+            "id": str(b["_id"]), "participants": b["participant_names"],
+            "text": b["text"], "created_at": b["created_at"].isoformat(),
+        })
+    return out
 
-@router.post("/{scenario_id}/reject")
-async def reject(scenario_id: str, body: VerdictBody, user: dict = Depends(admin_user)):
-    """رد یعنی این لشکرکشی هرگز رخ نداده — طلا و نفرات به لرد برمی‌گردد و لشکر منحل می‌شود"""
-    s = await campaigns.find_one({"_id": ObjectId(scenario_id)})
-    if not s:
-        raise HTTPException(404, "سناریو پیدا نشد")
-    await campaigns.update_one({"_id": s["_id"]},
-        {"$set": {"status": "rejected", "verdict": body.verdict, "active": False}})
-    await players.update_one({"tg_id": s["tg_id"]},
-        {"$inc": {"resources.gold": s["gold_cost"], "resources.men": s["men_committed"]}})
-    return {"ok": True}
+@router.post("/battles")
+async def create_battle(body: BattleReportBody, user: dict = Depends(admin_user)):
+    """روایت نتیجهٔ یک جنگ — برای هر شرکت‌کننده به‌عنوان کلاغی از «شورای جنگ» فرستاده می‌شود"""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(400, "متن روایت خالی است")
+    ids = list(dict.fromkeys(body.participant_tg_ids))
+    if not ids:
+        raise HTTPException(400, "حداقل یک شرکت‌کننده انتخاب کن")
+
+    targets = await players.find({"tg_id": {"$in": ids}}).to_list(len(ids))
+    if not targets:
+        raise HTTPException(404, "هیچ‌کدام از شرکت‌کننده‌ها پیدا نشدند")
+
+    for t in targets:
+        await send_system_message(t["tg_id"], t["name"], text)
+
+    await battle_reports.insert_one({
+        "participant_tg_ids": [t["tg_id"] for t in targets],
+        "participant_names": [t["name"] for t in targets],
+        "text": text, "created_by": user["id"], "created_at": now(),
+    })
+    return {"ok": True, "sent_to": len(targets)}
 
 @router.get("/map/options")
 async def map_options(region: str, user: dict = Depends(admin_user)):

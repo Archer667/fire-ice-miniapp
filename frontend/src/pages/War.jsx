@@ -6,7 +6,7 @@ import { Swords } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, REGIONS_STATIC, OP_TYPES,
-  TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL,
+  TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
 } from '../gamedata.js';
 
 export default function War() {
@@ -44,12 +44,25 @@ export default function War() {
 
   const [origin, setOrigin] = useState(me.castle);
   const [opType, setOpType] = useState(OP_TYPES[0].id);
-  const [target, setTarget] = useState(null); // { name, ... } | null
+  const [target, setTarget] = useState(null); // { name, region, ... } | null
   const [plan, setPlan] = useState('');
   const [counts, setCounts] = useState(Object.fromEntries(allTroops.map(t => [t.id, 0])));
   const [busy, setBusy] = useState(false);
 
   const op = OP_TYPES.find(o => o.id === opType);
+
+  const findCastleRegion = (name) => {
+    if (!mapData) return me.region;
+    for (const r of mapData.regions) {
+      if (r.castles.some(c => c.name === name)) return r.id;
+    }
+    return me.region;
+  };
+
+  const sameCastle = !op.needsTarget || (target && target.name === origin);
+  const originRegion = findCastleRegion(origin);
+  const targetRegion = op.needsTarget && target ? (target.region || findCastleRegion(target.name)) : originRegion;
+  const eta = travelMinutes(sameCastle, originRegion, targetRegion);
 
   const unlocked = (troop) => {
     if (troop.special) return true;
@@ -95,7 +108,7 @@ export default function War() {
       });
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, gold: gold - goldCost, men: men - menCommitted } });
-      toast('فرمان مُهر شد — لشکر تا لغوِ خودت آذوقه می‌خورد');
+      toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
       resetForm();
       loadMine(); loadMap();
     } catch (e) { toast(e.message); }
@@ -119,26 +132,35 @@ export default function War() {
       <div className="page-title up">نیروها/لشکرکشی</div>
       <div className="page-sub up">روی یک قلعه در نقشه کلیک کن تا اطلاعاتش را ببینی یا آن را هدف بگیری</div>
 
+      <div className="sect up u1">نقشهٔ وستروس</div>
       <div className="up u1">
+        <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
+      </div>
+
+      <div className="sect up u2">لشکرهای در حرکت</div>
+      <div className="up u2">
         {mapData.campaigns.length === 0 && (
           <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
             هیچ لشکری در حرکت نیست — وستروس در آرامشی مشکوک است
           </div>
         )}
-        {mapData.campaigns.map((c, i) => (
-          <div key={i} className={`warband ${c.mine ? 'mine' : ''}`}>
-            <div className="wi"><Swords s={17} /></div>
-            <div className="t">
-              <b>لشکری از {c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است
-              <div className="tm">{c.mine ? 'فرمان تو — در انتظار داوری' : `آشکار شده — ${Math.max(0, c.revealed_minutes_ago).toLocaleString('fa-IR')} دقیقه پیش`}</div>
+        {mapData.campaigns.map((c, i) => {
+          const cSameCastle = c.from === c.to;
+          return (
+            <div key={i} className={`warband ${c.mine ? 'mine' : ''}`}>
+              <div className="wi"><Swords s={17} /></div>
+              <div className="t">
+                {cSameCastle
+                  ? <><b>لشکر {c.from}</b> در حال دفاع از قلعه است</>
+                  : <><b>لشکری از {c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است</>}
+                <div className="tm">
+                  {c.mine ? 'فرمان تو' : `آشکار شده — ${Math.max(0, c.revealed_minutes_ago).toLocaleString('fa-IR')} دقیقه پیش`}
+                  {' · '}{c.arrived ? 'به مقصد رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="sect up u2">نقشهٔ وستروس</div>
-      <div className="up u2">
-        <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
+          );
+        })}
       </div>
 
       <div className="sect up u3">فرمان لشکرکشی</div>
@@ -168,6 +190,10 @@ export default function War() {
         ) : (
           <div className="page-sub" style={{ margin: '10px 4px 0' }}>عملیات دفاعی برای قلعهٔ مبدا — نیازی به مقصد نیست</div>
         )}
+
+        <div className="page-sub" style={{ margin: '10px 4px 0' }}>
+          زمان رسیدن لشکر: <b style={{ color: 'var(--az2)' }}>{eta > 0 ? `حدود ${eta.toLocaleString('fa-IR')} دقیقه` : 'بی‌درنگ — همین‌جاست'}</b>
+        </div>
 
         {op.needsTarget && opType !== 'garrison' && (
           <>
@@ -224,7 +250,9 @@ export default function War() {
               </div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>
-              وضعیت: {c.status === 'pending' ? 'در انتظار داوری' : c.status === 'approved' ? 'تایید شده' : c.status === 'rejected' ? 'رد شده' : 'لغوشده'}
+              {c.active
+                ? (c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`)
+                : 'لغوشده'}
               {c.active ? ` · ${c.days_active.toLocaleString('fa-IR')} روز فعال` : ''}
             </div>
             {c.active && (

@@ -17,12 +17,16 @@ CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "") or None
 STARTING_RESOURCES = {"gold": 1000, "food": 800, "men": 500, "iron": 100, "stone": 100, "wood": 150, "wine": 0}
 DAILY_PRODUCTION   = {"gold": 200,  "food": 300, "men": 50,  "iron": 40,  "stone": 40,  "wood": 50,  "wine": 0}
 RESOURCE_CAPS      = {"gold": 2000, "food": 2000, "men": 1000, "iron": 500, "stone": 500, "wood": 800, "wine": 300}
-CAMPAIGN_REVEAL_MINUTES = 15
+CAMPAIGN_REVEAL_MINUTES = 30
 SEASON_LENGTH_DAYS = 30
 
 # ---- آذوقهٔ روزانهٔ لشکر — به‌ازای هر سرباز، تا وقتی لشکر فعال است ----
 FOOD_COST_REGULAR = 1   # سرباز عادی، غله در روز
 FOOD_COST_SPECIAL = 2   # نیروی ویژهٔ اقلیمی، غله در روز
+
+# ---- فرستندهٔ سیستمی پیام‌ها — روایت‌های جنگ که ادمین برای بازیکنان می‌فرستد ----
+SYSTEM_SENDER_ID = 0
+SYSTEM_SENDER_NAME = "شورای جنگ"
 
 # ---- مالیات و محبوبیت ----
 TAX_RATE_DEFAULT = 10     # درصد، در ابتدای بازی
