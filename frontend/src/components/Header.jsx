@@ -1,8 +1,17 @@
 import { haptic } from '../telegram.js';
-import { Menu } from './Icons.jsx';
+import { Menu, Coin, Wood, Rock, Pick } from './Icons.jsx';
 import { PAGE_TITLES } from './NavBar.jsx';
+import { useGame } from '../store.jsx';
+
+const TICKER_RES = [
+  { key: 'gold',  Icon: Coin },
+  { key: 'wood',  Icon: Wood },
+  { key: 'stone', Icon: Rock },
+  { key: 'iron',  Icon: Pick },
+];
 
 export default function Header({ tab, onOpenMenu }) {
+  const { me } = useGame();
   const title = PAGE_TITLES[tab] || 'وستروس';
   return (
     <div className="header">
@@ -11,6 +20,16 @@ export default function Header({ tab, onOpenMenu }) {
       </button>
       <div className="header-title">{title}</div>
       <div className="header-spacer" />
+      {me?.resources && (
+        <div className="header-ticker">
+          {TICKER_RES.map(({ key, Icon }) => (
+            <span key={key}>
+              <Icon s={12} />
+              {(me.resources[key] ?? 0).toLocaleString('fa-IR')}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

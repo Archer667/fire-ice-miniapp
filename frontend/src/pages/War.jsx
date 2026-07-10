@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { api } from '../api.js';
 import { haptic } from '../telegram.js';
+import PlayerPicker from '../components/PlayerPicker.jsx';
 import { COMMON_TROOPS, SPECIAL_COST, REGIONS_STATIC } from '../gamedata.js';
 
 const OP_TYPES = ['حملهٔ نظامی', 'محاصرهٔ قلعه', 'غارت دریایی'];
@@ -17,7 +18,7 @@ export default function War() {
   ];
 
   const [opType, setOpType] = useState(OP_TYPES[0]);
-  const [target, setTarget] = useState('');
+  const [target, setTarget] = useState([]);
   const [plan, setPlan] = useState('');
   const [counts, setCounts] = useState(Object.fromEntries(allTroops.map(t => [t.id, 0])));
   const [busy, setBusy] = useState(false);
@@ -29,16 +30,16 @@ export default function War() {
   const over = cost > gold;
 
   const send = async () => {
-    if (!target.trim()) { toast('هدف را مشخص کن'); return; }
+    if (!target.length) { toast('هدف را از بین لردها انتخاب کن'); return; }
     if (plan.trim().length < 50) { toast('سناریو خیلی کوتاه است — نقشه‌ات را شرح بده'); return; }
     if (cost <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     setBusy(true);
     try {
-      await api.submitWar({ op_type: opType, target_castle: target.trim(), plan: plan.trim(), troops: counts });
+      await api.submitWar({ op_type: opType, target_castle: target[0].castle, plan: plan.trim(), troops: counts });
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, gold: gold - cost } });
       toast('فرمان مُهر شد — ۱۵ دقیقه دیگر روی نقشه آشکار می‌شود');
-      setPlan(''); setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
+      setPlan(''); setTarget([]); setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
     } catch (e) { toast(e.message); }
     setBusy(false);
   };
@@ -54,7 +55,7 @@ export default function War() {
           {OP_TYPES.map(t => <option key={t}>{t}</option>)}
         </select>
         <label className="f">قلعهٔ هدف</label>
-        <input value={target} onChange={e => setTarget(e.target.value)} placeholder="مثلاً: ریورران" />
+        <PlayerPicker value={target} onChange={setTarget} single placeholder="اسم لرد یا قلعه‌اش را جست‌وجو کن..." />
         <label className="f">سناریوی نبرد — تا دو صفحه</label>
         <textarea value={plan} onChange={e => setPlan(e.target.value)}
                   placeholder="مسیر لشکر، آرایش جنگی، نیرنگ‌ها..." />

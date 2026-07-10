@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Coin, Pick, Rock, Hammer, Shield } from '../components/Icons.jsx';
+import { Coin, Pick, Rock, Wood, Wheat, Hammer, Shield } from '../components/Icons.jsx';
 
-const RES_ICON = { gold: Coin, iron: Pick, stone: Rock };
-const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ' };
+const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat };
+const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا' };
 
 const GROUPS = [
   { key: 'economy',  label: 'ساختمان‌های اقتصادی', hint: 'منابعت رو تولید و ذخیره می‌کنن' },
@@ -60,7 +60,7 @@ export default function Buildings() {
             <div className={`sect up u${Math.min(gi + 1, 4)}`}>{g.label}{g.hint ? ` · ${g.hint}` : ''}</div>
             <div className={`card up u${Math.min(gi + 1, 4)}`}>
               {items.map(row => (
-                <BuildingRow key={row.id} row={row} busy={busyId === row.id} onAct={() => act(row)} />
+                <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={me.is_port} onAct={() => act(row)} />
               ))}
             </div>
           </div>
@@ -76,9 +76,10 @@ function subtractCost(resources, cost) {
   return out;
 }
 
-function BuildingRow({ row, busy, onAct }) {
+function BuildingRow({ row, busy, isPort, onAct }) {
   const pct = Math.round((row.level / row.max_level) * 100);
-  const canUpgrade = !row.upgrading && row.next_level;
+  const locked = row.requires_port && row.level === 0 && !isPort;
+  const canUpgrade = !locked && !row.upgrading && row.next_level;
   return (
     <div className="bld">
       <div className="bld-top">
@@ -91,7 +92,9 @@ function BuildingRow({ row, busy, onAct }) {
       </div>
       <div className="bar"><i style={{ width: pct + '%' }} /></div>
 
-      {row.upgrading ? (
+      {locked ? (
+        <div className="bld-status">فقط قلعه/شهرهای دریایی و بندری می‌تونن این رو بسازن</div>
+      ) : row.upgrading ? (
         <div className="bld-status">در حال ساخت به سطح {row.next_level.toLocaleString('fa-IR')} — آماده تا {fmtRemaining(row.ready_at)} دیگر</div>
       ) : canUpgrade ? (
         <>

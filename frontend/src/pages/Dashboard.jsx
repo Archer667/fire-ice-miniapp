@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { api } from '../api.js';
-import { Coin, Wheat, People, Pick, Rock, Wine, Build, Swords, Eye, Heart, Blossom, SunIcon, Leaf, Snowflake } from '../components/Icons.jsx';
+import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Blossom, SunIcon, Leaf, Snowflake } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
@@ -11,6 +11,7 @@ const RES_META = {
   gold:  { name: 'طلا', d: 'معدن طلا · بازار', Icon: Coin,  max: 2000 },
   food:  { name: 'غذا', d: 'مزرعه · دامداری', Icon: Wheat, max: 2000 },
   men:   { name: 'نیروی انسانی', d: 'ظرفیت استخدام', Icon: People, max: 1000 },
+  wood:  { name: 'چوب', d: 'چوب‌بری', Icon: Wood, max: 800 },
   iron:  { name: 'آهن', d: 'معدن آهن', Icon: Pick, max: 500 },
   stone: { name: 'سنگ', d: 'معدن سنگ', Icon: Rock, max: 500 },
   wine:  { name: 'شراب', d: 'می‌کده · ضیافت و پیمان‌ها', Icon: Wine, max: 300 },

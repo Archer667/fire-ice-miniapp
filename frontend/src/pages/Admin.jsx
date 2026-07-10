@@ -4,13 +4,15 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Shield, Plus, Close } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
-import { WARDEN_GROUPS } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
 
 export default function Admin() {
   const { me, toast } = useGame();
   const isFull = me.admin_role === 'full';
 
   const [pending, setPending] = useState(null);
+  const [overlordTarget, setOverlordTarget] = useState([]);
+  const [overlordRegion, setOverlordRegion] = useState('north');
   const [wardenTarget, setWardenTarget] = useState([]);
   const [wardenGroup, setWardenGroup] = useState('south');
   const [kingTarget, setKingTarget] = useState([]);
@@ -43,6 +45,16 @@ export default function Admin() {
       loadPending();
     } catch (e) { toast(e.message); }
     setBusy(false);
+  };
+
+  const setOverlord = async () => {
+    if (!overlordTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    try {
+      await api.adminSetOverlord(overlordRegion, overlordTarget[0].tg_id);
+      haptic('medium');
+      toast('بالادستی تعیین شد');
+      setOverlordTarget([]);
+    } catch (e) { toast(e.message); }
   };
 
   const setWarden = async () => {
@@ -142,6 +154,17 @@ export default function Admin() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="sect up u2">تعیین بالادستی</div>
+      <div className="card up u2">
+        <label className="f" style={{ marginTop: 0 }}>اقلیم</label>
+        <select value={overlordRegion} onChange={e => setOverlordRegion(e.target.value)}>
+          {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+        </select>
+        <label className="f">لرد (باید اهل همین اقلیم باشد — معمولاً برندهٔ رای‌گیری)</label>
+        <PlayerPicker value={overlordTarget} onChange={setOverlordTarget} single />
+        <button className="btn" style={{ marginTop: 14 }} onClick={setOverlord}>ثبت بالادستی</button>
       </div>
 
       <div className="sect up u2">تعیین والی</div>

@@ -14,9 +14,9 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "") or None
 
 # ---- ثابت‌های اقتصاد بازی ----
-STARTING_RESOURCES = {"gold": 1000, "food": 800, "men": 500, "iron": 100, "stone": 100, "wine": 0}
-DAILY_PRODUCTION   = {"gold": 200,  "food": 300, "men": 50,  "iron": 40,  "stone": 40,  "wine": 0}
-RESOURCE_CAPS      = {"gold": 2000, "food": 2000, "men": 1000, "iron": 500, "stone": 500, "wine": 300}
+STARTING_RESOURCES = {"gold": 1000, "food": 800, "men": 500, "iron": 100, "stone": 100, "wood": 150, "wine": 0}
+DAILY_PRODUCTION   = {"gold": 200,  "food": 300, "men": 50,  "iron": 40,  "stone": 40,  "wood": 50,  "wine": 0}
+RESOURCE_CAPS      = {"gold": 2000, "food": 2000, "men": 1000, "iron": 500, "stone": 500, "wood": 800, "wine": 300}
 CAMPAIGN_REVEAL_MINUTES = 15
 SEASON_LENGTH_DAYS = 30
 

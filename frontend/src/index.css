@@ -419,8 +419,19 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
   backdrop-filter: blur(18px); transition: transform 0.15s ease;
 }
 .hamburger:active { transform: scale(0.92); }
-.header-title { font-size: 14.5px; font-weight: 800; }
-.header-spacer { flex: 1; }
+.header-title { font-size: 14.5px; font-weight: 800; white-space: nowrap; }
+.header-spacer { flex: 1; min-width: 8px; }
+.header-ticker {
+  display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+  padding: 7px 10px; border-radius: 99px;
+  background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(18px);
+}
+.header-ticker span {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; color: var(--mid);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.header-ticker svg { flex-shrink: 0; color: var(--az2); }
 
 /* SIDE MENU — کشویی از راست */
 .sidemenu-overlay {

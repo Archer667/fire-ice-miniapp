@@ -23,6 +23,7 @@ export const Close  = (o) => <I {...o}><path d="M6 6l12 12M18 6L6 18"/></I>;
 export const Hammer = (o) => <I {...o}><path d="M14.5 6.5l3 3-7.5 7.5H7v-3l7.5-7.5z"/><path d="M13 5l4.5-2 3.5 3.5-2 4.5"/><path d="M4.5 19.5l2.5-2.5"/></I>;
 export const Wine   = (o) => <I {...o}><path d="M7 3h10l-1 6a4 4 0 01-8 0L7 3z"/><path d="M12 13v6M9 21h6"/></I>;
 export const Scroll = (o) => <I {...o}><path d="M6 4h10a2 2 0 012 2v13a2 2 0 01-2 2H8a2 2 0 01-2-2V4z"/><path d="M6 4a2 2 0 00-2 2v2h2"/><path d="M9 9h6M9 13h6"/></I>;
+export const Wood    = (o) => <I {...o}><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/></I>;
 
 /* آیکن‌های تزئینیِ فصل‌ها — پس‌زمینهٔ کم‌رنگ سکشن قلمرو */
 export const Blossom  = (o) => <I {...o}><path d="M4 20c4-6 8-10 16-16"/><circle cx="9" cy="15" r="1.6"/><circle cx="13" cy="10.5" r="1.6"/><circle cx="17" cy="6.5" r="1.6"/></I>;

@@ -42,7 +42,7 @@ async def list_buildings(user: dict = Depends(get_user)):
         target = st["upgrade_to"] or (level + 1 if level < MAX_BUILDING_LEVEL else None)
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
-            "unit": meta.get("unit"),
+            "unit": meta.get("unit"), "requires_port": meta.get("requires_port", False),
             "level": level, "max_level": MAX_BUILDING_LEVEL,
             "upgrading": bool(st["upgrade_to"]),
             "ready_at": st["ready_at"].isoformat() if st.get("ready_at") else None,
@@ -73,6 +73,8 @@ async def _start_upgrade(building_id: str, user: dict, require_built: bool):
         raise HTTPException(400, "این ساختمان قبلاً بنا شده — آن را ارتقا بده")
     if st["level"] >= MAX_BUILDING_LEVEL:
         raise HTTPException(400, "این ساختمان به بیشینهٔ سطح رسیده")
+    if not require_built and BUILDINGS[building_id].get("requires_port") and not p.get("is_port"):
+        raise HTTPException(400, "این ساختمان فقط در قلعه/شهرهای دریایی و بندری ساخته می‌شود")
 
     target = st["level"] + 1
     cost = building_cost(building_id, target)

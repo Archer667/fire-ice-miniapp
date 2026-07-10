@@ -69,7 +69,7 @@ const M = {
       is_port: REGIONS_STATIC[b.region].ports.includes(b.castle),
       gender: b.gender, title: DEFAULT_TITLE[b.gender], rank_label: null,
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
-      resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wine: 0 },
+      resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 0 },
       points: 100, alliance_count: 0, popularity: POPULARITY_START, tax_rate: TAX_RATE_DEFAULT,
       max_tax_rate: maxTaxRate(POPULARITY_START),
       rank: 5, total_players: 12, day: 18, season_length: 30,
@@ -114,7 +114,7 @@ const M = {
       const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
       const next = st.upgrade_to || (st.level < MAX_BUILDING_LEVEL ? st.level + 1 : null);
       return {
-        id, name: meta.name, type: meta.type, unit: meta.unit,
+        id, name: meta.name, type: meta.type, unit: meta.unit, requires_port: !!meta.requires_port,
         level: st.level, max_level: MAX_BUILDING_LEVEL,
         upgrading: !!st.upgrade_to, ready_at: st.ready_at,
         next_level: next,
@@ -130,6 +130,9 @@ const M = {
     if (requireBuilt && st.level === 0) throw new Error('اول این ساختمان را بنا کن');
     if (!requireBuilt && st.level > 0) throw new Error('این ساختمان قبلاً بنا شده — آن را ارتقا بده');
     if (st.level >= MAX_BUILDING_LEVEL) throw new Error('این ساختمان به بیشینهٔ سطح رسیده');
+    if (!requireBuilt && BUILDINGS_STATIC[id]?.requires_port && !mockMe.is_port) {
+      throw new Error('این ساختمان فقط در قلعه/شهرهای دریایی و بندری ساخته می‌شود');
+    }
     const target = st.level + 1;
     const cost = buildingCost(id, target);
     if (!mockCanAfford(cost)) throw new Error('منابع کافی نیست');
@@ -214,6 +217,7 @@ const M = {
   // ادمین در حالت mock پیاده نشده — این اپ دمو تک‌بازیکنه و پنل ادمین به بک‌اند واقعی نیاز دارد
   adminPending: () => [],
   adminVerdict: () => ({ ok: true }),
+  adminSetOverlord: () => ({ ok: true }),
   adminSetWarden: () => ({ ok: true }),
   adminSetKing: () => ({ ok: true }),
   adminSetEpithet: () => ({ ok: true }),
@@ -257,6 +261,8 @@ export const api = {
   adminPending: () => MOCK ? Promise.resolve(M.adminPending()) : req('/api/admin/pending'),
   adminVerdict: (id, action, verdict, pointsDelta) => MOCK ? Promise.resolve(M.adminVerdict())
     : req(`/api/admin/${id}/${action}`, { method: 'POST', body: JSON.stringify({ verdict, points_delta: pointsDelta || 0 }) }),
+  adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
+    : req('/api/titles/overlord', { method: 'POST', body: JSON.stringify({ region, tg_id: tgId }) }),
   adminSetWarden: (group, tgId) => MOCK ? Promise.resolve(M.adminSetWarden())
     : req('/api/titles/warden', { method: 'POST', body: JSON.stringify({ group, tg_id: tgId }) }),
   adminSetKing: (tgId) => MOCK ? Promise.resolve(M.adminSetKing())

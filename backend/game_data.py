@@ -50,35 +50,37 @@ BUILDINGS = {
     # --- اقتصادی: تولید و ذخیرهٔ منابع ---
     # «produces» = مقدار افزوده به تولید روزانه به‌ازای هر سطح
     # «cap_bonus» = مقدار افزوده به سقف ذخیره‌سازی به‌ازای هر سطح
-    "stone_mine":  {"name": "معدن سنگ",   "cost": {"gold": 150}, "hours": 4,  "type": "economy", "produces": {"stone": 8}},
-    "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200}, "hours": 6,  "type": "economy", "produces": {"iron": 6}},
-    "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100}, "hours": 12, "type": "economy", "produces": {"gold": 12}},
-    "market":      {"name": "بازار",       "cost": {"gold": 250}, "hours": 6,  "type": "economy", "produces": {"gold": 3}},
-    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150}, "hours": 8,  "type": "economy", "cap_bonus": {"gold": 40}},
-    "farm":        {"name": "مزرعه",       "cost": {"gold": 100}, "hours": 3,  "type": "economy", "produces": {"food": 10}},
-    "ranch":       {"name": "دامداری",     "cost": {"gold": 150}, "hours": 4,  "type": "economy", "produces": {"food": 6}},
-    "winery":      {"name": "می‌کده",      "cost": {"gold": 220, "food": 60}, "hours": 6,  "type": "economy", "produces": {"wine": 5}},
-    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 40}},
-    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80}, "hours": 5,  "type": "economy", "cap_bonus": {"stone": 15, "iron": 15}},
+    # «requires_port» = فقط قلعه/شهرهای دریایی می‌توانند بسازندش
+    "lumber_mill": {"name": "چوب‌بری",     "cost": {"gold": 130, "stone": 30}, "hours": 4,  "type": "economy", "produces": {"wood": 9}},
+    "stone_mine":  {"name": "معدن سنگ",   "cost": {"gold": 150, "wood": 60},  "hours": 4,  "type": "economy", "produces": {"stone": 8}},
+    "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200, "wood": 80},  "hours": 6,  "type": "economy", "produces": {"iron": 6}},
+    "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100, "wood": 100}, "hours": 12, "type": "economy", "produces": {"gold": 12}},
+    "market":      {"name": "بازار",       "cost": {"gold": 250, "wood": 70},  "hours": 6,  "type": "economy", "produces": {"gold": 3}},
+    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150, "iron": 40}, "hours": 8,  "type": "economy", "cap_bonus": {"gold": 40}},
+    "farm":        {"name": "مزرعه",       "cost": {"gold": 100, "wood": 50},  "hours": 3,  "type": "economy", "produces": {"food": 10}},
+    "ranch":       {"name": "دامداری",     "cost": {"gold": 150, "wood": 60},  "hours": 4,  "type": "economy", "produces": {"food": 6}},
+    "winery":      {"name": "می‌کده",      "cost": {"gold": 220, "food": 60, "wood": 70}, "hours": 6,  "type": "economy", "produces": {"wine": 5}},
+    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50, "wood": 60}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 40}},
+    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80, "wood": 50}, "hours": 5,  "type": "economy", "cap_bonus": {"stone": 15, "iron": 15}},
 
     # --- نظامی: پادگان هر یگان (پیش‌نیاز استخدام) ---
-    "camp_sword":  {"name": "پادگان پیاده‌نظام",   "cost": {"gold": 250, "iron": 50},  "hours": 6,  "type": "barracks", "unit": "infantry"},
-    "camp_spear":  {"name": "پادگان نیزه‌داران",   "cost": {"gold": 200, "iron": 30},  "hours": 5,  "type": "barracks", "unit": "spearman"},
-    "camp_archer": {"name": "پادگان کمانداران",    "cost": {"gold": 200, "iron": 20},  "hours": 5,  "type": "barracks", "unit": "archer"},
-    "camp_lcav":   {"name": "پادگان سوارهٔ سبک",   "cost": {"gold": 350, "iron": 60},  "hours": 8,  "type": "barracks", "unit": "light_cav"},
-    "camp_hcav":   {"name": "پادگان سوارهٔ سنگین", "cost": {"gold": 500, "iron": 120}, "hours": 12, "type": "barracks", "unit": "heavy_cav"},
+    "camp_sword":  {"name": "پادگان پیاده‌نظام",   "cost": {"gold": 250, "iron": 50,  "wood": 90},  "hours": 6,  "type": "barracks", "unit": "infantry"},
+    "camp_spear":  {"name": "پادگان نیزه‌داران",   "cost": {"gold": 200, "iron": 30,  "wood": 70},  "hours": 5,  "type": "barracks", "unit": "spearman"},
+    "camp_archer": {"name": "پادگان کمانداران",    "cost": {"gold": 200, "iron": 20,  "wood": 80},  "hours": 5,  "type": "barracks", "unit": "archer"},
+    "camp_lcav":   {"name": "پادگان سوارهٔ سبک",   "cost": {"gold": 350, "iron": 60,  "wood": 110}, "hours": 8,  "type": "barracks", "unit": "light_cav"},
+    "camp_hcav":   {"name": "پادگان سوارهٔ سنگین", "cost": {"gold": 500, "iron": 120, "wood": 140}, "hours": 12, "type": "barracks", "unit": "heavy_cav"},
 
     # --- نظامی: کارگاه تسلیحات هر یگان (منبع سلاح، پیش‌نیاز دوم استخدام) ---
-    "armory_sword":  {"name": "کارگاه تسلیحات پیاده‌نظام",   "cost": {"gold": 200, "iron": 80},  "hours": 6,  "type": "armory", "unit": "infantry"},
-    "armory_spear":  {"name": "کارگاه تسلیحات نیزه‌داران",   "cost": {"gold": 160, "iron": 60},  "hours": 5,  "type": "armory", "unit": "spearman"},
-    "armory_archer": {"name": "کارگاه تسلیحات کمانداران",    "cost": {"gold": 160, "iron": 50},  "hours": 5,  "type": "armory", "unit": "archer"},
-    "armory_lcav":   {"name": "کارگاه تسلیحات سوارهٔ سبک",   "cost": {"gold": 280, "iron": 100}, "hours": 8,  "type": "armory", "unit": "light_cav"},
-    "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180}, "hours": 12, "type": "armory", "unit": "heavy_cav"},
+    "armory_sword":  {"name": "کارگاه تسلیحات پیاده‌نظام",   "cost": {"gold": 200, "iron": 80,  "wood": 40}, "hours": 6,  "type": "armory", "unit": "infantry"},
+    "armory_spear":  {"name": "کارگاه تسلیحات نیزه‌داران",   "cost": {"gold": 160, "iron": 60,  "wood": 40}, "hours": 5,  "type": "armory", "unit": "spearman"},
+    "armory_archer": {"name": "کارگاه تسلیحات کمانداران",    "cost": {"gold": 160, "iron": 50,  "wood": 60}, "hours": 5,  "type": "armory", "unit": "archer"},
+    "armory_lcav":   {"name": "کارگاه تسلیحات سوارهٔ سبک",   "cost": {"gold": 280, "iron": 100, "wood": 50}, "hours": 8,  "type": "armory", "unit": "light_cav"},
+    "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180, "wood": 60}, "hours": 12, "type": "armory", "unit": "heavy_cav"},
 
     # --- دفاعی و زیرساخت ---
-    "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200}, "hours": 16, "type": "defense"},
-    "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300}, "hours": 14, "type": "defense"},
-    "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120}, "hours": 7,  "type": "defense"},
+    "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200, "wood": 260}, "hours": 16, "type": "defense", "requires_port": True},
+    "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300, "iron": 60},  "hours": 14, "type": "defense"},
+    "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120, "wood": 70},  "hours": 7,  "type": "defense"},
 }
 
 # ---- قراردادهای سیاسی — شراب نقشی در بستن هر پیمان دارد ----
