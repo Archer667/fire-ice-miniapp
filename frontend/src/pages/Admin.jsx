@@ -5,6 +5,7 @@ import { haptic } from '../telegram.js';
 import { Shield, Plus, Close } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
+import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import { REGION_COORDS } from '../mapCoords.js';
 import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
 
@@ -291,8 +292,10 @@ export default function Admin() {
           const coords = { ...(REGION_COORDS[r.id] || {}), ...(r.coords || {}) };
           return (
             <div className="mapview" style={{ marginTop: 4 }}>
-              <MapFrame region={r} coords={coords} pin={null}
-                        onFrameClick={(x, y) => { haptic(); setPendingPin({ x, y }); }} />
+              <ZoomPanMap>
+                <MapFrame region={r} coords={coords} pin={null}
+                          onFrameClick={(x, y) => { haptic(); setPendingPin({ x, y }); }} />
+              </ZoomPanMap>
             </div>
           );
         })()}

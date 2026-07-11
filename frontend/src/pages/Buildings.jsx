@@ -27,6 +27,7 @@ export default function Buildings() {
   const { me, setMe, toast } = useGame();
   const [rows, setRows] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [tab, setTab] = useState(GROUPS[0].key);
 
   const load = () => api.buildings().then(setRows).catch(e => toast(e.message));
   useEffect(() => { load(); }, []);
@@ -47,25 +48,29 @@ export default function Buildings() {
 
   if (!rows) return <div className="loading">نقشهٔ ساخت‌وساز باز می‌شود...</div>;
 
+  const availGroups = GROUPS.filter(g => rows.some(r => r.type === g.key));
+  const activeGroup = availGroups.find(g => g.key === tab) || availGroups[0];
+  const items = activeGroup ? rows.filter(r => r.type === activeGroup.key) : [];
+
   return (
     <>
       <div className="page-title up">ساختمان‌های قلمرو</div>
       <div className="page-sub up">تا سطح {(30).toLocaleString('fa-IR')} می‌تونی بالا ببریشون — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
 
-      {GROUPS.map((g, gi) => {
-        const items = rows.filter(r => r.type === g.key);
-        if (!items.length) return null;
-        return (
-          <div key={g.key}>
-            <div className={`sect up u${Math.min(gi + 1, 4)}`}>{g.label}{g.hint ? ` · ${g.hint}` : ''}</div>
-            <div className={`card up u${Math.min(gi + 1, 4)}`}>
-              {items.map(row => (
-                <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={me.is_port} onAct={() => act(row)} />
-              ))}
-            </div>
-          </div>
-        );
-      })}
+      <div className="tabs up u1">
+        {availGroups.map(g => (
+          <div key={g.key} className={`tab ${activeGroup?.key === g.key ? 'on' : ''}`}
+               onClick={() => { haptic(); setTab(g.key); }}>{g.label}</div>
+        ))}
+      </div>
+
+      {activeGroup?.hint && <div className="page-sub up u1" style={{ marginTop: -6 }}>{activeGroup.hint}</div>}
+
+      <div className="card up u2">
+        {items.map(row => (
+          <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={me.is_port} onAct={() => act(row)} />
+        ))}
+      </div>
     </>
   );
 }

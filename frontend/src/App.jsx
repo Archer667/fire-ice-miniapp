@@ -42,7 +42,7 @@ export default function App() {
         <Onboarding />
       ) : (
         <>
-          <Header tab={tab} onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
+          <Header onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
           <div className="view" key={tab}><Page goTo={setTab} /></div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />

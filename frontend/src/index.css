@@ -277,17 +277,6 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .warband .t { flex: 1; font-size: 12px; line-height: 1.7; }
 .warband .tm { font-size: 10px; color: var(--low); }
 
-.region {
-  display: flex; align-items: center; gap: 12px;
-  padding: 15px 16px; border-radius: 18px; margin-bottom: 9px;
-  background: var(--glass); border: 1px solid var(--edge);
-  backdrop-filter: blur(18px); cursor: pointer;
-}
-.region .g { width: 38px; height: 38px; border-radius: 13px; background: rgba(10,18,36,0.6); border: 1px solid var(--edge); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: var(--az2); flex-shrink: 0; }
-.region .n { flex: 1; font-size: 13.5px; font-weight: 700; }
-.region .n small { display: block; font-size: 10.5px; color: var(--low); font-weight: 500; margin-top: 2px; }
-.region .arrow { color: var(--low); transition: transform 0.25s; }
-.region.open .arrow { transform: rotate(-90deg); }
 .region-castles { padding: 4px 8px 12px; }
 .rc { display: flex; justify-content: space-between; padding: 9px 10px; font-size: 12px; border-radius: 10px; }
 .rc:nth-child(odd) { background: rgba(148,182,255,0.04); }
@@ -315,6 +304,8 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .pin.mine .dot { border-color: var(--az2); background: rgba(77,163,255,0.35); color: #fff; box-shadow: 0 0 0 4px rgba(77,163,255,0.25); }
 .pin.active .dot { transform: scale(1.25); }
 .pin.port .dot { border-radius: 8px; }
+.pin.sm { width: 17px; height: 17px; }
+.pin.sm .dot { width: 13px; height: 13px; border-width: 1px; box-shadow: 0 0 0 2px rgba(10,18,36,0.35); }
 .pin-info {
   margin-top: 8px; padding: 11px 13px; border-radius: 13px;
   background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(18px);
@@ -325,6 +316,23 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .pi-owner-block { margin-top: 4px; }
 .pi-stats { font-size: 10.5px; color: var(--mid); margin-top: 2px; }
 .pi-pick { width: 100%; margin-top: 10px; padding: 9px; font-size: 12px; }
+
+.zoommap { position: relative; }
+.zoommap-wrap {
+  position: relative; width: 100%; border-radius: 16px; overflow: hidden;
+  touch-action: pan-y; -webkit-user-select: none; user-select: none;
+}
+.zoommap-inner { transform-origin: center center; transition: transform 0.06s linear; }
+.zoommap-controls {
+  position: absolute; left: 10px; bottom: 10px; z-index: 2;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.zoommap-controls button {
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--edge);
+  background: rgba(10,18,36,0.75); backdrop-filter: blur(10px); color: var(--hi);
+  font-size: 16px; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.zoommap-controls button:active { transform: scale(0.94); }
 
 /* buildings */
 .bld { padding: 14px 0; }
@@ -456,7 +464,6 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
   backdrop-filter: blur(18px); transition: transform 0.15s ease;
 }
 .hamburger:active { transform: scale(0.92); }
-.header-title { font-size: 14.5px; font-weight: 800; white-space: nowrap; }
 .header-spacer { flex: 1; min-width: 8px; }
 .header-ticker {
   display: flex; align-items: center; gap: 9px; flex-shrink: 0;

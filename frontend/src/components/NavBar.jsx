@@ -18,9 +18,6 @@ export const EXTRA_PAGES = [
   { index: 7, Icon: Eye,    label: 'جاسوسی' },
 ];
 
-export const PAGE_TITLES = [];
-for (const { index, label } of [...NAV_ITEMS, ...EXTRA_PAGES]) PAGE_TITLES[index] = label;
-
 export default function NavBar({ tab, onChange }) {
   return (
     <div className="nav">
