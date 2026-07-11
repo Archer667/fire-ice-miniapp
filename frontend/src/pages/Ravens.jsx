@@ -6,7 +6,7 @@ import { Send, Plus, Back } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 
 export default function Ravens() {
-  const { toast } = useGame();
+  const { toast, refreshUnread } = useGame();
   const [inbox, setInbox] = useState(null);
   const [openWith, setOpenWith] = useState(null);   // {tg_id, name}
   const [thread, setThread] = useState([]);
@@ -14,13 +14,16 @@ export default function Ravens() {
   const [composeTargets, setComposeTargets] = useState([]);
   const [composing, setComposing] = useState(false);
 
-  const loadInbox = () => api.inbox().then(setInbox).catch(e => toast(e.message));
+  const loadInbox = () => api.inbox().then(setInbox).catch(e => { toast(e.message); setInbox([]); });
   useEffect(() => { loadInbox(); }, []);
 
   const openThread = async (m) => {
     haptic();
     setOpenWith({ tg_id: m.with_tg_id, name: m.with_name });
-    try { setThread(await api.thread(m.with_name)); } catch (e) { toast(e.message); }
+    try {
+      setThread(await api.thread(m.with_name));
+      refreshUnread();
+    } catch (e) { toast(e.message); }
   };
 
   const send = async () => {

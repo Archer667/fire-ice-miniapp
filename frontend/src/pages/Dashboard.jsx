@@ -74,7 +74,7 @@ export default function Dashboard({ goTo }) {
           </div>
         </div>
         <div className="stats">
-          <div className="st"><div className="v">{Object.values(me.troops || {}).reduce((a, b) => a + b, 0).toLocaleString('fa-IR')}</div><div className="k">سپاه</div></div>
+          <div className="st"><div className="v">{(me.active_campaigns ?? 0).toLocaleString('fa-IR')}</div><div className="k">لشکر در میدان</div></div>
           <div className="st"><div className="v">{me.points.toLocaleString('fa-IR')}</div><div className="k">امتیاز</div></div>
           <div className="st"><div className="v">۱</div><div className="k">قلعه</div></div>
           <div className="st"><div className="v">{(me.alliance_count ?? 0).toLocaleString('fa-IR')}</div><div className="k">اتحاد</div></div>
@@ -118,9 +118,9 @@ export default function Dashboard({ goTo }) {
       <div className="sect up u3">فرمان‌ها</div>
       <div className="qgrid up u3">
         <div className="q" onClick={() => { haptic(); goTo(1); }}><div className="qi"><Build s={19} /></div>ساختمان‌ها</div>
-        <div className="q" onClick={() => { haptic(); goTo(3); }}><div className="qi"><Swords s={19} /></div>لشکرکشی</div>
-        <div className="q" onClick={() => toast('جاسوسی — فاز ۲')}><div className="qi"><Eye s={19} /></div>جاسوسی</div>
-        <div className="q" onClick={() => { haptic(); goTo(6); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</div>
+        <div className="q" onClick={() => { haptic(); goTo(2); }}><div className="qi"><Swords s={19} /></div>لشکرکشی</div>
+        <div className="q" onClick={() => { haptic(); goTo(7); }}><div className="qi"><Eye s={19} /></div>جاسوسی</div>
+        <div className="q" onClick={() => { haptic(); goTo(5); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</div>
       </div>
     </>
   );

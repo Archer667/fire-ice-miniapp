@@ -5,13 +5,11 @@ client = AsyncIOMotorClient(MONGODB_URI)
 db = client[DB_NAME]
 
 players    = db.players
-scenarios  = db.scenarios
 campaigns  = db.campaigns
 map_castles = db.map_castles
 battle_reports = db.battle_reports
 spy_missions = db.spy_missions
 messages   = db.messages
-buildings  = db.buildings
 alliances  = db.alliances
 hierarchy  = db.hierarchy
 polls      = db.polls

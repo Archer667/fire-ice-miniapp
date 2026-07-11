@@ -2,7 +2,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
-from db import players
+from db import players, campaigns
 from game import now, apply_production
 from game_data import REGIONS
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate
@@ -81,6 +81,7 @@ async def me(user: dict = Depends(get_user)):
 
     popularity = p.get("popularity", POPULARITY_START)
     admin_role = await get_admin_role(user)
+    active_campaigns = await campaigns.count_documents({"tg_id": user["id"], "active": True})
     return {
         "registered": True,
         "name": p["name"],
@@ -93,7 +94,7 @@ async def me(user: dict = Depends(get_user)):
         "castle": p["castle"],
         "is_port": p["is_port"],
         "resources": p["resources"],
-        "troops": p.get("troops", {}),
+        "active_campaigns": active_campaigns,
         "points": score,
         "alliance_count": p.get("alliance_count", 0),
         "popularity": popularity,

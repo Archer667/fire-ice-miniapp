@@ -95,7 +95,11 @@ function mockPay(cost) {
 }
 const M = {
   gamedata: { regions: REGIONS_STATIC },
-  me: () => { mockResolveCampaigns(); return mockMe; },
+  me: () => {
+    mockResolveCampaigns();
+    if (mockMe.registered) mockMe.active_campaigns = mockCampaigns.filter(c => c.active).length;
+    return mockMe;
+  },
   register: (b) => {
     Object.assign(mockMe, {
       registered: true, name: b.name, region: b.region,

@@ -111,7 +111,11 @@ export default function War() {
         plan: plan.trim(), troops: counts,
       });
       haptic('medium');
-      setMe({ ...me, resources: { ...me.resources, gold: gold - goldCost, men: men - menCommitted } });
+      setMe({
+        ...me,
+        resources: { ...me.resources, gold: gold - goldCost, men: men - menCommitted },
+        active_campaigns: (me.active_campaigns ?? 0) + 1,
+      });
       toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
       resetForm();
       loadMine(); loadMap();
@@ -123,7 +127,11 @@ export default function War() {
     try {
       await api.cancelCampaign(c.id);
       haptic('medium');
-      setMe({ ...me, resources: { ...me.resources, men: men + c.men_committed } });
+      setMe({
+        ...me,
+        resources: { ...me.resources, men: men + c.men_committed },
+        active_campaigns: Math.max(0, (me.active_campaigns ?? 0) - 1),
+      });
       toast('لشکر لغو شد و نفراتش به خانه برگشتند');
       loadMine(); loadMap();
     } catch (e) { toast(e.message); }

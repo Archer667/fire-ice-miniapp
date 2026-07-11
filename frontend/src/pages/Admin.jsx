@@ -61,7 +61,7 @@ export default function Admin() {
 
   useEffect(() => {
     loadMapOptions();
-    setPendingPin(null); setPickName(''); setCastleQuery(''); setNewCastleName(''); setNewCastlePort(false);
+    resetCastlePicker();
   }, [mapRegion]);
 
   const filteredCastleOptions = (mapOptions || []).filter(o =>
@@ -75,6 +75,11 @@ export default function Admin() {
   const pickNewCastle = () => {
     haptic();
     setPickName(NEW_CASTLE); setNewCastleName(castleQuery.trim()); setCastleResultsOpen(false);
+  };
+
+  const resetCastlePicker = () => {
+    setPendingPin(null); setPickName(''); setCastleQuery(''); setCastleResultsOpen(false);
+    setNewCastleName(''); setNewCastlePort(false);
   };
 
   const addMapCastle = async () => {
@@ -92,7 +97,7 @@ export default function Admin() {
       await api.adminAddMapCastle(body);
       haptic('medium');
       toast('قلعه/شهر به نقشه اضافه شد');
-      setPendingPin(null); setPickName(''); setCastleQuery(''); setNewCastleName(''); setNewCastlePort(false);
+      resetCastlePicker();
       loadMapData(); loadMapOptions();
     } catch (e) { toast(e.message); }
   };
@@ -324,7 +329,7 @@ export default function Admin() {
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               <button className="btn" style={{ padding: 11 }} onClick={addMapCastle}>افزودن به نقشه</button>
-              <button className="btn ghost" style={{ padding: 11 }} onClick={() => setPendingPin(null)}>انصراف</button>
+              <button className="btn ghost" style={{ padding: 11 }} onClick={resetCastlePicker}>انصراف</button>
             </div>
           </div>
         )}
@@ -416,7 +421,7 @@ export default function Admin() {
 
           <div className="sect up u3">مدیریت ادمین‌ها</div>
           <div className="card up u3">
-            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (فقط سناریوها و مقام‌ها)</label>
+            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (فقط لشکرکشی‌ها، روایت جنگ و مقام‌ها)</label>
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>افزودن ادمین</button>
           </div>
