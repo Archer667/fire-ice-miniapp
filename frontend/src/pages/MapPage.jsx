@@ -4,6 +4,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Swords, Keep, Ship } from '../components/Icons.jsx';
 import { MAP_IMAGE, REGION_COORDS } from '../mapCoords.js';
+import ZoomPanMap from '../components/ZoomPanMap.jsx';
 
 export default function MapPage() {
   const { me, toast } = useGame();
@@ -44,20 +45,22 @@ export default function MapPage() {
 
       <div className="up u2">
         <div className="mapview" onClick={() => setPin(null)}>
-          <div className="mapview-frame">
-            <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
-            {pinned.map(c => {
-              const mine = c.name === me.castle;
-              return (
-                <div key={c.name}
-                     className={`pin sm ${c.port ? 'port' : ''} ${c.owner ? 'owned' : ''} ${mine ? 'mine' : ''} ${pin === c.name ? 'active' : ''}`}
-                     style={{ left: c.xy[0] + '%', top: c.xy[1] + '%' }}
-                     onClick={(e) => { e.stopPropagation(); haptic(); setPin(pin === c.name ? null : c.name); }}>
-                  <span className="dot">{c.port ? <Ship s={8} /> : <Keep s={8} />}</span>
-                </div>
-              );
-            })}
-          </div>
+          <ZoomPanMap>
+            <div className="mapview-frame">
+              <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
+              {pinned.map(c => {
+                const mine = c.name === me.castle;
+                return (
+                  <div key={c.name}
+                       className={`pin sm ${c.port ? 'port' : ''} ${c.owner ? 'owned' : ''} ${mine ? 'mine' : ''} ${pin === c.name ? 'active' : ''}`}
+                       style={{ left: c.xy[0] + '%', top: c.xy[1] + '%' }}
+                       onClick={(e) => { e.stopPropagation(); haptic(); setPin(pin === c.name ? null : c.name); }}>
+                    <span className="dot">{c.port ? <Ship s={8} /> : <Keep s={8} />}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </ZoomPanMap>
           {active && (
             <div className="pin-info">
               <div className="pi-name">{active.name}{active.port ? ' ⚓' : ''}{active.name === me.castle ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>

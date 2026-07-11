@@ -6,6 +6,7 @@ import { Shield, Plus, Close, Keep, Ship } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
 import { MAP_IMAGE } from '../mapCoords.js';
+import ZoomPanMap from '../components/ZoomPanMap.jsx';
 
 const ALL_CASTLES = Object.values(REGIONS_STATIC).flatMap(r => [
   ...r.castles.map(n => ({ name: n, region: r.name, port: false })),
@@ -201,20 +202,22 @@ export default function Admin() {
             <option key={c.name} value={c.name}>{c.name} · {c.region}{c.port ? ' (بندر)' : ''}</option>
           ))}
         </select>
-        <label className="f">روی نقشه بزن تا محل نشانه مشخص شود</label>
-        <div className="mapview-frame admin-pin-frame" onClick={onMapClick}>
-          <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
-          {existingPins.map(c => (
-            <div key={c.name} className="pin sm ghost" style={{ left: c.pin[0] + '%', top: c.pin[1] + '%' }}>
-              <span className="dot">{c.port ? <Ship s={8} /> : <Keep s={8} />}</span>
-            </div>
-          ))}
-          {pinXY && (
-            <div className="pin sm active" style={{ left: pinXY[0] + '%', top: pinXY[1] + '%' }}>
-              <span className="dot"><Plus s={9} /></span>
-            </div>
-          )}
-        </div>
+        <label className="f">روی نقشه بزن تا محل نشانه مشخص شود — با دو انگشت یا اسکرول زوم کن</label>
+        <ZoomPanMap>
+          <div className="mapview-frame admin-pin-frame" onClick={onMapClick}>
+            <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
+            {existingPins.map(c => (
+              <div key={c.name} className="pin sm ghost" style={{ left: c.pin[0] + '%', top: c.pin[1] + '%' }}>
+                <span className="dot">{c.port ? <Ship s={8} /> : <Keep s={8} />}</span>
+              </div>
+            ))}
+            {pinXY && (
+              <div className="pin sm active" style={{ left: pinXY[0] + '%', top: pinXY[1] + '%' }}>
+                <span className="dot"><Plus s={9} /></span>
+              </div>
+            )}
+          </div>
+        </ZoomPanMap>
         {pinXY && (
           <div className="page-sub" style={{ marginTop: 8, marginBottom: 0 }}>
             مختصات: {pinXY[0].toLocaleString('fa-IR')}٪ × {pinXY[1].toLocaleString('fa-IR')}٪
