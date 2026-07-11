@@ -25,8 +25,11 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick }) {
         return (
           <div key={c.name}
                className={`pin ${c.port ? 'port' : ''} ${c.owner ? 'owned' : ''} ${c.mine ? 'mine' : ''} ${pin === c.name ? 'active' : ''}`}
-               style={{ left: xy[0] + '%', top: xy[1] + '%' }}
-               onClick={(e) => { e.stopPropagation(); haptic(); onPinClick?.(c); }}>
+               style={{ left: xy[0] + '%', top: xy[1] + '%', pointerEvents: onPinClick ? 'auto' : 'none' }}
+               onClick={(e) => {
+                 if (!onPinClick) return; // حالت ادمین: نباید کلیکِ گذاشتنِ پینِ تازه را قورت بدهد
+                 e.stopPropagation(); haptic(); onPinClick(c);
+               }}>
             <span className="dot">{c.port ? <Ship s={11} /> : <Keep s={11} />}</span>
           </div>
         );

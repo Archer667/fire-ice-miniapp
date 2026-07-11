@@ -22,12 +22,16 @@ export default function Espionage() {
   const men = me.resources.men ?? 0;
 
   const [mapData, setMapData] = useState(null);
+  const [mapError, setMapError] = useState(false);
   const [missions, setMissions] = useState(null);
   const [target, setTarget] = useState(null); // { name, region, owner } | null
   const [busy, setBusy] = useState(false);
 
-  const loadMap = () => api.map().then(setMapData).catch(e => toast(e.message));
-  const loadMissions = () => api.spyMine().then(setMissions).catch(e => toast(e.message));
+  const loadMap = () => {
+    setMapError(false);
+    api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); });
+  };
+  const loadMissions = () => api.spyMine().then(setMissions).catch(e => { toast(e.message); setMissions([]); });
 
   useEffect(() => { loadMap(); loadMissions(); }, []);
 
@@ -56,6 +60,17 @@ export default function Espionage() {
     setBusy(false);
   };
 
+  if (mapError) return (
+    <>
+      <div className="page-title up">جاسوسی</div>
+      <div className="card up u1" style={{ textAlign: 'center', color: 'var(--mid)' }}>
+        نقشه بارگذاری نشد — اتصال به سرور را بررسی کن
+        <div style={{ marginTop: 12 }}>
+          <button className="btn ghost" style={{ padding: 11 }} onClick={loadMap}>تلاش دوباره</button>
+        </div>
+      </div>
+    </>
+  );
   if (!mapData || !missions) return <div className="loading">جاسوس‌ها در راه‌اند...</div>;
 
   return (

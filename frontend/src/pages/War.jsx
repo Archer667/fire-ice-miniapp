@@ -16,12 +16,16 @@ export default function War() {
   const specials = REGIONS_STATIC[me.region]?.special || [];
 
   const [mapData, setMapData] = useState(null);
+  const [mapError, setMapError] = useState(false);
   const [buildings, setBuildings] = useState(null);
   const [mine, setMine] = useState(null);
 
-  const loadMap = () => api.map().then(setMapData).catch(e => toast(e.message));
-  const loadBuildings = () => api.buildings().then(setBuildings).catch(e => toast(e.message));
-  const loadMine = () => api.warMine().then(setMine).catch(e => toast(e.message));
+  const loadMap = () => {
+    setMapError(false);
+    api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); });
+  };
+  const loadBuildings = () => api.buildings().then(setBuildings).catch(e => { toast(e.message); setBuildings([]); });
+  const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
 
   useEffect(() => { loadMap(); loadBuildings(); loadMine(); }, []);
 
@@ -125,6 +129,17 @@ export default function War() {
     } catch (e) { toast(e.message); }
   };
 
+  if (mapError) return (
+    <>
+      <div className="page-title up">نیروها/لشکرکشی</div>
+      <div className="card up u1" style={{ textAlign: 'center', color: 'var(--mid)' }}>
+        نقشه بارگذاری نشد — اتصال به سرور را بررسی کن
+        <div style={{ marginTop: 12 }}>
+          <button className="btn ghost" style={{ padding: 11 }} onClick={loadMap}>تلاش دوباره</button>
+        </div>
+      </div>
+    </>
+  );
   if (!mapData || !buildings || !mine) return <div className="loading">نیروها در راه‌اند...</div>;
 
   return (

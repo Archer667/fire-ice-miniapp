@@ -35,9 +35,12 @@ export default function Admin() {
 
   const [mapRegion, setMapRegion] = useState('north');
   const [mapData, setMapData] = useState(null);
+  const [mapError, setMapError] = useState(false);
   const [mapOptions, setMapOptions] = useState(null);
   const [pendingPin, setPendingPin] = useState(null); // {x,y}
   const [pickName, setPickName] = useState('');
+  const [castleQuery, setCastleQuery] = useState('');
+  const [castleResultsOpen, setCastleResultsOpen] = useState(false);
   const [newCastleName, setNewCastleName] = useState('');
   const [newCastlePort, setNewCastlePort] = useState(false);
 
@@ -45,7 +48,7 @@ export default function Admin() {
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
-  const loadMapData = () => api.map().then(setMapData).catch(e => toast(e.message));
+  const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
   const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
 
   useEffect(() => {
@@ -58,8 +61,21 @@ export default function Admin() {
 
   useEffect(() => {
     loadMapOptions();
-    setPendingPin(null); setPickName(''); setNewCastleName(''); setNewCastlePort(false);
+    setPendingPin(null); setPickName(''); setCastleQuery(''); setNewCastleName(''); setNewCastlePort(false);
   }, [mapRegion]);
+
+  const filteredCastleOptions = (mapOptions || []).filter(o =>
+    !castleQuery.trim() || o.name.includes(castleQuery.trim())
+  );
+
+  const pickCastle = (name) => {
+    haptic();
+    setPickName(name); setCastleQuery(name); setCastleResultsOpen(false);
+  };
+  const pickNewCastle = () => {
+    haptic();
+    setPickName(NEW_CASTLE); setNewCastleName(castleQuery.trim()); setCastleResultsOpen(false);
+  };
 
   const addMapCastle = async () => {
     if (!pendingPin) return;
@@ -76,7 +92,7 @@ export default function Admin() {
       await api.adminAddMapCastle(body);
       haptic('medium');
       toast('قلعه/شهر به نقشه اضافه شد');
-      setPendingPin(null); setPickName(''); setNewCastleName(''); setNewCastlePort(false);
+      setPendingPin(null); setPickName(''); setCastleQuery(''); setNewCastleName(''); setNewCastlePort(false);
       loadMapData(); loadMapOptions();
     } catch (e) { toast(e.message); }
   };
@@ -243,6 +259,11 @@ export default function Admin() {
           {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
         </select>
         <div className="page-sub" style={{ margin: '10px 4px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
+        {mapError && (
+          <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5, margin: '10px 0' }}>
+            نقشه بارگذاری نشد — <span style={{ color: 'var(--az2)', cursor: 'pointer' }} onClick={loadMapData}>تلاش دوباره</span>
+          </div>
+        )}
         {mapData && (() => {
           const r = mapData.regions.find(x => x.id === mapRegion);
           if (!r) return null;
@@ -257,13 +278,40 @@ export default function Admin() {
         {pendingPin && (
           <div style={{ marginTop: 12 }}>
             <label className="f" style={{ marginTop: 0 }}>این نقطه کدام قلعه/شهر است؟</label>
-            <select value={pickName} onChange={e => setPickName(e.target.value)}>
-              <option value="">— انتخاب کن —</option>
-              {mapOptions && mapOptions.map(o => (
-                <option key={o.name} value={o.name}>{o.name}{o.port ? ' ⚓' : ''}</option>
-              ))}
-              <option value={NEW_CASTLE}>+ قلعه/شهر کاملاً جدید...</option>
-            </select>
+            <div className="ppicker">
+              <input
+                value={castleQuery}
+                onChange={e => { setCastleQuery(e.target.value); setPickName(''); setCastleResultsOpen(true); }}
+                onFocus={() => setCastleResultsOpen(true)}
+                placeholder={mapOptions === null ? 'در حال بارگذاری قلعه/شهرهای این اقلیم...' : 'اسم قلعه یا شهر را جست‌وجو کن...'}
+              />
+              {castleResultsOpen && (
+                <div className="ppicker-results">
+                  {mapOptions === null ? (
+                    <div className="ppicker-empty">در حال بارگذاری...</div>
+                  ) : (
+                    <>
+                      {filteredCastleOptions.length === 0 && (
+                        <div className="ppicker-empty">
+                          {mapOptions.length === 0 ? 'همهٔ قلعه/شهرهای این اقلیم روی نقشه جا گرفته‌اند' : 'موردی پیدا نشد'}
+                        </div>
+                      )}
+                      {filteredCastleOptions.map(o => (
+                        <div className="ppicker-row" key={o.name} onClick={() => pickCastle(o.name)}>
+                          <span>{o.name}{o.port ? ' ⚓ بندر' : ''}</span>
+                        </div>
+                      ))}
+                      <div className="ppicker-row" onClick={pickNewCastle} style={{ color: 'var(--az2)' }}>
+                        + قلعه/شهر کاملاً جدید{castleQuery.trim() ? `: «${castleQuery.trim()}»` : '...'}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            {pickName && pickName !== NEW_CASTLE && (
+              <div className="page-sub" style={{ margin: '8px 4px 0' }}>انتخاب شد: <b style={{ color: 'var(--az2)' }}>{pickName}</b></div>
+            )}
             {pickName === NEW_CASTLE && (
               <>
                 <label className="f">نام تازه</label>
