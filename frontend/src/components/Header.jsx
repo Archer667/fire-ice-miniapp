@@ -1,6 +1,5 @@
 import { haptic } from '../telegram.js';
 import { Menu, Coin, Wood, Rock, Pick } from './Icons.jsx';
-import { PAGE_TITLES } from './NavBar.jsx';
 import { useGame } from '../store.jsx';
 
 const TICKER_RES = [
@@ -10,15 +9,13 @@ const TICKER_RES = [
   { key: 'iron',  Icon: Pick },
 ];
 
-export default function Header({ tab, onOpenMenu }) {
+export default function Header({ onOpenMenu }) {
   const { me } = useGame();
-  const title = PAGE_TITLES[tab] || 'وستروس';
   return (
     <div className="header">
       <button className="hamburger" onClick={() => { haptic(); onOpenMenu(); }} aria-label="منو">
         <Menu s={20} />
       </button>
-      <div className="header-title">{title}</div>
       <div className="header-spacer" />
       {me?.resources && (
         <div className="header-ticker">

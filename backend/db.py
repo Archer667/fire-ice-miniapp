@@ -12,3 +12,4 @@ alliances  = db.alliances
 hierarchy  = db.hierarchy
 polls      = db.polls
 admin_roles = db.admin_roles
+map_pins   = db.map_pins

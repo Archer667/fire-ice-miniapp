@@ -2,9 +2,10 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import scenarios, players, admin_roles
+from db import scenarios, players, admin_roles, map_pins
 from game import now
 from config import ADMIN_IDS
+from game_data import REGIONS
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -91,4 +92,25 @@ async def remove_admin(tg_id: int, user: dict = Depends(full_admin_user)):
     res = await admin_roles.delete_one({"tg_id": tg_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "ادمین محدود پیدا نشد")
+    return {"ok": True}
+
+class MapPinBody(BaseModel):
+    castle: str
+    x: float
+    y: float
+
+@router.post("/map-pin")
+async def set_map_pin(body: MapPinBody, user: dict = Depends(admin_user)):
+    """ثبت/جابه‌جایی نشانهٔ یک قلعه/شهر روی نقشه (درصد از عرض/ارتفاع تصویر)"""
+    region_id = next((rid for rid, r in REGIONS.items()
+                       if body.castle in r["castles"] or body.castle in r["ports"]), None)
+    if not region_id:
+        raise HTTPException(400, "این قلعه/شهر در هیچ اقلیمی پیدا نشد")
+    if not (0 <= body.x <= 100 and 0 <= body.y <= 100):
+        raise HTTPException(400, "مختصات باید بین ۰ تا ۱۰۰ درصد باشد")
+    await map_pins.update_one(
+        {"castle": body.castle},
+        {"$set": {"castle": body.castle, "region": region_id, "x": body.x, "y": body.y}},
+        upsert=True,
+    )
     return {"ok": True}

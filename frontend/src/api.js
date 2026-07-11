@@ -29,6 +29,7 @@ import {
 
 const mockMe = { registered: false };
 const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
+const mockMapPins = {}; // castle -> [x, y]
 const mockAlliances = []; // {id, mine_proposed, other_name, type, type_name, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
@@ -85,14 +86,20 @@ const M = {
   map: () => ({
     regions: Object.entries(REGIONS_STATIC).map(([id, r]) => ({
       id, name: r.name,
-      castles: [...r.castles.map(n => ({ name: n, owner: null, port: false })),
-                ...r.ports.map(n => ({ name: n, owner: null, port: true }))],
+      castles: [...r.castles.map(n => ({ name: n, owner: null, port: false, pin: mockMapPins[n] || null })),
+                ...r.ports.map(n => ({ name: n, owner: null, port: true, pin: mockMapPins[n] || null }))],
     })),
     campaigns: [
       { from: 'کسترلی راک', to: 'ریورران', mine: false, revealed_minutes_ago: 23 },
       { from: 'پایک', to: 'وایت هاربر', mine: false, revealed_minutes_ago: 61 },
     ],
   }),
+  adminSetMapPin: (castle, x, y) => {
+    const known = Object.values(REGIONS_STATIC).some(r => r.castles.includes(castle) || r.ports.includes(castle));
+    if (!known) throw new Error('این قلعه/شهر در هیچ اقلیمی پیدا نشد');
+    mockMapPins[castle] = [x, y];
+    return { ok: true };
+  },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
     { rank: 2, name: 'تایوین لنیستر', castle: 'کسترلی راک', region: 'وسترلندز', points: 2140 },
@@ -277,4 +284,6 @@ export const api = {
     : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),
   adminRemoveAdmin: (tgId) => MOCK ? Promise.resolve(M.adminRemoveAdmin())
     : req(`/api/admin/admins/${tgId}`, { method: 'DELETE' }),
+  adminSetMapPin: (castle, x, y) => MOCK ? Promise.resolve(M.adminSetMapPin(castle, x, y))
+    : req('/api/admin/map-pin', { method: 'POST', body: JSON.stringify({ castle, x, y }) }),
 };

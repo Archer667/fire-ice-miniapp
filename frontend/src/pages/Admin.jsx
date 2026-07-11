@@ -2,9 +2,15 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Shield, Plus, Close } from '../components/Icons.jsx';
+import { Shield, Plus, Close, Keep, Ship } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
+import { MAP_IMAGE } from '../mapCoords.js';
+
+const ALL_CASTLES = Object.values(REGIONS_STATIC).flatMap(r => [
+  ...r.castles.map(n => ({ name: n, region: r.name, port: false })),
+  ...r.ports.map(n => ({ name: n, region: r.name, port: true })),
+]);
 
 export default function Admin() {
   const { me, toast } = useGame();
@@ -25,14 +31,20 @@ export default function Admin() {
   const [admins, setAdmins] = useState(null);
   const [newAdminTarget, setNewAdminTarget] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [mapData, setMapData] = useState(null);
+  const [pinCastle, setPinCastle] = useState('');
+  const [pinXY, setPinXY] = useState(null);
+  const [pinBusy, setPinBusy] = useState(false);
 
   const loadPending = () => api.adminPending().then(setPending).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
+  const loadMap = () => api.map().then(setMapData).catch(e => toast(e.message));
 
   useEffect(() => {
     loadPending();
     loadPolls();
+    loadMap();
     if (isFull) loadAdmins();
   }, []);
 
@@ -122,6 +134,30 @@ export default function Admin() {
     catch (e) { toast(e.message); }
   };
 
+  const existingPins = mapData ? mapData.regions.flatMap(r => r.castles.filter(c => c.pin)) : [];
+
+  const onMapClick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 1000) / 10;
+    haptic();
+    setPinXY([x, y]);
+  };
+
+  const savePin = async () => {
+    if (!pinCastle) { toast('یک قلعه/شهر را انتخاب کن'); return; }
+    if (!pinXY) { toast('روی نقشه بزن تا محل نشانه مشخص شود'); return; }
+    setPinBusy(true);
+    try {
+      await api.adminSetMapPin(pinCastle, pinXY[0], pinXY[1]);
+      haptic('medium');
+      toast(`نشانهٔ «${pinCastle}» روی نقشه ثبت شد`);
+      setPinXY(null); setPinCastle('');
+      loadMap();
+    } catch (e) { toast(e.message); }
+    setPinBusy(false);
+  };
+
   if (!me.admin_role) {
     return (
       <>
@@ -154,6 +190,39 @@ export default function Admin() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="sect up u2">افزودن نشانه به نقشه</div>
+      <div className="card up u2">
+        <label className="f" style={{ marginTop: 0 }}>قلعه/شهر</label>
+        <select value={pinCastle} onChange={e => setPinCastle(e.target.value)}>
+          <option value="">— انتخاب کن —</option>
+          {ALL_CASTLES.map(c => (
+            <option key={c.name} value={c.name}>{c.name} · {c.region}{c.port ? ' (بندر)' : ''}</option>
+          ))}
+        </select>
+        <label className="f">روی نقشه بزن تا محل نشانه مشخص شود</label>
+        <div className="mapview-frame admin-pin-frame" onClick={onMapClick}>
+          <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
+          {existingPins.map(c => (
+            <div key={c.name} className="pin sm ghost" style={{ left: c.pin[0] + '%', top: c.pin[1] + '%' }}>
+              <span className="dot">{c.port ? <Ship s={8} /> : <Keep s={8} />}</span>
+            </div>
+          ))}
+          {pinXY && (
+            <div className="pin sm active" style={{ left: pinXY[0] + '%', top: pinXY[1] + '%' }}>
+              <span className="dot"><Plus s={9} /></span>
+            </div>
+          )}
+        </div>
+        {pinXY && (
+          <div className="page-sub" style={{ marginTop: 8, marginBottom: 0 }}>
+            مختصات: {pinXY[0].toLocaleString('fa-IR')}٪ × {pinXY[1].toLocaleString('fa-IR')}٪
+          </div>
+        )}
+        <button className="btn" style={{ marginTop: 14 }} disabled={pinBusy} onClick={savePin}>
+          {pinBusy ? 'در حال ثبت...' : 'ثبت نشانه'}
+        </button>
       </div>
 
       <div className="sect up u2">تعیین بالادستی</div>

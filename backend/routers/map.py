@@ -1,7 +1,7 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends
 from auth import get_user
-from db import players, scenarios
+from db import players, scenarios, map_pins
 from game import now
 from game_data import REGIONS
 from config import CAMPAIGN_REVEAL_MINUTES
@@ -15,12 +15,19 @@ async def get_map(user: dict = Depends(get_user)):
     async for p in players.find({}, {"castle": 1, "name": 1}):
         owners[p["castle"]] = p["name"]
 
+    pins = {}
+    async for pin in map_pins.find({}, {"castle": 1, "x": 1, "y": 1}):
+        pins[pin["castle"]] = [pin["x"], pin["y"]]
+
+    def pin_of(c):
+        return pins.get(c)
+
     regions = []
     for rid, r in REGIONS.items():
         regions.append({
             "id": rid, "name": r["name"],
-            "castles": [{"name": c, "owner": owners.get(c), "port": False} for c in r["castles"]] +
-                       [{"name": c, "owner": owners.get(c), "port": True} for c in r["ports"]],
+            "castles": [{"name": c, "owner": owners.get(c), "port": False, "pin": pin_of(c)} for c in r["castles"]] +
+                       [{"name": c, "owner": owners.get(c), "port": True, "pin": pin_of(c)} for c in r["ports"]],
         })
 
     # لشکرکشی‌های آشکارشده: ۱۵ دقیقه بعد از فرمان (فرمان خودت را همیشه می‌بینی)
