@@ -89,6 +89,15 @@ export default function War() {
   );
   const overGold = goldCost > gold;
   const overMen = menCommitted > men;
+  const planTooShort = op.needsTarget && opType !== 'garrison' && plan.trim().length < 50;
+  const badPortTarget = op.portOnly && target && !target.port;
+  const formIssue = overGold ? 'خزانه کافی نیست'
+    : overMen ? 'نفرات کافی نیست'
+    : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
+    : badPortTarget ? 'مقصد باید بندر باشد'
+    : planTooShort ? 'سناریو خیلی کوتاه است'
+    : menCommitted <= 0 ? 'نیرویی گسیل نکرده‌ای'
+    : null;
 
   const resetForm = () => {
     setPlan(''); setTarget(null);
@@ -97,6 +106,7 @@ export default function War() {
 
   const send = async () => {
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
+    if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
     if (op.needsTarget && opType !== 'garrison' && plan.trim().length < 50) {
       toast('سناریو خیلی کوتاه است — نقشه‌ات را شرح بده'); return;
     }
@@ -209,6 +219,11 @@ export default function War() {
                 </>
               ) : <span style={{ color: 'var(--mid)' }}>از روی نقشه در بالا انتخاب کن</span>}
             </div>
+            {op.portOnly && target && !target.port && (
+              <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
+                {target.name} بندر نیست — غارت دریایی فقط علیه اهداف بندری ممکن است
+              </div>
+            )}
           </>
         ) : (
           <div className="page-sub" style={{ margin: '10px 4px 0' }}>عملیات دفاعی برای قلعهٔ مبدا — نیازی به مقصد نیست</div>
@@ -223,6 +238,9 @@ export default function War() {
             <label className="f">سناریوی نبرد — تا دو صفحه</label>
             <textarea value={plan} onChange={e => setPlan(e.target.value)}
                       placeholder="مسیر لشکر، آرایش جنگی، نیرنگ‌ها..." />
+            <div className="page-sub" style={{ margin: '4px 4px 0', color: plan.trim().length < 50 ? 'var(--danger)' : 'var(--mid)' }}>
+              {plan.trim().length.toLocaleString('fa-IR')} / حداقل {(50).toLocaleString('fa-IR')} نویسه
+            </div>
           </>
         )}
       </div>
@@ -254,8 +272,8 @@ export default function War() {
       </div>
 
       <div className="up u3">
-        <button className="btn" disabled={overGold || overMen || busy} onClick={send}>
-          {overGold ? 'خزانه کافی نیست' : overMen ? 'نفرات کافی نیست' : busy ? 'در حال ارسال...' : 'مُهر و ارسال فرمان'}
+        <button className="btn" disabled={!!formIssue || busy} onClick={send}>
+          {formIssue || (busy ? 'در حال ارسال...' : 'مُهر و ارسال فرمان')}
         </button>
       </div>
 

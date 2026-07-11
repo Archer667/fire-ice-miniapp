@@ -29,9 +29,14 @@ async def list_campaigns(user: dict = Depends(admin_user)):
             for tid, n in s["troops"].items() if n and n > 0
         ]
         arrival_at = s.get("arrival_at")
+        target_owner = None
+        if s["target_castle"] != s["origin_castle"]:
+            target_owner = await players.find_one({"castle": s["target_castle"]}, {"tg_id": 1, "name": 1})
         out.append({
-            "id": str(s["_id"]), "player": s["player_name"],
+            "id": str(s["_id"]), "player": s["player_name"], "tg_id": s["tg_id"],
             "from": s["origin_castle"], "to": s["target_castle"],
+            "target_tg_id": target_owner["tg_id"] if target_owner else None,
+            "target_player": target_owner["name"] if target_owner else None,
             "op_type": s["op_type"], "op_name": OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
             "plan": s["plan"], "troops": troops,
             "gold_cost": s["gold_cost"], "men_committed": s["men_committed"], "food_per_day": s["food_per_day"],

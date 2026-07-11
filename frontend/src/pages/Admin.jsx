@@ -102,6 +102,17 @@ export default function Admin() {
     } catch (e) { toast(e.message); }
   };
 
+  const addToBattleReport = (s) => {
+    haptic();
+    const toAdd = [{ tg_id: s.tg_id, name: s.player }];
+    if (s.target_tg_id) toAdd.push({ tg_id: s.target_tg_id, name: s.target_player });
+    setBattleParticipants(prev => {
+      const existing = new Set(prev.map(p => p.tg_id));
+      return [...prev, ...toAdd.filter(p => !existing.has(p.tg_id))];
+    });
+    toast('به شرکت‌کننده‌های روایت جنگ اضافه شد');
+  };
+
   const sendBattleReport = async () => {
     if (!battleParticipants.length) { toast('حداقل یک شرکت‌کننده انتخاب کن'); return; }
     if (battleText.trim().length < 10) { toast('روایت جنگ خیلی کوتاه است'); return; }
@@ -227,8 +238,13 @@ export default function Admin() {
               نیروها: {s.troops.length ? s.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
             </div>
             {s.plan && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0', lineHeight: 1.8 }}>{s.plan}</div>}
-            <div style={{ fontSize: 11, color: 'var(--low)' }}>
-              {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--low)' }}>
+                {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+              </div>
+              <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }} onClick={() => addToBattleReport(s)}>
+                افزودن به روایت جنگ
+              </button>
             </div>
           </div>
         ))}

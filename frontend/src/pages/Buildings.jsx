@@ -83,7 +83,7 @@ function BuildingRow({ row, busy, isPort, onAct }) {
   return (
     <div className="bld">
       <div className="bld-top">
-        <div className="bld-ic">{row.type === 'barracks' ? <Shield s={18} /> : <Hammer s={18} />}</div>
+        <div className="bld-ic">{row.type === 'defense' ? <Shield s={18} /> : <Hammer s={18} />}</div>
         <div className="bld-n">
           {row.name}
           <small>{row.level === 0 ? 'ساخته نشده' : `سطح ${row.level.toLocaleString('fa-IR')} از ${row.max_level.toLocaleString('fa-IR')}`}</small>

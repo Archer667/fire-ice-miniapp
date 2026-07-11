@@ -283,18 +283,23 @@ const M = {
   adminCampaigns: () => {
     mockResolveCampaigns();
     const nowMs = Date.now();
-    return mockCampaigns.slice().reverse().map(c => ({
-      id: c.id, player: mockMe.name,
-      from: c.origin_castle, to: c.target_castle,
-      op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
-      plan: c.plan,
-      troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
-        name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
-      })),
-      gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
-      travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
-      active: c.active, created_at: c.created_at,
-    }));
+    return mockCampaigns.slice().reverse().map(c => {
+      const targetOwner = c.target_castle !== c.origin_castle
+        ? MOCK_PLAYERS.find(p => p.castle === c.target_castle) : null;
+      return {
+        id: c.id, player: mockMe.name, tg_id: 1,
+        from: c.origin_castle, to: c.target_castle,
+        target_tg_id: targetOwner?.tg_id ?? null, target_player: targetOwner?.name ?? null,
+        op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        plan: c.plan,
+        troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
+          name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+        })),
+        gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
+        travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
+        active: c.active, created_at: c.created_at,
+      };
+    });
   },
   adminBattles: () => mockBattleReports.slice().reverse(),
   adminCreateBattleReport: (participantTgIds, text) => {
