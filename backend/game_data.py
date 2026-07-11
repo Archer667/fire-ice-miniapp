@@ -140,3 +140,14 @@ def travel_minutes(same_castle: bool, origin_region: str, target_region: str) ->
         return TRAVEL_SAME_REGION_MINUTES
     hop = abs(REGION_ORDER.get(origin_region, 2) - REGION_ORDER.get(target_region, 2))
     return TRAVEL_CROSS_BASE_MINUTES + hop * TRAVEL_PER_HOP_MINUTES
+
+# جاسوس‌ها سبک‌بارتر و سریع‌تر از لشکر حرکت می‌کنند — حدود نصف زمان یک لشکر کامل
+SPY_SAME_REGION_MINUTES = 8
+SPY_CROSS_BASE_MINUTES = 15
+SPY_PER_HOP_MINUTES = 8
+
+def spy_travel_minutes(origin_region: str, target_region: str) -> int:
+    if origin_region == target_region:
+        return SPY_SAME_REGION_MINUTES
+    hop = abs(REGION_ORDER.get(origin_region, 2) - REGION_ORDER.get(target_region, 2))
+    return SPY_CROSS_BASE_MINUTES + hop * SPY_PER_HOP_MINUTES

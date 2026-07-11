@@ -38,7 +38,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick }) {
 /** نقشهٔ کامل با لیست اقلیم‌های قابل‌بازشدن — برای سکشن نقشهٔ صفحهٔ لشکرکشی.
  * data: { regions: [{ id, name, castles: [{name, owner, port, coords?, mine?}] }] }
  * هر castle می‌تواند owner را به‌صورت { name, points, title, overlord_name } داشته باشد */
-export default function WesterosMap({ data, meCastle, onSelectTarget }) {
+export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد' }) {
   const [open, setOpen] = useState(null);
   const [pin, setPin] = useState(null);
 
@@ -85,7 +85,7 @@ export default function WesterosMap({ data, meCastle, onSelectTarget }) {
                         </div>
                       ) : <div className="pi-owner">بدون لرد — خالی</div>}
                       {onSelectTarget && (
-                        <button className="btn ghost pi-pick" onClick={() => onSelectTarget({ ...c, region: r.id })}>انتخاب به‌عنوان مقصد</button>
+                        <button className="btn ghost pi-pick" onClick={() => onSelectTarget({ ...c, region: r.id })}>{pickLabel}</button>
                       )}
                     </div>
                   );

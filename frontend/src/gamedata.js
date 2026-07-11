@@ -61,6 +61,19 @@ export function travelMinutes(sameCastle, originRegion, targetRegion) {
   return TRAVEL_CROSS_BASE_MINUTES + hop * TRAVEL_PER_HOP_MINUTES;
 }
 
+// جاسوس‌ها سریع‌تر از لشکر حرکت می‌کنند
+export const SPY_GOLD_COST = 50;
+export const SPY_MEN_COST = 5;
+export const SPY_SAME_REGION_MINUTES = 8;
+export const SPY_CROSS_BASE_MINUTES = 15;
+export const SPY_PER_HOP_MINUTES = 8;
+
+export function spyTravelMinutes(originRegion, targetRegion) {
+  if (originRegion === targetRegion) return SPY_SAME_REGION_MINUTES;
+  const hop = Math.abs((REGION_ORDER[originRegion] ?? 2) - (REGION_ORDER[targetRegion] ?? 2));
+  return SPY_CROSS_BASE_MINUTES + hop * SPY_PER_HOP_MINUTES;
+}
+
 // گزینه‌های عملیات لشکرکشی
 export const OP_TYPES = [
   { id: 'attack',     name: 'حملهٔ نظامی',                    needsTarget: true,  portOnly: false },
