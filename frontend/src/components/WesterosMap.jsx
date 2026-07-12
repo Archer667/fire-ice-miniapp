@@ -39,63 +39,44 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick }) {
 }
 
 /** نقشهٔ یک‌پارچهٔ کل وستروس — بدون تب اقلیم‌ها، فقط خودِ نقشه با آیکن قلعه/شهرهایی
- * که مختصات دارند. قلعه/شهرهایی که هنوز روی نقشه نیستند (ادمین جایشان را مشخص
- * نکرده) به‌صورت یک فهرست ساده زیر نقشه می‌آیند تا انتخاب هدف همچنان ممکن بماند.
+ * که مختصات دارند (بقیه تا وقتی ادمین جایشان را روی نقشه مشخص نکند دیده نمی‌شوند).
  * data: { regions: [{ id, name, castles: [{name, owner, port, coords?}], coords? }] }
  * هر castle می‌تواند owner را به‌صورت { name, points, title, overlord_name } داشته باشد */
 export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد' }) {
   const [pin, setPin] = useState(null);
 
-  const allCastles = data.regions.flatMap(r => {
+  const mapped = data.regions.flatMap(r => {
     const coords = { ...(REGION_COORDS[r.id] || {}), ...(r.coords || {}) };
-    return r.castles.map(c => ({ ...c, region: r.id, mine: c.name === meCastle, xy: coords[c.name] }));
+    return r.castles
+      .map(c => ({ ...c, region: r.id, mine: c.name === meCastle, xy: coords[c.name] }))
+      .filter(c => c.xy);
   });
-  const mapped = allCastles.filter(c => c.xy);
-  const unmapped = allCastles.filter(c => !c.xy);
   const coords = Object.fromEntries(mapped.map(c => [c.name, c.xy]));
   const active = mapped.find(c => c.name === pin);
 
-  return (
-    <div>
-      {mapped.length > 0 && (
-        <div className="mapview">
-          <ZoomPanMap>
-            <MapFrame region={{ castles: mapped }} coords={coords} pin={pin}
-                      onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }} />
-          </ZoomPanMap>
-          {active && (
-            <div className="pin-info">
-              <div className="pi-name">{active.name}{active.port ? ' ⚓' : ''}{active.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
-              {active.owner ? (
-                <div className="pi-owner-block">
-                  <div className="pi-owner">صاحب: {active.owner.name}{active.owner.title ? ` · ${active.owner.title}` : ''}</div>
-                  <div className="pi-stats">
-                    امتیاز: {(active.owner.points ?? 0).toLocaleString('fa-IR')}
-                    {active.owner.overlord_name ? ` · بالادستی: ${active.owner.overlord_name}` : ''}
-                  </div>
-                </div>
-              ) : <div className="pi-owner">بدون لرد — خالی</div>}
-              {onSelectTarget && (
-                <button className="btn ghost pi-pick" onClick={() => onSelectTarget(active)}>{pickLabel}</button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+  if (mapped.length === 0) return null;
 
-      {unmapped.length > 0 && (
-        <div className="region-castles" style={mapped.length > 0 ? { marginTop: 10 } : undefined}>
-          {mapped.length > 0 && (
-            <div className="page-sub" style={{ margin: '2px 4px 6px' }}>هنوز روی نقشه نیستند</div>
-          )}
-          {unmapped.map(c => (
-            <div className="rc" key={c.name} onClick={() => onSelectTarget?.(c)} style={{ cursor: onSelectTarget ? 'pointer' : 'default' }}>
-              <span>{c.name}{c.port ? ' ⚓' : ''}</span>
-              {c.owner
-                ? <span className="own">{c.owner.name}</span>
-                : <span className="empty">بدون لرد</span>}
+  return (
+    <div className="mapview">
+      <ZoomPanMap>
+        <MapFrame region={{ castles: mapped }} coords={coords} pin={pin}
+                  onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }} />
+      </ZoomPanMap>
+      {active && (
+        <div className="pin-info">
+          <div className="pi-name">{active.name}{active.port ? ' ⚓' : ''}{active.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
+          {active.owner ? (
+            <div className="pi-owner-block">
+              <div className="pi-owner">صاحب: {active.owner.name}{active.owner.title ? ` · ${active.owner.title}` : ''}</div>
+              <div className="pi-stats">
+                امتیاز: {(active.owner.points ?? 0).toLocaleString('fa-IR')}
+                {active.owner.overlord_name ? ` · بالادستی: ${active.owner.overlord_name}` : ''}
+              </div>
             </div>
-          ))}
+          ) : <div className="pi-owner">بدون لرد — خالی</div>}
+          {onSelectTarget && (
+            <button className="btn ghost pi-pick" onClick={() => onSelectTarget(active)}>{pickLabel}</button>
+          )}
         </div>
       )}
     </div>

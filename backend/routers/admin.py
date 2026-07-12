@@ -120,20 +120,28 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
         name = body.new_name.strip()[:40]
         if name in all_names:
             raise HTTPException(409, "این اسم قبلاً در بازی وجود دارد")
-        custom, port = True, body.port
+        custom = True
     else:
         name = (body.name or "").strip()
         if name not in r["castles"] + r["ports"]:
             raise HTTPException(400, "این قلعه/بندر در دیتای این اقلیم نیست")
         if await map_castles.find_one({"region": body.region, "name": name}):
             raise HTTPException(409, "این قلعه از قبل روی نقشه گذاشته شده")
-        custom, port = False, name in r["ports"]
+        custom = False
 
+    # نوع آیکن (قلعه/بندر) را ادمین همیشه دستی مشخص می‌کند — چه برای اسم تازه چه موجود
     await map_castles.insert_one({
-        "region": body.region, "name": name, "port": port,
+        "region": body.region, "name": name, "port": body.port,
         "x": body.x, "y": body.y, "custom": custom, "created_at": now(),
     })
     return {"ok": True, "name": name}
+
+@router.delete("/map/castles/{name}")
+async def delete_map_castle(name: str, user: dict = Depends(admin_user)):
+    res = await map_castles.delete_one({"name": name})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "این نشانه روی نقشه پیدا نشد")
+    return {"ok": True}
 
 @router.get("/admins")
 async def list_admins(user: dict = Depends(full_admin_user)):

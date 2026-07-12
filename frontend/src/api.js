@@ -172,19 +172,26 @@ const M = {
     const allNames = new Set(mockMapCastles.map(m => m.name));
     for (const reg of Object.values(REGIONS_STATIC)) { reg.castles.forEach(n => allNames.add(n)); reg.ports.forEach(n => allNames.add(n)); }
 
-    let name, port, custom;
+    let name, custom;
     if (body.new_name && body.new_name.trim()) {
       name = body.new_name.trim().slice(0, 40);
       if (allNames.has(name)) throw new Error('این اسم قبلاً در بازی وجود دارد');
-      port = !!body.port; custom = true;
+      custom = true;
     } else {
       name = (body.name || '').trim();
       if (![...r.castles, ...r.ports].includes(name)) throw new Error('این قلعه/بندر در دیتای این اقلیم نیست');
       if (mockMapCastles.some(m => m.region === body.region && m.name === name)) throw new Error('این قلعه از قبل روی نقشه گذاشته شده');
-      port = r.ports.includes(name); custom = false;
+      custom = false;
     }
-    mockMapCastles.push({ region: body.region, name, port, x: body.x, y: body.y, custom });
+    // نوع آیکن را ادمین دستی مشخص می‌کند
+    mockMapCastles.push({ region: body.region, name, port: !!body.port, x: body.x, y: body.y, custom });
     return { ok: true, name };
+  },
+  adminDeleteMapCastle: (name) => {
+    const i = mockMapCastles.findIndex(m => m.name === name);
+    if (i === -1) throw new Error('این نشانه روی نقشه پیدا نشد');
+    mockMapCastles.splice(i, 1);
+    return { ok: true };
   },
   submitCampaign: (body) => {
     mockResolveCampaigns();
@@ -500,6 +507,8 @@ export const api = {
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
+  adminDeleteMapCastle: (name) => MOCK ? Promise.resolve(M.adminDeleteMapCastle(name))
+    : req(`/api/admin/map/castles/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
