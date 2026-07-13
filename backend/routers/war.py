@@ -7,6 +7,7 @@ from db import players, campaigns, map_castles
 from game import now, can_afford, pay, normalize_building_state
 from game_data import COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, travel_minutes
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
+from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/war", tags=["war"])
 
@@ -35,7 +36,7 @@ async def all_castle_names_and_ports():
         ports |= set(r["ports"])
     async for m in map_castles.find({}):
         names.add(m["name"])
-        if m.get("port"):
+        if m.get("kind", "port" if m.get("port") else "castle") == "port":
             ports.add(m["name"])
     return names, ports
 
@@ -154,7 +155,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "plan": body.plan.strip(), "troops": body.troops,
         "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
         "travel_minutes": travel, "arrival_at": arrival_at,
-        "active": True,
+        "active": True, "arrival_notified": False,
         "created_at": now(), "last_food_tick": now(),
     }
     res = await campaigns.insert_one(doc)
@@ -193,3 +194,23 @@ async def mine(user: dict = Depends(get_user)):
             "created_at": c["created_at"].isoformat(),
         })
     return out
+
+async def notify_arrivals():
+    """کلاغی به مبدا که «لشکرت رسید» و کلاغی به صاحب مقصد که «لشکری به قلعه‌ات رسید» —
+    یک‌بار برای هر لشکر، دقیقاً وقتی اولین بار به arrival_at می‌رسد"""
+    cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}})
+    async for c in cur:
+        origin, target = c["origin_castle"], c["target_castle"]
+        same_castle = origin == target
+        if not same_castle:
+            await send_system_message(
+                c["tg_id"], c["player_name"],
+                f"لشکرت از {origin} به {target} رسید.",
+            )
+        target_owner = await players.find_one({"castle": target}, {"tg_id": 1, "name": 1})
+        if target_owner and target_owner["tg_id"] != c["tg_id"]:
+            await send_system_message(
+                target_owner["tg_id"], target_owner["name"],
+                f"لشکری از {origin} به قلعه‌ات ({target}) رسید — مراقب باش.",
+            )
+        await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})

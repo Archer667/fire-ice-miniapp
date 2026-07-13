@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
@@ -7,6 +9,9 @@ from routers import (
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
     polls as polls_router,
 )
+from routers.war import notify_arrivals
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="نغمه آتش و یخ — API", version="1.0")
 
@@ -30,6 +35,19 @@ app.include_router(buildings_router.router)
 app.include_router(titles_router.router)
 app.include_router(diplomacy_router.router)
 app.include_router(polls_router.router)
+
+async def _arrival_watcher():
+    """هر ۳۰ ثانیه لشکرهایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد"""
+    while True:
+        try:
+            await notify_arrivals()
+        except Exception:
+            logger.exception("arrival watcher tick failed")
+        await asyncio.sleep(30)
+
+@app.on_event("startup")
+async def start_arrival_watcher():
+    asyncio.create_task(_arrival_watcher())
 
 @app.get("/api/health")
 async def health():

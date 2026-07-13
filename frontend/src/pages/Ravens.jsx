@@ -5,9 +5,12 @@ import { haptic } from '../telegram.js';
 import { Send, Plus, Back } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 
+const SYSTEM_TG_ID = 0;
+
 export default function Ravens() {
   const { toast, refreshUnread } = useGame();
   const [inbox, setInbox] = useState(null);
+  const [tab, setTab] = useState('announcements');
   const [openWith, setOpenWith] = useState(null);   // {tg_id, name}
   const [thread, setThread] = useState([]);
   const [text, setText] = useState('');
@@ -77,17 +80,32 @@ export default function Ravens() {
 
   /* ---------- صندوق نامه ---------- */
   if (!inbox) return <div className="loading">کلاغ‌ها در راه‌اند...</div>;
+
+  const announcements = inbox.filter(m => m.with_tg_id === SYSTEM_TG_ID);
+  const personal = inbox.filter(m => m.with_tg_id !== SYSTEM_TG_ID);
+  const rows = tab === 'announcements' ? announcements : personal;
+
   return (
     <>
       <div className="page-title up">کلاغ‌ها</div>
-      <div className="page-sub up">نامه‌های خصوصی میان تو و لردهای وستروس</div>
-      <div className="up u1">
-        {inbox.length === 0 && (
+      <div className="page-sub up">نامه‌های خصوصی و اطلاعیه‌های شورای جنگ</div>
+
+      <div className="tabs up u1">
+        <div className={`tab ${tab === 'announcements' ? 'on' : ''}`} onClick={() => { haptic(); setTab('announcements'); }}>
+          اطلاعیه‌ها{announcements.some(m => m.unread > 0) ? ' •' : ''}
+        </div>
+        <div className={`tab ${tab === 'messages' ? 'on' : ''}`} onClick={() => { haptic(); setTab('messages'); }}>
+          پیام‌ها{personal.some(m => m.unread > 0) ? ' •' : ''}
+        </div>
+      </div>
+
+      <div className="up u2">
+        {rows.length === 0 && (
           <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-            هنوز کلاغی برایت نیامده — تو اولین نامه را بفرست
+            {tab === 'announcements' ? 'هنوز اطلاعیه‌ای نیامده' : 'هنوز کلاغی برایت نیامده — تو اولین نامه را بفرست'}
           </div>
         )}
-        {inbox.map((m, i) => (
+        {rows.map((m, i) => (
           <div key={i} className="mailrow" onClick={() => openThread(m)}>
             <div className="mava">{m.with_name.charAt(0)}</div>
             <div className="mt">
@@ -97,9 +115,11 @@ export default function Ravens() {
           </div>
         ))}
       </div>
-      <button className="fab" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
-        <Plus s={22} />
-      </button>
+      {tab === 'messages' && (
+        <button className="fab" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
+          <Plus s={22} />
+        </button>
+      )}
     </>
   );
 }

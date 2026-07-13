@@ -36,7 +36,7 @@ let mockAllianceSeq = 1;
 let mockLastFeast = null;
 const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, active, created_at, last_food_tick, travel_minutes, arrival_at}
 let mockCampaignSeq = 1;
-const mockMapCastles = []; // {region, name, port, x, y, custom}
+const mockMapCastles = []; // {region, name, kind, x, y, custom}
 const mockBattleReports = []; // {id, participants:[name], text, created_at}
 let mockBattleSeq = 1;
 const mockSpyMissions = []; // {id, target, travel_minutes, arrival_at, success, report, created_at}
@@ -134,13 +134,14 @@ const M = {
       regions: Object.entries(REGIONS_STATIC).map(([id, r]) => {
         const custom = mockMapCastles.filter(m => m.region === id && m.custom);
         const coords = {};
-        for (const m of mockMapCastles.filter(m => m.region === id)) coords[m.name] = [m.x, m.y];
+        const kindByName = {};
+        for (const m of mockMapCastles.filter(m => m.region === id)) { coords[m.name] = [m.x, m.y]; kindByName[m.name] = m.kind; }
         return {
           id, name: r.name,
           castles: [
-            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: false })),
-            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: true })),
-            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: c.port })),
+            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: false, kind: kindByName[n] || 'castle' })),
+            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: true, kind: kindByName[n] || 'port' })),
+            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: c.kind === 'port', kind: c.kind })),
           ],
           coords,
         };
@@ -161,8 +162,8 @@ const M = {
     if (!r) return [];
     const placed = new Set(mockMapCastles.filter(m => m.region === region).map(m => m.name));
     return [
-      ...r.castles.filter(n => !placed.has(n)).map(n => ({ name: n, port: false })),
-      ...r.ports.filter(n => !placed.has(n)).map(n => ({ name: n, port: true })),
+      ...r.castles.filter(n => !placed.has(n)).map(n => ({ name: n, kind: 'castle' })),
+      ...r.ports.filter(n => !placed.has(n)).map(n => ({ name: n, kind: 'port' })),
     ];
   },
   adminAddMapCastle: (body) => {
@@ -183,8 +184,9 @@ const M = {
       if (mockMapCastles.some(m => m.region === body.region && m.name === name)) throw new Error('این قلعه از قبل روی نقشه گذاشته شده');
       custom = false;
     }
-    // نوع آیکن را ادمین دستی مشخص می‌کند
-    mockMapCastles.push({ region: body.region, name, port: !!body.port, x: body.x, y: body.y, custom });
+    // نوع آیکن (قلعه/شهر/مخروبه/بندر) را ادمین دستی مشخص می‌کند
+    const kind = ['castle', 'city', 'ruin', 'port'].includes(body.kind) ? body.kind : 'castle';
+    mockMapCastles.push({ region: body.region, name, kind, x: body.x, y: body.y, custom });
     return { ok: true, name };
   },
   adminDeleteMapCastle: (name) => {
@@ -209,7 +211,7 @@ const M = {
       targetCastle = body.target_castle;
       if (op.portOnly) {
         const isPort = Object.values(REGIONS_STATIC).some(r => r.ports.includes(targetCastle))
-          || mockMapCastles.some(m => m.name === targetCastle && m.port);
+          || mockMapCastles.some(m => m.name === targetCastle && m.kind === 'port');
         if (!isPort) throw new Error('غارت دریایی فقط علیه اهداف بندری ممکن است');
       }
       if (body.op_type !== 'garrison' && (body.plan || '').trim().length < 50) {
@@ -369,11 +371,14 @@ const M = {
   ],
   ravensUnread: () => ({ count: 0 }),
   inbox: () => [
+    { with_tg_id: 0, with_name: 'شورای جنگ', last_text: 'لشکرت از وینترفل به ریوران رسید.', last_at: '', unread: 1 },
     { with_tg_id: 9002, with_name: 'تایوین لنیستر', last_text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان.', last_at: '', unread: 1 },
     { with_tg_id: 9003, with_name: 'مارگری تایرل', last_text: 'ریچ آمادهٔ فروش گندم است. ۲۰۰ واحد در برابر ۱۵۰ طلا؟', last_at: '', unread: 1 },
     { with_tg_id: 9004, with_name: 'یارا گریجوی', last_text: 'آنچه مرده است هرگز نمی‌میرد.', last_at: '', unread: 0 },
   ],
-  thread: () => [
+  thread: (name) => name === 'شورای جنگ' ? [
+    { mine: false, text: 'لشکرت از وینترفل به ریوران رسید.' },
+  ] : [
     { mine: false, text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.' },
     { mine: true, text: 'شمال دربارهٔ پیشنهادت می‌اندیشد، لرد لنیستر.' },
   ],
@@ -512,7 +517,7 @@ export const api = {
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
-  thread:    (name) => MOCK ? Promise.resolve(M.thread()) : req('/api/ravens/thread/' + encodeURIComponent(name)),
+  thread:    (name) => MOCK ? Promise.resolve(M.thread(name)) : req('/api/ravens/thread/' + encodeURIComponent(name)),
   sendRaven: (toTgIds, text) => MOCK ? Promise.resolve(M.sendRaven(toTgIds, text))
     : req('/api/ravens/send', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, text }) }),
   buildings: () => MOCK ? Promise.resolve(M.buildings()) : req('/api/buildings'),

@@ -85,6 +85,8 @@ async def create_battle(body: BattleReportBody, user: dict = Depends(admin_user)
     })
     return {"ok": True, "sent_to": len(targets)}
 
+MAP_KINDS = {"castle", "city", "ruin", "port"}
+
 @router.get("/map/options")
 async def map_options(region: str, user: dict = Depends(admin_user)):
     """اسم قلعه/بندرهای این اقلیم که هنوز روی نقشه مکان ندارند — برای پرکردن انتخابگر ادمین"""
@@ -92,8 +94,8 @@ async def map_options(region: str, user: dict = Depends(admin_user)):
         raise HTTPException(400, "اقلیم نامعتبر")
     placed = {m["name"] async for m in map_castles.find({"region": region}, {"name": 1})}
     r = REGIONS[region]
-    options = [{"name": c, "port": False} for c in r["castles"] if c not in placed]
-    options += [{"name": c, "port": True} for c in r["ports"] if c not in placed]
+    options = [{"name": c, "kind": "castle"} for c in r["castles"] if c not in placed]
+    options += [{"name": c, "kind": "port"} for c in r["ports"] if c not in placed]
     return options
 
 class MapCastleBody(BaseModel):
@@ -102,7 +104,7 @@ class MapCastleBody(BaseModel):
     y: float
     name: str | None = None       # انتخاب از دیتای موجودِ بازی
     new_name: str | None = None   # قلعه/شهر کاملاً جدید
-    port: bool = False
+    kind: str = "castle"          # نوع آیکن روی نقشه: castle | city | ruin | port
 
 @router.post("/map/castles")
 async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
@@ -110,6 +112,8 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
         raise HTTPException(400, "اقلیم نامعتبر")
     if not (0 <= body.x <= 100 and 0 <= body.y <= 100):
         raise HTTPException(400, "مختصات نامعتبر")
+    if body.kind not in MAP_KINDS:
+        raise HTTPException(400, "نوع آیکن نامعتبر")
 
     r = REGIONS[body.region]
     all_names = {name async for doc in map_castles.find({}, {"name": 1}) for name in [doc["name"]]}
@@ -129,9 +133,9 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
             raise HTTPException(409, "این قلعه از قبل روی نقشه گذاشته شده")
         custom = False
 
-    # نوع آیکن (قلعه/بندر) را ادمین همیشه دستی مشخص می‌کند — چه برای اسم تازه چه موجود
+    # نوع آیکن (قلعه/شهر/مخروبه/بندر) را ادمین همیشه دستی مشخص می‌کند — چه برای اسم تازه چه موجود
     await map_castles.insert_one({
-        "region": body.region, "name": name, "port": body.port,
+        "region": body.region, "name": name, "kind": body.kind,
         "x": body.x, "y": body.y, "custom": custom, "created_at": now(),
     })
     return {"ok": True, "name": name}

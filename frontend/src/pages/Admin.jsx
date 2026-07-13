@@ -11,6 +11,13 @@ import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
+const MAP_KINDS = [
+  { key: 'castle', label: 'قلعه' },
+  { key: 'city',   label: 'شهر' },
+  { key: 'ruin',   label: 'مخروبه' },
+  { key: 'port',   label: 'بندر ⚓' },
+];
+
 const TABS = [
   { key: 'war',    label: 'جنگ' },
   { key: 'map',    label: 'نقشه' },
@@ -53,7 +60,7 @@ export default function Admin() {
   const [castleQuery, setCastleQuery] = useState('');
   const [castleResultsOpen, setCastleResultsOpen] = useState(false);
   const [newCastleName, setNewCastleName] = useState('');
-  const [pinIsPort, setPinIsPort] = useState(false);
+  const [pinKind, setPinKind] = useState('castle');
 
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
@@ -82,23 +89,23 @@ export default function Admin() {
   const pickCastle = (name) => {
     haptic();
     setPickName(name); setCastleQuery(name); setCastleResultsOpen(false);
-    setPinIsPort(!!(mapOptions || []).find(o => o.name === name)?.port);
+    setPinKind((mapOptions || []).find(o => o.name === name)?.kind || 'castle');
   };
   const pickNewCastle = () => {
     haptic();
     setPickName(NEW_CASTLE); setNewCastleName(castleQuery.trim()); setCastleResultsOpen(false);
-    setPinIsPort(false);
+    setPinKind('castle');
   };
 
   const resetCastlePicker = () => {
     setPendingPin(null); setPickName(''); setCastleQuery(''); setCastleResultsOpen(false);
-    setNewCastleName(''); setPinIsPort(false);
+    setNewCastleName(''); setPinKind('castle');
   };
 
   const addMapCastle = async () => {
     if (!pendingPin) return;
     if (!pickName) { toast('یک قلعه/شهر را انتخاب کن'); return; }
-    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y, port: pinIsPort };
+    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y, kind: pinKind };
     if (pickName === NEW_CASTLE) {
       if (!newCastleName.trim()) { toast('نام قلعه/شهر تازه را بنویس'); return; }
       body.new_name = newCastleName.trim();
@@ -355,7 +362,7 @@ export default function Admin() {
                           )}
                           {filteredCastleOptions.map(o => (
                             <div className="ppicker-row" key={o.name} onClick={() => pickCastle(o.name)}>
-                              <span>{o.name}{o.port ? ' ⚓ بندر' : ''}</span>
+                              <span>{o.name}{o.kind === 'port' ? ' ⚓ بندر' : ''}</span>
                             </div>
                           ))}
                           <div className="ppicker-row" onClick={pickNewCastle} style={{ color: 'var(--az2)' }}>
@@ -379,12 +386,12 @@ export default function Admin() {
                   <>
                     <label className="f">نوع آیکن روی نقشه</label>
                     <div className="grid2">
-                      <div className={`pick ${!pinIsPort ? 'sel' : ''}`} onClick={() => { haptic(); setPinIsPort(false); }}>
-                        <div className="n">قلعه</div>
-                      </div>
-                      <div className={`pick ${pinIsPort ? 'sel' : ''}`} onClick={() => { haptic(); setPinIsPort(true); }}>
-                        <div className="n">بندر ⚓</div>
-                      </div>
+                      {MAP_KINDS.map(k => (
+                        <div key={k.key} className={`pick ${pinKind === k.key ? 'sel' : ''}`}
+                             onClick={() => { haptic(); setPinKind(k.key); }}>
+                          <div className="n">{k.label}</div>
+                        </div>
+                      ))}
                     </div>
                   </>
                 )}
@@ -408,7 +415,7 @@ export default function Admin() {
                 <div className="region-castles up u3">
                   {placed.map(c => (
                     <div className="rc" key={c.name}>
-                      <span>{c.name}{c.port ? ' ⚓' : ''}</span>
+                      <span>{c.name}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind}</small></span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {c.owner ? <span className="own">{c.owner.name}</span> : <span className="empty">بدون لرد</span>}
                         <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}

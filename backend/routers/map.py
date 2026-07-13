@@ -27,20 +27,30 @@ async def get_map(user: dict = Depends(get_user)):
             "points": r["score"], "overlord_name": overlord_name.get(p["region"]),
         }
 
-    # مختصات و قلعه‌های کاملاً تازه‌ای که ادمین از پنلش به نقشه اضافه کرده
+    # مختصات و نوع آیکنِ هرچه ادمین از پنلش روی نقشه گذاشته (چه اسم موجود چه کاملاً تازه)
     coords_by_region = {}
+    kind_by_name = {}
     custom_by_region = {}
     async for m in map_castles.find({}):
         coords_by_region.setdefault(m["region"], {})[m["name"]] = [m["x"], m["y"]]
+        kind_by_name[m["name"]] = m.get("kind", "port" if m.get("port") else "castle")
         if m.get("custom"):
-            custom_by_region.setdefault(m["region"], []).append({"name": m["name"], "port": m.get("port", False)})
+            custom_by_region.setdefault(m["region"], []).append({"name": m["name"], "kind": kind_by_name[m["name"]]})
 
     regions = []
     for rid, r in REGIONS.items():
+        def built_in(c, is_port):
+            # «port» همیشه از دیتای ثابت بازی می‌آید (برای غارت دریایی و امثالش) — نوع آیکنِ
+            # نمایشی را ادمین می‌تواند جدا مشخص کند، بدون اینکه به مکانیزم بازی اثر بگذارد
+            return {
+                "name": c, "owner": owners_by_castle.get(c), "port": is_port,
+                "kind": kind_by_name.get(c, "port" if is_port else "castle"),
+            }
         castle_list = (
-            [{"name": c, "owner": owners_by_castle.get(c), "port": False} for c in r["castles"]] +
-            [{"name": c, "owner": owners_by_castle.get(c), "port": True} for c in r["ports"]] +
-            [{"name": c["name"], "owner": owners_by_castle.get(c["name"]), "port": c["port"]}
+            [built_in(c, False) for c in r["castles"]] +
+            [built_in(c, True) for c in r["ports"]] +
+            [{"name": c["name"], "owner": owners_by_castle.get(c["name"]),
+              "port": c["kind"] == "port", "kind": c["kind"]}
              for c in custom_by_region.get(rid, [])]
         )
         regions.append({
