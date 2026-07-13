@@ -151,3 +151,7 @@ def spy_travel_minutes(origin_region: str, target_region: str) -> int:
         return SPY_SAME_REGION_MINUTES
     hop = abs(REGION_ORDER.get(origin_region, 2) - REGION_ORDER.get(target_region, 2))
     return SPY_CROSS_BASE_MINUTES + hop * SPY_PER_HOP_MINUTES
+
+# --- بازار: کالاهایی که می‌شود کاروان فرستاد یا از بازار وستروس خرید (طلا خودش پول است، نه کالا) ---
+TRADE_GOODS = ["wood", "stone", "iron", "food", "wine"]
+TRADE_GOOD_NAMES = {"wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب"}

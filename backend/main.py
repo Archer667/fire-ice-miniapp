@@ -7,9 +7,11 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
-    polls as polls_router,
+    polls as polls_router, trade as trade_router, market as market_router,
 )
 from routers.war import notify_arrivals
+from routers.trade import notify_caravan_arrivals
+from routers.market import drift_market_prices
 
 logger = logging.getLogger(__name__)
 
@@ -35,19 +37,32 @@ app.include_router(buildings_router.router)
 app.include_router(titles_router.router)
 app.include_router(diplomacy_router.router)
 app.include_router(polls_router.router)
+app.include_router(trade_router.router)
+app.include_router(market_router.router)
 
 async def _arrival_watcher():
-    """هر ۳۰ ثانیه لشکرهایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد"""
+    """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد"""
     while True:
         try:
             await notify_arrivals()
+            await notify_caravan_arrivals()
         except Exception:
             logger.exception("arrival watcher tick failed")
         await asyncio.sleep(30)
 
+async def _market_watcher():
+    """هر ۵ دقیقه قیمت‌های بازار وستروس را کمی نوسان می‌دهد"""
+    while True:
+        try:
+            await drift_market_prices()
+        except Exception:
+            logger.exception("market watcher tick failed")
+        await asyncio.sleep(300)
+
 @app.on_event("startup")
-async def start_arrival_watcher():
+async def start_background_watchers():
     asyncio.create_task(_arrival_watcher())
+    asyncio.create_task(_market_watcher())
 
 @app.get("/api/health")
 async def health():

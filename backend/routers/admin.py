@@ -1,9 +1,11 @@
+from datetime import timedelta
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, battle_reports
+from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings
 from game import now
-from game_data import REGIONS, COMMON_TROOPS
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS
 from config import ADMIN_IDS
 from routers.war import OP_TYPES
 from routers.ravens import send_system_message
@@ -183,4 +185,74 @@ async def remove_admin(tg_id: int, user: dict = Depends(full_admin_user)):
     res = await admin_roles.delete_one({"tg_id": tg_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "ادمین محدود پیدا نشد")
+    return {"ok": True}
+
+@router.get("/market")
+async def admin_market_list(user: dict = Depends(full_admin_user)):
+    out = []
+    async for m in market_listings.find({}):
+        out.append({"resource": m["resource"], "qty": m["qty"], "price": m["price"],
+                    "base_price": m.get("base_price", m["price"])})
+    return out
+
+class MarketListingBody(BaseModel):
+    resource: str
+    qty: int
+    price: int
+
+@router.post("/market")
+async def admin_market_set(body: MarketListingBody, user: dict = Depends(full_admin_user)):
+    if body.resource not in TRADE_GOODS:
+        raise HTTPException(400, "کالای نامعتبر")
+    if body.qty < 0 or body.price <= 0:
+        raise HTTPException(400, "مقدار یا قیمت نامعتبر")
+    await market_listings.update_one(
+        {"resource": body.resource},
+        {"$set": {"resource": body.resource, "qty": body.qty, "price": body.price,
+                   "prev_price": body.price, "base_price": body.price, "updated_at": now()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+@router.delete("/market/{resource}")
+async def admin_market_delete(resource: str, user: dict = Depends(full_admin_user)):
+    res = await market_listings.delete_one({"resource": resource})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "این کالا توی بازار نیست")
+    return {"ok": True}
+
+@router.get("/market/black")
+async def admin_black_market_list(user: dict = Depends(full_admin_user)):
+    out = []
+    async for m in black_market_listings.find({}).sort("created_at", -1):
+        out.append({
+            "id": str(m["_id"]), "resource": m["resource"], "qty": m["qty"], "price": m["price"],
+            "expires_in_minutes": max(0, int((m["expires_at"] - now()).total_seconds() // 60)),
+        })
+    return out
+
+class BlackMarketBody(BaseModel):
+    resource: str
+    qty: int
+    price: int
+    hours: int = 6
+
+@router.post("/market/black")
+async def admin_black_market_create(body: BlackMarketBody, user: dict = Depends(full_admin_user)):
+    if body.resource not in TRADE_GOODS:
+        raise HTTPException(400, "کالای نامعتبر")
+    if body.qty <= 0 or body.price <= 0 or body.hours <= 0:
+        raise HTTPException(400, "مقدار، قیمت یا مدت نامعتبر")
+    doc = {
+        "resource": body.resource, "qty": body.qty, "price": body.price,
+        "expires_at": now() + timedelta(hours=body.hours), "created_at": now(),
+    }
+    res = await black_market_listings.insert_one(doc)
+    return {"ok": True, "id": str(res.inserted_id)}
+
+@router.delete("/market/black/{listing_id}")
+async def admin_black_market_delete(listing_id: str, user: dict = Depends(full_admin_user)):
+    res = await black_market_listings.delete_one({"_id": ObjectId(listing_id)})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "این نشانی بازار سیاه پیدا نشد")
     return {"ok": True}

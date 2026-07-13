@@ -7,7 +7,7 @@ import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import { REGION_COORDS } from '../mapCoords.js';
-import { WARDEN_GROUPS, REGIONS_STATIC } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -22,6 +22,7 @@ const TABS = [
   { key: 'war',    label: 'جنگ' },
   { key: 'map',    label: 'نقشه' },
   { key: 'titles', label: 'مقام‌ها' },
+  { key: 'market', label: 'بازار', fullOnly: true },
   { key: 'polls',  label: 'رای‌گیری', fullOnly: true },
   { key: 'admins', label: 'ادمین‌ها', fullOnly: true },
 ];
@@ -62,19 +63,30 @@ export default function Admin() {
   const [newCastleName, setNewCastleName] = useState('');
   const [pinKind, setPinKind] = useState('castle');
 
+  const [marketListings, setMarketListings] = useState(null);
+  const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
+  const [marketQty, setMarketQty] = useState('');
+  const [marketPrice, setMarketPrice] = useState('');
+  const [blackListings, setBlackListings] = useState(null);
+  const [blackResource, setBlackResource] = useState(TRADE_GOODS[0]);
+  const [blackQty, setBlackQty] = useState('');
+  const [blackPrice, setBlackPrice] = useState('');
+  const [blackHours, setBlackHours] = useState('6');
+
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
   const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
   const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
+  const loadMarket = () => api.adminMarketList().then(setMarketListings).catch(e => toast(e.message));
+  const loadBlackMarket = () => api.adminBlackMarketList().then(setBlackListings).catch(e => toast(e.message));
 
   useEffect(() => {
     loadCampaigns();
     loadBattles();
-    loadPolls();
     loadMapData();
-    if (isFull) loadAdmins();
+    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); }
   }, []);
 
   useEffect(() => {
@@ -127,6 +139,52 @@ export default function Admin() {
       haptic('medium');
       toast(`نشانهٔ «${name}» از نقشه حذف شد`);
       loadMapData(); loadMapOptions();
+    } catch (e) { toast(e.message); }
+  };
+
+  const setMarketListing = async () => {
+    const qty = parseInt(marketQty, 10), price = parseInt(marketPrice, 10);
+    if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(price) || price <= 0) {
+      toast('مقدار و قیمت را درست وارد کن'); return;
+    }
+    try {
+      await api.adminMarketSet({ resource: marketResource, qty, price });
+      haptic('medium');
+      toast(`بازار وستروس برای «${TRADE_GOOD_NAMES[marketResource]}» به‌روز شد`);
+      setMarketQty(''); setMarketPrice('');
+      loadMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const deleteMarketListing = async (resource) => {
+    try {
+      await api.adminMarketDelete(resource);
+      haptic('medium');
+      toast(`«${TRADE_GOOD_NAMES[resource]}» از بازار وستروس برداشته شد`);
+      loadMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const createBlackMarketListing = async () => {
+    const qty = parseInt(blackQty, 10), price = parseInt(blackPrice, 10), hours = parseInt(blackHours, 10);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0 || !Number.isFinite(hours) || hours <= 0) {
+      toast('مقدار، قیمت و مدت را درست وارد کن'); return;
+    }
+    try {
+      await api.adminBlackMarketCreate({ resource: blackResource, qty, price, hours });
+      haptic('medium');
+      toast(`جنس تازه به بازار سیاه اضافه شد`);
+      setBlackQty(''); setBlackPrice(''); setBlackHours('6');
+      loadBlackMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const deleteBlackMarketListing = async (id) => {
+    try {
+      await api.adminBlackMarketDelete(id);
+      haptic('medium');
+      toast('از بازار سیاه برداشته شد');
+      loadBlackMarket();
     } catch (e) { toast(e.message); }
   };
 
@@ -468,6 +526,66 @@ export default function Admin() {
             <label className="f">عنوان تازه</label>
             <input value={epithetText} onChange={e => setEpithetText(e.target.value)} placeholder="مثلاً: شکنندهٔ زنجیرها" />
             <button className="btn" style={{ marginTop: 14 }} onClick={setEpithet}>ثبت عنوان</button>
+          </div>
+        </>
+      )}
+
+      {tab === 'market' && isFull && (
+        <>
+          <div className="sect up u2">بازار وستروس</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>کالا</label>
+            <select value={marketResource} onChange={e => setMarketResource(e.target.value)}>
+              {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
+            </select>
+            <label className="f">حجم موجود</label>
+            <input type="number" min="0" value={marketQty} onChange={e => setMarketQty(e.target.value)} placeholder="مثلاً: ۳۰۰" />
+            <label className="f">قیمت (طلا به‌ازای هر واحد)</label>
+            <input type="number" min="1" value={marketPrice} onChange={e => setMarketPrice(e.target.value)} placeholder="مثلاً: ۵" />
+            <button className="btn" style={{ marginTop: 14 }} onClick={setMarketListing}>ثبت/به‌روزرسانی در بازار</button>
+          </div>
+          <div className="up u2">
+            {(!marketListings || marketListings.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کالایی در بازار وستروس نیست</div>
+            )}
+            {marketListings && marketListings.map(m => (
+              <div className="res" key={m.resource}>
+                <div className="n">{TRADE_GOOD_NAMES[m.resource] || m.resource}
+                  <small>{m.qty.toLocaleString('fa-IR')} واحد · {m.price.toLocaleString('fa-IR')} طلا · پایه {m.base_price.toLocaleString('fa-IR')}</small>
+                </div>
+                <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
+                        onClick={() => deleteMarketListing(m.resource)}>حذف</button>
+              </div>
+            ))}
+          </div>
+
+          <div className="sect up u3">افزودن به بازار سیاه</div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>کالا</label>
+            <select value={blackResource} onChange={e => setBlackResource(e.target.value)}>
+              {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
+            </select>
+            <label className="f">حجم</label>
+            <input type="number" min="1" value={blackQty} onChange={e => setBlackQty(e.target.value)} placeholder="مثلاً: ۴۰" />
+            <label className="f">قیمت (طلا به‌ازای هر واحد)</label>
+            <input type="number" min="1" value={blackPrice} onChange={e => setBlackPrice(e.target.value)} placeholder="مثلاً: ۵" />
+            <label className="f">مدت (ساعت)</label>
+            <input type="number" min="1" value={blackHours} onChange={e => setBlackHours(e.target.value)} />
+            <button className="btn" style={{ marginTop: 14 }} onClick={createBlackMarketListing}>افزودن به بازار سیاه</button>
+          </div>
+          <div className="up u3">
+            {(!blackListings || blackListings.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز جنسی در بازار سیاه نیست</div>
+            )}
+            {blackListings && blackListings.map(m => (
+              <div className="res" key={m.id}>
+                <div className="n">{TRADE_GOOD_NAMES[m.resource] || m.resource}
+                  <small>{m.qty.toLocaleString('fa-IR')} واحد · {m.price.toLocaleString('fa-IR')} طلا · {Math.floor(m.expires_in_minutes / 60).toLocaleString('fa-IR')} ساعت مانده</small>
+                </div>
+                <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
+                        onClick={() => deleteBlackMarketListing(m.id)}>حذف</button>
+              </div>
+            ))}
           </div>
         </>
       )}

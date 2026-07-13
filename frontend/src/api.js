@@ -26,16 +26,32 @@ import {
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
-  SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes,
+  SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
 const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
-const mockAlliances = []; // {id, mine_proposed, other_name, type, type_name, status}
+const mockAlliances = [
+  // یک اتحاد تجاری از قبل پذیرفته‌شده — برای تست کاروان بدون نیاز به شبیه‌سازی طرف مقابل
+  { id: 'a1', mine_proposed: false, other_id: 9002, other_name: 'تایوین لنیستر', type: 'trade', type_name: 'پیمان تجاری', status: 'accepted' },
+]; // {id, mine_proposed, other_id, other_name, type, type_name, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
 const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, active, created_at, last_food_tick, travel_minutes, arrival_at}
 let mockCampaignSeq = 1;
+const mockCaravans = []; // {id, from, to, from_castle, to_castle, resources, active, arrived, travel_minutes, arrival_at, created_at}
+let mockCaravanSeq = 1;
+const mockMarket = [
+  { resource: 'wood', qty: 400, price: 3, prev_price: 3, base_price: 3 },
+  { resource: 'stone', qty: 300, price: 4, prev_price: 4, base_price: 4 },
+  { resource: 'iron', qty: 200, price: 6, prev_price: 6, base_price: 6 },
+  { resource: 'food', qty: 500, price: 2, prev_price: 2, base_price: 2 },
+  { resource: 'wine', qty: 120, price: 8, prev_price: 8, base_price: 8 },
+];
+const mockBlackMarket = [
+  { id: 'bm1', resource: 'wine', qty: 40, price: 5, expires_at: Date.now() + 3 * 3600 * 1000 },
+];
+let mockBlackMarketSeq = 2;
 const mockMapCastles = []; // {region, name, kind, x, y, custom}
 const mockBattleReports = []; // {id, participants:[name], text, created_at}
 let mockBattleSeq = 1;
@@ -289,6 +305,108 @@ const M = {
       created_at: c.created_at,
     }));
   },
+  sendCaravan: (body) => {
+    const partner = mockAlliances.find(a => a.other_id === body.target_tg_id && a.status === 'accepted'
+      && (a.type === 'trade' || a.type === 'full_alliance'));
+    if (!partner) throw new Error('فقط با هم‌پیمان‌های تجاری (پیمان تجاری یا اتحاد کامل) می‌تونی کاروان رد و بدل کنی');
+    const p = MOCK_PLAYERS.find(x => x.tg_id === body.target_tg_id);
+    if (!p) throw new Error('گیرنده پیدا نشد');
+
+    const cost = {};
+    for (const [good, qty] of Object.entries(body.resources || {})) {
+      if (!TRADE_GOODS.includes(good)) throw new Error(`کالای نامعتبر: ${good}`);
+      if (qty > 0) cost[good] = qty;
+    }
+    if (!Object.keys(cost).length) throw new Error('هیچ کالایی برای فرستادن انتخاب نکردی');
+    if (!mockCanAfford(cost)) throw new Error('این مقدار کالا رو نداری');
+    mockPay(cost);
+
+    const originRegion = mockMe.region;
+    const targetRegion = mockResolveRegion(p.castle) || originRegion;
+    const travel = travelMinutes(false, originRegion, targetRegion);
+    const nowIso = new Date().toISOString();
+    mockCaravans.push({
+      id: String(mockCaravanSeq++), mine_sent: true,
+      from: mockMe.name, to: p.name, from_castle: mockMe.castle, to_castle: p.castle,
+      resources: cost, active: true, travel_minutes: travel,
+      arrival_at: new Date(Date.now() + travel * 60000).toISOString(), created_at: nowIso,
+    });
+    return { ok: true, travel_minutes: travel };
+  },
+  myCaravans: () => {
+    const nowMs = Date.now();
+    return mockCaravans.slice().reverse().map(c => ({
+      id: c.id, mine_sent: c.mine_sent,
+      from: c.from, to: c.to, from_castle: c.from_castle, to_castle: c.to_castle,
+      resources: Object.fromEntries(Object.entries(c.resources).map(([k, v]) => [TRADE_GOOD_NAMES[k] || k, v])),
+      travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
+      created_at: c.created_at,
+    }));
+  },
+  market: () => mockMarket.filter(m => m.qty > 0).map(m => ({
+    resource: m.resource, name: TRADE_GOOD_NAMES[m.resource] || m.resource, qty: m.qty, price: m.price,
+    change_pct: m.prev_price ? Math.round((m.price - m.prev_price) / m.prev_price * 1000) / 10 : 0,
+  })),
+  marketBuy: (resource, qty) => {
+    const m = mockMarket.find(x => x.resource === resource);
+    if (!m || m.qty <= 0) throw new Error('این کالا در بازار وستروس موجود نیست');
+    if (qty <= 0) throw new Error('مقدار نامعتبر');
+    if (qty > m.qty) throw new Error(`فقط ${m.qty} واحد از این کالا در بازار مانده`);
+    const cost = qty * m.price;
+    if (!mockCanAfford({ gold: cost })) throw new Error('طلای کافی نداری');
+    mockPay({ gold: cost });
+    mockMe.resources[resource] = (mockMe.resources[resource] ?? 0) + qty;
+    m.qty -= qty;
+    m.price = Math.max(1, Math.round(Math.min(m.price * (1 + 0.015 * qty), m.base_price * 2)));
+    return { ok: true, resource, qty, cost };
+  },
+  blackMarket: () => mockBlackMarket.filter(m => m.qty > 0 && m.expires_at > Date.now()).map(m => ({
+    id: m.id, resource: m.resource, name: TRADE_GOOD_NAMES[m.resource] || m.resource, qty: m.qty, price: m.price,
+    expires_in_minutes: Math.max(0, Math.floor((m.expires_at - Date.now()) / 60000)),
+  })),
+  blackMarketBuy: (listingId, qty) => {
+    const m = mockBlackMarket.find(x => x.id === listingId);
+    if (!m || m.qty <= 0 || m.expires_at <= Date.now()) throw new Error('این کالای بازار سیاه دیگر موجود نیست');
+    if (qty <= 0 || qty > m.qty) throw new Error('مقدار نامعتبر یا بیشتر از موجودی');
+    const cost = qty * m.price;
+    if (!mockCanAfford({ gold: cost })) throw new Error('طلای کافی نداری');
+    mockPay({ gold: cost });
+    mockMe.resources[m.resource] = (mockMe.resources[m.resource] ?? 0) + qty;
+    m.qty -= qty;
+    return { ok: true, resource: m.resource, qty, cost };
+  },
+  adminMarketList: () => mockMarket.map(m => ({ resource: m.resource, qty: m.qty, price: m.price, base_price: m.base_price })),
+  adminMarketSet: (body) => {
+    if (!TRADE_GOODS.includes(body.resource)) throw new Error('کالای نامعتبر');
+    if (body.qty < 0 || body.price <= 0) throw new Error('مقدار یا قیمت نامعتبر');
+    const existing = mockMarket.find(m => m.resource === body.resource);
+    if (existing) Object.assign(existing, { qty: body.qty, price: body.price, prev_price: body.price, base_price: body.price });
+    else mockMarket.push({ resource: body.resource, qty: body.qty, price: body.price, prev_price: body.price, base_price: body.price });
+    return { ok: true };
+  },
+  adminMarketDelete: (resource) => {
+    const i = mockMarket.findIndex(m => m.resource === resource);
+    if (i === -1) throw new Error('این کالا توی بازار نیست');
+    mockMarket.splice(i, 1);
+    return { ok: true };
+  },
+  adminBlackMarketList: () => mockBlackMarket.map(m => ({
+    id: m.id, resource: m.resource, qty: m.qty, price: m.price,
+    expires_in_minutes: Math.max(0, Math.floor((m.expires_at - Date.now()) / 60000)),
+  })),
+  adminBlackMarketCreate: (body) => {
+    if (!TRADE_GOODS.includes(body.resource)) throw new Error('کالای نامعتبر');
+    if (body.qty <= 0 || body.price <= 0 || body.hours <= 0) throw new Error('مقدار، قیمت یا مدت نامعتبر');
+    const id = `bm${mockBlackMarketSeq++}`;
+    mockBlackMarket.push({ id, resource: body.resource, qty: body.qty, price: body.price, expires_at: Date.now() + body.hours * 3600000 });
+    return { ok: true, id };
+  },
+  adminBlackMarketDelete: (id) => {
+    const i = mockBlackMarket.findIndex(m => m.id === id);
+    if (i === -1) throw new Error('این نشانی بازار سیاه پیدا نشد');
+    mockBlackMarket.splice(i, 1);
+    return { ok: true };
+  },
   adminCampaigns: () => {
     mockResolveCampaigns();
     const nowMs = Date.now();
@@ -432,7 +550,7 @@ const M = {
     for (const tgId of toTgIds) {
       const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
       mockAlliances.unshift({
-        id: String(mockAllianceSeq++), mine_proposed: true, other_name: p ? p.name : String(tgId),
+        id: String(mockAllianceSeq++), mine_proposed: true, other_id: tgId, other_name: p ? p.name : String(tgId),
         type, type_name: ALLIANCE_TYPES[type].name, status: 'pending',
       });
     }
@@ -514,6 +632,23 @@ export const api = {
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
   adminDeleteMapCastle: (name) => MOCK ? Promise.resolve(M.adminDeleteMapCastle(name))
     : req(`/api/admin/map/castles/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  sendCaravan: (b) => MOCK ? Promise.resolve(M.sendCaravan(b)) : req('/api/trade/caravan', { method: 'POST', body: JSON.stringify(b) }),
+  myCaravans: () => MOCK ? Promise.resolve(M.myCaravans()) : req('/api/trade/caravans/mine'),
+  market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),
+  marketBuy: (resource, qty) => MOCK ? Promise.resolve(M.marketBuy(resource, qty))
+    : req('/api/market/buy', { method: 'POST', body: JSON.stringify({ resource, qty }) }),
+  blackMarket: () => MOCK ? Promise.resolve(M.blackMarket()) : req('/api/market/black'),
+  blackMarketBuy: (listingId, qty) => MOCK ? Promise.resolve(M.blackMarketBuy(listingId, qty))
+    : req('/api/market/black/buy', { method: 'POST', body: JSON.stringify({ listing_id: listingId, qty }) }),
+  adminMarketList: () => MOCK ? Promise.resolve(M.adminMarketList()) : req('/api/admin/market'),
+  adminMarketSet: (b) => MOCK ? Promise.resolve(M.adminMarketSet(b)) : req('/api/admin/market', { method: 'POST', body: JSON.stringify(b) }),
+  adminMarketDelete: (resource) => MOCK ? Promise.resolve(M.adminMarketDelete(resource))
+    : req(`/api/admin/market/${encodeURIComponent(resource)}`, { method: 'DELETE' }),
+  adminBlackMarketList: () => MOCK ? Promise.resolve(M.adminBlackMarketList()) : req('/api/admin/market/black'),
+  adminBlackMarketCreate: (b) => MOCK ? Promise.resolve(M.adminBlackMarketCreate(b))
+    : req('/api/admin/market/black', { method: 'POST', body: JSON.stringify(b) }),
+  adminBlackMarketDelete: (id) => MOCK ? Promise.resolve(M.adminBlackMarketDelete(id))
+    : req(`/api/admin/market/black/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),

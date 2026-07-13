@@ -153,3 +153,7 @@ export const FEAST_POPULARITY_GAIN = 8;
 export function maxTaxRate(popularity) {
   return Math.max(0, TAX_RATE_BASE_MAX + Math.floor((popularity - POPULARITY_START) / 5));
 }
+
+// کالاهایی که می‌شود کاروان فرستاد یا از بازار وستروس خرید — طلا خودش پول است، نه کالا
+export const TRADE_GOODS = ['wood', 'stone', 'iron', 'food', 'wine'];
+export const TRADE_GOOD_NAMES = { wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };

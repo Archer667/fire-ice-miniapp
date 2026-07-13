@@ -66,10 +66,12 @@ async def mine(user: dict = Depends(get_user)):
     out = []
     cur = alliances.find({"$or": [{"from_id": user["id"]}, {"to_id": user["id"]}]}).sort("created_at", -1)
     async for a in cur:
+        mine_proposed = a["from_id"] == user["id"]
         out.append({
             "id": str(a["_id"]),
-            "mine_proposed": a["from_id"] == user["id"],
-            "other_name": a["to_name"] if a["from_id"] == user["id"] else a["from_name"],
+            "mine_proposed": mine_proposed,
+            "other_id": a["to_id"] if mine_proposed else a["from_id"],
+            "other_name": a["to_name"] if mine_proposed else a["from_name"],
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
             "status": a["status"],
         })
