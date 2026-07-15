@@ -26,10 +26,11 @@ import {
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
-  SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES,
+  SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
+const mockHierarchy = { king_tg_id: 1, small_council: {} }; // seat -> tg_id — تک‌بازیکنه: خودت همیشه پادشاهی
 const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = [
   // یک اتحاد تجاری از قبل پذیرفته‌شده — برای تست کاروان بدون نیاز به شبیه‌سازی طرف مقابل
@@ -52,6 +53,8 @@ const mockBlackMarket = [
   { id: 'bm1', resource: 'wine', qty: 40, price: 5, expires_at: Date.now() + 3 * 3600 * 1000 },
 ];
 let mockBlackMarketSeq = 2;
+const DEFAULT_MOCK_PLAYER_RESOURCES = { gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 0, men: 500 };
+const mockPlayerResources = {}; // tg_id -> {gold,wood,stone,iron,food,wine,men} — برای تست ویرایش منابع در پنل ادمین
 const mockMapCastles = []; // {region, name, kind, x, y, custom}
 const mockBattleReports = []; // {id, participants:[name], text, created_at}
 let mockBattleSeq = 1;
@@ -407,6 +410,21 @@ const M = {
     mockBlackMarket.splice(i, 1);
     return { ok: true };
   },
+  adminGetPlayerResources: (tgId) => {
+    const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+    if (!p) throw new Error('بازیکن پیدا نشد');
+    if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
+    return { name: p.name, castle: p.castle, resources: mockPlayerResources[tgId] };
+  },
+  adminSetPlayerResources: (tgId, resources) => {
+    if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
+    for (const [k, v] of Object.entries(resources)) {
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 0) throw new Error(`مقدار نامعتبر برای ${k}`);
+      mockPlayerResources[tgId][k] = n;
+    }
+    return { ok: true };
+  },
   adminCampaigns: () => {
     mockResolveCampaigns();
     const nowMs = Date.now();
@@ -534,12 +552,33 @@ const M = {
     mockBuildings[id] = st;
     return { ok: true, target_level: target, cost, ready_at: st.ready_at };
   },
-  titles: () => ({
-    overlords: Object.fromEntries(Object.keys(REGIONS_STATIC).map(id => [id, null])),
-    warden_groups: WARDEN_GROUPS,
-    wardens: { south: null, central: null, north: null },
-    king: null,
-  }),
+  titles: () => {
+    const brief = (p) => p ? { tg_id: p.tg_id, name: p.name, title: p.title, castle: p.castle } : null;
+    const meBrief = { tg_id: 1, name: mockMe.name, title: mockMe.title, castle: mockMe.castle };
+    const isKing = mockHierarchy.king_tg_id === 1;
+    const councilHolders = {};
+    for (const seat of Object.keys(SMALL_COUNCIL_SEATS)) {
+      const tgId = mockHierarchy.small_council[seat];
+      councilHolders[seat] = tgId ? brief(MOCK_PLAYERS.find(x => x.tg_id === tgId)) : null;
+    }
+    return {
+      overlords: Object.fromEntries(Object.keys(REGIONS_STATIC).map(id => [id, null])),
+      warden_groups: WARDEN_GROUPS,
+      wardens: { south: null, central: null, north: null },
+      king: isKing ? meBrief : null,
+      small_council_seats: SMALL_COUNCIL_SEATS,
+      small_council: councilHolders,
+      is_king: isKing,
+    };
+  },
+  setSmallCouncil: (seat, tgId) => {
+    if (!SMALL_COUNCIL_SEATS[seat]) throw new Error('کرسی نامعتبر');
+    if (tgId == null) { delete mockHierarchy.small_council[seat]; return { ok: true }; }
+    if (tgId === 1) throw new Error('پادشاه/ملکه نمی‌تواند خودش را عضو شورای کوچک کند');
+    if (!MOCK_PLAYERS.find(x => x.tg_id === tgId)) throw new Error('لرد پیدا نشد');
+    mockHierarchy.small_council[seat] = tgId;
+    return { ok: true };
+  },
   diplomacyMine: () => mockAlliances,
   diplomacyPropose: (toTgIds, type) => {
     if (!ALLIANCE_TYPES[type]) throw new Error('نوع پیمان نامعتبر');
@@ -649,6 +688,9 @@ export const api = {
     : req('/api/admin/market/black', { method: 'POST', body: JSON.stringify(b) }),
   adminBlackMarketDelete: (id) => MOCK ? Promise.resolve(M.adminBlackMarketDelete(id))
     : req(`/api/admin/market/black/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  adminGetPlayerResources: (tgId) => MOCK ? Promise.resolve(M.adminGetPlayerResources(tgId)) : req(`/api/admin/players/${tgId}/resources`),
+  adminSetPlayerResources: (tgId, resources) => MOCK ? Promise.resolve(M.adminSetPlayerResources(tgId, resources))
+    : req(`/api/admin/players/${tgId}/resources`, { method: 'POST', body: JSON.stringify({ resources }) }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
@@ -660,6 +702,8 @@ export const api = {
   upgradeBuilding: (id) => MOCK ? Promise.resolve(M.buildAction(id, true))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id }) }),
   setTax:    (rate) => MOCK ? Promise.resolve(M.setTax(rate)) : req('/api/players/tax', { method: 'POST', body: JSON.stringify({ rate }) }),
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
+  setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
+    : req('/api/titles/small-council', { method: 'POST', body: JSON.stringify({ seat, tg_id: tgId }) }),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
   diplomacyPropose: (toTgIds, type) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type))
     : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type }) }),

@@ -1,9 +1,25 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Build, Rock } from './Icons.jsx';
 import { MAP_IMAGE, REGION_COORDS } from '../mapCoords.js';
 import { REGIONS_STATIC } from '../gamedata.js';
-import ZoomPanMap from './ZoomPanMap.jsx';
+import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
+
+/** جای‌گذاری و ضدِمقیاسِ پاپ‌آپ اطلاعات — طوری که همیشه دقیقاً کنار پین بچسبد
+ * ولی با زوم نقشه بزرگ/کوچک نشود (اندازه‌اش همیشه یک‌جور و خواناست) */
+function popupPlacement(xy, zoom) {
+  const vBelow = xy[1] < 30;
+  const hSide = xy[0] < 20 ? 'left' : xy[0] > 80 ? 'right' : 'center';
+  const style = { transformOrigin: `${hSide === 'center' ? '50%' : hSide === 'left' ? '0%' : '100%'} ${vBelow ? '0%' : '100%'}` };
+  style[vBelow ? 'top' : 'bottom'] = '100%';
+  style[vBelow ? 'bottom' : 'top'] = 'auto';
+  style.marginTop = vBelow ? 10 : 0;
+  style.marginBottom = vBelow ? 0 : 10;
+  if (hSide === 'center') { style.left = '50%'; style.transform = `translateX(-50%) scale(${1 / zoom})`; }
+  else if (hSide === 'left') { style.left = 0; style.transform = `scale(${1 / zoom})`; }
+  else { style.left = 'auto'; style.right = 0; style.transform = `scale(${1 / zoom})`; }
+  return style;
+}
 
 const KIND_ICON = { castle: Keep, city: Build, ruin: Rock, port: Ship };
 
@@ -12,6 +28,7 @@ const KIND_ICON = { castle: Keep, city: Build, ruin: Rock, port: Ship };
  * نقشه برای گرفتن مختصات یک نقطهٔ خالی) به کار می‌رود.
  * مختصات هر قلعه درصدی از عرض/ارتفاع کامل تصویر است (۰ تا ۱۰۰) */
 export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel }) {
+  const zoom = useContext(ZoomContext);
   const handleFrameClick = (e) => {
     if (!onFrameClick) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -28,11 +45,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
         if (!xy) return null;
         const Icon = KIND_ICON[c.kind] || (c.port ? Ship : Keep);
         const active = pin === c.name;
-        const popupStyle = xy[1] < 30
-          ? { top: '100%', bottom: 'auto', marginTop: 10, marginBottom: 0 }
-          : {};
-        if (xy[0] < 20) Object.assign(popupStyle, { left: 0, transform: 'none' });
-        else if (xy[0] > 80) Object.assign(popupStyle, { left: 'auto', right: 0, transform: 'none' });
+        const popupStyle = popupPlacement(xy, zoom);
         return (
           <div key={c.name}
                className={`pin sm ${c.port ? 'port' : ''} ${c.owner ? 'owned' : ''} ${c.mine ? 'mine' : ''} ${active ? 'active' : ''}`}
@@ -86,7 +99,7 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
 
   return (
     <div className="mapview">
-      <ZoomPanMap>
+      <ZoomPanMap onInteract={() => setPin(null)}>
         <MapFrame region={{ castles: mapped }} coords={coords} pin={pin}
                   onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
                   onSelectTarget={onSelectTarget} pickLabel={pickLabel} />

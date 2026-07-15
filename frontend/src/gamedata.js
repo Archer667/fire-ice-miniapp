@@ -136,6 +136,16 @@ export const WARDEN_GROUPS = {
   north:   { name: 'والی شمال', regions: ['north', 'iron', 'vale'] },
 };
 
+// شورای کوچک پادشاه — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند این کرسی‌ها را بچیند
+export const SMALL_COUNCIL_SEATS = {
+  hand:     'دست پادشاه',
+  coin:     'استاد سکه',
+  whispers: 'استاد نجواها',
+  ships:    'استاد کشتی‌ها',
+  laws:     'استاد قوانین',
+  war:      'استاد جنگ',
+};
+
 export const ALLIANCE_TYPES = {
   non_aggression: { name: 'پیمان عدم‌تجاوز', wine_cost: 20 },
   trade:          { name: 'پیمان تجاری',      wine_cost: 30 },

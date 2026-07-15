@@ -1,13 +1,17 @@
-import { useRef, useState } from 'react';
+import { createContext, useRef, useState } from 'react';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const STEP = 0.6;
 
+// زوم فعلی نقشه — تا عناصری مثل پاپ‌آپ اطلاعات بتوانند اندازهٔ خودشان را
+// برعکسِ این مقدار جبران کنند و با زوم نقشه بزرگ/کوچک نشوند
+export const ZoomContext = createContext(1);
+
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const dist = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 
-export default function ZoomPanMap({ children, className = '' }) {
+export default function ZoomPanMap({ children, className = '', onInteract }) {
   const wrapRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -21,10 +25,13 @@ export default function ZoomPanMap({ children, className = '' }) {
     return { x: clamp(p.x, -maxX, maxX), y: clamp(p.y, -maxY, maxY) };
   };
 
+  // زوم/جابه‌جایی نقشه یعنی هر پاپ‌آپ بازی که کنار یک پین چسبیده دیگر معنی ندارد
+  // (ممکن است پین از دید بیرون رفته باشد) — پس والد فرصت می‌گیرد آن را ببندد
   const applyZoom = (nextZoom) => {
     const z = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
     setZoom(z);
     setPan(p => clampPan(z, p));
+    onInteract?.();
   };
 
   const zoomIn = () => applyZoom(zoom + STEP);
@@ -56,10 +63,12 @@ export default function ZoomPanMap({ children, className = '' }) {
     } else if (g.mode === 'pan' && e.touches.length === 1) {
       const dx = e.touches[0].clientX - g.startX;
       const dy = e.touches[0].clientY - g.startY;
+      const justStartedMoving = !g.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4);
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) g.moved = true;
       if (zoom > 1 && g.moved) {
         e.preventDefault();
         setPan(clampPan(zoom, { x: g.startPan.x + dx, y: g.startPan.y + dy }));
+        if (justStartedMoving) onInteract?.();
       }
     }
   };
@@ -69,11 +78,12 @@ export default function ZoomPanMap({ children, className = '' }) {
   const mouseDrag = useRef(null);
   const onMouseDown = (e) => {
     if (zoom <= 1) return;
-    mouseDrag.current = { startX: e.clientX, startY: e.clientY, startPan: pan };
+    mouseDrag.current = { startX: e.clientX, startY: e.clientY, startPan: pan, moved: false };
   };
   const onMouseMove = (e) => {
     if (!mouseDrag.current || e.buttons !== 1) return;
     const d = mouseDrag.current;
+    if (!d.moved) { d.moved = true; onInteract?.(); }
     setPan(clampPan(zoom, { x: d.startPan.x + (e.clientX - d.startX), y: d.startPan.y + (e.clientY - d.startY) }));
   };
   const onMouseUp = () => { mouseDrag.current = null; };
@@ -85,7 +95,7 @@ export default function ZoomPanMap({ children, className = '' }) {
            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
            onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
         <div className="zoommap-inner" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-          {children}
+          <ZoomContext.Provider value={zoom}>{children}</ZoomContext.Provider>
         </div>
       </div>
       <div className="zoommap-controls">

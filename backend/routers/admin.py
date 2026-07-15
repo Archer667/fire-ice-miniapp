@@ -256,3 +256,34 @@ async def admin_black_market_delete(listing_id: str, user: dict = Depends(full_a
     if res.deleted_count == 0:
         raise HTTPException(404, "این نشانی بازار سیاه پیدا نشد")
     return {"ok": True}
+
+PLAYER_RESOURCE_KEYS = {"gold", "wood", "stone", "iron", "food", "wine", "men"}
+
+@router.get("/players/{tg_id}/resources")
+async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin_user)):
+    p = await players.find_one({"tg_id": tg_id})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    res = {k: p.get("resources", {}).get(k, 0) for k in PLAYER_RESOURCE_KEYS}
+    return {"name": p["name"], "castle": p["castle"], "resources": res}
+
+class SetPlayerResourcesBody(BaseModel):
+    resources: dict
+
+@router.post("/players/{tg_id}/resources")
+async def admin_set_player_resources(tg_id: int, body: SetPlayerResourcesBody, user: dict = Depends(full_admin_user)):
+    p = await players.find_one({"tg_id": tg_id})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    updates = {}
+    for k, v in body.resources.items():
+        if k not in PLAYER_RESOURCE_KEYS:
+            raise HTTPException(400, f"منبع نامعتبر: {k}")
+        v = int(v)
+        if v < 0:
+            raise HTTPException(400, "مقدار منفی مجاز نیست")
+        updates[f"resources.{k}"] = v
+    if not updates:
+        raise HTTPException(400, "هیچ منبعی برای تغییر مشخص نشده")
+    await players.update_one({"tg_id": tg_id}, {"$set": updates})
+    return {"ok": True}

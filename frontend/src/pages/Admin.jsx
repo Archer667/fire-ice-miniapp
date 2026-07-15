@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Shield, Plus, Close } from '../components/Icons.jsx';
+import { Shield, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
@@ -19,12 +19,23 @@ const MAP_KINDS = [
 ];
 
 const TABS = [
-  { key: 'war',    label: 'جنگ' },
-  { key: 'map',    label: 'نقشه' },
-  { key: 'titles', label: 'مقام‌ها' },
-  { key: 'market', label: 'بازار', fullOnly: true },
-  { key: 'polls',  label: 'رای‌گیری', fullOnly: true },
-  { key: 'admins', label: 'ادمین‌ها', fullOnly: true },
+  { key: 'war',       label: 'جنگ' },
+  { key: 'map',       label: 'نقشه' },
+  { key: 'titles',    label: 'مقام‌ها' },
+  { key: 'market',    label: 'بازار', fullOnly: true },
+  { key: 'resources', label: 'منابع', fullOnly: true },
+  { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
+  { key: 'admins',    label: 'ادمین‌ها', fullOnly: true },
+];
+
+const PLAYER_RES = [
+  { key: 'gold',  label: 'طلا',  Icon: Coin },
+  { key: 'wood',  label: 'چوب',  Icon: Wood },
+  { key: 'stone', label: 'سنگ',  Icon: Rock },
+  { key: 'iron',  label: 'آهن',  Icon: Pick },
+  { key: 'food',  label: 'غذا',  Icon: Wheat },
+  { key: 'wine',  label: 'شراب', Icon: Wine },
+  { key: 'men',   label: 'نیروی انسانی', Icon: People },
 ];
 
 export default function Admin() {
@@ -73,6 +84,10 @@ export default function Admin() {
   const [blackPrice, setBlackPrice] = useState('');
   const [blackHours, setBlackHours] = useState('6');
 
+  const [resTarget, setResTarget] = useState([]);
+  const [resValues, setResValues] = useState(null);
+  const [resBusy, setResBusy] = useState(false);
+
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
@@ -93,6 +108,14 @@ export default function Admin() {
     loadMapOptions();
     resetCastlePicker();
   }, [mapRegion]);
+
+  useEffect(() => {
+    if (!resTarget.length) { setResValues(null); return; }
+    setResValues(null);
+    api.adminGetPlayerResources(resTarget[0].tg_id)
+      .then(r => setResValues(r.resources))
+      .catch(e => { toast(e.message); setResTarget([]); });
+  }, [resTarget]);
 
   const filteredCastleOptions = (mapOptions || []).filter(o =>
     !castleQuery.trim() || o.name.includes(castleQuery.trim())
@@ -186,6 +209,17 @@ export default function Admin() {
       toast('از بازار سیاه برداشته شد');
       loadBlackMarket();
     } catch (e) { toast(e.message); }
+  };
+
+  const saveResources = async () => {
+    if (!resTarget.length || !resValues) return;
+    setResBusy(true);
+    try {
+      await api.adminSetPlayerResources(resTarget[0].tg_id, resValues);
+      haptic('medium');
+      toast(`منابع «${resTarget[0].name}» به‌روزرسانی شد`);
+    } catch (e) { toast(e.message); }
+    setResBusy(false);
   };
 
   const addToBattleReport = (s) => {
@@ -586,6 +620,33 @@ export default function Admin() {
                         onClick={() => deleteBlackMarketListing(m.id)}>حذف</button>
               </div>
             ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'resources' && isFull && (
+        <>
+          <div className="sect up u2">ویرایش منابع بازیکن</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
+            <PlayerPicker value={resTarget} onChange={setResTarget} single />
+            {resTarget.length > 0 && !resValues && (
+              <div className="page-sub" style={{ margin: '10px 4px' }}>در حال بارگذاری منابع...</div>
+            )}
+            {resValues && (
+              <>
+                {PLAYER_RES.map(({ key, label, Icon }) => (
+                  <div className="troop" key={key}>
+                    <div className="tn"><Icon s={14} /> {label}</div>
+                    <input type="number" min="0" value={resValues[key] ?? 0}
+                           onChange={e => setResValues({ ...resValues, [key]: Math.max(0, +e.target.value || 0) })} />
+                  </div>
+                ))}
+                <button className="btn" style={{ marginTop: 14 }} disabled={resBusy} onClick={saveResources}>
+                  {resBusy ? 'در حال ثبت...' : 'ثبت منابع تازه'}
+                </button>
+              </>
+            )}
           </div>
         </>
       )}

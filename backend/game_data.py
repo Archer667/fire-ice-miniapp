@@ -37,6 +37,16 @@ WARDEN_GROUPS = {
     "north":   {"name": "والی شمال",  "regions": ["north", "iron", "vale"]},
 }
 
+# ---- شورای کوچک پادشاه — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند این کرسی‌ها را بچیند ----
+SMALL_COUNCIL_SEATS = {
+    "hand":     "دست پادشاه",
+    "coin":     "استاد سکه",
+    "whispers": "استاد نجواها",
+    "ships":    "استاد کشتی‌ها",
+    "laws":     "استاد قوانین",
+    "war":      "استاد جنگ",
+}
+
 COMMON_TROOPS = {
     "infantry":  {"name": "پیاده‌نظام",       "cost": 2},
     "spearman":  {"name": "نیزه‌دار",          "cost": 1},

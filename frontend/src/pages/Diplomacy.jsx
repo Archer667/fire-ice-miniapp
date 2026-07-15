@@ -4,7 +4,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Wine, Heart, Crown, Scroll } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
-import { REGIONS_STATIC, ALLIANCE_TYPES, WARDEN_GROUPS, FEAST_COST } from '../gamedata.js';
+import { REGIONS_STATIC, ALLIANCE_TYPES, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
 
 const STATUS_FA = { pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده' };
 
@@ -17,6 +17,9 @@ export default function Diplomacy() {
   const [type, setType] = useState('non_aggression');
   const [busy, setBusy] = useState(false);
   const [feastBusy, setFeastBusy] = useState(false);
+  const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
+  const [councilTarget, setCouncilTarget] = useState([]);
+  const [councilBusy, setCouncilBusy] = useState(false);
 
   const load = () => {
     api.titles().then(setTitles).catch(e => toast(e.message));
@@ -67,6 +70,28 @@ export default function Diplomacy() {
       await api.diplomacyRespond(id, accept);
       haptic('medium');
       toast(accept ? 'پیمان پذیرفته شد' : 'پیمان رد شد');
+      load();
+    } catch (e) { toast(e.message); }
+  };
+
+  const assignCouncil = async () => {
+    if (!councilTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    setCouncilBusy(true);
+    try {
+      await api.setSmallCouncil(councilSeat, councilTarget[0].tg_id);
+      haptic('medium');
+      toast('کرسی شورای کوچک واگذار شد');
+      setCouncilTarget([]);
+      load();
+    } catch (e) { toast(e.message); }
+    setCouncilBusy(false);
+  };
+
+  const clearCouncilSeat = async (seat) => {
+    try {
+      await api.setSmallCouncil(seat, null);
+      haptic();
+      toast('این کرسی خالی شد');
       load();
     } catch (e) { toast(e.message); }
   };
@@ -172,6 +197,38 @@ export default function Diplomacy() {
             <div className="val">{titles?.wardens?.[gid] ? titles.wardens[gid].name : '—'}</div>
           </div>
         ))}
+      </div>
+
+      <div className="sect up u3">شورای کوچک</div>
+      <div className="card up u3">
+        {Object.entries(SMALL_COUNCIL_SEATS).map(([seat, label]) => {
+          const holder = titles?.small_council?.[seat];
+          return (
+            <div className="res" key={seat}>
+              <div className="ic"><Scroll s={16} /></div>
+              <div className="n">{label}<small>{holder ? holder.name : 'کرسی خالی'}</small></div>
+              {titles?.is_king && holder && (
+                <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
+                        onClick={() => clearCouncilSeat(seat)}>خالی کن</button>
+              )}
+            </div>
+          );
+        })}
+        {titles?.is_king ? (
+          <>
+            <label className="f">کرسی</label>
+            <select value={councilSeat} onChange={e => setCouncilSeat(e.target.value)}>
+              {Object.entries(SMALL_COUNCIL_SEATS).map(([seat, label]) => <option key={seat} value={seat}>{label}</option>)}
+            </select>
+            <label className="f">لرد</label>
+            <PlayerPicker value={councilTarget} onChange={setCouncilTarget} single />
+            <button className="btn" style={{ marginTop: 14 }} disabled={councilBusy} onClick={assignCouncil}>
+              {councilBusy ? 'در حال ثبت...' : 'انتصاب به این کرسی'}
+            </button>
+          </>
+        ) : (
+          <div className="page-sub" style={{ margin: '10px 4px 0' }}>فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند شورای کوچک را بچیند</div>
+        )}
       </div>
 
       <div className="sect up u3">بالادستیِ اقلیم من</div>

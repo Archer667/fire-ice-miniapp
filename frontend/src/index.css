@@ -308,13 +308,15 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .pin.sm { width: 17px; height: 17px; }
 .pin.sm .dot { width: 13px; height: 13px; border-width: 1px; box-shadow: 0 0 0 2px rgba(10,18,36,0.35); }
 .pin-popup {
-  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-  margin-bottom: 10px; width: 190px; z-index: 5; cursor: default;
+  /* left/top/bottom/right/transform/transform-origin تماماً inline تعیین می‌شوند —
+     چون بسته به جای پین روی نقشه (کنار لبه‌ها) و زوم فعلی فرق می‌کنند */
+  position: absolute; z-index: 5; cursor: default;
+  width: 180px; max-width: 62vw; box-sizing: border-box;
   padding: 11px 13px; border-radius: 13px;
   background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(18px);
   box-shadow: 0 10px 26px rgba(0,0,0,0.45);
 }
-.pi-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.pi-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }
 .pi-mine { font-size: 10px; font-weight: 600; color: var(--az2); background: rgba(77,163,255,0.15); border: 1px solid rgba(96,178,255,0.35); border-radius: 8px; padding: 2px 7px; }
 .pi-owner { margin-top: 4px; font-size: 11.5px; color: var(--low); }
 .pi-owner-block { margin-top: 4px; }

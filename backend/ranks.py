@@ -33,6 +33,7 @@ async def get_hierarchy_doc() -> dict:
         "warden_central": doc.get("warden_central"),
         "warden_north": doc.get("warden_north"),
         "king": doc.get("king"),
+        "small_council": doc.get("small_council", {}),   # {seat_id: tg_id} — با دست خودِ پادشاه
     }
 
 def wardens_of(h: dict) -> set:

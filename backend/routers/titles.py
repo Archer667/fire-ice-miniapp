@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin
 from db import players, hierarchy
-from game_data import REGIONS, WARDEN_GROUPS
+from game_data import REGIONS, WARDEN_GROUPS, SMALL_COUNCIL_SEATS
 from ranks import get_hierarchy_doc, group_of_region, wardens_of, HIERARCHY_ID
 
 router = APIRouter(prefix="/api/titles", tags=["titles"])
@@ -31,11 +31,21 @@ async def get_titles(user: dict = Depends(get_user)):
 
     king_holder = await players.find_one({"tg_id": h.get("king")}) if h.get("king") else None
 
+    council = h.get("small_council", {})
+    council_holders = {}
+    for seat in SMALL_COUNCIL_SEATS:
+        tg_id = council.get(seat)
+        holder = await players.find_one({"tg_id": tg_id}) if tg_id else None
+        council_holders[seat] = _brief(holder)
+
     return {
         "overlords": overlord_holders,
         "warden_groups": WARDEN_GROUPS,
         "wardens": warden_holders,
         "king": _brief(king_holder),
+        "small_council_seats": SMALL_COUNCIL_SEATS,
+        "small_council": council_holders,
+        "is_king": h.get("king") == user["id"],
     }
 
 async def admin_user(user: dict = Depends(get_user)):
@@ -110,3 +120,31 @@ async def set_epithet(body: EpithetBody, user: dict = Depends(admin_user)):
     if res.matched_count == 0:
         raise HTTPException(404, "بازیکن پیدا نشد")
     return {"ok": True, "title": title}
+
+class CouncilBody(BaseModel):
+    seat: str
+    tg_id: int | None = None   # None = خالی کردن این کرسی
+
+@router.post("/small-council")
+async def set_small_council(body: CouncilBody, user: dict = Depends(get_user)):
+    """شورای کوچک — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند لردها را به کرسی‌ها بگمارد، نه ادمین"""
+    h = await get_hierarchy_doc()
+    if h.get("king") != user["id"]:
+        raise HTTPException(403, "فقط پادشاه/ملکهٔ فعلی می‌تواند شورای کوچک را بچیند")
+    if body.seat not in SMALL_COUNCIL_SEATS:
+        raise HTTPException(400, "کرسی نامعتبر")
+
+    if body.tg_id is None:
+        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$unset": {f"small_council.{body.seat}": ""}})
+        return {"ok": True}
+
+    if body.tg_id == user["id"]:
+        raise HTTPException(400, "پادشاه/ملکه نمی‌تواند خودش را عضو شورای کوچک کند")
+    target = await players.find_one({"tg_id": body.tg_id})
+    if not target:
+        raise HTTPException(404, "لرد پیدا نشد")
+
+    await hierarchy.update_one(
+        {"_id": HIERARCHY_ID}, {"$set": {f"small_council.{body.seat}": body.tg_id}}, upsert=True,
+    )
+    return {"ok": True}
