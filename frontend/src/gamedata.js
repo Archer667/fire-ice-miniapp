@@ -109,14 +109,16 @@ export const BUILDINGS_STATIC = {
   armory_lcav:   { name: 'کارگاه تسلیحات سوارهٔ سبک',   cost: { gold: 280, iron: 100, wood: 50 }, hours: 8,  type: 'armory', unit: 'light_cav' },
   armory_hcav:   { name: 'کارگاه تسلیحات سوارهٔ سنگین', cost: { gold: 400, iron: 180, wood: 60 }, hours: 12, type: 'armory', unit: 'heavy_cav' },
   // دفاعی
-  port:        { name: 'بندر',         cost: { gold: 600, stone: 200, wood: 260 }, hours: 16, type: 'defense', requires_port: true },
-  wall:        { name: 'دیوار دفاعی', cost: { gold: 400, stone: 300, iron: 60 }, hours: 14, type: 'defense' },
+  port:        { name: 'بندر',         cost: { gold: 600, stone: 200, wood: 260 }, hours: 12, type: 'defense', requires_port: true },
+  wall:        { name: 'دیوار دفاعی', cost: { gold: 400, stone: 300, iron: 60 }, hours: 12, type: 'defense' },
   watchtower:  { name: 'برج نگهبانی', cost: { gold: 250, stone: 120, wood: 70 }, hours: 7,  type: 'defense' },
 };
 
 export const MAX_BUILDING_LEVEL = 30;
 const LEVEL_COST_STEP = 0.15;
-const LEVEL_HOURS_STEP = 0.12;
+// قبلاً ۰٫۱۲ بود — یعنی جمع ساعتِ ۳۰ سطح برای ساختمان‌های سنگین (پایه ≥۱۲ساعت) از
+// ۷۲۰ ساعتِ یک دورهٔ ۳۰روزه رد می‌شد و رساندنشان به سطح ۳۰ ریاضاً غیرممکن بود
+const LEVEL_HOURS_STEP = 0.06;
 
 export function buildingCost(id, level) {
   const base = BUILDINGS_STATIC[id].cost;

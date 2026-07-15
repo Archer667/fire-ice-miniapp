@@ -88,8 +88,8 @@ BUILDINGS = {
     "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180, "wood": 60}, "hours": 12, "type": "armory", "unit": "heavy_cav"},
 
     # --- دفاعی و زیرساخت ---
-    "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200, "wood": 260}, "hours": 16, "type": "defense", "requires_port": True},
-    "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300, "iron": 60},  "hours": 14, "type": "defense"},
+    "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200, "wood": 260}, "hours": 12, "type": "defense", "requires_port": True},
+    "wall":        {"name": "دیوار دفاعی", "cost": {"gold": 400, "stone": 300, "iron": 60},  "hours": 12, "type": "defense"},
     "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120, "wood": 70},  "hours": 7,  "type": "defense"},
 }
 
@@ -104,9 +104,12 @@ ALLIANCE_TYPES = {
 # دورهٔ بازی ۳۰ روزه است؛ هر ساختمان تا ۳۰ سطح ارتقا می‌خورد و هر سطح بالاتر
 # هزینه و زمان بیشتری نسبت به سطح پایه می‌طلبد تا ارتقای کامل در طول یک دوره
 # چالش‌برانگیز اما ممکن باشد.
+# (LEVEL_HOURS_STEP=0.12 قبلاً یعنی جمع ساعتِ ۳۰ سطح ≈ ۸۲.۲× ساعت پایه — برای
+# ساختمان‌های سنگین (پایه ≥۱۲ساعت) این از ۷۲۰ ساعتِ یک دورهٔ ۳۰روزه رد می‌شد و
+# رساندن آن‌ها به سطح ۳۰ در یک دوره ریاضاً غیرممکن بود، برخلاف همین کامنت بالا)
 MAX_BUILDING_LEVEL = 30
 LEVEL_COST_STEP = 0.15   # هر سطح ~۱۵٪ هزینهٔ پایه اضافه می‌شود
-LEVEL_HOURS_STEP = 0.12  # هر سطح ~۱۲٪ زمان پایه اضافه می‌شود
+LEVEL_HOURS_STEP = 0.06  # هر سطح ~۶٪ زمان پایه اضافه می‌شود
 
 def building_cost(building_id: str, level: int) -> dict:
     """هزینهٔ ساخت/ارتقا به «level» (سطح ۱ = ساخت اولیه، هزینه = هزینهٔ پایه)"""

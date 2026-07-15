@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
+from db import players, map_castles, admin_roles
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
@@ -59,8 +60,20 @@ async def _market_watcher():
             logger.exception("market watcher tick failed")
         await asyncio.sleep(300)
 
+async def _ensure_indexes():
+    """ایندکس‌های یکتا برای جلوگیری از رکورد دوتایی زیر بار همزمان (race condition) —
+    مثلاً دو ثبت‌نام هم‌زمان با یک قلعه، یا دو بار افزودن یک اسم به نقشه توسط ادمین"""
+    try:
+        await players.create_index("tg_id", unique=True)
+        await players.create_index("castle", unique=True)
+        await map_castles.create_index("name", unique=True)
+        await admin_roles.create_index("tg_id", unique=True)
+    except Exception:
+        logger.exception("ensuring unique indexes failed — احتمالاً دادهٔ تکراری از قبل در دیتابیس هست")
+
 @app.on_event("startup")
 async def start_background_watchers():
+    await _ensure_indexes()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
 
