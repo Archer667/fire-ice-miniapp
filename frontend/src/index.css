@@ -20,7 +20,7 @@
 html, body, #root { height: 100%; }
 
 /* دکمه‌های بی‌ظاهر — برای عناصر قابل‌کلیک که قبلاً div بودند (دسترس‌پذیری/کیبورد) */
-button.rbtn {
+.rbtn {
   all: unset;
   box-sizing: border-box;
   width: 100%;
