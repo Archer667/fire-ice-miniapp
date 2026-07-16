@@ -90,7 +90,7 @@ export const BUILDINGS_STATIC = {
   iron_mine:   { name: 'معدن آهن',   cost: { gold: 200, wood: 80 },    hours: 6,  type: 'economy' },
   gold_mine:   { name: 'معدن طلا',   cost: { gold: 400, stone: 100, wood: 100 }, hours: 12, type: 'economy' },
   market:      { name: 'بازار',       cost: { gold: 250, wood: 70 },    hours: 6,  type: 'economy' },
-  treasury:    { name: 'خزانه',       cost: { gold: 300, stone: 150, iron: 40 }, hours: 8,  type: 'economy' },
+  village:     { name: 'دهکده',       cost: { gold: 300, stone: 150, iron: 40 }, hours: 8,  type: 'economy' },
   farm:        { name: 'مزرعه',       cost: { gold: 100, wood: 50 },    hours: 3,  type: 'economy' },
   ranch:       { name: 'دامداری',     cost: { gold: 150, wood: 60 },    hours: 4,  type: 'economy' },
   winery:      { name: 'می‌کده',      cost: { gold: 220, food: 60, wood: 70 }, hours: 6,  type: 'economy' },

@@ -66,7 +66,7 @@ BUILDINGS = {
     "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200, "wood": 80},  "hours": 6,  "type": "economy", "produces": {"iron": 6}},
     "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100, "wood": 100}, "hours": 12, "type": "economy", "produces": {"gold": 12}},
     "market":      {"name": "بازار",       "cost": {"gold": 250, "wood": 70},  "hours": 6,  "type": "economy", "produces": {"gold": 3}},
-    "treasury":    {"name": "خزانه",       "cost": {"gold": 300, "stone": 150, "iron": 40}, "hours": 8,  "type": "economy", "cap_bonus": {"gold": 40}},
+    "village":     {"name": "دهکده",       "cost": {"gold": 300, "stone": 150, "iron": 40}, "hours": 8,  "type": "economy", "cap_bonus": {"men": 40}},
     "farm":        {"name": "مزرعه",       "cost": {"gold": 100, "wood": 50},  "hours": 3,  "type": "economy", "produces": {"food": 10}},
     "ranch":       {"name": "دامداری",     "cost": {"gold": 150, "wood": 60},  "hours": 4,  "type": "economy", "produces": {"food": 6}},
     "winery":      {"name": "می‌کده",      "cost": {"gold": 220, "food": 60, "wood": 70}, "hours": 6,  "type": "economy", "produces": {"wine": 5}},
