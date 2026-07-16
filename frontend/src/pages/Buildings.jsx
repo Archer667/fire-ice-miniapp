@@ -11,6 +11,7 @@ const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چو�
 const BUILDING_ICON = {
   market: Market, farm: Farm, ranch: Ranch, winery: Winery,
   granary: Warehouse, warehouse: Warehouse,
+  lumber_mill: Wood, stone_mine: Rock, iron_mine: Pick, gold_mine: Coin, treasury: Coin,
   camp_sword: Barracks, camp_spear: Barracks, camp_archer: Barracks, camp_lcav: Barracks, camp_hcav: Barracks,
 };
 
