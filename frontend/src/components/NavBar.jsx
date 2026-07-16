@@ -1,10 +1,10 @@
 import { haptic } from '../telegram.js';
-import { Keep, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart } from './Icons.jsx';
+import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart } from './Icons.jsx';
 
 // هر آیتم index خودش رو جدا نگه می‌داره (نه ترتیب آرایه) چون همین index مستقیم
 // به PAGES توی App.jsx اشاره می‌کنه — هر صفحهٔ جدید همین‌جا و اونجا اضافه شود
 export const NAV_ITEMS = [
-  { index: 0, Icon: Keep,   label: 'قلمرو' },
+  { index: 0, Icon: Realm,  label: 'قلمرو' },
   { index: 1, Icon: Build,  label: 'ساختمان‌ها' },
   { index: 2, Icon: Swords, label: 'نیروها/لشکرکشی' },
   { index: 3, Icon: Crown,  label: 'تاج‌وتخت' },

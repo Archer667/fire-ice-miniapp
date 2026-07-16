@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { api } from '../api.js';
-import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Blossom, SunIcon, Leaf, Snowflake } from '../components/Icons.jsx';
+import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
@@ -100,7 +100,7 @@ export default function Dashboard({ goTo }) {
       <div className="sect up u2">محبوبیت و مالیات</div>
       <div className="card up u2">
         <div className="res">
-          <div className="ic"><Heart s={18} /></div>
+          <div className="ic"><Popularity s={18} /></div>
           <div className="n">محبوبیت<small>با برگزاری ضیافت در دیپلماسی بالا می‌رود</small></div>
           <div className="bar"><i style={{ width: (me.popularity ?? 0) + '%' }} /></div>
           <div className="val">{(me.popularity ?? 0).toLocaleString('fa-IR')}٪</div>

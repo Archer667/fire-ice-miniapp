@@ -2,10 +2,17 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Coin, Pick, Rock, Wood, Wheat, Hammer, Shield } from '../components/Icons.jsx';
+import { Coin, Pick, Rock, Wood, Wheat, Hammer, Bastion, Market, Farm, Ranch, Winery, Warehouse, Barracks } from '../components/Icons.jsx';
 
 const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا' };
+
+// آیکن اختصاصی هر ساختمان — بر اساس id (کلید gamedata)؛ نبودش یعنی بازگشت به هامر عمومی
+const BUILDING_ICON = {
+  market: Market, farm: Farm, ranch: Ranch, winery: Winery,
+  granary: Warehouse, warehouse: Warehouse,
+  camp_sword: Barracks, camp_spear: Barracks, camp_archer: Barracks, camp_lcav: Barracks, camp_hcav: Barracks,
+};
 
 const GROUPS = [
   { key: 'economy',  label: 'ساختمان‌های اقتصادی', hint: 'منابعت رو تولید و ذخیره می‌کنن' },
@@ -86,10 +93,11 @@ function BuildingRow({ row, busy, isPort, onAct }) {
   const pct = Math.round((row.level / row.max_level) * 100);
   const locked = row.requires_port && row.level === 0 && !isPort;
   const canUpgrade = !locked && !row.upgrading && row.next_level;
+  const RowIcon = BUILDING_ICON[row.id] || (row.type === 'defense' ? Bastion : Hammer);
   return (
     <div className="bld">
       <div className="bld-top">
-        <div className="bld-ic">{row.type === 'defense' ? <Shield s={18} /> : <Hammer s={18} />}</div>
+        <div className="bld-ic"><RowIcon s={18} /></div>
         <div className="bld-n">
           {row.name}
           <small>{row.level === 0 ? 'ساخته نشده' : `سطح ${row.level.toLocaleString('fa-IR')} از ${row.max_level.toLocaleString('fa-IR')}`}</small>

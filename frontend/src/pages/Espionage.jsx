@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { api } from '../api.js';
 import { haptic } from '../telegram.js';
-import { Eye, Swords, Shield, Coin, Wheat, People, Wood, Rock, Pick, Wine } from '../components/Icons.jsx';
+import { Eye, Swords, Bastion, Coin, Wheat, People, Wood, Rock, Pick, Wine } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
 import { SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes } from '../gamedata.js';
 
@@ -156,7 +156,7 @@ export default function Espionage() {
                   ? <div style={{ fontSize: 11.5, color: 'var(--low)' }}>هیچ سازهٔ دفاعی‌ای ندارد</div>
                   : m.report.defense.map((b, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--mid)' }}>
-                      <Shield s={12} /> {b.name} · سطح {b.level.toLocaleString('fa-IR')}
+                      <Bastion s={12} /> {b.name} · سطح {b.level.toLocaleString('fa-IR')}
                     </div>
                   ))}
 
