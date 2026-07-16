@@ -21,14 +21,15 @@ export const EXTRA_PAGES = [
 
 export default function NavBar({ tab, onChange }) {
   return (
-    <div className="nav">
+    <nav className="nav" aria-label="ناوبری اصلی">
       {NAV_ITEMS.map(({ index, Icon, label }) => (
-        <div key={index} className={`nv ${tab === index ? 'on' : ''}`}
+        <button key={index} type="button" className={`rbtn nv ${tab === index ? 'on' : ''}`}
+             aria-current={tab === index ? 'page' : undefined}
              onClick={() => { haptic(); onChange(index); }}>
           <Icon />
           {label}
-        </div>
+        </button>
       ))}
-    </div>
+    </nav>
   );
 }

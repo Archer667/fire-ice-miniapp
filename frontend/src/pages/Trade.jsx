@@ -91,10 +91,11 @@ export default function Trade() {
       <div className="page-title up">تجارت</div>
       <div className="page-sub up">کاروان بفرست، از بازار وستروس خرید کن، یا شانست رو تو بازار سیاه امتحان کن</div>
 
-      <div className="tabs up u1">
+      <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
-          <div key={t.key} className={`tab ${tab === t.key ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</div>
+          <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
+               className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
+               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
         ))}
       </div>
 

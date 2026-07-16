@@ -336,10 +336,11 @@ export default function Admin() {
       <div className="page-title up">پنل ادمین</div>
       <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، روایت جنگ و مقام‌ها'}</div>
 
-      <div className="tabs up u1">
+      <div className="tabs up u1" role="tablist">
         {availTabs.map(t => (
-          <div key={t.key} className={`tab ${tab === t.key ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</div>
+          <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
+               className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
+               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
         ))}
       </div>
 
@@ -415,7 +416,7 @@ export default function Admin() {
             <div className="page-sub" style={{ margin: '10px 4px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
             {mapError && (
               <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5, margin: '10px 0' }}>
-                نقشه بارگذاری نشد — <span style={{ color: 'var(--az2)', cursor: 'pointer' }} onClick={loadMapData}>تلاش دوباره</span>
+                نقشه بارگذاری نشد — <button type="button" className="rbtn" style={{ width: 'auto', display: 'inline', color: 'var(--az2)', cursor: 'pointer', textDecoration: 'underline' }} onClick={loadMapData}>تلاش دوباره</button>
               </div>
             )}
             {mapData && (() => {
@@ -453,13 +454,13 @@ export default function Admin() {
                             </div>
                           )}
                           {filteredCastleOptions.map(o => (
-                            <div className="ppicker-row" key={o.name} onClick={() => pickCastle(o.name)}>
+                            <button type="button" className="rbtn ppicker-row" key={o.name} onClick={() => pickCastle(o.name)}>
                               <span>{o.name}{o.kind === 'port' ? ' ⚓ بندر' : ''}</span>
-                            </div>
+                            </button>
                           ))}
-                          <div className="ppicker-row" onClick={pickNewCastle} style={{ color: 'var(--az2)' }}>
+                          <button type="button" className="rbtn ppicker-row" onClick={pickNewCastle} style={{ color: 'var(--az2)' }}>
                             + قلعه/شهر کاملاً جدید{castleQuery.trim() ? `: «${castleQuery.trim()}»` : '...'}
-                          </div>
+                          </button>
                         </>
                       )}
                     </div>

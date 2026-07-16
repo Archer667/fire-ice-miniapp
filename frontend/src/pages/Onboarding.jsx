@@ -48,25 +48,28 @@ export default function Onboarding() {
       </div>
       <div className="up u1">
         <label className="f">عنوان</label>
-        <div className="grid2">
-          <div className={`pick ${gender === 'lord' ? 'sel' : ''}`} onClick={() => { haptic(); setGender('lord'); }}>
+        <div className="grid2" role="radiogroup" aria-label="عنوان">
+          <button type="button" role="radio" aria-checked={gender === 'lord'}
+                  className={`rbtn pick ${gender === 'lord' ? 'sel' : ''}`} onClick={() => { haptic(); setGender('lord'); }}>
             <div className="n">لرد</div>
-          </div>
-          <div className={`pick ${gender === 'lady' ? 'sel' : ''}`} onClick={() => { haptic(); setGender('lady'); }}>
+          </button>
+          <button type="button" role="radio" aria-checked={gender === 'lady'}
+                  className={`rbtn pick ${gender === 'lady' ? 'sel' : ''}`} onClick={() => { haptic(); setGender('lady'); }}>
             <div className="n">لیدی</div>
-          </div>
+          </button>
         </div>
       </div>
       <div className="up u2">
         <label className="f">اقلیم خود را برگزین</label>
-        <div className="grid3">
+        <div className="grid3" role="radiogroup" aria-label="اقلیم">
           {Object.entries(REGIONS_STATIC).map(([id, r]) => (
-            <div key={id} className={`pick ${regionId === id ? 'sel' : ''}`}
+            <button type="button" key={id} role="radio" aria-checked={regionId === id}
+                 className={`rbtn pick ${regionId === id ? 'sel' : ''}`}
                  onClick={() => { haptic(); setRegionId(id); }}>
               <div className="g">{r.g}</div>
               <div className="n">{r.name}</div>
               <div className="c">{r.castles.length + r.ports.length} قلعه و بندر</div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -83,14 +86,15 @@ export default function Onboarding() {
         <p>{region.castles.length} قلعه و {region.ports.length} بندر · بندر = ناوگان</p>
         <div className="steps"><i className="on" /><i className="on" /></div>
       </div>
-      <div className="castles up u1">
+      <div className="castles up u1" role="radiogroup" aria-label="قلعه">
         {[...region.castles.map(n => ({ n, port: false })),
           ...region.ports.map(n => ({ n, port: true }))].map(c => (
-          <div key={c.n} className={`castle ${castle === c.n ? 'sel' : ''}`}
+          <button type="button" key={c.n} role="radio" aria-checked={castle === c.n}
+               className={`rbtn castle ${castle === c.n ? 'sel' : ''}`}
                onClick={() => { haptic(); setCastle(c.n); }}>
             {c.n}
             {c.port && <span className="tag">بندر — ناوگان</span>}
-          </div>
+          </button>
         ))}
       </div>
       <div className="up u2" style={{ marginTop: 18 }}>

@@ -57,10 +57,11 @@ export default function Buildings() {
       <div className="page-title up">ساختمان‌های قلمرو</div>
       <div className="page-sub up">تا سطح {(30).toLocaleString('fa-IR')} می‌تونی بالا ببریشون — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
 
-      <div className="tabs up u1">
+      <div className="tabs up u1" role="tablist">
         {availGroups.map(g => (
-          <div key={g.key} className={`tab ${activeGroup?.key === g.key ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(g.key); }}>{g.label}</div>
+          <button type="button" key={g.key} role="tab" aria-selected={activeGroup?.key === g.key}
+               className={`rbtn tab ${activeGroup?.key === g.key ? 'on' : ''}`}
+               onClick={() => { haptic(); setTab(g.key); }}>{g.label}</button>
         ))}
       </div>
 

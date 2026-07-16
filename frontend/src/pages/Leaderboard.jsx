@@ -24,10 +24,11 @@ export default function Leaderboard() {
       <div className="page-title up">بازی تاج‌وتخت</div>
       <div className="page-sub up">یا اقلیمت رو ببر بالا، یا خودت بدرخش — هرکی به روش خودش</div>
 
-      <div className="tabs up u1">
+      <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
-          <div key={t.id} className={`tab ${tab === t.id ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(t.id); }}>{t.label}</div>
+          <button type="button" key={t.id} role="tab" aria-selected={tab === t.id}
+               className={`rbtn tab ${tab === t.id ? 'on' : ''}`}
+               onClick={() => { haptic(); setTab(t.id); }}>{t.label}</button>
         ))}
       </div>
 

@@ -36,7 +36,7 @@ export default function PlayerPicker({ value, onChange, placeholder = 'اسم ل
           {value.map(p => (
             <span className="ppicker-chip" key={p.tg_id}>
               {p.name}
-              <i onClick={() => remove(p.tg_id)}><Close s={11} /></i>
+              <button type="button" aria-label={`حذف ${p.name}`} onClick={() => remove(p.tg_id)}><Close s={11} /></button>
             </span>
           ))}
         </div>
@@ -52,10 +52,10 @@ export default function PlayerPicker({ value, onChange, placeholder = 'اسم ل
           {results.length === 0 ? (
             <div className="ppicker-empty">لردی با این مشخصات پیدا نشد</div>
           ) : results.map(p => (
-            <div className="ppicker-row" key={p.tg_id} onClick={() => pick(p)}>
+            <button type="button" className="rbtn ppicker-row" key={p.tg_id} onClick={() => pick(p)}>
               <span>{p.name}</span>
               <small>{p.castle} · {p.region_name}</small>
-            </div>
+            </button>
           ))}
         </div>
       )}

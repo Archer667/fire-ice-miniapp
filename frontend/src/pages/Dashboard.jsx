@@ -108,19 +108,19 @@ export default function Dashboard({ goTo }) {
         <div className="tax-row">
           <span>نرخ مالیات <small>(سقف {me.max_tax_rate.toLocaleString('fa-IR')}٪ با این محبوبیت)</small></span>
           <div className="tax-stepper">
-            <button disabled={taxBusy || me.tax_rate <= 0} onClick={() => changeTax(-1)}>−</button>
+            <button type="button" aria-label="کاهش نرخ مالیات" disabled={taxBusy || me.tax_rate <= 0} onClick={() => changeTax(-1)}>−</button>
             <b>{me.tax_rate.toLocaleString('fa-IR')}٪</b>
-            <button disabled={taxBusy || me.tax_rate >= me.max_tax_rate} onClick={() => changeTax(1)}>+</button>
+            <button type="button" aria-label="افزایش نرخ مالیات" disabled={taxBusy || me.tax_rate >= me.max_tax_rate} onClick={() => changeTax(1)}>+</button>
           </div>
         </div>
       </div>
 
       <div className="sect up u3">فرمان‌ها</div>
       <div className="qgrid up u3">
-        <div className="q" onClick={() => { haptic(); goTo(1); }}><div className="qi"><Build s={19} /></div>ساختمان‌ها</div>
-        <div className="q" onClick={() => { haptic(); goTo(2); }}><div className="qi"><Swords s={19} /></div>لشکرکشی</div>
-        <div className="q" onClick={() => { haptic(); goTo(7); }}><div className="qi"><Eye s={19} /></div>جاسوسی</div>
-        <div className="q" onClick={() => { haptic(); goTo(5); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</div>
+        <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(1); }}><div className="qi"><Build s={19} /></div>ساختمان‌ها</button>
+        <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(2); }}><div className="qi"><Swords s={19} /></div>لشکرکشی</button>
+        <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(7); }}><div className="qi"><Eye s={19} /></div>جاسوسی</button>
+        <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(5); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</button>
       </div>
     </>
   );

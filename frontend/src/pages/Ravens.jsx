@@ -50,9 +50,10 @@ export default function Ravens() {
   /* ---------- نمای گفتگو ---------- */
   if (openWith || composing) return (
     <>
-      <div className="back up" onClick={() => { setOpenWith(null); setComposing(false); setComposeTargets([]); loadInbox(); }}>
+      <button type="button" className="rbtn back up" style={{ width: 'auto' }}
+              onClick={() => { setOpenWith(null); setComposing(false); setComposeTargets([]); loadInbox(); }}>
         <Back s={15} /> بازگشت به صندوق نامه
-      </div>
+      </button>
       {composing ? (
         <>
           <div className="page-title up">کلاغ تازه</div>
@@ -73,7 +74,7 @@ export default function Ravens() {
       <div className="composer up u2">
         <input value={text} onChange={e => setText(e.target.value)}
                onKeyDown={e => e.key === 'Enter' && send()} placeholder="نامه‌ات را بنویس..." />
-        <button onClick={send}><Send s={18} /></button>
+        <button type="button" aria-label="ارسال" onClick={send}><Send s={18} /></button>
       </div>
     </>
   );
@@ -90,13 +91,15 @@ export default function Ravens() {
       <div className="page-title up">کلاغ‌ها</div>
       <div className="page-sub up">نامه‌های خصوصی و اطلاعیه‌های شورای جنگ</div>
 
-      <div className="tabs up u1">
-        <div className={`tab ${tab === 'announcements' ? 'on' : ''}`} onClick={() => { haptic(); setTab('announcements'); }}>
+      <div className="tabs up u1" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === 'announcements'}
+                className={`rbtn tab ${tab === 'announcements' ? 'on' : ''}`} onClick={() => { haptic(); setTab('announcements'); }}>
           اطلاعیه‌ها{announcements.some(m => m.unread > 0) ? ' •' : ''}
-        </div>
-        <div className={`tab ${tab === 'messages' ? 'on' : ''}`} onClick={() => { haptic(); setTab('messages'); }}>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === 'messages'}
+                className={`rbtn tab ${tab === 'messages' ? 'on' : ''}`} onClick={() => { haptic(); setTab('messages'); }}>
           پیام‌ها{personal.some(m => m.unread > 0) ? ' •' : ''}
-        </div>
+        </button>
       </div>
 
       <div className="up u2">
@@ -106,17 +109,17 @@ export default function Ravens() {
           </div>
         )}
         {rows.map((m, i) => (
-          <div key={i} className="mailrow" onClick={() => openThread(m)}>
+          <button type="button" key={i} className="rbtn mailrow" onClick={() => openThread(m)}>
             <div className="mava">{m.with_name.charAt(0)}</div>
             <div className="mt">
               <div className="mn">{m.with_name}{m.unread > 0 && <span className="dot" />}</div>
               <div className="ms">{m.last_text}</div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
       {tab === 'messages' && (
-        <button className="fab" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
+        <button type="button" className="fab" aria-label="کلاغ تازه" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
           <Plus s={22} />
         </button>
       )}

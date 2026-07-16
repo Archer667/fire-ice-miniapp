@@ -47,12 +47,17 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
         const active = pin === c.name;
         const popupStyle = popupPlacement(xy, zoom);
         return (
-          <div key={c.name}
+          <div key={c.name} role={onPinClick ? 'button' : undefined} tabIndex={onPinClick ? 0 : undefined}
+               aria-label={onPinClick ? c.name : undefined}
                className={`pin sm ${c.port ? 'port' : ''} ${c.owner ? 'owned' : ''} ${c.mine ? 'mine' : ''} ${active ? 'active' : ''}`}
                style={{ left: xy[0] + '%', top: xy[1] + '%', pointerEvents: onPinClick ? 'auto' : 'none' }}
                onClick={(e) => {
                  if (!onPinClick) return; // حالت ادمین: نباید کلیکِ گذاشتنِ پینِ تازه را قورت بدهد
                  e.stopPropagation(); haptic(); onPinClick(c);
+               }}
+               onKeyDown={(e) => {
+                 if (!onPinClick) return;
+                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); haptic(); onPinClick(c); }
                }}>
             <span className="dot"><Icon s={8} /></span>
             {active && onPinClick && (
