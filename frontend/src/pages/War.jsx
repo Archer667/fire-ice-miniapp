@@ -49,7 +49,7 @@ export default function War() {
   const [origin, setOrigin] = useState(me.castle);
   const [opType, setOpType] = useState(OP_TYPES[0].id);
   const [target, setTarget] = useState(null); // { name, region, ... } | null
-  const [plan, setPlan] = useState('');
+  const [name, setName] = useState('');
   const [counts, setCounts] = useState(Object.fromEntries(allTroops.map(t => [t.id, 0])));
   const [busy, setBusy] = useState(false);
 
@@ -89,27 +89,22 @@ export default function War() {
   );
   const overGold = goldCost > gold;
   const overMen = menCommitted > men;
-  const planTooShort = op.needsTarget && opType !== 'garrison' && plan.trim().length < 50;
   const badPortTarget = op.portOnly && target && !target.port;
   const formIssue = overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
     : badPortTarget ? 'مقصد باید بندر باشد'
-    : planTooShort ? 'سناریو خیلی کوتاه است'
     : menCommitted <= 0 ? 'نیرویی گسیل نکرده‌ای'
     : null;
 
   const resetForm = () => {
-    setPlan(''); setTarget(null);
+    setName(''); setTarget(null);
     setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
   };
 
   const send = async () => {
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
-    if (op.needsTarget && opType !== 'garrison' && plan.trim().length < 50) {
-      toast('سناریو خیلی کوتاه است — نقشه‌ات را شرح بده'); return;
-    }
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
@@ -118,7 +113,7 @@ export default function War() {
       await api.submitCampaign({
         origin_castle: origin, op_type: opType,
         target_castle: op.needsTarget ? target.name : null,
-        plan: plan.trim(), troops: counts,
+        name: name.trim(), troops: counts,
       });
       haptic('medium');
       setMe({
@@ -183,9 +178,10 @@ export default function War() {
             <div key={i} className={`warband ${c.mine ? 'mine' : ''}`}>
               <div className="wi"><Swords s={17} /></div>
               <div className="t">
+                {c.name && <b>{c.name}</b>}{c.name ? ' — ' : ''}
                 {cSameCastle
-                  ? <><b>لشکر {c.from}</b> در حال دفاع از قلعه است</>
-                  : <><b>لشکری از {c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است</>}
+                  ? <>لشکر {c.from} در حال دفاع از قلعه است</>
+                  : <>لشکری از <b>{c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است</>}
                 <div className="tm">
                   {c.mine ? 'فرمان تو' : `آشکار شده — ${Math.max(0, c.revealed_minutes_ago).toLocaleString('fa-IR')} دقیقه پیش`}
                   {' · '}{c.arrived ? 'به مقصد رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`}
@@ -198,7 +194,10 @@ export default function War() {
 
       <div className="sect up u3">فرمان لشکرکشی</div>
       <div className="card up u3">
-        <label className="f" style={{ marginTop: 0 }}>مبدا</label>
+        <label className="f" style={{ marginTop: 0 }}>نام لشکرکشی</label>
+        <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
+
+        <label className="f">مبدا</label>
         <select value={origin} onChange={e => setOrigin(e.target.value)}>
           {originOptions.map(o => <option key={o} value={o}>{o}{o === me.castle ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
         </select>
@@ -234,14 +233,9 @@ export default function War() {
         </div>
 
         {op.needsTarget && opType !== 'garrison' && (
-          <>
-            <label className="f">سناریوی نبرد — تا دو صفحه</label>
-            <textarea value={plan} onChange={e => setPlan(e.target.value)}
-                      placeholder="مسیر لشکر، آرایش جنگی، نیرنگ‌ها..." />
-            <div className="page-sub" style={{ margin: '4px 4px 0', color: plan.trim().length < 50 ? 'var(--danger)' : 'var(--mid)' }}>
-              {plan.trim().length.toLocaleString('fa-IR')} / حداقل {(50).toLocaleString('fa-IR')} نویسه
-            </div>
-          </>
+          <div className="page-sub" style={{ margin: '10px 4px 0' }}>
+            سناریوی نبرد اینجا نوشته نمی‌شود — وقتی لشکر برسد، آمار دو طرف رد و بدل می‌شود و تا ۶ ساعت بعد می‌توانی از صفحهٔ «رول‌ها» سناریوی جنگ را بفرستی.
+          </div>
         )}
       </div>
 
@@ -254,11 +248,11 @@ export default function War() {
             <div className="troop" key={t.id}>
               <div className="tn">
                 {t.name}
-                <small style={t.special ? { color: 'var(--az2)' } : {}}>
-                  {t.special ? 'نیروی ویژهٔ اقلیم تو · ' : ''}
+                {t.special && <span className="troop-tag">ویژهٔ اقلیم</span>}
+                <small>
                   {t.cost.toLocaleString('fa-IR')} طلا/نفر · {(t.special ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز
-                  {!ok && req ? ' · نیاز به پادگان و کارگاه تسلیحاتِ این یگان' : ''}
                 </small>
+                {!ok && req && <small className="troop-locked">نیاز به پادگان و کارگاه تسلیحاتِ این یگان</small>}
               </div>
               <input type="number" min="0" value={counts[t.id]} disabled={!ok}
                      onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, +e.target.value || 0) })} />
@@ -287,7 +281,8 @@ export default function War() {
             <div className="res">
               <div className="ic"><Swords s={16} /></div>
               <div className="n">
-                {c.op_name}<small>{c.origin} ← {c.target} · {c.men_committed.toLocaleString('fa-IR')} نفر · {c.food_per_day.toLocaleString('fa-IR')} غله/روز</small>
+                {c.name}
+                <small>{c.op_name} · {c.origin} ← {c.target} · {c.men_committed.toLocaleString('fa-IR')} نفر · {c.food_per_day.toLocaleString('fa-IR')} غله/روز</small>
               </div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>

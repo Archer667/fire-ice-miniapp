@@ -27,7 +27,7 @@ import {
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
-  ROLEPLAY_CATEGORIES,
+  ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -169,10 +169,10 @@ const M = {
         };
       }),
       campaigns: [
-        { from: 'کسترلی راک', to: 'ریورران', op_type: 'attack', mine: false, revealed_minutes_ago: 23, travel_minutes: 45, arrived: true },
-        { from: 'پایک', to: 'وایت هاربر', op_type: 'naval_raid', mine: false, revealed_minutes_ago: 61, travel_minutes: 65, arrived: false },
+        { from: 'کسترلی راک', to: 'ریورران', op_type: 'attack', name: 'حملهٔ نظامی', mine: false, revealed_minutes_ago: 23, travel_minutes: 45, arrived: true },
+        { from: 'پایک', to: 'وایت هاربر', op_type: 'naval_raid', name: 'غارت دریایی', mine: false, revealed_minutes_ago: 61, travel_minutes: 65, arrived: false },
         ...mockCampaigns.filter(c => c.active).map(c => ({
-          from: c.origin_castle, to: c.target_castle, op_type: c.op_type, mine: true,
+          from: c.origin_castle, to: c.target_castle, op_type: c.op_type, name: c.name, mine: true,
           revealed_minutes_ago: Math.floor((nowMs - new Date(c.created_at).getTime()) / 60000),
           travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
         })),
@@ -236,9 +236,6 @@ const M = {
           || mockMapCastles.some(m => m.name === targetCastle && m.kind === 'port');
         if (!isPort) throw new Error('غارت دریایی فقط علیه اهداف بندری ممکن است');
       }
-      if (body.op_type !== 'garrison' && (body.plan || '').trim().length < 50) {
-        throw new Error('سناریو خیلی کوتاه است — نقشه‌ات را شرح بده');
-      }
     }
 
     const specials = REGIONS_STATIC[mockMe.region]?.special || [];
@@ -279,11 +276,11 @@ const M = {
 
     const nowIso = new Date().toISOString();
     const doc = {
-      id: String(mockCampaignSeq++),
+      id: String(mockCampaignSeq++), tg_id: 1, player_name: mockMe.name,
       origin_castle: body.origin_castle, op_type: body.op_type, target_castle: targetCastle,
-      plan: body.plan || '', troops: body.troops,
+      name: (body.name || '').trim().slice(0, 60) || op.name, troops: body.troops,
       gold_cost: gold, men_committed: men, food_per_day: food,
-      active: true, created_at: nowIso, last_food_tick: nowIso,
+      active: true, created_at: nowIso, last_food_tick: nowIso, arrival_notified: false,
       travel_minutes: travel, arrival_at: new Date(Date.now() + travel * 60000).toISOString(),
     };
     mockCampaigns.push(doc);
@@ -303,6 +300,7 @@ const M = {
     return mockCampaigns.slice().reverse().map(c => ({
       id: c.id,
       op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+      name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
       origin: c.origin_castle, target: c.target_castle,
       active: c.active,
       gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
@@ -439,7 +437,7 @@ const M = {
         from: c.origin_castle, to: c.target_castle,
         target_tg_id: targetOwner?.tg_id ?? null, target_player: targetOwner?.name ?? null,
         op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
-        plan: c.plan,
+        name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
         troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
           name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
         })),
@@ -524,24 +522,55 @@ const M = {
     }
     return { ok: true, success };
   },
-  sendRoleplay: (category, text) => {
+  warRoleplayEligible: () => {
+    mockResolveCampaigns();
+    const nowMs = Date.now();
+    const cutoff = nowMs - ROLEPLAY_WINDOW_HOURS * 3600000;
+    const already = new Set(mockRoleplays.filter(r => r.category === 'war').map(r => r.campaign_id));
+    return mockCampaigns
+      .filter(c => ATTACK_OP_TYPES.includes(c.op_type))
+      .filter(c => {
+        const arrivalMs = new Date(c.arrival_at).getTime();
+        return arrivalMs <= nowMs && arrivalMs >= cutoff;
+      })
+      .filter(c => !already.has(c.id))
+      .map(c => ({
+        campaign_id: c.id, role: 'attacker',
+        name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        origin: c.origin_castle, target: c.target_castle, arrival_at: c.arrival_at,
+      }))
+      .reverse();
+  },
+  sendRoleplay: (category, text, campaignId) => {
     if (!ROLEPLAY_CATEGORIES[category]) throw new Error('دسته‌بندی نامعتبر است');
     const t = (text || '').trim();
     if (t.length < 10) throw new Error('رول خیلی کوتاه است — کمی بیشتر بنویس');
+    let campaign_id = null;
+    if (category === 'war') {
+      if (!campaignId) throw new Error('برای دستهٔ جنگ باید نبردت را انتخاب کنی');
+      const c = mockCampaigns.find(x => x.id === campaignId);
+      if (!c || !ATTACK_OP_TYPES.includes(c.op_type)) throw new Error('این نبرد پیدا نشد');
+      const nowMs = Date.now();
+      const arrivalMs = new Date(c.arrival_at).getTime();
+      if (arrivalMs > nowMs) throw new Error('این نبرد هنوز به مقصد نرسیده');
+      if (nowMs > arrivalMs + ROLEPLAY_WINDOW_HOURS * 3600000) throw new Error(`مهلت ${ROLEPLAY_WINDOW_HOURS} ساعته برای فرستادن سناریوی این نبرد گذشته`);
+      if (mockRoleplays.some(r => r.category === 'war' && r.campaign_id === campaignId)) throw new Error('قبلاً سناریوی این نبرد را فرستاده‌ای');
+      campaign_id = campaignId;
+    }
     mockRoleplays.push({
-      id: String(mockRoleplaySeq++), category, text: t,
+      id: String(mockRoleplaySeq++), category, text: t, campaign_id,
       result: null, resolved: false, created_at: new Date().toISOString(),
     });
     return { ok: true };
   },
   roleplayMine: () => mockRoleplays.slice().reverse().map(r => ({
     id: r.id, category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
-    text: r.text, resolved: r.resolved, result: r.result, created_at: r.created_at,
+    text: r.text, resolved: r.resolved, result: r.result, campaign_id: r.campaign_id, created_at: r.created_at,
   })),
   adminRoleplayPending: () => mockRoleplays.filter(r => !r.resolved).slice().reverse().map(r => ({
     id: r.id, player: mockMe.name || 'تو', tg_id: 1, castle: mockMe.castle,
     category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
-    text: r.text, created_at: r.created_at,
+    text: r.text, campaign_id: r.campaign_id, sibling: null, created_at: r.created_at,
   })),
   adminRespondRoleplay: (roleplayId, result) => {
     const r = mockRoleplays.find(x => x.id === roleplayId);
@@ -783,12 +812,13 @@ export const api = {
     : req(`/api/admin/espionage/${missionId}/score`, { method: 'POST', body: JSON.stringify({ score }) }),
 
   /* ---------- رول‌ها ---------- */
-  sendRoleplay: (category, text) => MOCK ? Promise.resolve(M.sendRoleplay(category, text))
-    : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text }) }),
+  sendRoleplay: (category, text, campaignId) => MOCK ? Promise.resolve(M.sendRoleplay(category, text, campaignId))
+    : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
   adminRespondRoleplay: (roleplayId, result) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result))
     : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result }) }),
+  warRoleplayEligible: () => MOCK ? Promise.resolve(M.warRoleplayEligible()) : req('/api/war/roleplay-eligible'),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
     : req('/api/titles/overlord', { method: 'POST', body: JSON.stringify({ region, tg_id: tgId }) }),

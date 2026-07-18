@@ -83,6 +83,12 @@ export const OP_TYPES = [
   { id: 'defense',    name: 'دفاعی',                          needsTarget: false, portOnly: false },
 ];
 
+// نبردهای واقعی — بعد از رسیدن، هر دو طرف تا ROLEPLAY_WINDOW_HOURS ساعت فرصت دارند
+// سناریوی جنگ را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستند
+export const ATTACK_OP_TYPES = ['attack', 'siege', 'naval_raid'];
+export const DEFENSE_OP_TYPES = ['defense', 'garrison'];
+export const ROLEPLAY_WINDOW_HOURS = 6;
+
 export const BUILDINGS_STATIC = {
   // اقتصادی
   lumber_mill: { name: 'چوب‌بری',     cost: { gold: 130, stone: 30 },   hours: 4,  type: 'economy' },

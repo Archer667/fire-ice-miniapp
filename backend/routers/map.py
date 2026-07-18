@@ -70,6 +70,7 @@ async def get_map(user: dict = Depends(get_user)):
             arrival_at = s.get("arrival_at")
             camps.append({
                 "from": s["origin_castle"], "to": s["target_castle"], "op_type": s["op_type"],
+                "name": s.get("name", ""),
                 "mine": mine,
                 "revealed_minutes_ago": int((now() - s["created_at"]).total_seconds() // 60) - (0 if mine else CAMPAIGN_REVEAL_MINUTES),
                 "travel_minutes": s.get("travel_minutes", 0),

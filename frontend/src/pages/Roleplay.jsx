@@ -16,21 +16,33 @@ export default function Roleplay() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState(null);
+  const [battles, setBattles] = useState(null);
+  const [campaignId, setCampaignId] = useState('');
 
   const load = () => api.roleplayMine().then(setRows).catch(e => { toast(e.message); setRows([]); });
-  useEffect(() => { load(); }, []);
+  const loadBattles = () => api.warRoleplayEligible().then(rows => {
+    setBattles(rows);
+    setCampaignId(prev => rows.some(b => b.campaign_id === prev) ? prev : (rows[0]?.campaign_id || ''));
+  }).catch(e => { toast(e.message); setBattles([]); });
 
+  useEffect(() => { load(); }, []);
+  useEffect(() => { if (category === 'war' && battles === null) loadBattles(); }, [category]);
+
+  const isWar = category === 'war';
   const textTooShort = text.trim().length < 10;
+  const noBattleChosen = isWar && !campaignId;
 
   const send = async () => {
     if (textTooShort) { toast('رول را کمی بیشتر توضیح بده'); return; }
+    if (noBattleChosen) { toast('یک نبرد را انتخاب کن'); return; }
     setBusy(true);
     try {
-      await api.sendRoleplay(category, text.trim());
+      await api.sendRoleplay(category, text.trim(), isWar ? campaignId : undefined);
       haptic('medium');
       toast('رول برای بررسی شورای جنگ فرستاده شد');
       setText('');
       load();
+      if (isWar) loadBattles();
       setTab('results');
     } catch (e) { toast(e.message); }
     setBusy(false);
@@ -58,11 +70,32 @@ export default function Roleplay() {
             ))}
           </select>
 
+          {isWar && (
+            <>
+              <label className="f">نبرد</label>
+              {battles === null ? (
+                <div className="page-sub" style={{ margin: '0 4px' }}>در حال بارگذاری نبردها...</div>
+              ) : battles.length === 0 ? (
+                <div className="page-sub" style={{ margin: '0 4px', color: 'var(--danger)' }}>
+                  فعلاً هیچ نبردِ رسیده‌ای برای نوشتن سناریو نداری — بعد از اینکه لشکری (مهاجم یا مدافع) به مقصد برسد، تا ۶ ساعت اینجا نشانش می‌دهیم
+                </div>
+              ) : (
+                <select value={campaignId} onChange={e => setCampaignId(e.target.value)}>
+                  {battles.map(b => (
+                    <option key={b.campaign_id} value={b.campaign_id}>
+                      {b.name} — {b.origin} ← {b.target} ({b.role === 'attacker' ? 'مهاجم' : 'مدافع'} تویی)
+                    </option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+
           <label className="f">متن رول</label>
           <textarea value={text} onChange={e => setText(e.target.value)}
                     placeholder="سناریوت را بنویس... چه می‌کنی، چطور، و هدفت چیست؟" />
 
-          <button className="btn" style={{ marginTop: 14 }} disabled={textTooShort || busy} onClick={send}>
+          <button className="btn" style={{ marginTop: 14 }} disabled={textTooShort || noBattleChosen || busy} onClick={send}>
             {busy ? 'در حال ارسال...' : 'ارسال رول به شورای جنگ'}
           </button>
         </div>

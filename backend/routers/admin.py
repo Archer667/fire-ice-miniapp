@@ -177,15 +177,22 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
 
 @router.get("/roleplay")
 async def list_roleplay_pending(user: dict = Depends(admin_user)):
-    """رول‌های بازیکنان که هنوز ادمین نتیجه‌شان را ننوشته"""
+    """رول‌های بازیکنان که هنوز ادمین نتیجه‌شان را ننوشته — برای دستهٔ «جنگ» طرف
+    مقابلِ همان نبرد (اگر او هم سناریواش را فرستاده باشد) هم برای مقایسه نشان داده می‌شود"""
     out = []
     cur = roleplays.find({"resolved": False}).sort("created_at", -1).limit(50)
     async for r in cur:
-        out.append({
+        row = {
             "id": str(r["_id"]), "player": r["player_name"], "tg_id": r["tg_id"], "castle": r["castle"],
             "category": r["category"], "category_name": ROLEPLAY_CATEGORIES.get(r["category"], r["category"]),
-            "text": r["text"], "created_at": r["created_at"].isoformat(),
-        })
+            "text": r["text"], "campaign_id": r.get("campaign_id"), "sibling": None,
+            "created_at": r["created_at"].isoformat(),
+        }
+        if r["category"] == "war" and r.get("campaign_id"):
+            sib = await roleplays.find_one({"category": "war", "campaign_id": r["campaign_id"], "tg_id": {"$ne": r["tg_id"]}})
+            if sib:
+                row["sibling"] = {"player": sib["player_name"], "text": sib["text"], "resolved": sib.get("resolved", False)}
+        out.append(row)
     return out
 
 class RoleplayResultBody(BaseModel):
@@ -193,6 +200,8 @@ class RoleplayResultBody(BaseModel):
 
 @router.post("/roleplay/{roleplay_id}/respond")
 async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
+    """برای دستهٔ «جنگ»، نتیجه برای هر دو طرف نبرد فرستاده می‌شود — چه هر دو سناریو
+    فرستاده باشند چه فقط یکی؛ طرفی که ننوشته هم از طریق خودِ لشکرکشی پیدا و باخبر می‌شود"""
     result = body.result.strip()
     if len(result) < 3:
         raise HTTPException(400, "متن نتیجه خیلی کوتاه است")
@@ -206,17 +215,39 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     if r.get("resolved"):
         raise HTTPException(400, "این رول قبلاً پاسخ داده شده")
 
-    await roleplays.update_one({"_id": r["_id"]}, {"$set": {
+    ids_to_resolve = [r["_id"]]
+    recipient_tg_ids = {r["tg_id"]}
+
+    if r["category"] == "war" and r.get("campaign_id"):
+        sibling = await roleplays.find_one({
+            "category": "war", "campaign_id": r["campaign_id"],
+            "tg_id": {"$ne": r["tg_id"]}, "resolved": False,
+        })
+        if sibling:
+            ids_to_resolve.append(sibling["_id"])
+            recipient_tg_ids.add(sibling["tg_id"])
+        try:
+            campaign = await campaigns.find_one({"_id": ObjectId(r["campaign_id"])})
+        except Exception:
+            campaign = None
+        if campaign:
+            recipient_tg_ids.add(campaign["tg_id"])
+            defender = await players.find_one({"castle": campaign["target_castle"]})
+            if defender:
+                recipient_tg_ids.add(defender["tg_id"])
+
+    await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
     }})
 
-    player = await players.find_one({"tg_id": r["tg_id"]})
-    if player:
-        cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
-        await send_system_message(
-            player["tg_id"], player["name"],
-            f"نتیجهٔ رول «{cat_name}»ات آمد — «{r['text'][:60]}{'…' if len(r['text']) > 60 else ''}»: {result}",
-        )
+    cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
+    for tg_id in recipient_tg_ids:
+        player = await players.find_one({"tg_id": tg_id})
+        if player:
+            await send_system_message(
+                player["tg_id"], player["name"],
+                f"نتیجهٔ رول «{cat_name}»{'ِ نبرد ' if r['category'] == 'war' else ''} آمد: {result}",
+            )
 
     return {"ok": True}
 

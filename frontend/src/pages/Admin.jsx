@@ -504,12 +504,22 @@ export default function Admin() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
+                {r.category === 'war' && (
+                  r.sibling ? (
+                    <div style={{ margin: '0 0 10px', padding: 10, borderRadius: 12, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(96,178,255,0.2)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--az2)', marginBottom: 4 }}>سناریوی طرف مقابل ({r.sibling.player})</div>
+                      <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--mid)' }}>{r.sibling.text}</div>
+                    </div>
+                  ) : (
+                    <div style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--low)' }}>طرف مقابل هنوز سناریویش را نفرستاده — نتیجه برای هر دو طرف فرستاده می‌شود</div>
+                  )
+                )}
                 <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
                           placeholder="نتیجهٔ این رول چه شد..." />
                 <button className="btn" style={{ marginTop: 10 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
-                  {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه به بازیکن'}
+                  {roleplayBusyId === r.id ? 'در حال ارسال...' : (r.category === 'war' ? 'ارسال نتیجه به هر دو طرف' : 'ارسال نتیجه به بازیکن')}
                 </button>
               </div>
             ))}
