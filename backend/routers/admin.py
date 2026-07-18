@@ -4,9 +4,9 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings, spy_missions
+from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings, spy_missions, roleplays
 from game import now, normalize_building_state
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES
 from config import ADMIN_IDS
 from routers.war import OP_TYPES
 from routers.ravens import send_system_message
@@ -174,6 +174,51 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
         )
 
     return {"ok": True, "success": success}
+
+@router.get("/roleplay")
+async def list_roleplay_pending(user: dict = Depends(admin_user)):
+    """رول‌های بازیکنان که هنوز ادمین نتیجه‌شان را ننوشته"""
+    out = []
+    cur = roleplays.find({"resolved": False}).sort("created_at", -1).limit(50)
+    async for r in cur:
+        out.append({
+            "id": str(r["_id"]), "player": r["player_name"], "tg_id": r["tg_id"], "castle": r["castle"],
+            "category": r["category"], "category_name": ROLEPLAY_CATEGORIES.get(r["category"], r["category"]),
+            "text": r["text"], "created_at": r["created_at"].isoformat(),
+        })
+    return out
+
+class RoleplayResultBody(BaseModel):
+    result: str
+
+@router.post("/roleplay/{roleplay_id}/respond")
+async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
+    result = body.result.strip()
+    if len(result) < 3:
+        raise HTTPException(400, "متن نتیجه خیلی کوتاه است")
+    try:
+        oid = ObjectId(roleplay_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ رول نامعتبر است")
+    r = await roleplays.find_one({"_id": oid})
+    if not r:
+        raise HTTPException(404, "این رول پیدا نشد")
+    if r.get("resolved"):
+        raise HTTPException(400, "این رول قبلاً پاسخ داده شده")
+
+    await roleplays.update_one({"_id": r["_id"]}, {"$set": {
+        "result": result[:4000], "resolved": True, "resolved_at": now(),
+    }})
+
+    player = await players.find_one({"tg_id": r["tg_id"]})
+    if player:
+        cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
+        await send_system_message(
+            player["tg_id"], player["name"],
+            f"نتیجهٔ رول «{cat_name}»ات آمد — «{r['text'][:60]}{'…' if len(r['text']) > 60 else ''}»: {result}",
+        )
+
+    return {"ok": True}
 
 MAP_KINDS = {"castle", "city", "ruin", "port"}
 

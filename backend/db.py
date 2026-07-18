@@ -17,3 +17,4 @@ admin_roles = db.admin_roles
 caravans   = db.caravans
 market_listings = db.market_listings
 black_market_listings = db.black_market_listings
+roleplays = db.roleplays

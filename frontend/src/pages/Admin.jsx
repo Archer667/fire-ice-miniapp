@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Shield, Eye, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People } from '../components/Icons.jsx';
+import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
@@ -21,6 +21,7 @@ const MAP_KINDS = [
 const TABS = [
   { key: 'war',       label: 'جنگ' },
   { key: 'espionage', label: 'جاسوسی' },
+  { key: 'roleplay',  label: 'رول‌ها' },
   { key: 'map',       label: 'نقشه' },
   { key: 'titles',    label: 'مقام‌ها' },
   { key: 'market',    label: 'بازار', fullOnly: true },
@@ -93,9 +94,14 @@ export default function Admin() {
   const [spyScores, setSpyScores] = useState({}); // missionId -> score string
   const [spyBusyId, setSpyBusyId] = useState(null);
 
+  const [roleplayPending, setRoleplayPending] = useState(null);
+  const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
+  const [roleplayBusyId, setRoleplayBusyId] = useState(null);
+
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
+  const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
   const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
@@ -107,6 +113,7 @@ export default function Admin() {
     loadCampaigns();
     loadBattles();
     loadSpyPending();
+    loadRoleplayPending();
     loadMapData();
     if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); }
   }, []);
@@ -269,6 +276,20 @@ export default function Admin() {
       loadSpyPending();
     } catch (e) { toast(e.message); }
     setSpyBusyId(null);
+  };
+
+  const respondRoleplay = async (roleplayId) => {
+    const result = (roleplayResults[roleplayId] || '').trim();
+    if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
+    setRoleplayBusyId(roleplayId);
+    try {
+      await api.adminRespondRoleplay(roleplayId, result);
+      haptic('medium');
+      toast('نتیجهٔ رول برای بازیکن فرستاده شد');
+      setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      loadRoleplayPending();
+    } catch (e) { toast(e.message); }
+    setRoleplayBusyId(null);
   };
 
   const setOverlord = async () => {
@@ -457,6 +478,39 @@ export default function Admin() {
                     {spyBusyId === m.id ? 'در حال ثبت...' : 'ثبت امتیاز و اعلام نتیجه'}
                   </button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'roleplay' && (
+        <>
+          <div className="sect up u2">رول‌های در انتظار پاسخ</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس — همین متن به‌عنوان کلاغ برایش فرستاده می‌شود
+          </div>
+          <div className="up u2">
+            {(!roleplayPending || roleplayPending.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رول بررسی‌نشده‌ای نیست</div>
+            )}
+            {roleplayPending && roleplayPending.map(r => (
+              <div className="card" key={r.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Scroll s={16} /></div>
+                  <div className="n">
+                    {r.player}
+                    <small>{r.category_name} · {r.castle}</small>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
+                <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
+                <textarea value={roleplayResults[r.id] ?? ''}
+                          onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
+                          placeholder="نتیجهٔ این رول چه شد..." />
+                <button className="btn" style={{ marginTop: 10 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
+                  {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه به بازیکن'}
+                </button>
               </div>
             ))}
           </div>

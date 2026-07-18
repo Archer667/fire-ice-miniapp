@@ -27,6 +27,7 @@ import {
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
+  ROLEPLAY_CATEGORIES,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -60,6 +61,8 @@ const mockBattleReports = []; // {id, participants:[name], text, created_at}
 let mockBattleSeq = 1;
 const mockSpyMissions = []; // {id, target, travel_minutes, arrival_at, success, report, created_at}
 let mockSpySeq = 1;
+const mockRoleplays = []; // {id, category, text, result, resolved, created_at}
+let mockRoleplaySeq = 1;
 
 function mockResolveRegion(name) {
   for (const [rid, r] of Object.entries(REGIONS_STATIC)) {
@@ -521,6 +524,34 @@ const M = {
     }
     return { ok: true, success };
   },
+  sendRoleplay: (category, text) => {
+    if (!ROLEPLAY_CATEGORIES[category]) throw new Error('دسته‌بندی نامعتبر است');
+    const t = (text || '').trim();
+    if (t.length < 10) throw new Error('رول خیلی کوتاه است — کمی بیشتر بنویس');
+    mockRoleplays.push({
+      id: String(mockRoleplaySeq++), category, text: t,
+      result: null, resolved: false, created_at: new Date().toISOString(),
+    });
+    return { ok: true };
+  },
+  roleplayMine: () => mockRoleplays.slice().reverse().map(r => ({
+    id: r.id, category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
+    text: r.text, resolved: r.resolved, result: r.result, created_at: r.created_at,
+  })),
+  adminRoleplayPending: () => mockRoleplays.filter(r => !r.resolved).slice().reverse().map(r => ({
+    id: r.id, player: mockMe.name || 'تو', tg_id: 1, castle: mockMe.castle,
+    category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
+    text: r.text, created_at: r.created_at,
+  })),
+  adminRespondRoleplay: (roleplayId, result) => {
+    const r = mockRoleplays.find(x => x.id === roleplayId);
+    if (!r) throw new Error('این رول پیدا نشد');
+    if (r.resolved) throw new Error('این رول قبلاً پاسخ داده شده');
+    const res = (result || '').trim();
+    if (res.length < 3) throw new Error('متن نتیجه خیلی کوتاه است');
+    r.result = res; r.resolved = true;
+    return { ok: true };
+  },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
     { rank: 2, name: 'تایوین لنیستر', castle: 'کسترلی راک', region: 'وسترلندز', points: 2140 },
@@ -750,6 +781,14 @@ export const api = {
   adminSpyPending: () => MOCK ? Promise.resolve(M.adminSpyPending()) : req('/api/admin/espionage'),
   adminScoreSpy: (missionId, score) => MOCK ? Promise.resolve(M.adminScoreSpy(missionId, score))
     : req(`/api/admin/espionage/${missionId}/score`, { method: 'POST', body: JSON.stringify({ score }) }),
+
+  /* ---------- رول‌ها ---------- */
+  sendRoleplay: (category, text) => MOCK ? Promise.resolve(M.sendRoleplay(category, text))
+    : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text }) }),
+  roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
+  adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
+  adminRespondRoleplay: (roleplayId, result) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result))
+    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result }) }),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
     : req('/api/titles/overlord', { method: 'POST', body: JSON.stringify({ region, tg_id: tgId }) }),

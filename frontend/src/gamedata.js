@@ -138,6 +138,15 @@ export const WARDEN_GROUPS = {
   north:   { name: 'والی شمال', regions: ['north', 'iron', 'vale'] },
 };
 
+// رول‌ها — بازیکن سناریوی آزاد می‌نویسد، دسته‌بندی می‌کند، ادمین نتیجه را می‌نویسد
+export const ROLEPLAY_CATEGORIES = {
+  war:       'جنگ',
+  espionage: 'جاسوسی',
+  diplomacy: 'دیپلماسی',
+  economy:   'اقتصاد',
+  other:     'آزاد',
+};
+
 // شورای کوچک پادشاه — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند این کرسی‌ها را بچیند
 export const SMALL_COUNCIL_SEATS = {
   hand:     'دست پادشاه',
