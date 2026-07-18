@@ -455,11 +455,13 @@ const M = {
     mockBattleReports.push({ id: String(mockBattleSeq++), participants: names, text: t, created_at: new Date().toISOString() });
     return { ok: true, sent_to: names.length };
   },
-  sendSpy: (targetCastle) => {
+  sendSpy: (targetCastle, scenario) => {
     mockResolveCampaigns();
     if (targetCastle === mockMe.castle) throw new Error('نمی‌توانی جاسوس به قلعهٔ خودت بفرستی');
     const targetPlayer = MOCK_PLAYERS.find(p => p.castle === targetCastle);
     if (!targetPlayer) throw new Error('این قلعه صاحبی ندارد که جاسوسی‌اش کنی');
+    const s = (scenario || '').trim();
+    if (s.length < 10) throw new Error('سناریوی جاسوسی خیلی کوتاه است — نقشه‌ات را کمی بیشتر توضیح بده');
     if (!mockCanAfford({ gold: SPY_GOLD_COST })) throw new Error('خزانه کافی نیست');
     if ((mockMe.resources.men ?? 0) < SPY_MEN_COST) throw new Error('نفرات کافی نداری');
 
@@ -468,36 +470,56 @@ const M = {
 
     const targetRegion = mockResolveRegion(targetCastle) || mockMe.region;
     const travel = spyTravelMinutes(mockMe.region, targetRegion);
-    const success = Math.random() < 0.8;
-
-    const report = success ? {
-      resources: {
-        gold: 400 + (targetPlayer.tg_id % 600), food: 300 + (targetPlayer.tg_id % 400),
-        men: 200 + (targetPlayer.tg_id % 300), wood: 80, stone: 60, iron: 40, wine: 10,
-      },
-      military: [{ name: 'پادگان پیاده‌نظام', level: 2 }],
-      defense: [{ name: 'برج نگهبانی', level: 1 }],
-      campaigns: [],
-    } : null;
 
     const nowIso = new Date().toISOString();
     mockSpyMissions.push({
-      id: String(mockSpySeq++), target: targetCastle, travel_minutes: travel,
+      id: String(mockSpySeq++), target: targetCastle, target_tg_id: targetPlayer.tg_id, scenario: s,
+      men_sent: SPY_MEN_COST, travel_minutes: travel,
       arrival_at: new Date(Date.now() + travel * 60000).toISOString(),
-      success, report, created_at: nowIso,
+      admin_score: null, resolved: false, success: null, report: null, created_at: nowIso,
     });
     return { ok: true, travel_minutes: travel };
   },
   spyMine: () => {
     const nowMs = Date.now();
-    return mockSpyMissions.slice().reverse().map(m => {
-      const arrived = nowMs >= new Date(m.arrival_at).getTime();
-      return {
-        id: m.id, target: m.target, travel_minutes: m.travel_minutes,
-        arrived, success: arrived ? m.success : null, report: (arrived && m.success) ? m.report : null,
-        created_at: m.created_at,
+    return mockSpyMissions.slice().reverse().map(m => ({
+      id: m.id, target: m.target, scenario: m.scenario, travel_minutes: m.travel_minutes,
+      arrived: nowMs >= new Date(m.arrival_at).getTime(),
+      resolved: m.resolved,
+      success: m.resolved ? m.success : null,
+      report: (m.resolved && m.success) ? m.report : null,
+      created_at: m.created_at,
+    }));
+  },
+  adminSpyPending: () => mockSpyMissions.filter(m => !m.resolved).slice().reverse().map(m => ({
+    id: m.id, player: mockMe.name || 'تو', tg_id: 1,
+    origin: mockMe.castle, target: m.target, scenario: m.scenario,
+    arrived: Date.now() >= new Date(m.arrival_at).getTime(), created_at: m.created_at,
+  })),
+  adminScoreSpy: (missionId, score) => {
+    const m = mockSpyMissions.find(x => x.id === missionId);
+    if (!m) throw new Error('این ماموریت پیدا نشد');
+    if (m.resolved) throw new Error('این ماموریت قبلاً امتیازدهی شده');
+    const sc = Math.max(0, Math.min(100, Math.round(score)));
+    const success = Math.random() * 100 < sc;
+    m.admin_score = sc; m.resolved = true; m.success = success;
+    if (success) {
+      const targetPlayer = MOCK_PLAYERS.find(p => p.castle === m.target);
+      const seed = targetPlayer?.tg_id || 0;
+      m.report = {
+        resources: {
+          gold: 400 + (seed % 600), food: 300 + (seed % 400),
+          men: 200 + (seed % 300), wood: 80, stone: 60, iron: 40, wine: 10,
+        },
+        military: [{ name: 'پادگان پیاده‌نظام', level: 2 }],
+        defense: [{ name: 'برج نگهبانی', level: 1 }],
+        campaigns: [],
       };
-    });
+      mockMe.resources.men = (mockMe.resources.men ?? 0) + m.men_sent;
+    } else {
+      m.report = null;
+    }
+    return { ok: true, success };
   },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
@@ -722,9 +744,12 @@ export const api = {
     : req('/api/admin/battles', { method: 'POST', body: JSON.stringify({ participant_tg_ids: participantTgIds, text }) }),
 
   /* ---------- جاسوسی ---------- */
-  sendSpy: (targetCastle) => MOCK ? Promise.resolve(M.sendSpy(targetCastle))
-    : req('/api/espionage/send', { method: 'POST', body: JSON.stringify({ target_castle: targetCastle }) }),
+  sendSpy: (targetCastle, scenario) => MOCK ? Promise.resolve(M.sendSpy(targetCastle, scenario))
+    : req('/api/espionage/send', { method: 'POST', body: JSON.stringify({ target_castle: targetCastle, scenario }) }),
   spyMine: () => MOCK ? Promise.resolve(M.spyMine()) : req('/api/espionage/mine'),
+  adminSpyPending: () => MOCK ? Promise.resolve(M.adminSpyPending()) : req('/api/admin/espionage'),
+  adminScoreSpy: (missionId, score) => MOCK ? Promise.resolve(M.adminScoreSpy(missionId, score))
+    : req(`/api/admin/espionage/${missionId}/score`, { method: 'POST', body: JSON.stringify({ score }) }),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
     : req('/api/titles/overlord', { method: 'POST', body: JSON.stringify({ region, tg_id: tgId }) }),

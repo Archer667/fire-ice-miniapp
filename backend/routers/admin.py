@@ -1,11 +1,12 @@
+import random
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings
-from game import now
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS
+from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings, spy_missions
+from game import now, normalize_building_state
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS
 from config import ADMIN_IDS
 from routers.war import OP_TYPES
 from routers.ravens import send_system_message
@@ -86,6 +87,93 @@ async def create_battle(body: BattleReportBody, user: dict = Depends(admin_user)
         "text": text, "created_by": user["id"], "created_at": now(),
     })
     return {"ok": True, "sent_to": len(targets)}
+
+def _building_levels(player: dict) -> dict:
+    out = {}
+    for bid, raw in player.get("buildings", {}).items():
+        lvl = normalize_building_state(raw)["level"]
+        if lvl > 0:
+            out[bid] = lvl
+    return out
+
+@router.get("/espionage")
+async def list_spy_pending(user: dict = Depends(admin_user)):
+    """سناریوهای جاسوسی که بازیکنان فرستاده‌اند و هنوز امتیازدهی نشده‌اند"""
+    out = []
+    cur = spy_missions.find({"resolved": False}).sort("created_at", -1).limit(50)
+    async for m in cur:
+        out.append({
+            "id": str(m["_id"]), "player": m["player_name"], "tg_id": m["tg_id"],
+            "origin": m["origin_castle"], "target": m["target_castle"],
+            "scenario": m["scenario"], "arrived": now() >= m["arrival_at"],
+            "created_at": m["created_at"].isoformat(),
+        })
+    return out
+
+class SpyScoreBody(BaseModel):
+    score: int
+
+@router.post("/espionage/{mission_id}/score")
+async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(admin_user)):
+    """ادمین سناریو را می‌خواند و امتیاز جاسوسی (۰ تا ۱۰۰) می‌دهد — همان امتیاز
+    مستقیماً شانس موفقیت است؛ نتیجه فوراً برای بازیکن کلاغ می‌شود"""
+    if not (0 <= body.score <= 100):
+        raise HTTPException(400, "امتیاز باید بین ۰ تا ۱۰۰ باشد")
+    try:
+        oid = ObjectId(mission_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ ماموریت نامعتبر است")
+    m = await spy_missions.find_one({"_id": oid})
+    if not m:
+        raise HTTPException(404, "این ماموریت پیدا نشد")
+    if m.get("resolved"):
+        raise HTTPException(400, "این ماموریت قبلاً امتیازدهی شده")
+
+    success = random.random() * 100 < body.score
+    spy_player = await players.find_one({"tg_id": m["tg_id"]})
+    target = await players.find_one({"tg_id": m["target_tg_id"]})
+
+    report = None
+    if success and target:
+        levels = _building_levels(target)
+        military = [{"name": BUILDINGS[bid]["name"], "level": lvl}
+                    for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") in ("barracks", "armory")]
+        defense = [{"name": BUILDINGS[bid]["name"], "level": lvl}
+                   for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") == "defense"]
+        camps = []
+        async for c in campaigns.find({"tg_id": target["tg_id"], "active": True}):
+            camps.append({
+                "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+                "origin": c["origin_castle"], "target": c["target_castle"],
+                "men_committed": c["men_committed"],
+                "arrived": now() >= c.get("arrival_at", now()),
+            })
+        report = {"resources": target["resources"], "military": military, "defense": defense, "campaigns": camps}
+
+    await spy_missions.update_one({"_id": m["_id"]}, {"$set": {
+        "admin_score": body.score, "success": success, "report": report,
+        "resolved": True, "resolved_at": now(),
+    }})
+
+    if spy_player:
+        if success:
+            await players.update_one({"tg_id": spy_player["tg_id"]}, {"$inc": {"resources.men": m["men_sent"]}})
+            await send_system_message(
+                spy_player["tg_id"], spy_player["name"],
+                f"جاسوس‌های تو با موفقیت به {m['target_castle']} نفوذ کردند و گزارش کاملی به دست آوردند — نتیجه در بخش جاسوسی منتظر توست.",
+            )
+        else:
+            await send_system_message(
+                spy_player["tg_id"], spy_player["name"],
+                f"جاسوسی تو در {m['target_castle']} شناسایی و دستگیر شد — نفرات اعزامی برنگشتند.",
+            )
+    if not success and target:
+        await send_system_message(
+            target["tg_id"], target["name"],
+            f"جاسوسی از سوی {m['player_name']} در تلاش برای نفوذ به {m['target_castle']} شناسایی و دستگیر شد.",
+        )
+
+    return {"ok": True, "success": success}
 
 MAP_KINDS = {"castle", "city", "ruin", "port"}
 

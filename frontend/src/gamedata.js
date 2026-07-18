@@ -62,7 +62,7 @@ export function travelMinutes(sameCastle, originRegion, targetRegion) {
 }
 
 // جاسوس‌ها سریع‌تر از لشکر حرکت می‌کنند
-export const SPY_GOLD_COST = 50;
+export const SPY_GOLD_COST = 1000;
 export const SPY_MEN_COST = 5;
 export const SPY_SAME_REGION_MINUTES = 8;
 export const SPY_CROSS_BASE_MINUTES = 15;

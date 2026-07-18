@@ -25,6 +25,7 @@ export default function Espionage() {
   const [mapError, setMapError] = useState(false);
   const [missions, setMissions] = useState(null);
   const [target, setTarget] = useState(null); // { name, region, owner } | null
+  const [scenario, setScenario] = useState('');
   const [busy, setBusy] = useState(false);
 
   const loadMap = () => {
@@ -42,19 +43,23 @@ export default function Espionage() {
   const overGold = gold < SPY_GOLD_COST;
   const overMen = men < SPY_MEN_COST;
 
+  const scenarioTooShort = scenario.trim().length < 10;
+
   const send = async () => {
     if (!target) { toast('یک قلعه را از روی نقشه هدف بگیر'); return; }
     if (!target.owner) { toast('این قلعه صاحبی ندارد که جاسوسی‌اش کنی'); return; }
     if (target.mine) { toast('نمی‌توانی جاسوس به قلعهٔ خودت بفرستی'); return; }
+    if (scenarioTooShort) { toast('نقشهٔ جاسوسی‌ات را کمی بیشتر توضیح بده'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
     setBusy(true);
     try {
-      await api.sendSpy(target.name);
+      await api.sendSpy(target.name, scenario.trim());
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, gold: gold - SPY_GOLD_COST, men: men - SPY_MEN_COST } });
-      toast(`جاسوس گسیل شد — تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر خبر می‌رسد`);
+      toast('یگان جاسوسی اعزام شد — سناریو برای بررسی شورای جنگ فرستاده شد');
       setTarget(null);
+      setScenario('');
       loadMissions();
     } catch (e) { toast(e.message); }
     setBusy(false);
@@ -100,6 +105,11 @@ export default function Espionage() {
             زمان رسیدن جاسوس: <b style={{ color: 'var(--az2)' }}>حدود {eta.toLocaleString('fa-IR')} دقیقه</b>
           </div>
         )}
+
+        <label className="f">نقشهٔ جاسوسی</label>
+        <textarea value={scenario} onChange={e => setScenario(e.target.value)}
+                  placeholder="یگان جاسوسی‌ات را چطور تربیت و اعزام می‌کنی؟ نقشه‌ات برای نفوذ چیست... (شورای جنگ این را می‌خواند و بر اساسش شانس موفقیتت را مشخص می‌کند)" />
+
         <div className={`cost ${overGold || overMen ? 'over' : ''}`}>
           <span>هزینهٔ اعزام</span>
           <b>{SPY_GOLD_COST.toLocaleString('fa-IR')} طلا · {SPY_MEN_COST.toLocaleString('fa-IR')} نفر</b>
@@ -107,8 +117,8 @@ export default function Espionage() {
       </div>
 
       <div className="up u2">
-        <button className="btn" disabled={!target || overGold || overMen || busy} onClick={send}>
-          {overGold ? 'خزانه کافی نیست' : overMen ? 'نفرات کافی نیست' : busy ? 'در حال اعزام...' : 'اعزام جاسوس'}
+        <button className="btn" disabled={!target || overGold || overMen || scenarioTooShort || busy} onClick={send}>
+          {overGold ? 'خزانه کافی نیست' : overMen ? 'نفرات کافی نیست' : busy ? 'در حال اعزام...' : 'تربیت و اعزام یگان جاسوسی'}
         </button>
       </div>
 
@@ -123,17 +133,27 @@ export default function Espionage() {
               <div className="ic"><Eye s={16} /></div>
               <div className="n">
                 {m.target}
-                <small>{!m.arrived ? `در راه — حدود ${m.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر` : (m.success ? 'گزارش رسید' : 'جاسوس دستگیر شد')}</small>
+                <small>
+                  {!m.arrived ? `در راه — حدود ${m.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`
+                    : !m.resolved ? 'رسیده — منتظر بررسی شورای جنگ'
+                    : m.success ? 'گزارش رسید' : 'جاسوس دستگیر شد'}
+                </small>
               </div>
             </div>
 
-            {m.arrived && m.success === false && (
+            {m.scenario && (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--low)', lineHeight: 1.8 }}>
+                نقشه‌ات: «{m.scenario}»
+              </div>
+            )}
+
+            {m.resolved && m.success === false && (
               <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--danger)' }}>
                 جاسوس شناسایی و دستگیر شد — نفرات اعزامی برنگشتند و گزارشی به دست نیامد.
               </div>
             )}
 
-            {m.arrived && m.report && (
+            {m.resolved && m.report && (
               <div style={{ marginTop: 10 }}>
                 <div className="sect" style={{ margin: '0 0 8px' }}>منابع</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>

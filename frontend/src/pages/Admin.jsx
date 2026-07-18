@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Shield, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People } from '../components/Icons.jsx';
+import { Shield, Eye, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
@@ -20,6 +20,7 @@ const MAP_KINDS = [
 
 const TABS = [
   { key: 'war',       label: 'جنگ' },
+  { key: 'espionage', label: 'جاسوسی' },
   { key: 'map',       label: 'نقشه' },
   { key: 'titles',    label: 'مقام‌ها' },
   { key: 'market',    label: 'بازار', fullOnly: true },
@@ -88,8 +89,13 @@ export default function Admin() {
   const [resValues, setResValues] = useState(null);
   const [resBusy, setResBusy] = useState(false);
 
+  const [spyPending, setSpyPending] = useState(null);
+  const [spyScores, setSpyScores] = useState({}); // missionId -> score string
+  const [spyBusyId, setSpyBusyId] = useState(null);
+
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
+  const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
   const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
@@ -100,6 +106,7 @@ export default function Admin() {
   useEffect(() => {
     loadCampaigns();
     loadBattles();
+    loadSpyPending();
     loadMapData();
     if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); }
   }, []);
@@ -247,6 +254,23 @@ export default function Admin() {
     setBattleBusy(false);
   };
 
+  const scoreSpy = async (missionId) => {
+    const raw = spyScores[missionId];
+    const score = Number(raw);
+    if (raw === undefined || raw === '' || Number.isNaN(score) || score < 0 || score > 100) {
+      toast('امتیاز جاسوسی باید عددی بین ۰ تا ۱۰۰ باشد'); return;
+    }
+    setSpyBusyId(missionId);
+    try {
+      const res = await api.adminScoreSpy(missionId, score);
+      haptic('medium');
+      toast(res.success ? 'نتیجه ثبت شد — جاسوسی موفق بود' : 'نتیجه ثبت شد — جاسوس دستگیر شد');
+      setSpyScores(prev => { const n = { ...prev }; delete n[missionId]; return n; });
+      loadSpyPending();
+    } catch (e) { toast(e.message); }
+    setSpyBusyId(null);
+  };
+
   const setOverlord = async () => {
     if (!overlordTarget.length) { toast('یک لرد را انتخاب کن'); return; }
     try {
@@ -334,7 +358,7 @@ export default function Admin() {
   return (
     <>
       <div className="page-title up">پنل ادمین</div>
-      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، روایت جنگ و مقام‌ها'}</div>
+      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، روایت جنگ، جاسوسی و مقام‌ها'}</div>
 
       <div className="tabs up u1" role="tablist">
         {availTabs.map(t => (
@@ -399,6 +423,40 @@ export default function Admin() {
               <div className="card" key={b.id} style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginBottom: 6 }}>{b.participants.join(' · ')}</div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8 }}>{b.text}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'espionage' && (
+        <>
+          <div className="sect up u2">سناریوهای جاسوسی در انتظار بررسی</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            نقشهٔ هر بازیکن را بخوان و بر اساس هوشمندی و منطقی‌بودنش امتیاز جاسوسی (۰ تا ۱۰۰) بده — همان امتیاز مستقیماً شانس موفقیتش می‌شود
+          </div>
+          <div className="up u2">
+            {(!spyPending || spyPending.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>سناریوی بررسی‌نشده‌ای نیست</div>
+            )}
+            {spyPending && spyPending.map(m => (
+              <div className="card" key={m.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Eye s={16} /></div>
+                  <div className="n">
+                    {m.player}
+                    <small>{m.origin} ← {m.target} · {m.arrived ? 'رسیده به مقصد' : 'در راه'}</small>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{m.scenario}</div>
+                <div className="buy-row">
+                  <input type="number" min="0" max="100" placeholder="۰-۱۰۰"
+                         value={spyScores[m.id] ?? ''}
+                         onChange={e => setSpyScores(prev => ({ ...prev, [m.id]: e.target.value }))} />
+                  <button className="btn" disabled={spyBusyId === m.id} onClick={() => scoreSpy(m.id)}>
+                    {spyBusyId === m.id ? 'در حال ثبت...' : 'ثبت امتیاز و اعلام نتیجه'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
