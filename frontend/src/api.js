@@ -54,7 +54,7 @@ const mockBlackMarket = [
   { id: 'bm1', resource: 'wine', qty: 40, price: 5, expires_at: Date.now() + 3 * 3600 * 1000 },
 ];
 let mockBlackMarketSeq = 2;
-const DEFAULT_MOCK_PLAYER_RESOURCES = { gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 0, men: 500 };
+const DEFAULT_MOCK_PLAYER_RESOURCES = { gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 30, men: 500 };
 const mockPlayerResources = {}; // tg_id -> {gold,wood,stone,iron,food,wine,men} — برای تست ویرایش منابع در پنل ادمین
 const mockMapCastles = []; // {region, name, kind, x, y, custom}
 const mockBattleReports = []; // {id, participants:[name], text, created_at}
@@ -129,7 +129,7 @@ const M = {
       is_port: REGIONS_STATIC[b.region].ports.includes(b.castle),
       gender: b.gender, title: DEFAULT_TITLE[b.gender], rank_label: null,
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
-      resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 0 },
+      resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30 },
       points: 100, alliance_count: 0, popularity: POPULARITY_START, tax_rate: TAX_RATE_DEFAULT,
       max_tax_rate: maxTaxRate(POPULARITY_START),
       rank: 5, total_players: 12, day: 18, season_length: 30,
