@@ -29,13 +29,15 @@ export const REGIONS_STATIC = {
 };
 
 export const COMMON_TROOPS = [
-  { id: 'heavy_cav', name: 'سواره‌نظام سنگین', cost: 3 },
-  { id: 'infantry',  name: 'پیاده‌نظام',       cost: 2 },
-  { id: 'light_cav', name: 'سواره‌نظام سبک',   cost: 2 },
-  { id: 'archer',    name: 'کماندار',           cost: 1 },
-  { id: 'spearman',  name: 'نیزه‌دار',          cost: 1 },
+  { id: 'heavy_cav', name: 'سواره‌نظام سنگین', cost: 3, power: 6 },
+  { id: 'infantry',  name: 'پیاده‌نظام',       cost: 2, power: 4 },
+  { id: 'light_cav', name: 'سواره‌نظام سبک',   cost: 2, power: 4 },
+  { id: 'archer',    name: 'کماندار',           cost: 1, power: 3 },
+  { id: 'spearman',  name: 'نیزه‌دار',          cost: 1, power: 2 },
 ];
 export const SPECIAL_COST = 4;
+export const SPECIAL_POWER = 5;       // نیروهای ویژه پادگان ندارند، پس توانشان ثابت است
+export const CAMP_POWER_STEP = 0.05;  // هر سطح پادگانِ یک یگان، توان همان یگان را ۵٪ بالا می‌برد
 export const FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
 export const FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
 
@@ -47,6 +49,23 @@ export const TROOP_UNIT_BUILDINGS = {
   archer:    { camp: 'camp_archer', armory: 'armory_archer' },
   spearman:  { camp: 'camp_spear',  armory: 'armory_spear' },
 };
+
+// توان کل یک لشکر — troops: {troop_id: count}, builtLevels: {building_id: level}
+export function campaignPower(troops, builtLevels) {
+  let total = 0;
+  for (const [tid, n] of Object.entries(troops || {})) {
+    if (!n || n <= 0) continue;
+    const common = COMMON_TROOPS.find(t => t.id === tid);
+    if (common) {
+      const req = TROOP_UNIT_BUILDINGS[tid];
+      const campLevel = (req && builtLevels?.[req.camp]) || 0;
+      total += common.power * (1 + campLevel * CAMP_POWER_STEP) * n;
+    } else {
+      total += SPECIAL_POWER * n;
+    }
+  }
+  return Math.round(total);
+}
 
 // زمان سفر لشکر — بر مبنای فاصلهٔ اقلیمی، تقریبی روی محور شمال-جنوب نقشه (هم‌راستا با بک‌اند)
 export const REGION_ORDER = { north: 0, vale: 1, iron: 1, river: 1, west: 2, crown: 2, reach: 3, storm: 3, dorne: 4 };
@@ -88,6 +107,8 @@ export const OP_TYPES = [
 export const ATTACK_OP_TYPES = ['attack', 'siege', 'naval_raid'];
 export const DEFENSE_OP_TYPES = ['defense', 'garrison'];
 export const ROLEPLAY_WINDOW_HOURS = 6;
+// ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
+export const REPORT_VISIBLE_HOURS = 24;
 
 export const BUILDINGS_STATIC = {
   // اقتصادی

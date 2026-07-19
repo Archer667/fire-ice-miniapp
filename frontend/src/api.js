@@ -28,6 +28,7 @@ import {
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
+  campaignPower, REPORT_VISIBLE_HOURS,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -109,6 +110,9 @@ function mockStationedOrigins() {
   return mockCampaigns.filter(c => c.active && c.op_type === 'garrison').map(c => c.target_castle);
 }
 
+function mockBuiltLevels() {
+  return Object.fromEntries(Object.entries(mockBuildings).map(([k, v]) => [k, v.level || 0]));
+}
 function mockCanAfford(cost) {
   return Object.entries(cost).every(([k, v]) => (mockMe.resources?.[k] ?? 0) >= v);
 }
@@ -274,17 +278,18 @@ const M = {
     const targetRegion = sameCastle ? originRegion : (mockResolveRegion(targetCastle) || originRegion);
     const travel = travelMinutes(sameCastle, originRegion, targetRegion);
 
+    const power = campaignPower(body.troops, mockBuiltLevels());
     const nowIso = new Date().toISOString();
     const doc = {
       id: String(mockCampaignSeq++), tg_id: 1, player_name: mockMe.name,
       origin_castle: body.origin_castle, op_type: body.op_type, target_castle: targetCastle,
-      name: (body.name || '').trim().slice(0, 60) || op.name, troops: body.troops,
+      name: (body.name || '').trim().slice(0, 60) || op.name, troops: body.troops, power,
       gold_cost: gold, men_committed: men, food_per_day: food,
       active: true, created_at: nowIso, last_food_tick: nowIso, arrival_notified: false,
       travel_minutes: travel, arrival_at: new Date(Date.now() + travel * 60000).toISOString(),
     };
     mockCampaigns.push(doc);
-    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food, travel_minutes: travel };
+    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food, travel_minutes: travel, power };
   },
   cancelCampaign: (id) => {
     const c = mockCampaigns.find(x => x.id === id);
@@ -297,17 +302,23 @@ const M = {
   warMine: () => {
     mockResolveCampaigns();
     const nowMs = Date.now();
-    return mockCampaigns.slice().reverse().map(c => ({
-      id: c.id,
-      op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
-      name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
-      origin: c.origin_castle, target: c.target_castle,
-      active: c.active,
-      gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
-      days_active: Math.max(0, Math.floor((nowMs - new Date(c.created_at).getTime()) / 86400000)),
-      travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
-      created_at: c.created_at,
-    }));
+    return mockCampaigns.slice().reverse()
+      .filter(c => {
+        const arrived = nowMs >= new Date(c.arrival_at).getTime();
+        if (!arrived) return true;
+        return nowMs - new Date(c.arrival_at).getTime() <= REPORT_VISIBLE_HOURS * 3600000;
+      })
+      .map(c => ({
+        id: c.id,
+        op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        origin: c.origin_castle, target: c.target_castle,
+        active: c.active, power: c.power || 0,
+        gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
+        days_active: Math.max(0, Math.floor((nowMs - new Date(c.created_at).getTime()) / 86400000)),
+        travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
+        created_at: c.created_at, arrival_at: c.arrival_at,
+      }));
   },
   sendCaravan: (body) => {
     const partner = mockAlliances.find(a => a.other_id === body.target_tg_id && a.status === 'accepted'

@@ -57,13 +57,18 @@ SMALL_COUNCIL_SEATS = {
 }
 
 COMMON_TROOPS = {
-    "infantry":  {"name": "پیاده‌نظام",       "cost": 2},
-    "spearman":  {"name": "نیزه‌دار",          "cost": 1},
-    "archer":    {"name": "کماندار",           "cost": 1},
-    "light_cav": {"name": "سواره‌نظام سبک",   "cost": 2},
-    "heavy_cav": {"name": "سواره‌نظام سنگین", "cost": 3},
+    "infantry":  {"name": "پیاده‌نظام",       "cost": 2, "power": 4},
+    "spearman":  {"name": "نیزه‌دار",          "cost": 1, "power": 2},
+    "archer":    {"name": "کماندار",           "cost": 1, "power": 3},
+    "light_cav": {"name": "سواره‌نظام سبک",   "cost": 2, "power": 4},
+    "heavy_cav": {"name": "سواره‌نظام سنگین", "cost": 3, "power": 6},
 }
 SPECIAL_TROOP_COST = 4
+SPECIAL_TROOP_POWER = 5   # نیروهای ویژهٔ اقلیمی پادگان ندارند، پس توانشان ثابت است
+
+# هر سطح پادگانِ یک یگان، توانِ همان یگان را وقتی از آن پادگان گسیل می‌شود بالا می‌برد —
+# نیروهای ویژه چون پادگان ندارند، همیشه توان پایه‌شان ثابت می‌ماند
+CAMP_POWER_STEP = 0.05
 
 BUILDINGS = {
     # --- اقتصادی: تولید و ذخیرهٔ منابع ---
@@ -146,6 +151,20 @@ def unit_requirements(troop_id: str):
     if not req:
         return None
     return req.get("camp"), req.get("armory")
+
+def unit_power(troop_id: str, building_levels: dict) -> float:
+    """تک‌بهٔ توان یک یگان — برای نیروی عمومی با سطح پادگانِ همان یگان بالا می‌رود،
+    نیروی ویژه چون پادگان ندارد همیشه ثابت است"""
+    common = COMMON_TROOPS.get(troop_id)
+    if common:
+        req = UNIT_REQUIREMENTS.get(troop_id, {})
+        camp_level = building_levels.get(req.get("camp"), 0)
+        return common["power"] * (1 + camp_level * CAMP_POWER_STEP)
+    return SPECIAL_TROOP_POWER
+
+def campaign_power(troops: dict, building_levels: dict) -> int:
+    """توان کل یک لشکر — مجموع (تعداد × توان تک‌بهٔ هر یگان) روی سطح پادگان‌های *الان*"""
+    return round(sum(unit_power(tid, building_levels) * n for tid, n in troops.items() if n and n > 0))
 
 # ---- زمان سفر لشکر — بر مبنای فاصلهٔ اقلیمی، تقریبی روی محور شمال-جنوب نقشه ----
 REGION_ORDER = {"north": 0, "vale": 1, "iron": 1, "river": 1, "west": 2, "crown": 2, "reach": 3, "storm": 3, "dorne": 4}

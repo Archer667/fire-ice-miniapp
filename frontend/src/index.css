@@ -258,10 +258,11 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
   background: var(--glass); border: 1px solid var(--edge); margin-bottom: 4px;
 }
 .tab {
-  flex: 1; text-align: center; padding: 10px; border-radius: 12px; cursor: pointer;
+  position: relative; flex: 1; text-align: center; padding: 10px; border-radius: 12px; cursor: pointer;
   font-size: 12.5px; font-weight: 700; color: var(--mid); transition: all 0.18s ease;
 }
 .tab.on { color: #cfe8ff; background: linear-gradient(150deg, rgba(77,163,255,0.22), rgba(56,120,255,0.07)); }
+.tab .dot.badge { position: absolute; top: 4px; inset-inline-end: 10px; }
 
 .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .q {

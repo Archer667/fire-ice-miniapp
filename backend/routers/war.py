@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, map_castles, roleplays
 from game import now, can_afford, pay, normalize_building_state
-from game_data import COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, travel_minutes
+from game_data import COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
 
@@ -26,6 +26,12 @@ OP_TYPES = {
 ATTACK_OP_TYPES = {"attack", "siege", "naval_raid"}
 DEFENSE_OP_TYPES = {"defense", "garrison"}
 ROLEPLAY_WINDOW_HOURS = 6
+
+# ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
+REPORT_VISIBLE_HOURS = 24
+
+def _building_levels(player: dict) -> dict:
+    return {bid: normalize_building_state(raw)["level"] for bid, raw in player.get("buildings", {}).items()}
 
 class CampaignBody(BaseModel):
     origin_castle: str
@@ -147,6 +153,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     target_region = (await resolve_region(target_castle) or origin_region) if not same_castle else origin_region
     travel = travel_minutes(same_castle, origin_region, target_region)
     arrival_at = now() + timedelta(minutes=travel)
+    power = campaign_power(body.troops, _building_levels(p))
 
     pay(p["resources"], {"gold": gold})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
@@ -156,7 +163,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "tg_id": user["id"], "player_name": p["name"],
         "origin_castle": body.origin_castle,
         "op_type": body.op_type, "target_castle": target_castle,
-        "name": body.name.strip()[:60] or op["name"], "troops": body.troops,
+        "name": body.name.strip()[:60] or op["name"], "troops": body.troops, "power": power,
         "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
         "travel_minutes": travel, "arrival_at": arrival_at,
         "active": True, "arrival_notified": False,
@@ -164,7 +171,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     }
     res = await campaigns.insert_one(doc)
     return {
-        "ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men,
+        "ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men, "power": power,
         "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
     }
 
@@ -181,23 +188,31 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):
-    cur = campaigns.find({"tg_id": user["id"]}).sort("created_at", -1).limit(30)
+    """گزارش لشکرکشی‌های خودم — لشکری که بیش از REPORT_VISIBLE_HOURS ساعت پیش رسیده
+    دیگر توی این لیست نمی‌آید (پاک‌سازی خودکار تب گزارش‌ها)"""
+    cur = campaigns.find({"tg_id": user["id"]}).sort("created_at", -1).limit(50)
     out = []
     async for c in cur:
-        days_active = max(0, int((now() - c["created_at"]).total_seconds() // 86400))
         arrival_at = c.get("arrival_at")
+        arrived = (now() >= arrival_at) if arrival_at else True
+        if arrived and arrival_at and now() - arrival_at > timedelta(hours=REPORT_VISIBLE_HOURS):
+            continue
+        days_active = max(0, int((now() - c["created_at"]).total_seconds() // 86400))
         out.append({
             "id": str(c["_id"]),
             "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "origin": c["origin_castle"], "target": c["target_castle"],
-            "active": c.get("active", False),
+            "active": c.get("active", False), "power": c.get("power", 0),
             "gold_cost": c["gold_cost"], "men_committed": c["men_committed"],
             "food_per_day": c["food_per_day"], "days_active": days_active,
             "travel_minutes": c.get("travel_minutes", 0),
-            "arrived": (now() >= arrival_at) if arrival_at else True,
+            "arrived": arrived,
             "created_at": c["created_at"].isoformat(),
+            "arrival_at": arrival_at.isoformat() if arrival_at else None,
         })
+    if len(out) > 30:
+        out = out[:30]
     return out
 
 def troops_summary(troops: dict) -> str:
@@ -231,7 +246,7 @@ async def notify_arrivals():
                 c["tg_id"], c["player_name"],
                 f"لشکرت «{name}» از {origin} به {target} رسید.",
             )
-        target_owner = await players.find_one({"castle": target}, {"tg_id": 1, "name": 1})
+        target_owner = await players.find_one({"castle": target})
         if target_owner and target_owner["tg_id"] != c["tg_id"]:
             await send_system_message(
                 target_owner["tg_id"], target_owner["name"],
@@ -242,10 +257,12 @@ async def notify_arrivals():
             attacker_summary = troops_summary(c.get("troops", {}))
             defense_troops = await defending_troops(target, target_owner["tg_id"])
             defender_summary = troops_summary(defense_troops)
+            defender_power = campaign_power(defense_troops, _building_levels(target_owner))
+            attacker_power = c.get("power", 0)
             stats_text = (
                 f"آمار نبرد «{name}» در {target}:\n"
-                f"مهاجم ({c['player_name']}): {attacker_summary}\n"
-                f"مدافع ({target_owner['name']}): {defender_summary}\n"
+                f"مهاجم ({c['player_name']}): {attacker_summary} — توان {attacker_power}\n"
+                f"مدافع ({target_owner['name']}): {defender_summary} — توان {defender_power}\n"
                 f"هر دو طرف تا {ROLEPLAY_WINDOW_HOURS} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
             )
             await send_system_message(c["tg_id"], c["player_name"], stats_text)

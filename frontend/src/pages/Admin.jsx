@@ -401,10 +401,11 @@ export default function Admin() {
                 <div className="res">
                   <div className="ic"><Shield s={16} /></div>
                   <div className="n">
-                    {s.player}
+                    {s.player} — {s.name}
                     <small>
                       {s.op_name} · {s.from} ← {s.to} · {s.gold_cost.toLocaleString('fa-IR')} طلا ·{' '}
-                      {s.men_committed.toLocaleString('fa-IR')} نفر · {s.food_per_day.toLocaleString('fa-IR')} غله/روز ·{' '}
+                      {s.men_committed.toLocaleString('fa-IR')} نفر · توان {s.power.toLocaleString('fa-IR')} ·{' '}
+                      {s.food_per_day.toLocaleString('fa-IR')} غله/روز ·{' '}
                       {s.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر
                     </small>
                   </div>
@@ -412,7 +413,6 @@ export default function Admin() {
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
                   نیروها: {s.troops.length ? s.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
                 </div>
-                {s.plan && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0', lineHeight: 1.8 }}>{s.plan}</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}

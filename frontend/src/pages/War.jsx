@@ -5,9 +5,16 @@ import { haptic } from '../telegram.js';
 import { Swords } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
 import {
-  COMMON_TROOPS, SPECIAL_COST, REGIONS_STATIC, OP_TYPES,
-  TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
+  COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
+  TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
 } from '../gamedata.js';
+
+const TABS = [
+  { key: 'command', label: 'نقشه و فرمان' },
+  { key: 'reports', label: 'گزارش‌ها' },
+];
+const SEEN_KEY = 'fireice_war_reports_seen';
+const loadSeenIds = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); } };
 
 export default function War() {
   const { me, setMe, toast } = useGame();
@@ -15,10 +22,12 @@ export default function War() {
   const men = me.resources.men ?? 0;
   const specials = REGIONS_STATIC[me.region]?.special || [];
 
+  const [tab, setTab] = useState('command');
   const [mapData, setMapData] = useState(null);
   const [mapError, setMapError] = useState(false);
   const [buildings, setBuildings] = useState(null);
   const [mine, setMine] = useState(null);
+  const [seenIds, setSeenIds] = useState(loadSeenIds);
 
   const loadMap = () => {
     setMapError(false);
@@ -28,6 +37,20 @@ export default function War() {
   const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
 
   useEffect(() => { loadMap(); loadBuildings(); loadMine(); }, []);
+
+  const newReportsCount = useMemo(
+    () => (mine || []).filter(c => c.arrived && !seenIds.has(c.id)).length,
+    [mine, seenIds]
+  );
+
+  const openReports = () => {
+    setTab('reports');
+    if (!mine) return;
+    const next = new Set(seenIds);
+    mine.forEach(c => { if (c.arrived) next.add(c.id); });
+    setSeenIds(next);
+    localStorage.setItem(SEEN_KEY, JSON.stringify([...next]));
+  };
 
   const builtLevels = useMemo(() => {
     const m = {};
@@ -87,6 +110,7 @@ export default function War() {
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * (t.special ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR), 0),
     [counts]
   );
+  const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
   const overGold = goldCost > gold;
   const overMen = menCommitted > men;
   const badPortTarget = op.portOnly && target && !target.port;
@@ -160,143 +184,159 @@ export default function War() {
       <div className="page-title up">نیروها/لشکرکشی</div>
       <div className="page-sub up">روی یک قلعه در نقشه کلیک کن تا اطلاعاتش را ببینی یا آن را هدف بگیری</div>
 
-      <div className="sect up u1">نقشهٔ وستروس</div>
-      <div className="up u1">
-        <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
-      </div>
-
-      <div className="sect up u2">لشکرهای در حرکت</div>
-      <div className="up u2">
-        {mapData.campaigns.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-            هیچ لشکری در حرکت نیست — وستروس در آرامشی مشکوک است
-          </div>
-        )}
-        {mapData.campaigns.map((c, i) => {
-          const cSameCastle = c.from === c.to;
-          return (
-            <div key={i} className={`warband ${c.mine ? 'mine' : ''}`}>
-              <div className="wi"><Swords s={17} /></div>
-              <div className="t">
-                {c.name && <b>{c.name}</b>}{c.name ? ' — ' : ''}
-                {cSameCastle
-                  ? <>لشکر {c.from} در حال دفاع از قلعه است</>
-                  : <>لشکری از <b>{c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است</>}
-                <div className="tm">
-                  {c.mine ? 'فرمان تو' : `آشکار شده — ${Math.max(0, c.revealed_minutes_ago).toLocaleString('fa-IR')} دقیقه پیش`}
-                  {' · '}{c.arrived ? 'به مقصد رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="sect up u3">فرمان لشکرکشی</div>
-      <div className="card up u3">
-        <label className="f" style={{ marginTop: 0 }}>نام لشکرکشی</label>
-        <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
-
-        <label className="f">مبدا</label>
-        <select value={origin} onChange={e => setOrigin(e.target.value)}>
-          {originOptions.map(o => <option key={o} value={o}>{o}{o === me.castle ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
-        </select>
-
-        <label className="f">نوع عملیات</label>
-        <select value={opType} onChange={e => { setOpType(e.target.value); setTarget(null); }}>
-          {OP_TYPES.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-        </select>
-
-        {op.needsTarget ? (
-          <>
-            <label className="f">مقصد</label>
-            <div className="target-pick">
-              {target ? (
-                <>
-                  <span>{target.name}</span>
-                  <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11.5 }} onClick={() => setTarget(null)}>پاک‌کردن</button>
-                </>
-              ) : <span style={{ color: 'var(--mid)' }}>از روی نقشه در بالا انتخاب کن</span>}
-            </div>
-            {op.portOnly && target && !target.port && (
-              <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
-                {target.name} بندر نیست — غارت دریایی فقط علیه اهداف بندری ممکن است
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="page-sub" style={{ margin: '10px 4px 0' }}>عملیات دفاعی برای قلعهٔ مبدا — نیازی به مقصد نیست</div>
-        )}
-
-        <div className="page-sub" style={{ margin: '10px 4px 0' }}>
-          زمان رسیدن لشکر: <b style={{ color: 'var(--az2)' }}>{eta > 0 ? `حدود ${eta.toLocaleString('fa-IR')} دقیقه` : 'بی‌درنگ — همین‌جاست'}</b>
-        </div>
-
-        {op.needsTarget && opType !== 'garrison' && (
-          <div className="page-sub" style={{ margin: '10px 4px 0' }}>
-            سناریوی نبرد اینجا نوشته نمی‌شود — وقتی لشکر برسد، آمار دو طرف رد و بدل می‌شود و تا ۶ ساعت بعد می‌توانی از صفحهٔ «رول‌ها» سناریوی جنگ را بفرستی.
-          </div>
-        )}
-      </div>
-
-      <div className="sect up u3">گسیل نیرو</div>
-      <div className="card up u3">
-        {allTroops.map(t => {
-          const ok = unlocked(t);
-          const req = !t.special && TROOP_UNIT_BUILDINGS[t.id];
-          return (
-            <div className="troop" key={t.id}>
-              <div className="tn">
-                {t.name}
-                {t.special && <span className="troop-tag">ویژهٔ اقلیم</span>}
-                <small>
-                  {t.cost.toLocaleString('fa-IR')} طلا/نفر · {(t.special ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز
-                </small>
-                {!ok && req && <small className="troop-locked">نیاز به پادگان و کارگاه تسلیحاتِ این یگان</small>}
-              </div>
-              <input type="number" min="0" value={counts[t.id]} disabled={!ok}
-                     onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, +e.target.value || 0) })} />
-            </div>
-          );
-        })}
-        <div className={`cost ${overGold || overMen ? 'over' : ''}`}>
-          <span>هزینهٔ طلا / نفرات / آذوقهٔ روزانه</span>
-          <b>{goldCost.toLocaleString('fa-IR')} طلا · {menCommitted.toLocaleString('fa-IR')}/{men.toLocaleString('fa-IR')} نفر · {foodPerDay.toLocaleString('fa-IR')} غله/روز</b>
-        </div>
-      </div>
-
-      <div className="up u3">
-        <button className="btn" disabled={!!formIssue || busy} onClick={send}>
-          {formIssue || (busy ? 'در حال ارسال...' : 'مُهر و ارسال فرمان')}
-        </button>
-      </div>
-
-      <div className="sect up u4">لشکرهای من</div>
-      <div className="up u4">
-        {mine.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکری نفرستاده‌ای</div>
-        )}
-        {mine.map(c => (
-          <div className="card" key={c.id} style={{ marginBottom: 10 }}>
-            <div className="res">
-              <div className="ic"><Swords s={16} /></div>
-              <div className="n">
-                {c.name}
-                <small>{c.op_name} · {c.origin} ← {c.target} · {c.men_committed.toLocaleString('fa-IR')} نفر · {c.food_per_day.toLocaleString('fa-IR')} غله/روز</small>
-              </div>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>
-              {c.active
-                ? (c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`)
-                : 'لغوشده'}
-              {c.active ? ` · ${c.days_active.toLocaleString('fa-IR')} روز فعال` : ''}
-            </div>
-            {c.active && (
-              <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => cancelCampaign(c)}>لغو لشکر</button>
-            )}
-          </div>
+      <div className="tabs up u1" role="tablist">
+        {TABS.map(t => (
+          <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
+               className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
+               onClick={() => { haptic(); if (t.key === 'reports') openReports(); else setTab(t.key); }}>
+            {t.label}
+            {t.key === 'reports' && newReportsCount > 0 && <span className="dot badge" />}
+          </button>
         ))}
       </div>
+
+      {tab === 'command' && (
+        <>
+          <div className="sect up u2">نقشهٔ وستروس</div>
+          <div className="up u2">
+            <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
+          </div>
+
+          <div className="sect up u2">لشکرهای در حرکت</div>
+          <div className="up u2">
+            {mapData.campaigns.length === 0 && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
+                هیچ لشکری در حرکت نیست — وستروس در آرامشی مشکوک است
+              </div>
+            )}
+            {mapData.campaigns.map((c, i) => {
+              const cSameCastle = c.from === c.to;
+              return (
+                <div key={i} className={`warband ${c.mine ? 'mine' : ''}`}>
+                  <div className="wi"><Swords s={17} /></div>
+                  <div className="t">
+                    {c.name && <b>{c.name}</b>}{c.name ? ' — ' : ''}
+                    {cSameCastle
+                      ? <>لشکر {c.from} در حال دفاع از قلعه است</>
+                      : <>لشکری از <b>{c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است</>}
+                    <div className="tm">
+                      {c.mine ? 'فرمان تو' : `آشکار شده — ${Math.max(0, c.revealed_minutes_ago).toLocaleString('fa-IR')} دقیقه پیش`}
+                      {' · '}{c.arrived ? 'به مقصد رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="sect up u3">فرمان لشکرکشی</div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>نام لشکرکشی</label>
+            <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
+
+            <label className="f">مبدا</label>
+            <select value={origin} onChange={e => setOrigin(e.target.value)}>
+              {originOptions.map(o => <option key={o} value={o}>{o}{o === me.castle ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
+            </select>
+
+            <label className="f">نوع عملیات</label>
+            <select value={opType} onChange={e => { setOpType(e.target.value); setTarget(null); }}>
+              {OP_TYPES.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+
+            {op.needsTarget ? (
+              <>
+                <label className="f">مقصد</label>
+                <div className="target-pick">
+                  {target ? (
+                    <>
+                      <span>{target.name}</span>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11.5 }} onClick={() => setTarget(null)}>پاک‌کردن</button>
+                    </>
+                  ) : <span style={{ color: 'var(--mid)' }}>از روی نقشه در بالا انتخاب کن</span>}
+                </div>
+                {op.portOnly && target && !target.port && (
+                  <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
+                    {target.name} بندر نیست — غارت دریایی فقط علیه اهداف بندری ممکن است
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="page-sub" style={{ margin: '10px 4px 0' }}>عملیات دفاعی برای قلعهٔ مبدا — نیازی به مقصد نیست</div>
+            )}
+
+            <div className="page-sub" style={{ margin: '10px 4px 0' }}>
+              زمان رسیدن لشکر: <b style={{ color: 'var(--az2)' }}>{eta > 0 ? `حدود ${eta.toLocaleString('fa-IR')} دقیقه` : 'بی‌درنگ — همین‌جاست'}</b>
+            </div>
+
+            {op.needsTarget && opType !== 'garrison' && (
+              <div className="page-sub" style={{ margin: '10px 4px 0' }}>
+                سناریوی نبرد اینجا نوشته نمی‌شود — وقتی لشکر برسد، آمار دو طرف رد و بدل می‌شود و تا ۶ ساعت بعد می‌توانی از صفحهٔ «رول‌ها» سناریوی جنگ را بفرستی.
+              </div>
+            )}
+          </div>
+
+          <div className="sect up u3">گسیل نیرو</div>
+          <div className="card up u3">
+            {allTroops.map(t => {
+              const ok = unlocked(t);
+              const req = !t.special && TROOP_UNIT_BUILDINGS[t.id];
+              return (
+                <div className="troop" key={t.id}>
+                  <div className="tn">
+                    {t.name}
+                    {t.special && <span className="troop-tag">ویژهٔ اقلیم</span>}
+                    <small>
+                      {t.cost.toLocaleString('fa-IR')} طلا/نفر · {(t.special ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
+                    </small>
+                    {!ok && req && <small className="troop-locked">نیاز به پادگان و کارگاه تسلیحاتِ این یگان</small>}
+                  </div>
+                  <input type="number" min="0" value={counts[t.id]} disabled={!ok}
+                         onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, +e.target.value || 0) })} />
+                </div>
+              );
+            })}
+            <div className={`cost ${overGold || overMen ? 'over' : ''}`}>
+              <span>هزینهٔ طلا / نفرات / آذوقهٔ روزانه / توان لشکر</span>
+              <b>{goldCost.toLocaleString('fa-IR')} طلا · {menCommitted.toLocaleString('fa-IR')}/{men.toLocaleString('fa-IR')} نفر · {foodPerDay.toLocaleString('fa-IR')} غله/روز · {estPower.toLocaleString('fa-IR')} توان</b>
+            </div>
+          </div>
+
+          <div className="up u3">
+            <button className="btn" disabled={!!formIssue || busy} onClick={send}>
+              {formIssue || (busy ? 'در حال ارسال...' : 'مُهر و ارسال فرمان')}
+            </button>
+          </div>
+        </>
+      )}
+
+      {tab === 'reports' && (
+        <div className="up u2">
+          {mine.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکری نفرستاده‌ای</div>
+          )}
+          {mine.map(c => (
+            <div className="card" key={c.id} style={{ marginBottom: 10 }}>
+              <div className="res">
+                <div className="ic"><Swords s={16} /></div>
+                <div className="n">
+                  {c.name}
+                  <small>{c.op_name} · {c.origin} ← {c.target} · {c.men_committed.toLocaleString('fa-IR')} نفر · {c.food_per_day.toLocaleString('fa-IR')} غله/روز · توان {(c.power || 0).toLocaleString('fa-IR')}</small>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>
+                {c.active
+                  ? (c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`)
+                  : 'لغوشده'}
+                {c.active ? ` · ${c.days_active.toLocaleString('fa-IR')} روز فعال` : ''}
+              </div>
+              {c.active && (
+                <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => cancelCampaign(c)}>لغو لشکر</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
