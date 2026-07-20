@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { api } from '../api.js';
 import { haptic } from '../telegram.js';
-import { Swords } from '../components/Icons.jsx';
+import { Swords, Coin, People, Wheat } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
@@ -174,11 +174,11 @@ export default function War() {
 
   const cancelCampaign = async (c) => {
     try {
-      await api.cancelCampaign(c.id);
+      const res = await api.cancelCampaign(c.id);
       haptic('medium');
       setMe({
         ...me,
-        resources: { ...me.resources, men: men + c.men_committed },
+        resources: { ...me.resources, men: men + (res.men_refunded ?? 0) },
         active_campaigns: Math.max(0, (me.active_campaigns ?? 0) - 1),
       });
       toast('لشکر لغو شد و نفراتش به خانه برگشتند');
@@ -294,14 +294,32 @@ export default function War() {
                     {!ok && req && <small className="troop-locked">نیاز به پادگان و کارگاه تسلیحاتِ این یگان</small>}
                     {!ok && t.naval && <small className="troop-locked">نیاز به ساختن بندر</small>}
                   </div>
-                  <input type="number" min="0" value={counts[t.id]} disabled={!ok}
-                         onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, +e.target.value || 0) })} />
+                  <input type="number" min="0" value={counts[t.id] || ''} disabled={!ok} placeholder="۰"
+                         onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
                 </div>
               );
             })}
-            <div className={`cost ${overGold || overMen ? 'over' : ''}`}>
-              <span>هزینهٔ طلا / نفرات / آذوقهٔ روزانه / توان لشکر</span>
-              <b>{goldCost.toLocaleString('fa-IR')} طلا · {menCommitted.toLocaleString('fa-IR')}/{men.toLocaleString('fa-IR')} نفر · {foodPerDay.toLocaleString('fa-IR')} غله/روز · {estPower.toLocaleString('fa-IR')} توان</b>
+            <div className={`cost-grid ${overGold || overMen ? 'over' : ''}`}>
+              <div className={`cost-item ${overGold ? 'over' : ''}`}>
+                <Coin s={16} />
+                <b>{goldCost.toLocaleString('fa-IR')}</b>
+                <small>طلا</small>
+              </div>
+              <div className={`cost-item ${overMen ? 'over' : ''}`}>
+                <People s={16} />
+                <b>{menCommitted.toLocaleString('fa-IR')}/{men.toLocaleString('fa-IR')}</b>
+                <small>نفر</small>
+              </div>
+              <div className="cost-item">
+                <Wheat s={16} />
+                <b>{foodPerDay.toLocaleString('fa-IR')}</b>
+                <small>غله/روز</small>
+              </div>
+              <div className="cost-item">
+                <Swords s={16} />
+                <b>{estPower.toLocaleString('fa-IR')}</b>
+                <small>توان</small>
+              </div>
             </div>
           </div>
 
@@ -329,14 +347,15 @@ export default function War() {
                 <div className="ic"><Swords s={16} /></div>
                 <div className="n">
                   {c.name}
-                  <small>{c.op_name} · {c.origin} ← {c.target} · {c.men_committed.toLocaleString('fa-IR')} نفر · {c.food_per_day.toLocaleString('fa-IR')} غله/روز · توان {(c.power || 0).toLocaleString('fa-IR')}</small>
+                  <small>{c.op_name} · فرستنده: {c.sender}</small>
                 </div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>
-                {c.active
-                  ? (c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`)
-                  : 'لغوشده'}
-                {c.active ? ` · ${c.days_active.toLocaleString('fa-IR')} روز فعال` : ''}
+                {c.origin} ← {c.target}
+                {' · '}
+                {!c.active ? 'لغوشده'
+                  : c.arrived ? 'رسیده به مقصد'
+                  : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
               </div>
               {c.active && (
                 <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => cancelCampaign(c)}>لغو لشکر</button>

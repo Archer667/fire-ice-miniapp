@@ -328,12 +328,15 @@ const M = {
     if (!c.active) throw new Error('این لشکر دیگر فعال نیست');
     c.active = false;
     mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
-    return { ok: true };
+    return { ok: true, men_refunded: c.men_committed };
   },
   warMine: () => {
+    // گزارش‌ها عمداً حداقلی‌اند: فقط اسم، فرستنده، مبدا/مقصد و زمان رسیدن — نه توان نه نیرو.
+    // لشکر دفاعی (همون‌جایی) اصلاً وارد گزارش‌ها نمی‌شود.
     mockResolveCampaigns();
     const nowMs = Date.now();
     return mockCampaigns.slice().reverse()
+      .filter(c => c.op_type !== 'defense')
       .filter(c => {
         const arrived = nowMs >= new Date(c.arrival_at).getTime();
         if (!arrived) return true;
@@ -343,10 +346,9 @@ const M = {
         id: c.id,
         op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
         name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        sender: c.player_name,
         origin: c.origin_castle, target: c.target_castle,
-        active: c.active, power: c.power || 0,
-        gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
-        days_active: Math.max(0, Math.floor((nowMs - new Date(c.created_at).getTime()) / 86400000)),
+        active: c.active,
         travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
         created_at: c.created_at, arrival_at: c.arrival_at,
       }));

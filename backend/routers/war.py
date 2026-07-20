@@ -197,28 +197,27 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
     await campaigns.update_one({"_id": c["_id"]}, {"$set": {"active": False, "status": "cancelled"}})
     await players.update_one({"tg_id": user["id"]}, {"$inc": {"resources.men": c["men_committed"]}})
-    return {"ok": True}
+    return {"ok": True, "men_refunded": c["men_committed"]}
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):
-    """گزارش لشکرکشی‌های خودم — لشکری که بیش از REPORT_VISIBLE_HOURS ساعت پیش رسیده
-    دیگر توی این لیست نمی‌آید (پاک‌سازی خودکار تب گزارش‌ها)"""
-    cur = campaigns.find({"tg_id": user["id"]}).sort("created_at", -1).limit(50)
+    """گزارش لشکرکشی‌های خودم — عمداً حداقلی: فقط اسم، فرستنده، مبدا/مقصد و زمان رسیدن؛
+    نه توان نه ترکیب/تعداد نیرو. لشکر دفاعی (همون‌جایی) اصلاً وارد گزارش‌ها نمی‌شود، و
+    لشکری که بیش از REPORT_VISIBLE_HOURS ساعت پیش رسیده دیگر توی این لیست نمی‌آید"""
+    cur = campaigns.find({"tg_id": user["id"], "op_type": {"$ne": "defense"}}).sort("created_at", -1).limit(50)
     out = []
     async for c in cur:
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
         if arrived and arrival_at and now() - arrival_at > timedelta(hours=REPORT_VISIBLE_HOURS):
             continue
-        days_active = max(0, int((now() - c["created_at"]).total_seconds() // 86400))
         out.append({
             "id": str(c["_id"]),
             "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            "sender": c["player_name"],
             "origin": c["origin_castle"], "target": c["target_castle"],
-            "active": c.get("active", False), "power": c.get("power", 0),
-            "gold_cost": c["gold_cost"], "men_committed": c["men_committed"],
-            "food_per_day": c["food_per_day"], "days_active": days_active,
+            "active": c.get("active", False),
             "travel_minutes": c.get("travel_minutes", 0),
             "arrived": arrived,
             "created_at": c["created_at"].isoformat(),
