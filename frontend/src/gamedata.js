@@ -117,6 +117,8 @@ export const DEFENSE_OP_TYPES = ['defense', 'garrison'];
 export const ROLEPLAY_WINDOW_HOURS = 6;
 // ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
 export const REPORT_VISIBLE_HOURS = 24;
+// گزارش لشکرکشی تازه، ۳۰ دقیقه بعد از ارسال در تب «گزارش‌ها» ظاهر می‌شود — نه بی‌درنگ
+export const REPORT_DELAY_MINUTES = 30;
 
 export const BUILDINGS_STATIC = {
   // اقتصادی

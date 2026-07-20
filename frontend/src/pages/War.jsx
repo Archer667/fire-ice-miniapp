@@ -7,7 +7,7 @@ import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
-  NAVAL_TROOP, NAVAL_CAMP_BUILDING,
+  NAVAL_TROOP, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES,
 } from '../gamedata.js';
 
 const TABS = [
@@ -39,16 +39,22 @@ export default function War() {
 
   useEffect(() => { loadMap(); loadBuildings(); loadMine(); }, []);
 
+  // گزارش لشکرکشی تازه، ۳۰ دقیقه بعد از ارسال در تب «گزارش‌ها» ظاهر می‌شود
+  const visibleReports = useMemo(
+    () => (mine || []).filter(c => Date.now() - new Date(c.created_at).getTime() >= REPORT_DELAY_MINUTES * 60000),
+    [mine]
+  );
+
   const newReportsCount = useMemo(
-    () => (mine || []).filter(c => c.arrived && !seenIds.has(c.id)).length,
-    [mine, seenIds]
+    () => visibleReports.filter(c => c.arrived && !seenIds.has(c.id)).length,
+    [visibleReports, seenIds]
   );
 
   const openReports = () => {
     setTab('reports');
-    if (!mine) return;
+    if (!visibleReports.length) return;
     const next = new Set(seenIds);
-    mine.forEach(c => { if (c.arrived) next.add(c.id); });
+    visibleReports.forEach(c => { if (c.arrived) next.add(c.id); });
     setSeenIds(next);
     localStorage.setItem(SEEN_KEY, JSON.stringify([...next]));
   };
@@ -216,33 +222,6 @@ export default function War() {
             <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
           </div>
 
-          <div className="sect up u2">لشکرهای در حرکت</div>
-          <div className="up u2">
-            {mapData.campaigns.length === 0 && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-                هیچ لشکری در حرکت نیست — وستروس در آرامشی مشکوک است
-              </div>
-            )}
-            {mapData.campaigns.map((c, i) => {
-              const cSameCastle = c.from === c.to;
-              return (
-                <div key={i} className={`warband ${c.mine ? 'mine' : ''}`}>
-                  <div className="wi"><Swords s={17} /></div>
-                  <div className="t">
-                    {c.name && <b>{c.name}</b>}{c.name ? ' — ' : ''}
-                    {cSameCastle
-                      ? <>لشکر {c.from} در حال دفاع از قلعه است</>
-                      : <>لشکری از <b>{c.from}</b> به‌سوی <b>{c.to}</b> در حرکت است</>}
-                    <div className="tm">
-                      {c.mine ? 'فرمان تو' : `آشکار شده — ${Math.max(0, c.revealed_minutes_ago).toLocaleString('fa-IR')} دقیقه پیش`}
-                      {' · '}{c.arrived ? 'به مقصد رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           <div className="sect up u3">فرمان لشکرکشی</div>
           <div className="card up u3">
             <label className="f" style={{ marginTop: 0 }}>نام لشکرکشی</label>
@@ -339,7 +318,12 @@ export default function War() {
           {mine.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکری نفرستاده‌ای</div>
           )}
-          {mine.map(c => (
+          {mine.length > 0 && visibleReports.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
+              گزارش لشکرکشی تازه، تا نیم ساعت دیگر اینجا ظاهر می‌شود
+            </div>
+          )}
+          {visibleReports.map(c => (
             <div className="card" key={c.id} style={{ marginBottom: 10 }}>
               <div className="res">
                 <div className="ic"><Swords s={16} /></div>
