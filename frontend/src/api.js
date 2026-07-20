@@ -24,7 +24,7 @@ async function req(path, opts = {}) {
 import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
-  FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, WARDEN_GROUPS,
+  FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
@@ -38,8 +38,8 @@ const mockHierarchy = { king_tg_id: 1, small_council: {} }; // seat -> tg_id —
 const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = [
   // یک اتحاد تجاری از قبل پذیرفته‌شده — برای تست کاروان بدون نیاز به شبیه‌سازی طرف مقابل
-  { id: 'a1', mine_proposed: false, other_id: 9002, other_name: 'تایوین لنیستر', type: 'trade', type_name: 'پیمان تجاری', status: 'accepted' },
-]; // {id, mine_proposed, other_id, other_name, type, type_name, status}
+  { id: 'a1', mine_proposed: false, other_id: 9002, other_name: 'تایوین لنیستر', type: 'trade', type_name: 'پیمان تجاری', name: '', public: true, status: 'accepted' },
+]; // {id, mine_proposed, other_id, other_name, type, type_name, name, public, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
 const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, active, created_at, last_food_tick, travel_minutes, arrival_at}
@@ -810,10 +810,18 @@ const M = {
     return { ok: true };
   },
   diplomacyMine: () => mockAlliances,
-  diplomacyPropose: (toTgIds, type, name) => {
+  diplomacyPublic: () => mockAlliances
+    .filter(a => a.status === 'accepted' && a.public !== false)
+    .map(a => ({
+      id: a.id, type: a.type, type_name: a.type_name, name: a.name || '',
+      from_name: a.mine_proposed ? mockMe.name : a.other_name,
+      to_name: a.mine_proposed ? a.other_name : mockMe.name,
+    })),
+  diplomacyPropose: (toTgIds, type, name, isPrivate) => {
     if (!ALLIANCE_TYPES[type]) throw new Error('نوع پیمان نامعتبر');
     if (!toTgIds.length) throw new Error('هیچ گیرنده‌ای انتخاب نشده');
-    const cost = ALLIANCE_TYPES[type].wine_cost * toTgIds.length;
+    const unitCost = ALLIANCE_TYPES[type].wine_cost * (isPrivate ? PRIVATE_ALLIANCE_MULTIPLIER : 1);
+    const cost = unitCost * toTgIds.length;
     if (!mockCanAfford({ wine: cost })) throw new Error(`شراب کافی برای پیشنهاد به ${toTgIds.length} نفر نداری`);
     mockPay({ wine: cost });
     const pactName = (name || '').trim().slice(0, 60);
@@ -821,7 +829,8 @@ const M = {
       const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
       mockAlliances.unshift({
         id: String(mockAllianceSeq++), mine_proposed: true, other_id: tgId, other_name: p ? p.name : String(tgId),
-        type, type_name: ALLIANCE_TYPES[type].name, name: pactName, status: 'pending',
+        type, type_name: ALLIANCE_TYPES[type].name, name: pactName, public: !isPrivate,
+        wine_cost: unitCost, status: 'pending',
       });
     }
     return { ok: true, sent_to: toTgIds.length };
@@ -831,6 +840,7 @@ const M = {
     if (!a) throw new Error('پیمان پیدا نشد');
     a.status = accept ? 'accepted' : 'rejected';
     if (accept) mockMe.alliance_count = (mockMe.alliance_count ?? 0) + 1;
+    else mockMe.resources.wine = (mockMe.resources.wine ?? 0) + (a.wine_cost || 0);
     return { ok: true };
   },
   feast: () => {
@@ -949,8 +959,9 @@ export const api = {
   setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
     : req('/api/titles/small-council', { method: 'POST', body: JSON.stringify({ seat, tg_id: tgId }) }),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
-  diplomacyPropose: (toTgIds, type, name) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name))
-    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name }) }),
+  diplomacyPublic: () => MOCK ? Promise.resolve(M.diplomacyPublic()) : req('/api/diplomacy/public'),
+  diplomacyPropose: (toTgIds, type, name, isPrivate) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate))
+    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   feast: () => MOCK ? Promise.resolve(M.feast()) : req('/api/diplomacy/feast', { method: 'POST' }),

@@ -4,18 +4,25 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Wine, Heart, Crown, Scroll } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
-import { REGIONS_STATIC, ALLIANCE_TYPES, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
+import { REGIONS_STATIC, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
 
 const STATUS_FA = { pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده' };
+const TABS = [
+  { key: 'main',      label: 'دیپلماسی' },
+  { key: 'alliances', label: 'اتحادها' },
+];
 
 export default function Diplomacy() {
   const { me, setMe, toast } = useGame();
+  const [tab, setTab] = useState('main');
   const [titles, setTitles] = useState(null);
   const [alliances, setAlliances] = useState(null);
+  const [publicAlliances, setPublicAlliances] = useState(null);
   const [polls, setPolls] = useState(null);
   const [targets, setTargets] = useState([]);
   const [type, setType] = useState('non_aggression');
   const [pactName, setPactName] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [feastBusy, setFeastBusy] = useState(false);
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
@@ -25,6 +32,7 @@ export default function Diplomacy() {
   const load = () => {
     api.titles().then(setTitles).catch(e => toast(e.message));
     api.diplomacyMine().then(setAlliances).catch(e => toast(e.message));
+    api.diplomacyPublic().then(setPublicAlliances).catch(e => toast(e.message));
     api.polls().then(setPolls).catch(e => toast(e.message));
   };
   useEffect(() => { load(); }, []);
@@ -52,15 +60,17 @@ export default function Diplomacy() {
     setFeastBusy(false);
   };
 
+  const unitCost = ALLIANCE_TYPES[type].wine_cost * (isPrivate ? PRIVATE_ALLIANCE_MULTIPLIER : 1);
+
   const propose = async () => {
     if (targets.length === 0) { toast('حداقل یک لرد را برای پیشنهاد انتخاب کن'); return; }
     setBusy(true);
     try {
-      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim());
+      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate);
       haptic('medium');
-      setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - ALLIANCE_TYPES[type].wine_cost * (res.sent_to || targets.length) } });
+      setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - unitCost * (res.sent_to || targets.length) } });
       toast(`پیشنهاد پیمان با کلاغ به ${res.sent_to || targets.length} لرد ارسال شد`);
-      setTargets([]); setPactName('');
+      setTargets([]); setPactName(''); setIsPrivate(false);
       load();
     } catch (e) { toast(e.message); }
     setBusy(false);
@@ -102,8 +112,18 @@ export default function Diplomacy() {
       <div className="page-title up">دیپلماسی</div>
       <div className="page-sub up">ضیافت بگیر، پیمان ببند، ببین قدرت دست کیه</div>
 
-      <div className="sect up u1">ضیافت</div>
-      <div className="card up u1">
+      <div className="tabs up u1" role="tablist">
+        {TABS.map(t => (
+          <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
+               className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
+               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === 'main' && (
+      <>
+      <div className="sect up u2">ضیافت</div>
+      <div className="card up u2">
         <div className="res">
           <div className="ic"><Wine s={18} /></div>
           <div className="n">برگزاری ضیافت<small>{FEAST_COST.wine.toLocaleString('fa-IR')} شراب + {FEAST_COST.food.toLocaleString('fa-IR')} غذا → محبوبیت بیشتر</small></div>
@@ -125,6 +145,22 @@ export default function Diplomacy() {
             <option key={id} value={id}>{t.name} — {t.wine_cost.toLocaleString('fa-IR')} شراب هرکدام</option>
           ))}
         </select>
+        <label className="f">نمایش در تب عمومیِ «اتحادها»</label>
+        <div className="grid2" role="radiogroup" aria-label="نمایش عمومی">
+          <button type="button" role="radio" aria-checked={!isPrivate}
+                  className={`rbtn pick ${!isPrivate ? 'sel' : ''}`} onClick={() => { haptic(); setIsPrivate(false); }}>
+            <div className="n">عمومی</div>
+            <div className="c">همه می‌بینن</div>
+          </button>
+          <button type="button" role="radio" aria-checked={isPrivate}
+                  className={`rbtn pick ${isPrivate ? 'sel' : ''}`} onClick={() => { haptic(); setIsPrivate(true); }}>
+            <div className="n">خصوصی</div>
+            <div className="c">{PRIVATE_ALLIANCE_MULTIPLIER.toLocaleString('fa-IR')}× هزینه</div>
+          </button>
+        </div>
+        <div className="page-sub" style={{ margin: '10px 4px 0' }}>
+          هزینه به‌ازای هر لرد: <b style={{ color: 'var(--az2)' }}>{unitCost.toLocaleString('fa-IR')} شراب</b>
+        </div>
         <button className="btn" style={{ marginTop: 14 }} disabled={busy} onClick={propose}>
           {busy ? 'در حال ارسال...' : `ارسال پیشنهاد با کلاغ${targets.length ? ` (${targets.length.toLocaleString('fa-IR')} نفر)` : ''}`}
         </button>
@@ -139,7 +175,10 @@ export default function Diplomacy() {
           <div className="troop" key={a.id}>
             <div className="tn">
               {a.name ? <>{a.name} <small style={{ display: 'inline' }}>— {a.other_name}</small></> : a.other_name}
-              <small>{a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}</small>
+              <small>
+                {a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}
+                {a.public === false ? ' · خصوصی' : ''}
+              </small>
             </div>
             {!a.mine_proposed && a.status === 'pending' && (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -242,6 +281,30 @@ export default function Diplomacy() {
           <div className="val">{titles?.overlords?.[me.region] ? titles.overlords[me.region].name : '—'}</div>
         </div>
       </div>
+      </>
+      )}
+
+      {tab === 'alliances' && (
+        <div className="up u2">
+          <div className="page-sub" style={{ margin: '0 4px 10px' }}>
+            همهٔ اتحادهای برقرارِ عمومیِ وستروس — پیمان‌های خصوصی اینجا نشان داده نمی‌شوند
+          </div>
+          {(!publicAlliances || publicAlliances.length === 0) && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز اتحاد عمومی‌ای برقرار نشده</div>
+          )}
+          {publicAlliances && publicAlliances.map(a => (
+            <div className="card" key={a.id} style={{ marginBottom: 10 }}>
+              <div className="res">
+                <div className="ic"><Crown s={16} /></div>
+                <div className="n">
+                  {a.name || `${a.from_name} و ${a.to_name}`}
+                  <small>{a.type_name}{a.name ? ` · ${a.from_name} و ${a.to_name}` : ''}</small>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }

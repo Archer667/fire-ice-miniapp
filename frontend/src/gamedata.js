@@ -214,6 +214,8 @@ export const ALLIANCE_TYPES = {
   trade:          { name: 'پیمان تجاری',      wine_cost: 30 },
   full_alliance:  { name: 'اتحاد کامل',       wine_cost: 60 },
 };
+// پیمان خصوصی (توی تب عمومیِ «اتحادها» نشان داده نمی‌شود) دو برابر شرابِ معمولی هزینه دارد
+export const PRIVATE_ALLIANCE_MULTIPLIER = 2;
 
 export const DEFAULT_TITLE = { lord: 'لرد جوان', lady: 'لیدی جوان' };
 export const POPULARITY_START = 50;

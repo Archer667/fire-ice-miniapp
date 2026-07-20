@@ -6,7 +6,7 @@ from auth import get_user
 from db import players, alliances
 from game import now, apply_production, can_afford, pay
 from game_data import ALLIANCE_TYPES
-from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX
+from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX, PRIVATE_ALLIANCE_MULTIPLIER
 
 router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
 
@@ -14,6 +14,7 @@ class ProposeBody(BaseModel):
     to_tg_ids: list[int]
     type: str
     name: str = ""
+    private: bool = False
 
 @router.post("/propose")
 async def propose(body: ProposeBody, user: dict = Depends(get_user)):
@@ -46,7 +47,7 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         raise HTTPException(409, "با همهٔ گیرنده‌های انتخابی، پیمانی از همین نوع از قبل داری")
 
     me = apply_production(me)
-    unit_cost = ALLIANCE_TYPES[body.type]["wine_cost"]
+    unit_cost = ALLIANCE_TYPES[body.type]["wine_cost"] * (PRIVATE_ALLIANCE_MULTIPLIER if body.private else 1)
     total_cost = {"wine": unit_cost * len(valid_targets)}
     if not can_afford(me["resources"], total_cost):
         raise HTTPException(400, f"شراب کافی برای پیشنهاد به {len(valid_targets)} نفر نداری")
@@ -59,6 +60,7 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         "from_id": user["id"], "from_name": me["name"],
         "to_id": t["tg_id"], "to_name": t["name"],
         "type": body.type, "wine_cost": unit_cost, "name": pact_name,
+        "public": not body.private,
         "status": "pending", "created_at": now(),
     } for t in valid_targets])
     return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
@@ -76,7 +78,21 @@ async def mine(user: dict = Depends(get_user)):
             "other_name": a["to_name"] if mine_proposed else a["from_name"],
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
             "name": a.get("name", ""),
+            "public": a.get("public", True),
             "status": a["status"],
+        })
+    return out
+
+@router.get("/public")
+async def public_alliances(user: dict = Depends(get_user)):
+    """اتحادهای برقرارِ عمومی — همهٔ بازیکنان می‌بینند، مگر آن‌هایی که با هزینهٔ دوبرابر خصوصی نگه داشته شده‌اند"""
+    out = []
+    cur = alliances.find({"status": "accepted", "public": {"$ne": False}}).sort("created_at", -1).limit(100)
+    async for a in cur:
+        out.append({
+            "id": str(a["_id"]), "from_name": a["from_name"], "to_name": a["to_name"],
+            "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
+            "name": a.get("name", ""), "created_at": a["created_at"].isoformat(),
         })
     return out
 

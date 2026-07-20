@@ -55,6 +55,9 @@ FEAST_COST = {"wine": 40, "food": 80}
 FEAST_POPULARITY_GAIN = 8
 FEAST_COOLDOWN_HOURS = 24
 
+# پیمان خصوصی (توی تب عمومیِ «اتحادها» نشان داده نمی‌شود) دو برابر شرابِ معمولی هزینه دارد
+PRIVATE_ALLIANCE_MULTIPLIER = 2
+
 # ---- شایعات — کارزار عمومی علیه یک بازیکن؛ همه می‌بینند، محبوبیت هدف کم می‌شود ----
 RUMOR_GOLD_COST = 100
 RUMOR_POPULARITY_DAMAGE = 3
