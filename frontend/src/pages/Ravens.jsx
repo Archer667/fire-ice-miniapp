@@ -2,10 +2,18 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Send, Plus, Back } from '../components/Icons.jsx';
+import { Send, Plus, Back, Eye } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 
 const SYSTEM_TG_ID = 0;
+
+function timeAgo(iso) {
+  const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 60) return `${min.toLocaleString('fa-IR')} دقیقه پیش`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h.toLocaleString('fa-IR')} ساعت پیش`;
+  return `${Math.floor(h / 24).toLocaleString('fa-IR')} روز پیش`;
+}
 
 export default function Ravens() {
   const { toast, refreshUnread } = useGame();
@@ -16,9 +24,12 @@ export default function Ravens() {
   const [text, setText] = useState('');
   const [composeTargets, setComposeTargets] = useState([]);
   const [composing, setComposing] = useState(false);
+  const [rumors, setRumors] = useState(null);
 
   const loadInbox = () => api.inbox().then(setInbox).catch(e => { toast(e.message); setInbox([]); });
+  const loadRumors = () => api.listRumors().then(setRumors).catch(e => { toast(e.message); setRumors([]); });
   useEffect(() => { loadInbox(); }, []);
+  useEffect(() => { if (tab === 'rumors' && rumors === null) loadRumors(); }, [tab]);
 
   const openThread = async (m) => {
     haptic();
@@ -100,24 +111,52 @@ export default function Ravens() {
                 className={`rbtn tab ${tab === 'messages' ? 'on' : ''}`} onClick={() => { haptic(); setTab('messages'); }}>
           پیام‌ها{personal.some(m => m.unread > 0) ? ' •' : ''}
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'rumors'}
+                className={`rbtn tab ${tab === 'rumors' ? 'on' : ''}`} onClick={() => { haptic(); setTab('rumors'); }}>
+          شایعات
+        </button>
       </div>
 
-      <div className="up u2">
-        {rows.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-            {tab === 'announcements' ? 'هنوز اطلاعیه‌ای نیامده' : 'هنوز کلاغی برایت نیامده — تو اولین نامه را بفرست'}
-          </div>
-        )}
-        {rows.map((m, i) => (
-          <button type="button" key={i} className="rbtn mailrow" onClick={() => openThread(m)}>
-            <div className="mava">{m.with_name.charAt(0)}</div>
-            <div className="mt">
-              <div className="mn">{m.with_name}{m.unread > 0 && <span className="dot" />}</div>
-              <div className="ms">{m.last_text}</div>
+      {tab !== 'rumors' && (
+        <div className="up u2">
+          {rows.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
+              {tab === 'announcements' ? 'هنوز اطلاعیه‌ای نیامده' : 'هنوز کلاغی برایت نیامده — تو اولین نامه را بفرست'}
             </div>
-          </button>
-        ))}
-      </div>
+          )}
+          {rows.map((m, i) => (
+            <button type="button" key={i} className="rbtn mailrow" onClick={() => openThread(m)}>
+              <div className="mava">{m.with_name.charAt(0)}</div>
+              <div className="mt">
+                <div className="mn">{m.with_name}{m.unread > 0 && <span className="dot" />}</div>
+                <div className="ms">{m.last_text}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'rumors' && (
+        <div className="up u2">
+          {rumors === null && <div className="loading">در حال بارگذاری...</div>}
+          {rumors && rumors.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز شایعه‌ای پخش نشده</div>
+          )}
+          {rumors && rumors.map(r => (
+            <div className="card" key={r.id} style={{ marginBottom: 10 }}>
+              <div className="res">
+                <div className="ic"><Eye s={16} /></div>
+                <div className="n">
+                  علیه {r.target}
+                  <small>{r.mine ? 'از طرف تو' : `از طرف ${r.author}`} · {timeAgo(r.created_at)}</small>
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.8, color: 'var(--hi)', marginTop: 8 }}>{r.text}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {tab === 'messages' && (
         <button type="button" className="fab" aria-label="کلاغ تازه" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
           <Plus s={22} />

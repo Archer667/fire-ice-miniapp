@@ -15,7 +15,6 @@ import Espionage from './pages/Espionage.jsx';
 import Trade from './pages/Trade.jsx';
 import Roleplay from './pages/Roleplay.jsx';
 import Assets from './pages/Assets.jsx';
-import Rumors from './pages/Rumors.jsx';
 import Header from './components/Header.jsx';
 import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
@@ -23,7 +22,7 @@ import Toast from './components/Toast.jsx';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Rumors];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets];
 const RAVENS_INDEX = 4;
 const ADMIN_INDEX = 6;
 

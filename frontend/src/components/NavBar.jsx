@@ -19,7 +19,6 @@ export const EXTRA_PAGES = [
   { index: 8, Icon: Cart,   label: 'تجارت' },
   { index: 9, Icon: Scroll, label: 'رول‌ها' },
   { index: 10, Icon: Warehouse, label: 'دارایی‌ها' },
-  { index: 11, Icon: Eye, label: 'شایعات' },
 ];
 
 export default function NavBar({ tab, onChange }) {
