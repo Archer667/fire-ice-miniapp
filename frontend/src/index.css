@@ -263,6 +263,8 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 }
 .tab.on { color: #cfe8ff; background: linear-gradient(150deg, rgba(77,163,255,0.22), rgba(56,120,255,0.07)); }
 .tab .dot.badge { position: absolute; top: 4px; inset-inline-end: 10px; }
+.tabs-group { margin-top: 6px; }
+.tabs-group-label { font-size: 11px; color: var(--mid); font-weight: 700; margin: 8px 4px 2px; }
 
 .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .q {

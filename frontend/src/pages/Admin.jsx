@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse } from '../components/Icons.jsx';
+import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse, Swords } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
@@ -18,19 +18,34 @@ const MAP_KINDS = [
   { key: 'port',   label: 'بندر ⚓' },
 ];
 
-const TABS = [
-  { key: 'onboarding', label: 'خاندان‌ها' },
-  { key: 'war',       label: 'جنگ' },
-  { key: 'espionage', label: 'جاسوسی' },
-  { key: 'roleplay',  label: 'رول‌ها' },
-  { key: 'map',       label: 'نقشه' },
-  { key: 'titles',    label: 'مقام‌ها' },
-  { key: 'items',     label: 'آیتم‌ها', fullOnly: true },
-  { key: 'market',    label: 'بازار', fullOnly: true },
-  { key: 'resources', label: 'منابع', fullOnly: true },
-  { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
-  { key: 'admins',    label: 'ادمین‌ها', fullOnly: true },
+// دسته‌های تب‌ها فقط برای نمایشِ گروه‌بندی‌شده‌ترِ نوار تب‌هاست
+const TAB_GROUPS = [
+  {
+    label: 'بازیکن‌ها',
+    tabs: [
+      { key: 'onboarding', label: 'خاندان‌ها' },
+      { key: 'resources',  label: 'منابع و لشکرها', fullOnly: true },
+      { key: 'admins',     label: 'ادمین‌ها', fullOnly: true },
+    ],
+  },
+  {
+    label: 'رویدادها',
+    tabs: [
+      { key: 'war',    label: 'جنگ و رول‌ها' },
+      { key: 'titles', label: 'مقام‌ها' },
+      { key: 'polls',  label: 'رای‌گیری', fullOnly: true },
+    ],
+  },
+  {
+    label: 'دنیای بازی',
+    tabs: [
+      { key: 'map',    label: 'نقشه' },
+      { key: 'market', label: 'بازار', fullOnly: true },
+      { key: 'items',  label: 'آیتم‌ها', fullOnly: true },
+    ],
+  },
 ];
+const TABS = TAB_GROUPS.flatMap(g => g.tabs);
 
 const PLAYER_RES = [
   { key: 'gold',  label: 'طلا',  Icon: Coin },
@@ -45,19 +60,19 @@ const PLAYER_RES = [
 export default function Admin() {
   const { me, toast } = useGame();
   const isFull = me.admin_role === 'full';
-  const availTabs = TABS.filter(t => !t.fullOnly || isFull);
+  const availGroups = TAB_GROUPS.map(g => ({ ...g, tabs: g.tabs.filter(t => !t.fullOnly || isFull) })).filter(g => g.tabs.length);
   const [tab, setTab] = useState('onboarding');
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
+  const [roster, setRoster] = useState(null);
   const [assignRegion, setAssignRegion] = useState({}); // tg_id -> regionId
   const [assignCastle, setAssignCastle] = useState({}); // tg_id -> castle name
   const [assignBusyId, setAssignBusyId] = useState(null);
+  const [unassignBusyId, setUnassignBusyId] = useState(null);
+  const [reassignOpenId, setReassignOpenId] = useState(null);
 
   const [campaignsInfo, setCampaignsInfo] = useState(null);
-  const [battles, setBattles] = useState(null);
-  const [battleParticipants, setBattleParticipants] = useState([]);
-  const [battleText, setBattleText] = useState('');
-  const [battleBusy, setBattleBusy] = useState(false);
+  const [disbandBusyId, setDisbandBusyId] = useState(null);
   const [overlordTarget, setOverlordTarget] = useState([]);
   const [overlordRegion, setOverlordRegion] = useState('north');
   const [wardenTarget, setWardenTarget] = useState([]);
@@ -96,6 +111,7 @@ export default function Admin() {
   const [resTarget, setResTarget] = useState([]);
   const [resValues, setResValues] = useState(null);
   const [resBusy, setResBusy] = useState(false);
+  const [resCampaigns, setResCampaigns] = useState(null);
 
   const [spyPending, setSpyPending] = useState(null);
   const [spyScores, setSpyScores] = useState({}); // missionId -> score string
@@ -103,6 +119,7 @@ export default function Admin() {
 
   const [roleplayPending, setRoleplayPending] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
+  const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
   const [itemsList, setItemsList] = useState(null);
@@ -118,8 +135,8 @@ export default function Admin() {
   const [grantBusy, setGrantBusy] = useState(false);
 
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
+  const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
-  const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
   const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
@@ -132,8 +149,8 @@ export default function Admin() {
 
   useEffect(() => {
     loadPendingPlayers();
+    loadRoster();
     loadCampaigns();
-    loadBattles();
     loadSpyPending();
     loadRoleplayPending();
     loadMapData();
@@ -146,11 +163,12 @@ export default function Admin() {
   }, [mapRegion]);
 
   useEffect(() => {
-    if (!resTarget.length) { setResValues(null); return; }
-    setResValues(null);
+    if (!resTarget.length) { setResValues(null); setResCampaigns(null); return; }
+    setResValues(null); setResCampaigns(null);
     api.adminGetPlayerResources(resTarget[0].tg_id)
       .then(r => setResValues(r.resources))
       .catch(e => { toast(e.message); setResTarget([]); });
+    api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message));
   }, [resTarget]);
 
   const filteredCastleOptions = (mapOptions || []).filter(o =>
@@ -258,29 +276,16 @@ export default function Admin() {
     setResBusy(false);
   };
 
-  const addToBattleReport = (s) => {
-    haptic();
-    const toAdd = [{ tg_id: s.tg_id, name: s.player }];
-    if (s.target_tg_id) toAdd.push({ tg_id: s.target_tg_id, name: s.target_player });
-    setBattleParticipants(prev => {
-      const existing = new Set(prev.map(p => p.tg_id));
-      return [...prev, ...toAdd.filter(p => !existing.has(p.tg_id))];
-    });
-    toast('به شرکت‌کننده‌های روایت جنگ اضافه شد');
-  };
-
-  const sendBattleReport = async () => {
-    if (!battleParticipants.length) { toast('حداقل یک شرکت‌کننده انتخاب کن'); return; }
-    if (battleText.trim().length < 10) { toast('روایت جنگ خیلی کوتاه است'); return; }
-    setBattleBusy(true);
+  const disbandCampaign = async (id) => {
+    setDisbandBusyId(id);
     try {
-      await api.adminCreateBattleReport(battleParticipants.map(p => p.tg_id), battleText.trim());
+      await api.adminDisbandCampaign(id);
       haptic('medium');
-      toast('روایت جنگ برای شرکت‌کننده‌ها فرستاده شد');
-      setBattleParticipants([]); setBattleText('');
-      loadBattles();
+      toast('لشکر منحل شد و نفراتش به خانه برگشتند');
+      if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(() => {});
+      loadCampaigns();
     } catch (e) { toast(e.message); }
-    setBattleBusy(false);
+    setDisbandBusyId(null);
   };
 
   const scoreSpy = async (missionId) => {
@@ -303,12 +308,14 @@ export default function Admin() {
   const respondRoleplay = async (roleplayId) => {
     const result = (roleplayResults[roleplayId] || '').trim();
     if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
+    const visibility = roleplayVisibility[roleplayId] || 'participants';
     setRoleplayBusyId(roleplayId);
     try {
-      await api.adminRespondRoleplay(roleplayId, result);
+      const res = await api.adminRespondRoleplay(roleplayId, result, visibility);
       haptic('medium');
-      toast('نتیجهٔ رول برای بازیکن فرستاده شد');
+      toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
       setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayVisibility(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
@@ -395,13 +402,31 @@ export default function Admin() {
     if (!castle) { toast('یک قلعه انتخاب کن'); return; }
     setAssignBusyId(tgId);
     try {
-      await api.adminAssignHouse(tgId, regionId, castle);
+      const res = await api.adminAssignHouse(tgId, regionId, castle);
       haptic('medium');
-      toast('خاندان و قلعه تعیین شد — کلاغی برایش رفت');
+      toast(res.moved ? 'خاندان و قلعه جابه‌جا شد — کلاغی برایش رفت' : 'خاندان و قلعه تعیین شد — کلاغی برایش رفت');
       setAssignCastle(prev => { const n = { ...prev }; delete n[tgId]; return n; });
-      loadPendingPlayers();
+      setReassignOpenId(null);
+      loadPendingPlayers(); loadRoster();
     } catch (e) { toast(e.message); }
     setAssignBusyId(null);
+  };
+
+  const unassignHouse = async (tgId) => {
+    setUnassignBusyId(tgId);
+    try {
+      await api.adminUnassignHouse(tgId);
+      haptic('medium');
+      toast('خاندان و قلعه از این بازیکن گرفته شد');
+      loadPendingPlayers(); loadRoster();
+    } catch (e) { toast(e.message); }
+    setUnassignBusyId(null);
+  };
+
+  const toggleReassign = (tgId) => {
+    haptic();
+    setReassignOpenId(prev => prev === tgId ? null : tgId);
+    setAssignCastle(prev => ({ ...prev, [tgId]: '' }));
   };
 
   const createItem = async () => {
@@ -460,15 +485,20 @@ export default function Admin() {
   return (
     <>
       <div className="page-title up">پنل ادمین</div>
-      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، روایت جنگ، جاسوسی و مقام‌ها'}</div>
+      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، رول‌ها، جاسوسی و مقام‌ها'}</div>
 
-      <div className="tabs up u1" role="tablist">
-        {availTabs.map(t => (
-          <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
-               className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
-        ))}
-      </div>
+      {availGroups.map((g, gi) => (
+        <div key={g.label} className={gi > 0 ? 'tabs-group' : ''}>
+          <div className="tabs-group-label up u1">{g.label}</div>
+          <div className="tabs up u1" role="tablist" aria-label={g.label}>
+            {g.tabs.map(t => (
+              <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
+                   className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
+                   onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {tab === 'onboarding' && (
         <>
@@ -509,6 +539,57 @@ export default function Admin() {
               );
             })}
           </div>
+
+          <div className="sect up u3">خاندان‌های موجود در بازی</div>
+          <div className="page-sub up u3" style={{ marginTop: -10 }}>
+            هر بازیکنِ خاندان‌دار — می‌توانی از خاندانش خارجش کنی یا به خاندان/قلعهٔ دیگری منتقلش کنی
+          </div>
+          <div className="up u3">
+            {(!roster || roster.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کسی خاندانی ندارد</div>
+            )}
+            {roster && roster.map(p => {
+              const regionId = assignRegion[p.tg_id] || p.region || Object.keys(REGIONS_STATIC)[0];
+              const region = REGIONS_STATIC[regionId];
+              const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
+              return (
+                <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
+                  <div className="res">
+                    <div className="ic"><Shield s={16} /></div>
+                    <div className="n">{p.name}<small>{p.region_name} · {p.castle}{p.is_port ? ' ⚓' : ''}</small></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
+                            disabled={unassignBusyId === p.tg_id} onClick={() => unassignHouse(p.tg_id)}>
+                      {unassignBusyId === p.tg_id ? 'در حال حذف...' : 'حذف از خاندان'}
+                    </button>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => toggleReassign(p.tg_id)}>
+                      انتقال به خاندان دیگر
+                    </button>
+                  </div>
+                  {reassignOpenId === p.tg_id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
+                      <label className="f" style={{ marginTop: 0 }}>اقلیم (خاندان) تازه</label>
+                      <select value={regionId} onChange={e => {
+                        setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
+                        setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
+                      }}>
+                        {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+                      </select>
+                      <label className="f">قلعهٔ تازه</label>
+                      <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
+                        <option value="" disabled>انتخاب کن...</option>
+                        {castleOptions.map(c => <option key={c.n} value={c.n}>{c.n}{c.port ? ' ⚓ بندر' : ''}</option>)}
+                      </select>
+                      <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
+                        {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'انتقال'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
 
@@ -540,46 +621,22 @@ export default function Admin() {
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
                   </div>
-                  <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }} onClick={() => addToBattleReport(s)}>
-                    افزودن به روایت جنگ
-                  </button>
+                  {s.active && isFull && (
+                    <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                            disabled={disbandBusyId === s.id} onClick={() => disbandCampaign(s.id)}>
+                      {disbandBusyId === s.id ? 'در حال انحلال...' : 'منحل کن'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="sect up u3">روایت جنگ</div>
-          <div className="card up u3">
-            <label className="f" style={{ marginTop: 0 }}>شرکت‌کننده‌ها</label>
-            <PlayerPicker value={battleParticipants} onChange={setBattleParticipants} />
-            <label className="f">چه اتفاقی افتاد</label>
-            <textarea value={battleText} onChange={e => setBattleText(e.target.value)}
-                      placeholder="روایت کن بین چه کسانی بود و نتیجه‌اش چه شد..." />
-            <button className="btn" style={{ marginTop: 14 }} disabled={battleBusy} onClick={sendBattleReport}>
-              {battleBusy ? 'در حال ارسال...' : 'ارسال روایت به شرکت‌کننده‌ها'}
-            </button>
-          </div>
-          <div className="up u3">
-            {(!battles || battles.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز روایتی فرستاده نشده</div>
-            )}
-            {battles && battles.map(b => (
-              <div className="card" key={b.id} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginBottom: 6 }}>{b.participants.join(' · ')}</div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.8 }}>{b.text}</div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'espionage' && (
-        <>
-          <div className="sect up u2">سناریوهای جاسوسی در انتظار بررسی</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+          <div className="sect up u3">جاسوسی‌های در انتظار بررسی</div>
+          <div className="page-sub up u3" style={{ marginTop: -10 }}>
             نقشهٔ هر بازیکن را بخوان و بر اساس هوشمندی و منطقی‌بودنش امتیاز جاسوسی (۰ تا ۱۰۰) بده — همان امتیاز مستقیماً شانس موفقیتش می‌شود
           </div>
-          <div className="up u2">
+          <div className="up u3">
             {(!spyPending || spyPending.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>سناریوی بررسی‌نشده‌ای نیست</div>
             )}
@@ -604,16 +661,12 @@ export default function Admin() {
               </div>
             ))}
           </div>
-        </>
-      )}
 
-      {tab === 'roleplay' && (
-        <>
-          <div className="sect up u2">رول‌های در انتظار پاسخ</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس — همین متن به‌عنوان کلاغ برایش فرستاده می‌شود
+          <div className="sect up u3">رول‌های در انتظار پاسخ</div>
+          <div className="page-sub up u3" style={{ marginTop: -10 }}>
+            سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
           </div>
-          <div className="up u2">
+          <div className="up u3">
             {(!roleplayPending || roleplayPending.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رول بررسی‌نشده‌ای نیست</div>
             )}
@@ -641,8 +694,23 @@ export default function Admin() {
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
                           placeholder="نتیجهٔ این رول چه شد..." />
-                <button className="btn" style={{ marginTop: 10 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
-                  {roleplayBusyId === r.id ? 'در حال ارسال...' : (r.category === 'war' ? 'ارسال نتیجه به هر دو طرف' : 'ارسال نتیجه به بازیکن')}
+                <label className="f">این نتیجه برای چه کسانی نمایش داده شود؟</label>
+                <div className="grid2" role="radiogroup" aria-label="نمایش نتیجه">
+                  <button type="button" role="radio" aria-checked={(roleplayVisibility[r.id] || 'participants') === 'participants'}
+                          className={`rbtn pick ${(roleplayVisibility[r.id] || 'participants') === 'participants' ? 'sel' : ''}`}
+                          onClick={() => setRoleplayVisibility(prev => ({ ...prev, [r.id]: 'participants' }))}>
+                    <div className="n">شرکت‌کننده‌ها</div>
+                    <div className="c">{r.category === 'war' ? 'هر دو طرف نبرد' : 'فقط همین بازیکن'}</div>
+                  </button>
+                  <button type="button" role="radio" aria-checked={roleplayVisibility[r.id] === 'all'}
+                          className={`rbtn pick ${roleplayVisibility[r.id] === 'all' ? 'sel' : ''}`}
+                          onClick={() => setRoleplayVisibility(prev => ({ ...prev, [r.id]: 'all' }))}>
+                    <div className="n">همهٔ بازیکنان</div>
+                    <div className="c">اعلامیهٔ عمومی</div>
+                  </button>
+                </div>
+                <button className="btn" style={{ marginTop: 14 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
+                  {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
                 </button>
               </div>
             ))}
@@ -972,6 +1040,46 @@ export default function Admin() {
               </>
             )}
           </div>
+
+          {resTarget.length > 0 && (
+            <>
+              <div className="sect up u3">لشکرهای «{resTarget[0].name}»</div>
+              <div className="up u3">
+                {resCampaigns === null && <div className="page-sub" style={{ margin: '0 4px' }}>در حال بارگذاری...</div>}
+                {resCampaigns && resCampaigns.length === 0 && (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>این بازیکن لشکری ندارد</div>
+                )}
+                {resCampaigns && resCampaigns.map(c => (
+                  <div className="card" key={c.id} style={{ marginBottom: 10 }}>
+                    <div className="res">
+                      <div className="ic"><Swords s={16} /></div>
+                      <div className="n">
+                        {c.name}
+                        <small>
+                          {c.op_name} · {c.from} ← {c.to} · توان {c.power.toLocaleString('fa-IR')} ·{' '}
+                          {c.men_committed.toLocaleString('fa-IR')} نفر
+                        </small>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+                      نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: 11, color: 'var(--low)' }}>
+                        {c.active ? (c.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+                      </div>
+                      {c.active && (
+                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                                disabled={disbandBusyId === c.id} onClick={() => disbandCampaign(c.id)}>
+                          {disbandBusyId === c.id ? 'در حال انحلال...' : 'منحل کن'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -1027,7 +1135,7 @@ export default function Admin() {
         <>
           <div className="sect up u2">مدیریت ادمین‌ها</div>
           <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (فقط لشکرکشی‌ها، روایت جنگ و مقام‌ها)</label>
+            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (فقط لشکرکشی‌ها، رول‌ها، جاسوسی و مقام‌ها)</label>
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>افزودن ادمین</button>
           </div>

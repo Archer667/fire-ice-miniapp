@@ -60,8 +60,6 @@ let mockBlackMarketSeq = 2;
 const DEFAULT_MOCK_PLAYER_RESOURCES = { gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 30, men: 500 };
 const mockPlayerResources = {}; // tg_id -> {gold,wood,stone,iron,food,wine,men} — برای تست ویرایش منابع در پنل ادمین
 const mockMapCastles = []; // {region, name, kind, x, y, custom}
-const mockBattleReports = []; // {id, participants:[name], text, created_at}
-let mockBattleSeq = 1;
 const mockSpyMissions = []; // {id, target, travel_minutes, arrival_at, success, report, created_at}
 let mockSpySeq = 1;
 const mockRoleplays = []; // {id, category, text, result, resolved, created_at}
@@ -150,20 +148,41 @@ const M = {
   },
   adminListPendingPlayers: () => (mockMe.registered && mockMe.pending)
     ? [{ tg_id: 1, name: mockMe.name, title: mockMe.title, gender: mockMe.gender }] : [],
+  adminListRoster: () => {
+    const out = [];
+    if (mockMe.registered && !mockMe.pending) {
+      out.push({ tg_id: 1, name: mockMe.name, title: mockMe.title, region: mockMe.region, region_name: mockMe.region_name, castle: mockMe.castle, is_port: mockMe.is_port });
+    }
+    for (const p of MOCK_PLAYERS) {
+      out.push({ tg_id: p.tg_id, name: p.name, title: p.title, region: mockResolveRegion(p.castle), region_name: p.region_name, castle: p.castle, is_port: false });
+    }
+    return out;
+  },
   adminAssignHouse: (tgId, region, castle) => {
-    if (tgId !== 1 || !mockMe.pending) throw new Error('این بازیکن پیدا نشد یا قبلاً خاندانش تعیین شده');
+    if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی خودت را تخصیص بدهی');
+    if (!mockMe.registered) throw new Error('این بازیکن پیدا نشد');
     if (!REGIONS_STATIC[region]) throw new Error('اقلیم نامعتبر');
     const r = REGIONS_STATIC[region];
     if (![...r.castles, ...r.ports].includes(castle)) throw new Error('این قلعه در این اقلیم نیست');
+    const takenByNpc = MOCK_PLAYERS.some(p => p.castle === castle);
+    if (takenByNpc) throw new Error('این قلعه صاحب دارد — یکی دیگر برگزین');
+    const wasPending = mockMe.pending;
     Object.assign(mockMe, {
       pending: false, region, region_name: r.name, castle,
       is_port: r.ports.includes(castle),
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
-      resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30 },
-      points: 100, alliance_count: 0, popularity: POPULARITY_START, tax_rate: TAX_RATE_DEFAULT,
-      max_tax_rate: maxTaxRate(POPULARITY_START),
-      rank: 5, total_players: 12, day: 18, season_length: 30,
+      resources: mockMe.resources || { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30 },
+      points: mockMe.points ?? 100, alliance_count: mockMe.alliance_count ?? 0,
+      popularity: mockMe.popularity ?? POPULARITY_START, tax_rate: mockMe.tax_rate ?? TAX_RATE_DEFAULT,
+      max_tax_rate: maxTaxRate(mockMe.popularity ?? POPULARITY_START),
+      rank: mockMe.rank ?? 5, total_players: 12, day: mockMe.day ?? 18, season_length: 30,
     });
+    return { ok: true, moved: !wasPending };
+  },
+  adminUnassignHouse: (tgId) => {
+    if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی خودت را از خاندان خارج کنی');
+    if (!mockMe.registered || mockMe.pending) throw new Error('این بازیکن اصلاً خاندانی ندارد');
+    Object.assign(mockMe, { pending: true, region: null, region_name: null, castle: null, is_port: false });
     return { ok: true };
   },
   setTax: (rate) => {
@@ -491,14 +510,27 @@ const M = {
       };
     });
   },
-  adminBattles: () => mockBattleReports.slice().reverse(),
-  adminCreateBattleReport: (participantTgIds, text) => {
-    if (!participantTgIds.length) throw new Error('حداقل یک شرکت‌کننده انتخاب کن');
-    const t = (text || '').trim();
-    if (!t) throw new Error('متن روایت خالی است');
-    const names = participantTgIds.map(id => MOCK_PLAYERS.find(p => p.tg_id === id)?.name || String(id));
-    mockBattleReports.push({ id: String(mockBattleSeq++), participants: names, text: t, created_at: new Date().toISOString() });
-    return { ok: true, sent_to: names.length };
+  adminPlayerCampaigns: (tgId) => {
+    if (tgId !== 1) return []; // حالت آزمایشی تک‌بازیکنه — فقط لشکرهای خودت شبیه‌سازی می‌شود
+    mockResolveCampaigns();
+    return mockCampaigns.slice().reverse().map(c => ({
+      id: c.id, name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+      op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+      from: c.origin_castle, to: c.target_castle,
+      troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
+        name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+      })),
+      power: c.power || 0, men_committed: c.men_committed,
+      active: c.active, arrived: Date.now() >= new Date(c.arrival_at).getTime(),
+    }));
+  },
+  adminDisbandCampaign: (id) => {
+    const c = mockCampaigns.find(x => x.id === id);
+    if (!c) throw new Error('این لشکرکشی پیدا نشد');
+    if (!c.active) throw new Error('این لشکرکشی دیگر فعال نیست');
+    c.active = false;
+    mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
+    return { ok: true };
   },
   sendSpy: (targetCastle, scenario) => {
     mockResolveCampaigns();
@@ -616,14 +648,14 @@ const M = {
     category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
     text: r.text, campaign_id: r.campaign_id, sibling: null, created_at: r.created_at,
   })),
-  adminRespondRoleplay: (roleplayId, result) => {
+  adminRespondRoleplay: (roleplayId, result, visibility) => {
     const r = mockRoleplays.find(x => x.id === roleplayId);
     if (!r) throw new Error('این رول پیدا نشد');
     if (r.resolved) throw new Error('این رول قبلاً پاسخ داده شده');
     const res = (result || '').trim();
     if (res.length < 3) throw new Error('متن نتیجه خیلی کوتاه است');
     r.result = res; r.resolved = true;
-    return { ok: true };
+    return { ok: true, sent_to: visibility === 'all' ? MOCK_PLAYERS.length + 1 : 1 };
   },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
@@ -947,6 +979,8 @@ export const api = {
     : req('/api/rumors/send', { method: 'POST', body: JSON.stringify({ target_tg_id: targetTgId, text }) }),
   listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
   adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
+  adminListRoster: () => MOCK ? Promise.resolve(M.adminListRoster()) : req('/api/admin/players/roster'),
+  adminUnassignHouse: (tgId) => MOCK ? Promise.resolve(M.adminUnassignHouse(tgId)) : req(`/api/admin/players/${tgId}/unassign`, { method: 'POST' }),
   adminAssignHouse: (tgId, region, castle) => MOCK ? Promise.resolve(M.adminAssignHouse(tgId, region, castle))
     : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
   castleAssets: () => MOCK ? Promise.resolve(M.castleAssets()) : req('/api/assets/castle'),
@@ -974,9 +1008,8 @@ export const api = {
 
   /* ---------- پنل ادمین ---------- */
   adminCampaigns: () => MOCK ? Promise.resolve(M.adminCampaigns()) : req('/api/admin/campaigns'),
-  adminBattles: () => MOCK ? Promise.resolve(M.adminBattles()) : req('/api/admin/battles'),
-  adminCreateBattleReport: (participantTgIds, text) => MOCK ? Promise.resolve(M.adminCreateBattleReport(participantTgIds, text))
-    : req('/api/admin/battles', { method: 'POST', body: JSON.stringify({ participant_tg_ids: participantTgIds, text }) }),
+  adminPlayerCampaigns: (tgId) => MOCK ? Promise.resolve(M.adminPlayerCampaigns(tgId)) : req(`/api/admin/players/${tgId}/campaigns`),
+  adminDisbandCampaign: (id) => MOCK ? Promise.resolve(M.adminDisbandCampaign(id)) : req(`/api/admin/campaigns/${id}/disband`, { method: 'POST' }),
 
   /* ---------- جاسوسی ---------- */
   sendSpy: (targetCastle, scenario) => MOCK ? Promise.resolve(M.sendSpy(targetCastle, scenario))
@@ -991,8 +1024,8 @@ export const api = {
     : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
-  adminRespondRoleplay: (roleplayId, result) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result))
-    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result }) }),
+  adminRespondRoleplay: (roleplayId, result, visibility) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility))
+    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants' }) }),
   warRoleplayEligible: () => MOCK ? Promise.resolve(M.warRoleplayEligible()) : req('/api/war/roleplay-eligible'),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())

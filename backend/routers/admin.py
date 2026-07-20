@@ -4,7 +4,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants
+from db import campaigns, players, admin_roles, map_castles, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants
 from game import now, normalize_building_state
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS
 from config import ADMIN_IDS
@@ -50,44 +50,6 @@ async def list_campaigns(user: dict = Depends(admin_user)):
             "created_at": s["created_at"].isoformat(),
         })
     return out
-
-class BattleReportBody(BaseModel):
-    participant_tg_ids: list[int]
-    text: str
-
-@router.get("/battles")
-async def list_battles(user: dict = Depends(admin_user)):
-    out = []
-    async for b in battle_reports.find({}).sort("created_at", -1).limit(30):
-        out.append({
-            "id": str(b["_id"]), "participants": b["participant_names"],
-            "text": b["text"], "created_at": b["created_at"].isoformat(),
-        })
-    return out
-
-@router.post("/battles")
-async def create_battle(body: BattleReportBody, user: dict = Depends(admin_user)):
-    """روایت نتیجهٔ یک جنگ — برای هر شرکت‌کننده به‌عنوان کلاغی از «شورای جنگ» فرستاده می‌شود"""
-    text = body.text.strip()
-    if not text:
-        raise HTTPException(400, "متن روایت خالی است")
-    ids = list(dict.fromkeys(body.participant_tg_ids))
-    if not ids:
-        raise HTTPException(400, "حداقل یک شرکت‌کننده انتخاب کن")
-
-    targets = await players.find({"tg_id": {"$in": ids}}).to_list(len(ids))
-    if not targets:
-        raise HTTPException(404, "هیچ‌کدام از شرکت‌کننده‌ها پیدا نشدند")
-
-    for t in targets:
-        await send_system_message(t["tg_id"], t["name"], text)
-
-    await battle_reports.insert_one({
-        "participant_tg_ids": [t["tg_id"] for t in targets],
-        "participant_names": [t["name"] for t in targets],
-        "text": text, "created_by": user["id"], "created_at": now(),
-    })
-    return {"ok": True, "sent_to": len(targets)}
 
 def _building_levels(player: dict) -> dict:
     out = {}
@@ -198,14 +160,19 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
 
 class RoleplayResultBody(BaseModel):
     result: str
+    visibility: str = "participants"   # "participants" | "all" — چه کسی نتیجه را کلاغ می‌گیرد
 
 @router.post("/roleplay/{roleplay_id}/respond")
 async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
     """برای دستهٔ «جنگ»، نتیجه برای هر دو طرف نبرد فرستاده می‌شود — چه هر دو سناریو
-    فرستاده باشند چه فقط یکی؛ طرفی که ننوشته هم از طریق خودِ لشکرکشی پیدا و باخبر می‌شود"""
+    فرستاده باشند چه فقط یکی؛ طرفی که ننوشته هم از طریق خودِ لشکرکشی پیدا و باخبر می‌شود.
+    اگر visibility=all باشد، علاوه بر شرکت‌کننده‌ها، همهٔ بازیکنان بازی هم کلاغ می‌گیرند —
+    جایگزین «روایت جنگ» قدیمی برای وقتی نتیجه باید عمومی اعلام شود"""
     result = body.result.strip()
     if len(result) < 3:
         raise HTTPException(400, "متن نتیجه خیلی کوتاه است")
+    if body.visibility not in ("participants", "all"):
+        raise HTTPException(400, "نوع نمایش نامعتبر")
     try:
         oid = ObjectId(roleplay_id)
     except Exception:
@@ -241,16 +208,17 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         "result": result[:4000], "resolved": True, "resolved_at": now(),
     }})
 
+    if body.visibility == "all":
+        recipient_tg_ids = {p["tg_id"] async for p in players.find({}, {"tg_id": 1})}
+
     cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
+    prefix = "اعلامیهٔ عمومی" if body.visibility == "all" else f"نتیجهٔ رول «{cat_name}»{'ِ نبرد' if r['category'] == 'war' else ''}"
     for tg_id in recipient_tg_ids:
         player = await players.find_one({"tg_id": tg_id})
         if player:
-            await send_system_message(
-                player["tg_id"], player["name"],
-                f"نتیجهٔ رول «{cat_name}»{'ِ نبرد ' if r['category'] == 'war' else ''} آمد: {result}",
-            )
+            await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}")
 
-    return {"ok": True}
+    return {"ok": True, "sent_to": len(recipient_tg_ids)}
 
 @router.get("/players/pending")
 async def list_pending_players(user: dict = Depends(admin_user)):
@@ -264,32 +232,64 @@ async def list_pending_players(user: dict = Depends(admin_user)):
         })
     return out
 
+@router.get("/players/roster")
+async def list_roster(user: dict = Depends(admin_user)):
+    """همهٔ بازیکن‌های خاندان‌دار — برای مرور، حذف از خاندان یا تخصیص دوباره"""
+    out = []
+    cur = players.find({"region": {"$ne": None}, "castle": {"$ne": None}}).sort("name", 1)
+    async for p in cur:
+        out.append({
+            "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
+            "region": p["region"], "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
+            "castle": p["castle"], "is_port": p.get("is_port", False),
+        })
+    return out
+
 class AssignHouseBody(BaseModel):
     region: str
     castle: str
 
 @router.post("/players/{tg_id}/assign")
 async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Depends(admin_user)):
-    """خاندان (اقلیم) و قلعهٔ یک بازیکنِ تازه‌ثبت‌نام‌شده را دستی تعیین می‌کند"""
+    """خاندان (اقلیم) و قلعهٔ یک بازیکن را دستی تعیین می‌کند — چه تازه‌ثبت‌نامی چه
+    بازیکنی که می‌خواهی به خاندان/قلعهٔ دیگری منتقلش کنی"""
     target = await players.find_one({"tg_id": tg_id})
     if not target:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    if target.get("region") and target.get("castle"):
-        raise HTTPException(400, "این بازیکن قبلاً خاندان و قلعه‌اش تعیین شده")
     if body.region not in REGIONS:
         raise HTTPException(400, "اقلیم نامعتبر")
     region = REGIONS[body.region]
     if body.castle not in region["castles"] + region["ports"]:
         raise HTTPException(400, "این قلعه در این اقلیم نیست")
-    if await players.find_one({"castle": body.castle}):
+    holder = await players.find_one({"castle": body.castle})
+    if holder and holder["tg_id"] != tg_id:
         raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
 
+    was_assigned = bool(target.get("region") and target.get("castle"))
     await players.update_one({"tg_id": tg_id}, {"$set": {
         "region": body.region, "castle": body.castle, "is_port": body.castle in region["ports"],
     }})
+    msg = (
+        f"خاندانت جابه‌جا شد — حالا به {region['name']} تعلق داری و قلعه‌ات {body.castle} است."
+        if was_assigned else
+        f"خاندانت مشخص شد — به {region['name']} تعلق داری و قلعه‌ات {body.castle} است. اکنون می‌توانی وارد بازی شوی."
+    )
+    await send_system_message(tg_id, target["name"], msg)
+    return {"ok": True}
+
+@router.post("/players/{tg_id}/unassign")
+async def admin_unassign_house(tg_id: int, user: dict = Depends(admin_user)):
+    """خاندان و قلعهٔ یک بازیکن را از او می‌گیرد — دوباره «در انتظار تخصیص» می‌شود
+    و قلعه‌اش برای بازیکن دیگری آزاد می‌شود؛ منابع/ساختمان‌هایش دست‌نخورده می‌ماند"""
+    target = await players.find_one({"tg_id": tg_id})
+    if not target:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    if not target.get("region") and not target.get("castle"):
+        raise HTTPException(400, "این بازیکن اصلاً خاندانی ندارد")
+    await players.update_one({"tg_id": tg_id}, {"$set": {"region": None, "castle": None, "is_port": False}})
     await send_system_message(
         tg_id, target["name"],
-        f"خاندانت مشخص شد — به {region['name']} تعلق داری و قلعه‌ات {body.castle} است. اکنون می‌توانی وارد بازی شوی.",
+        "خاندان و قلعه‌ات از تو گرفته شد — منتظر بمان تا ادمین دوباره خاندانی برایت مشخص کند.",
     )
     return {"ok": True}
 
@@ -580,4 +580,51 @@ async def admin_set_player_resources(tg_id: int, body: SetPlayerResourcesBody, u
     if not updates:
         raise HTTPException(400, "هیچ منبعی برای تغییر مشخص نشده")
     await players.update_one({"tg_id": tg_id}, {"$set": updates})
+    return {"ok": True}
+
+@router.get("/players/{tg_id}/campaigns")
+async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_user)):
+    """لشکرکشی‌های یک بازیکن خاص — برای دیدن و در صورت نیاز منحل‌کردن، کنار ویرایش منابع"""
+    p = await players.find_one({"tg_id": tg_id})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    out = []
+    cur = campaigns.find({"tg_id": tg_id}).sort("created_at", -1).limit(30)
+    async for c in cur:
+        troops = [
+            {"name": COMMON_TROOPS[t]["name"] if t in COMMON_TROOPS else t, "count": n}
+            for t, n in c["troops"].items() if n and n > 0
+        ]
+        arrival_at = c.get("arrival_at")
+        out.append({
+            "id": str(c["_id"]),
+            "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            "from": c["origin_castle"], "to": c["target_castle"],
+            "troops": troops, "power": c.get("power", 0), "men_committed": c["men_committed"],
+            "active": c.get("active", False),
+            "arrived": (now() >= arrival_at) if arrival_at else True,
+        })
+    return out
+
+@router.post("/campaigns/{campaign_id}/disband")
+async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_admin_user)):
+    """ادمین هر لشکرکشیِ فعالی را (از هر بازیکنی) منحل می‌کند — نفراتش به صاحبش برمی‌گردد"""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ لشکرکشی نامعتبر است")
+    c = await campaigns.find_one({"_id": oid})
+    if not c:
+        raise HTTPException(404, "این لشکرکشی پیدا نشد")
+    if not c.get("active"):
+        raise HTTPException(400, "این لشکرکشی دیگر فعال نیست")
+    await campaigns.update_one({"_id": oid}, {"$set": {"active": False, "status": "disbanded"}})
+    await players.update_one({"tg_id": c["tg_id"]}, {"$inc": {"resources.men": c["men_committed"]}})
+    owner = await players.find_one({"tg_id": c["tg_id"]})
+    if owner:
+        await send_system_message(
+            owner["tg_id"], owner["name"],
+            f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و نفراتش به خانه برگشتند.",
+        )
     return {"ok": True}
