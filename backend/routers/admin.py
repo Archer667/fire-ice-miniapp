@@ -252,6 +252,47 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
     return {"ok": True}
 
+@router.get("/players/pending")
+async def list_pending_players(user: dict = Depends(admin_user)):
+    """بازیکن‌هایی که فقط اسم‌نویسی کرده‌اند و هنوز خاندان (اقلیم) و قلعه‌شان تعیین نشده"""
+    out = []
+    cur = players.find({"$or": [{"region": None}, {"castle": None}]}).sort("created_at", 1)
+    async for p in cur:
+        out.append({
+            "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
+            "gender": p.get("gender"), "created_at": p["created_at"].isoformat(),
+        })
+    return out
+
+class AssignHouseBody(BaseModel):
+    region: str
+    castle: str
+
+@router.post("/players/{tg_id}/assign")
+async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Depends(admin_user)):
+    """خاندان (اقلیم) و قلعهٔ یک بازیکنِ تازه‌ثبت‌نام‌شده را دستی تعیین می‌کند"""
+    target = await players.find_one({"tg_id": tg_id})
+    if not target:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    if target.get("region") and target.get("castle"):
+        raise HTTPException(400, "این بازیکن قبلاً خاندان و قلعه‌اش تعیین شده")
+    if body.region not in REGIONS:
+        raise HTTPException(400, "اقلیم نامعتبر")
+    region = REGIONS[body.region]
+    if body.castle not in region["castles"] + region["ports"]:
+        raise HTTPException(400, "این قلعه در این اقلیم نیست")
+    if await players.find_one({"castle": body.castle}):
+        raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
+
+    await players.update_one({"tg_id": tg_id}, {"$set": {
+        "region": body.region, "castle": body.castle, "is_port": body.castle in region["ports"],
+    }})
+    await send_system_message(
+        tg_id, target["name"],
+        f"خاندانت مشخص شد — به {region['name']} تعلق داری و قلعه‌ات {body.castle} است. اکنون می‌توانی وارد بازی شوی.",
+    )
+    return {"ok": True}
+
 MAP_KINDS = {"castle", "city", "ruin", "port"}
 
 @router.get("/map/options")

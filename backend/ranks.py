@@ -54,6 +54,8 @@ async def scored_players() -> list:
     h = await get_hierarchy_doc()
     rows = []
     async for p in players.find({}):
+        if not p.get("region") or not p.get("castle"):
+            continue  # هنوز ادمین خاندان/قلعه‌اش را مشخص نکرده — هنوز عملاً وارد بازی نشده
         bonus, rank_label = title_bonus_and_rank(p["tg_id"], h)
         score = round(base_score(p) + bonus)
         rows.append({"player": p, "score": score, "rank_label": rank_label})

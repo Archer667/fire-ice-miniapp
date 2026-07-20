@@ -19,6 +19,7 @@ const MAP_KINDS = [
 ];
 
 const TABS = [
+  { key: 'onboarding', label: 'خاندان‌ها' },
   { key: 'war',       label: 'جنگ' },
   { key: 'espionage', label: 'جاسوسی' },
   { key: 'roleplay',  label: 'رول‌ها' },
@@ -45,7 +46,12 @@ export default function Admin() {
   const { me, toast } = useGame();
   const isFull = me.admin_role === 'full';
   const availTabs = TABS.filter(t => !t.fullOnly || isFull);
-  const [tab, setTab] = useState('war');
+  const [tab, setTab] = useState('onboarding');
+
+  const [pendingPlayers, setPendingPlayers] = useState(null);
+  const [assignRegion, setAssignRegion] = useState({}); // tg_id -> regionId
+  const [assignCastle, setAssignCastle] = useState({}); // tg_id -> castle name
+  const [assignBusyId, setAssignBusyId] = useState(null);
 
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [battles, setBattles] = useState(null);
@@ -111,6 +117,7 @@ export default function Admin() {
   const [grantColor, setGrantColor] = useState(Object.keys(ITEM_RARITY_COLORS)[0]);
   const [grantBusy, setGrantBusy] = useState(false);
 
+  const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
@@ -124,6 +131,7 @@ export default function Admin() {
   const loadItems = () => api.adminListItems().then(setItemsList).catch(e => toast(e.message));
 
   useEffect(() => {
+    loadPendingPlayers();
     loadCampaigns();
     loadBattles();
     loadSpyPending();
@@ -381,6 +389,21 @@ export default function Admin() {
     catch (e) { toast(e.message); }
   };
 
+  const assignHouse = async (tgId) => {
+    const regionId = assignRegion[tgId] || Object.keys(REGIONS_STATIC)[0];
+    const castle = assignCastle[tgId];
+    if (!castle) { toast('یک قلعه انتخاب کن'); return; }
+    setAssignBusyId(tgId);
+    try {
+      await api.adminAssignHouse(tgId, regionId, castle);
+      haptic('medium');
+      toast('خاندان و قلعه تعیین شد — کلاغی برایش رفت');
+      setAssignCastle(prev => { const n = { ...prev }; delete n[tgId]; return n; });
+      loadPendingPlayers();
+    } catch (e) { toast(e.message); }
+    setAssignBusyId(null);
+  };
+
   const createItem = async () => {
     if (!itemName.trim()) { toast('نام آیتم را بنویس'); return; }
     if (itemDuration === 'temporary' && (!itemDurationHours || +itemDurationHours <= 0)) {
@@ -446,6 +469,48 @@ export default function Admin() {
                onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
         ))}
       </div>
+
+      {tab === 'onboarding' && (
+        <>
+          <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
+          </div>
+          <div className="up u2">
+            {(!pendingPlayers || pendingPlayers.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کسی منتظر نیست</div>
+            )}
+            {pendingPlayers && pendingPlayers.map(p => {
+              const regionId = assignRegion[p.tg_id] || Object.keys(REGIONS_STATIC)[0];
+              const region = REGIONS_STATIC[regionId];
+              const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
+              return (
+                <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
+                  <div className="res">
+                    <div className="ic"><Shield s={16} /></div>
+                    <div className="n">{p.name}<small>{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'}</small></div>
+                  </div>
+                  <label className="f">اقلیم (خاندان)</label>
+                  <select value={regionId} onChange={e => {
+                    setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
+                    setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
+                  }}>
+                    {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+                  </select>
+                  <label className="f">قلعه</label>
+                  <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
+                    <option value="" disabled>انتخاب کن...</option>
+                    {castleOptions.map(c => <option key={c.n} value={c.n}>{c.n}{c.port ? ' ⚓ بندر' : ''}</option>)}
+                  </select>
+                  <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
+                    {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'تخصیص خاندان و قلعه'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {tab === 'war' && (
         <>

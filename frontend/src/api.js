@@ -30,6 +30,7 @@ import {
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
+  RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -69,6 +70,8 @@ const mockItems = []; // {id, name, type, duration, duration_hours, description,
 let mockItemSeq = 1;
 const mockItemGrants = []; // {id, item_id, tg_id, color, granted_at, expires_at}
 let mockItemGrantSeq = 1;
+const mockRumors = []; // {id, author_tg_id, author_name, target_tg_id, target_name, text, created_at}
+let mockRumorSeq = 1;
 
 function mockResolveRegion(name) {
   for (const [rid, r] of Object.entries(REGIONS_STATIC)) {
@@ -131,16 +134,30 @@ function mockPay(cost) {
 const M = {
   gamedata: { regions: REGIONS_STATIC },
   me: () => {
-    mockResolveCampaigns();
-    if (mockMe.registered) mockMe.active_campaigns = mockCampaigns.filter(c => c.active).length;
+    if (mockMe.registered && !mockMe.pending) {
+      mockResolveCampaigns();
+      mockMe.active_campaigns = mockCampaigns.filter(c => c.active).length;
+    }
     return mockMe;
   },
   register: (b) => {
     Object.assign(mockMe, {
-      registered: true, name: b.name, region: b.region,
-      region_name: REGIONS_STATIC[b.region].name, castle: b.castle,
-      is_port: REGIONS_STATIC[b.region].ports.includes(b.castle),
-      gender: b.gender, title: DEFAULT_TITLE[b.gender], rank_label: null,
+      registered: true, pending: true, name: b.name,
+      gender: b.gender, title: DEFAULT_TITLE[b.gender],
+      admin_role: 'full', // حالت mock تک‌بازیکنه — خودت همیشه ادمینی تا بتونی خاندان خودت رو تخصیص بدی
+    });
+    return { ok: true };
+  },
+  adminListPendingPlayers: () => (mockMe.registered && mockMe.pending)
+    ? [{ tg_id: 1, name: mockMe.name, title: mockMe.title, gender: mockMe.gender }] : [],
+  adminAssignHouse: (tgId, region, castle) => {
+    if (tgId !== 1 || !mockMe.pending) throw new Error('این بازیکن پیدا نشد یا قبلاً خاندانش تعیین شده');
+    if (!REGIONS_STATIC[region]) throw new Error('اقلیم نامعتبر');
+    const r = REGIONS_STATIC[region];
+    if (![...r.castles, ...r.ports].includes(castle)) throw new Error('این قلعه در این اقلیم نیست');
+    Object.assign(mockMe, {
+      pending: false, region, region_name: r.name, castle,
+      is_port: r.ports.includes(castle),
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
       resources: { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30 },
       points: 100, alliance_count: 0, popularity: POPULARITY_START, tax_rate: TAX_RATE_DEFAULT,
@@ -740,6 +757,31 @@ const M = {
     });
     return { ok: true };
   },
+  sendRumor: (targetTgId, text) => {
+    if (targetTgId === 1) throw new Error('نمی‌توانی علیه خودت شایعه بسازی');
+    const t = text.trim();
+    if (t.length < 10) throw new Error('متن شایعه خیلی کوتاه است');
+    const target = MOCK_PLAYERS.find(p => p.tg_id === targetTgId);
+    if (!target) throw new Error('این لرد پیدا نشد');
+    const nowMs = Date.now();
+    const recent = mockRumors.find(r => r.author_tg_id === 1 && r.target_tg_id === targetTgId
+      && nowMs - new Date(r.created_at).getTime() < RUMOR_COOLDOWN_HOURS * 3600000);
+    if (recent) throw new Error(`همین الان علیه این لرد شایعه ساختی — ${RUMOR_COOLDOWN_HOURS} ساعت دیگر دوباره امتحان کن`);
+    if (!mockCanAfford({ gold: RUMOR_GOLD_COST })) throw new Error('طلای کافی برای پخش این شایعه نداری');
+    mockPay({ gold: RUMOR_GOLD_COST });
+    target.popularity = Math.max(0, (target.popularity ?? 50) - RUMOR_POPULARITY_DAMAGE);
+    mockRumors.unshift({
+      id: String(mockRumorSeq++), author_tg_id: 1, author_name: mockMe.name,
+      target_tg_id: targetTgId, target_name: target.name,
+      text: t.slice(0, 400), created_at: new Date().toISOString(),
+    });
+    return { ok: true };
+  },
+  listRumors: () => mockRumors.map(r => ({
+    id: r.id, author: r.author_name, author_tg_id: r.author_tg_id,
+    target: r.target_name, target_tg_id: r.target_tg_id,
+    text: r.text, created_at: r.created_at, mine: r.author_tg_id === 1,
+  })),
   titles: () => {
     const brief = (p) => p ? { tg_id: p.tg_id, name: p.name, title: p.title, castle: p.castle } : null;
     const meBrief = { tg_id: 1, name: mockMe.name, title: mockMe.title, castle: mockMe.castle };
@@ -889,6 +931,12 @@ export const api = {
   buildings: () => MOCK ? Promise.resolve(M.buildings()) : req('/api/buildings'),
   buildBuilding:   (id) => MOCK ? Promise.resolve(M.buildAction(id, false)) : req('/api/buildings/build',   { method: 'POST', body: JSON.stringify({ building_id: id }) }),
   upgradeBuilding: (id) => MOCK ? Promise.resolve(M.buildAction(id, true))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id }) }),
+  sendRumor: (targetTgId, text) => MOCK ? Promise.resolve(M.sendRumor(targetTgId, text))
+    : req('/api/rumors/send', { method: 'POST', body: JSON.stringify({ target_tg_id: targetTgId, text }) }),
+  listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
+  adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
+  adminAssignHouse: (tgId, region, castle) => MOCK ? Promise.resolve(M.adminAssignHouse(tgId, region, castle))
+    : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
   castleAssets: () => MOCK ? Promise.resolve(M.castleAssets()) : req('/api/assets/castle'),
   myItems: () => MOCK ? Promise.resolve(M.myItems()) : req('/api/assets/items'),
   adminListItems: () => MOCK ? Promise.resolve(M.adminListItems()) : req('/api/admin/items'),

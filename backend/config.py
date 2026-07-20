@@ -55,6 +55,11 @@ FEAST_COST = {"wine": 40, "food": 80}
 FEAST_POPULARITY_GAIN = 8
 FEAST_COOLDOWN_HOURS = 24
 
+# ---- شایعات — کارزار عمومی علیه یک بازیکن؛ همه می‌بینند، محبوبیت هدف کم می‌شود ----
+RUMOR_GOLD_COST = 100
+RUMOR_POPULARITY_DAMAGE = 3
+RUMOR_COOLDOWN_HOURS = 6   # یک نفر نمی‌تواند علیه همان هدف زودتر از این دوباره شایعه بسازد
+
 # ---- امتیاز ترکیبی ----
 SCORE_W_ECONOMY    = 4     # به‌ازای هر سطح ساختمان اقتصادی
 SCORE_W_MILITARY   = 5     # به‌ازای هر سطح پادگان/کارگاه تسلیحات

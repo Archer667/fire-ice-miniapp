@@ -13,33 +13,26 @@ router = APIRouter(prefix="/api/players", tags=["players"])
 
 class RegisterBody(BaseModel):
     name: str
-    region: str
-    castle: str
     gender: str   # "lord" | "lady"
 
 @router.post("/register")
 async def register(body: RegisterBody, user: dict = Depends(get_user)):
-    if body.region not in REGIONS:
-        raise HTTPException(400, "اقلیم نامعتبر")
-    region = REGIONS[body.region]
-    if body.castle not in region["castles"] + region["ports"]:
-        raise HTTPException(400, "این قلعه در این اقلیم نیست")
+    """فقط نام و جنسیت — خاندان (اقلیم) و قلعه را ادمین بعداً از پنلش دستی تعیین می‌کند"""
     if body.gender not in DEFAULT_TITLE:
         raise HTTPException(400, "جنسیت نامعتبر")
-
+    if not body.name.strip():
+        raise HTTPException(400, "نام نمی‌تواند خالی باشد")
     if await players.find_one({"tg_id": user["id"]}):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
-    if await players.find_one({"castle": body.castle}):
-        raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
 
     doc = {
         "tg_id": user["id"],
         "name": body.name.strip()[:40],
         "gender": body.gender,
         "title": DEFAULT_TITLE[body.gender],
-        "region": body.region,
-        "castle": body.castle,
-        "is_port": body.castle in region["ports"],
+        "region": None,
+        "castle": None,
+        "is_port": False,
         "resources": dict(STARTING_RESOURCES),
         "troops": {},
         "buildings": {},
@@ -59,6 +52,13 @@ async def me(user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         return {"registered": False}
+    if not p.get("region") or not p.get("castle"):
+        return {
+            "registered": True, "pending": True,
+            "name": p["name"], "gender": p.get("gender", "lord"),
+            "title": p.get("title", DEFAULT_TITLE.get(p.get("gender", "lord"))),
+            "admin_role": await get_admin_role(user),
+        }
     p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
     await players.update_one({"tg_id": user["id"]},
@@ -82,6 +82,7 @@ async def me(user: dict = Depends(get_user)):
     active_campaigns = await campaigns.count_documents({"tg_id": user["id"], "active": True})
     return {
         "registered": True,
+        "pending": False,
         "name": p["name"],
         "admin_role": admin_role,
         "gender": p.get("gender", "lord"),

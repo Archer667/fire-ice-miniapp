@@ -9,7 +9,7 @@ from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
     polls as polls_router, trade as trade_router, market as market_router, roleplay as roleplay_router,
-    assets as assets_router,
+    assets as assets_router, rumors as rumors_router,
 )
 from routers.war import notify_arrivals
 from routers.trade import notify_caravan_arrivals
@@ -43,6 +43,7 @@ app.include_router(trade_router.router)
 app.include_router(market_router.router)
 app.include_router(roleplay_router.router)
 app.include_router(assets_router.router)
+app.include_router(rumors_router.router)
 
 async def _arrival_watcher():
     """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد"""

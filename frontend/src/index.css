@@ -321,8 +321,8 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .pin.active { z-index: 6; }
 .pin.active .dot { transform: scale(1.25); }
 .pin.port .dot { border-radius: 8px; }
-.pin.sm { width: 17px; height: 17px; }
-.pin.sm .dot { width: 13px; height: 13px; border-width: 1px; box-shadow: 0 0 0 2px rgba(10,18,36,0.35); }
+.pin.sm { width: 13px; height: 13px; }
+.pin.sm .dot { width: 10px; height: 10px; border-width: 1px; box-shadow: 0 0 0 2px rgba(10,18,36,0.35); }
 .pin-popup {
   /* left/top/bottom/right/transform/transform-origin تماماً inline تعیین می‌شوند —
      چون بسته به جای پین روی نقشه (کنار لبه‌ها) و زوم فعلی فرق می‌کنند */
