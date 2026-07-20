@@ -15,6 +15,7 @@ export default function Diplomacy() {
   const [polls, setPolls] = useState(null);
   const [targets, setTargets] = useState([]);
   const [type, setType] = useState('non_aggression');
+  const [pactName, setPactName] = useState('');
   const [busy, setBusy] = useState(false);
   const [feastBusy, setFeastBusy] = useState(false);
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
@@ -55,11 +56,11 @@ export default function Diplomacy() {
     if (targets.length === 0) { toast('حداقل یک لرد را برای پیشنهاد انتخاب کن'); return; }
     setBusy(true);
     try {
-      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type);
+      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim());
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - ALLIANCE_TYPES[type].wine_cost * (res.sent_to || targets.length) } });
       toast(`پیشنهاد پیمان با کلاغ به ${res.sent_to || targets.length} لرد ارسال شد`);
-      setTargets([]);
+      setTargets([]); setPactName('');
       load();
     } catch (e) { toast(e.message); }
     setBusy(false);
@@ -114,7 +115,9 @@ export default function Diplomacy() {
 
       <div className="sect up u2">پیشنهاد پیمان تازه</div>
       <div className="card up u2">
-        <label className="f" style={{ marginTop: 0 }}>لرد(ها)ی طرف مقابل</label>
+        <label className="f" style={{ marginTop: 0 }}>نام پیمان</label>
+        <input value={pactName} onChange={e => setPactName(e.target.value)} maxLength={60} placeholder="مثلاً «پیمان دو اژدها» — اختیاری" />
+        <label className="f">لرد(ها)ی طرف مقابل</label>
         <PlayerPicker value={targets} onChange={setTargets} />
         <label className="f">نوع پیمان</label>
         <select value={type} onChange={e => setType(e.target.value)}>
@@ -135,7 +138,7 @@ export default function Diplomacy() {
         {alliances && alliances.map(a => (
           <div className="troop" key={a.id}>
             <div className="tn">
-              {a.other_name}
+              {a.name ? <>{a.name} <small style={{ display: 'inline' }}>— {a.other_name}</small></> : a.other_name}
               <small>{a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}</small>
             </div>
             {!a.mine_proposed && a.status === 'pending' && (

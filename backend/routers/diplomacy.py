@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
 class ProposeBody(BaseModel):
     to_tg_ids: list[int]
     type: str
+    name: str = ""
 
 @router.post("/propose")
 async def propose(body: ProposeBody, user: dict = Depends(get_user)):
@@ -53,10 +54,11 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     await players.update_one({"tg_id": user["id"]},
         {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
 
+    pact_name = body.name.strip()[:60]
     await alliances.insert_many([{
         "from_id": user["id"], "from_name": me["name"],
         "to_id": t["tg_id"], "to_name": t["name"],
-        "type": body.type, "wine_cost": unit_cost,
+        "type": body.type, "wine_cost": unit_cost, "name": pact_name,
         "status": "pending", "created_at": now(),
     } for t in valid_targets])
     return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
@@ -73,6 +75,7 @@ async def mine(user: dict = Depends(get_user)):
             "other_id": a["to_id"] if mine_proposed else a["from_id"],
             "other_name": a["to_name"] if mine_proposed else a["from_name"],
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
+            "name": a.get("name", ""),
             "status": a["status"],
         })
     return out

@@ -29,6 +29,7 @@ import {
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
+  ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -64,6 +65,10 @@ const mockSpyMissions = []; // {id, target, travel_minutes, arrival_at, success,
 let mockSpySeq = 1;
 const mockRoleplays = []; // {id, category, text, result, resolved, created_at}
 let mockRoleplaySeq = 1;
+const mockItems = []; // {id, name, type, duration, duration_hours, description, created_at}
+let mockItemSeq = 1;
+const mockItemGrants = []; // {id, item_id, tg_id, color, granted_at, expires_at}
+let mockItemGrantSeq = 1;
 
 function mockResolveRegion(name) {
   for (const [rid, r] of Object.entries(REGIONS_STATIC)) {
@@ -654,6 +659,87 @@ const M = {
     mockBuildings[id] = st;
     return { ok: true, target_level: target, cost, ready_at: st.ready_at };
   },
+  castleAssets: () => {
+    mockResolve();
+    return Object.entries(mockBuildings)
+      .filter(([, st]) => st.level > 0)
+      .map(([id, st]) => {
+        const meta = BUILDINGS_STATIC[id];
+        const { produces, cap_bonus } = buildingYield(id, st.level);
+        return { id, name: meta.name, type: meta.type, level: st.level, produces, cap_bonus };
+      })
+      .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name, 'fa'));
+  },
+  myItems: () => {
+    const nowMs = Date.now();
+    return mockItemGrants
+      .filter(g => g.tg_id === 1)
+      .filter(g => !g.expires_at || new Date(g.expires_at).getTime() > nowMs)
+      .slice().reverse()
+      .map(g => {
+        const tpl = mockItems.find(t => t.id === g.item_id);
+        if (!tpl) return null;
+        return {
+          id: g.id, item_id: tpl.id, name: tpl.name,
+          type: tpl.type, type_name: ITEM_TYPES[tpl.type] || tpl.type,
+          description: tpl.description || '',
+          duration: tpl.duration, duration_name: ITEM_DURATIONS[tpl.duration] || tpl.duration,
+          color: g.color, color_name: ITEM_RARITY_COLORS[g.color] || g.color,
+          granted_at: g.granted_at, expires_at: g.expires_at,
+        };
+      })
+      .filter(Boolean);
+  },
+  adminListItems: () => {
+    return mockItems.slice().reverse().map(tpl => ({
+      id: tpl.id, name: tpl.name,
+      type: tpl.type, type_name: ITEM_TYPES[tpl.type] || tpl.type,
+      duration: tpl.duration, duration_name: ITEM_DURATIONS[tpl.duration] || tpl.duration,
+      duration_hours: tpl.duration_hours, description: tpl.description || '',
+      grant_count: mockItemGrants.filter(g => g.item_id === tpl.id).length,
+    }));
+  },
+  adminCreateItem: (body) => {
+    const name = (body.name || '').trim();
+    if (!name) throw new Error('نام آیتم را بنویس');
+    if (!ITEM_TYPES[body.type]) throw new Error('نوع آیتم نامعتبر');
+    if (!ITEM_DURATIONS[body.duration]) throw new Error('مدت آیتم نامعتبر');
+    let durationHours = null;
+    if (body.duration === 'temporary') {
+      durationHours = parseInt(body.duration_hours, 10);
+      if (!durationHours || durationHours <= 0) throw new Error('برای آیتم موقتی، مدت (ساعت) را مشخص کن');
+    }
+    const doc = {
+      id: String(mockItemSeq++), name: name.slice(0, 60), type: body.type, duration: body.duration,
+      duration_hours: durationHours, description: (body.description || '').trim().slice(0, 300),
+      created_at: new Date().toISOString(),
+    };
+    mockItems.push(doc);
+    return { ok: true, id: doc.id };
+  },
+  adminDeleteItem: (itemId) => {
+    const i = mockItems.findIndex(t => t.id === itemId);
+    if (i === -1) throw new Error('این آیتم پیدا نشد');
+    mockItems.splice(i, 1);
+    for (let j = mockItemGrants.length - 1; j >= 0; j--) {
+      if (mockItemGrants[j].item_id === itemId) mockItemGrants.splice(j, 1);
+    }
+    return { ok: true };
+  },
+  adminGrantItem: (itemId, tgId, color) => {
+    const tpl = mockItems.find(t => t.id === itemId);
+    if (!tpl) throw new Error('این آیتم پیدا نشد');
+    if (!ITEM_RARITY_COLORS[color]) throw new Error('رنگ نامعتبر');
+    const target = tgId === 1 ? { tg_id: 1, name: mockMe.name } : MOCK_PLAYERS.find(p => p.tg_id === tgId);
+    if (!target) throw new Error('این لرد پیدا نشد');
+    const expiresAt = tpl.duration === 'temporary'
+      ? new Date(Date.now() + tpl.duration_hours * 3600 * 1000).toISOString() : null;
+    mockItemGrants.push({
+      id: String(mockItemGrantSeq++), item_id: itemId, tg_id: tgId, color,
+      granted_at: new Date().toISOString(), expires_at: expiresAt,
+    });
+    return { ok: true };
+  },
   titles: () => {
     const brief = (p) => p ? { tg_id: p.tg_id, name: p.name, title: p.title, castle: p.castle } : null;
     const meBrief = { tg_id: 1, name: mockMe.name, title: mockMe.title, castle: mockMe.castle };
@@ -682,17 +768,18 @@ const M = {
     return { ok: true };
   },
   diplomacyMine: () => mockAlliances,
-  diplomacyPropose: (toTgIds, type) => {
+  diplomacyPropose: (toTgIds, type, name) => {
     if (!ALLIANCE_TYPES[type]) throw new Error('نوع پیمان نامعتبر');
     if (!toTgIds.length) throw new Error('هیچ گیرنده‌ای انتخاب نشده');
     const cost = ALLIANCE_TYPES[type].wine_cost * toTgIds.length;
     if (!mockCanAfford({ wine: cost })) throw new Error(`شراب کافی برای پیشنهاد به ${toTgIds.length} نفر نداری`);
     mockPay({ wine: cost });
+    const pactName = (name || '').trim().slice(0, 60);
     for (const tgId of toTgIds) {
       const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
       mockAlliances.unshift({
         id: String(mockAllianceSeq++), mine_proposed: true, other_id: tgId, other_name: p ? p.name : String(tgId),
-        type, type_name: ALLIANCE_TYPES[type].name, status: 'pending',
+        type, type_name: ALLIANCE_TYPES[type].name, name: pactName, status: 'pending',
       });
     }
     return { ok: true, sent_to: toTgIds.length };
@@ -802,13 +889,20 @@ export const api = {
   buildings: () => MOCK ? Promise.resolve(M.buildings()) : req('/api/buildings'),
   buildBuilding:   (id) => MOCK ? Promise.resolve(M.buildAction(id, false)) : req('/api/buildings/build',   { method: 'POST', body: JSON.stringify({ building_id: id }) }),
   upgradeBuilding: (id) => MOCK ? Promise.resolve(M.buildAction(id, true))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id }) }),
+  castleAssets: () => MOCK ? Promise.resolve(M.castleAssets()) : req('/api/assets/castle'),
+  myItems: () => MOCK ? Promise.resolve(M.myItems()) : req('/api/assets/items'),
+  adminListItems: () => MOCK ? Promise.resolve(M.adminListItems()) : req('/api/admin/items'),
+  adminCreateItem: (b) => MOCK ? Promise.resolve(M.adminCreateItem(b)) : req('/api/admin/items', { method: 'POST', body: JSON.stringify(b) }),
+  adminDeleteItem: (id) => MOCK ? Promise.resolve(M.adminDeleteItem(id)) : req(`/api/admin/items/${id}`, { method: 'DELETE' }),
+  adminGrantItem: (itemId, tgId, color) => MOCK ? Promise.resolve(M.adminGrantItem(itemId, tgId, color))
+    : req(`/api/admin/items/${itemId}/grant`, { method: 'POST', body: JSON.stringify({ tg_id: tgId, color }) }),
   setTax:    (rate) => MOCK ? Promise.resolve(M.setTax(rate)) : req('/api/players/tax', { method: 'POST', body: JSON.stringify({ rate }) }),
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
   setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
     : req('/api/titles/small-council', { method: 'POST', body: JSON.stringify({ seat, tg_id: tgId }) }),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
-  diplomacyPropose: (toTgIds, type) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type))
-    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type }) }),
+  diplomacyPropose: (toTgIds, type, name) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name))
+    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   feast: () => MOCK ? Promise.resolve(M.feast()) : req('/api/diplomacy/feast', { method: 'POST' }),

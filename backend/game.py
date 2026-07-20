@@ -20,6 +20,23 @@ def normalize_building_state(raw) -> dict:
         return {"level": raw.get("level", 0), "upgrade_to": raw.get("upgrade_to"), "ready_at": raw.get("ready_at")}
     return {"level": 1, "upgrade_to": None, "ready_at": None} if raw else {"level": 0, "upgrade_to": None, "ready_at": None}
 
+def resolve_building_upgrades(player: dict) -> dict:
+    """ارتقاهای تمام‌شده را نهایی می‌کند و ساختار قدیمی‌تر (True/False به‌جای
+    دیکشنری سطح‌دار) را که از نسخه‌های پیش از سیستم سطح‌بندی مانده، اصلاح می‌کند"""
+    b = player.setdefault("buildings", {})
+    for bid, raw in list(b.items()):
+        st = normalize_building_state(raw)
+        ready = st["ready_at"]
+        if ready and st["upgrade_to"]:
+            if isinstance(ready, str):
+                ready = datetime.fromisoformat(ready)
+            if ready <= now():
+                st["level"] = st["upgrade_to"]
+                st["upgrade_to"] = None
+                st["ready_at"] = None
+        b[bid] = st
+    return player
+
 def _building_levels(player: dict):
     for bid, raw in player.get("buildings", {}).items():
         level = normalize_building_state(raw)["level"]

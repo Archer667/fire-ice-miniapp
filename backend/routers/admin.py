@@ -4,9 +4,9 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings, spy_missions, roleplays
+from db import campaigns, players, admin_roles, map_castles, battle_reports, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants
 from game import now, normalize_building_state
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS
 from config import ADMIN_IDS
 from routers.war import OP_TYPES
 from routers.ravens import send_system_message
@@ -423,6 +423,94 @@ async def admin_black_market_delete(listing_id: str, user: dict = Depends(full_a
     return {"ok": True}
 
 PLAYER_RESOURCE_KEYS = {"gold", "wood", "stone", "iron", "food", "wine", "men"}
+
+@router.get("/items")
+async def admin_list_items(user: dict = Depends(full_admin_user)):
+    """قالب‌های آیتم — همراه با تعداد بارِ داده‌شده به لردها"""
+    out = []
+    async for tpl in items.find({}).sort("created_at", -1):
+        grant_count = await item_grants.count_documents({"item_id": tpl["_id"]})
+        out.append({
+            "id": str(tpl["_id"]), "name": tpl["name"],
+            "type": tpl["type"], "type_name": ITEM_TYPES.get(tpl["type"], tpl["type"]),
+            "duration": tpl["duration"], "duration_name": ITEM_DURATIONS.get(tpl["duration"], tpl["duration"]),
+            "duration_hours": tpl.get("duration_hours"),
+            "description": tpl.get("description", ""),
+            "grant_count": grant_count,
+        })
+    return out
+
+class ItemBody(BaseModel):
+    name: str
+    type: str
+    duration: str
+    duration_hours: int | None = None
+    description: str = ""
+
+@router.post("/items")
+async def admin_create_item(body: ItemBody, user: dict = Depends(full_admin_user)):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "نام آیتم را بنویس")
+    if body.type not in ITEM_TYPES:
+        raise HTTPException(400, "نوع آیتم نامعتبر")
+    if body.duration not in ITEM_DURATIONS:
+        raise HTTPException(400, "مدت آیتم نامعتبر")
+    duration_hours = None
+    if body.duration == "temporary":
+        if not body.duration_hours or body.duration_hours <= 0:
+            raise HTTPException(400, "برای آیتم موقتی، مدت (ساعت) را مشخص کن")
+        duration_hours = body.duration_hours
+
+    doc = {
+        "name": name[:60], "type": body.type, "duration": body.duration,
+        "duration_hours": duration_hours, "description": body.description.strip()[:300],
+        "created_by": user["id"], "created_at": now(),
+    }
+    res = await items.insert_one(doc)
+    return {"ok": True, "id": str(res.inserted_id)}
+
+@router.delete("/items/{item_id}")
+async def admin_delete_item(item_id: str, user: dict = Depends(full_admin_user)):
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ آیتم نامعتبر است")
+    res = await items.delete_one({"_id": oid})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "این آیتم پیدا نشد")
+    await item_grants.delete_many({"item_id": oid})
+    return {"ok": True}
+
+class ItemGrantBody(BaseModel):
+    tg_id: int
+    color: str
+
+@router.post("/items/{item_id}/grant")
+async def admin_grant_item(item_id: str, body: ItemGrantBody, user: dict = Depends(full_admin_user)):
+    try:
+        oid = ObjectId(item_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ آیتم نامعتبر است")
+    tpl = await items.find_one({"_id": oid})
+    if not tpl:
+        raise HTTPException(404, "این آیتم پیدا نشد")
+    if body.color not in ITEM_RARITY_COLORS:
+        raise HTTPException(400, "رنگ نامعتبر")
+    target = await players.find_one({"tg_id": body.tg_id})
+    if not target:
+        raise HTTPException(404, "این لرد پیدا نشد")
+
+    expires_at = now() + timedelta(hours=tpl["duration_hours"]) if tpl["duration"] == "temporary" else None
+    await item_grants.insert_one({
+        "item_id": oid, "tg_id": body.tg_id, "color": body.color,
+        "granted_by": user["id"], "granted_at": now(), "expires_at": expires_at,
+    })
+    await send_system_message(
+        target["tg_id"], target["name"],
+        f"آیتم «{tpl['name']}» ({ITEM_RARITY_COLORS[body.color]}) به دارایی‌های تو اضافه شد — در صفحهٔ «دارایی‌ها» ببینش.",
+    )
+    return {"ok": True}
 
 @router.get("/players/{tg_id}/resources")
 async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin_user)):

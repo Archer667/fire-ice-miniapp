@@ -122,17 +122,17 @@ export const REPORT_DELAY_MINUTES = 30;
 
 export const BUILDINGS_STATIC = {
   // اقتصادی
-  lumber_mill: { name: 'چوب‌بری',     cost: { gold: 130, stone: 30 },   hours: 4,  type: 'economy' },
-  stone_mine:  { name: 'معدن سنگ',   cost: { gold: 150, wood: 60 },    hours: 4,  type: 'economy' },
-  iron_mine:   { name: 'معدن آهن',   cost: { gold: 200, wood: 80 },    hours: 6,  type: 'economy' },
-  gold_mine:   { name: 'معدن طلا',   cost: { gold: 400, stone: 100, wood: 100 }, hours: 12, type: 'economy' },
-  market:      { name: 'بازار',       cost: { gold: 250, wood: 70 },    hours: 6,  type: 'economy' },
-  village:     { name: 'دهکده',       cost: { gold: 300, stone: 150, iron: 40 }, hours: 8,  type: 'economy' },
-  farm:        { name: 'مزرعه',       cost: { gold: 100, wood: 50 },    hours: 3,  type: 'economy' },
-  ranch:       { name: 'دامداری',     cost: { gold: 150, wood: 60 },    hours: 4,  type: 'economy' },
-  winery:      { name: 'می‌کده',      cost: { gold: 220, food: 60, wood: 70 }, hours: 6,  type: 'economy' },
-  granary:     { name: 'انبار غله',   cost: { gold: 200, stone: 50, wood: 60 }, hours: 5,  type: 'economy' },
-  warehouse:   { name: 'انبار',        cost: { gold: 200, stone: 80, wood: 50 }, hours: 5,  type: 'economy' },
+  lumber_mill: { name: 'چوب‌بری',     cost: { gold: 130, stone: 30 },   hours: 4,  type: 'economy', produces: { wood: 9 } },
+  stone_mine:  { name: 'معدن سنگ',   cost: { gold: 150, wood: 60 },    hours: 4,  type: 'economy', produces: { stone: 8 } },
+  iron_mine:   { name: 'معدن آهن',   cost: { gold: 200, wood: 80 },    hours: 6,  type: 'economy', produces: { iron: 6 } },
+  gold_mine:   { name: 'معدن طلا',   cost: { gold: 400, stone: 100, wood: 100 }, hours: 12, type: 'economy', produces: { gold: 12 } },
+  market:      { name: 'بازار',       cost: { gold: 250, wood: 70 },    hours: 6,  type: 'economy', produces: { gold: 3 } },
+  village:     { name: 'دهکده',       cost: { gold: 300, stone: 150, iron: 40 }, hours: 8,  type: 'economy', cap_bonus: { men: 40 } },
+  farm:        { name: 'مزرعه',       cost: { gold: 100, wood: 50 },    hours: 3,  type: 'economy', produces: { food: 10 } },
+  ranch:       { name: 'دامداری',     cost: { gold: 150, wood: 60 },    hours: 4,  type: 'economy', produces: { food: 6 } },
+  winery:      { name: 'می‌کده',      cost: { gold: 220, food: 60, wood: 70 }, hours: 6,  type: 'economy', produces: { wine: 5 } },
+  granary:     { name: 'انبار غله',   cost: { gold: 200, stone: 50, wood: 60 }, hours: 5,  type: 'economy', cap_bonus: { food: 40 } },
+  warehouse:   { name: 'انبار',        cost: { gold: 200, stone: 80, wood: 50 }, hours: 5,  type: 'economy', cap_bonus: { stone: 15, iron: 15 } },
   // پادگان هر یگان
   camp_sword:  { name: 'پادگان پیاده‌نظام',   cost: { gold: 250, iron: 50,  wood: 90 },  hours: 6,  type: 'barracks', unit: 'infantry' },
   camp_spear:  { name: 'پادگان نیزه‌داران',   cost: { gold: 200, iron: 30,  wood: 70 },  hours: 5,  type: 'barracks', unit: 'spearman' },
@@ -169,6 +169,14 @@ export function buildingHours(id, level) {
   return Math.round(base * mult * 10) / 10;
 }
 
+// بازدهیِ فعلیِ یک ساختمان — تولید روزانه و افزایش سقفِ ذخیره‌سازی، به‌نسبت سطح فعلی‌اش
+export function buildingYield(id, level) {
+  const meta = BUILDINGS_STATIC[id];
+  const produces = Object.fromEntries(Object.entries(meta.produces || {}).map(([k, v]) => [k, v * level]));
+  const capBonus = Object.fromEntries(Object.entries(meta.cap_bonus || {}).map(([k, v]) => [k, v * level]));
+  return { produces, cap_bonus: capBonus };
+}
+
 export const WARDEN_GROUPS = {
   south:   { name: 'والی جنوب', regions: ['reach', 'dorne', 'storm'] },
   central: { name: 'والی مرکز', regions: ['west', 'crown', 'river'] },
@@ -183,6 +191,13 @@ export const ROLEPLAY_CATEGORIES = {
   economy:   'اقتصاد',
   other:     'آزاد',
 };
+
+// آیتم‌ها — دارایی‌های شخصی هر لرد؛ ادمین قالبشان را می‌سازد و به لردها می‌دهد
+export const ITEM_TYPES = { war: 'جنگی', economy: 'اقتصادی', stealth: 'مخفی‌کاری' };
+export const ITEM_DURATIONS = { temporary: 'موقتی', permanent: 'دائمی' };
+// «رنگ» میزان خاص‌بودن آیتم را نشان می‌دهد — ادمین موقع دادن آیتم به هر لرد جداگانه انتخابش می‌کند
+export const ITEM_RARITY_COLORS = { gray: 'خاکستری', blue: 'آبی', purple: 'بنفش', gold: 'طلایی' };
+export const ITEM_RARITY_HEX = { gray: '#9aa5b1', blue: '#4da3ff', purple: '#b06cf0', gold: '#e0b84a' };
 
 // شورای کوچک پادشاه — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند این کرسی‌ها را بچیند
 export const SMALL_COUNCIL_SEATS = {

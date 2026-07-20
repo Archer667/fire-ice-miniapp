@@ -1,5 +1,5 @@
 import { haptic } from '../telegram.js';
-import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart, Scroll } from './Icons.jsx';
+import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart, Scroll, Warehouse } from './Icons.jsx';
 
 // هر آیتم index خودش رو جدا نگه می‌داره (نه ترتیب آرایه) چون همین index مستقیم
 // به PAGES توی App.jsx اشاره می‌کنه — هر صفحهٔ جدید همین‌جا و اونجا اضافه شود
@@ -18,6 +18,7 @@ export const EXTRA_PAGES = [
   { index: 7, Icon: Eye,    label: 'جاسوسی' },
   { index: 8, Icon: Cart,   label: 'تجارت' },
   { index: 9, Icon: Scroll, label: 'رول‌ها' },
+  { index: 10, Icon: Warehouse, label: 'دارایی‌ها' },
 ];
 
 export default function NavBar({ tab, onChange }) {

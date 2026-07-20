@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People } from '../components/Icons.jsx';
+import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import { REGION_COORDS } from '../mapCoords.js';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -24,6 +24,7 @@ const TABS = [
   { key: 'roleplay',  label: 'رول‌ها' },
   { key: 'map',       label: 'نقشه' },
   { key: 'titles',    label: 'مقام‌ها' },
+  { key: 'items',     label: 'آیتم‌ها', fullOnly: true },
   { key: 'market',    label: 'بازار', fullOnly: true },
   { key: 'resources', label: 'منابع', fullOnly: true },
   { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
@@ -98,6 +99,18 @@ export default function Admin() {
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
+  const [itemsList, setItemsList] = useState(null);
+  const [itemName, setItemName] = useState('');
+  const [itemType, setItemType] = useState(Object.keys(ITEM_TYPES)[0]);
+  const [itemDuration, setItemDuration] = useState(Object.keys(ITEM_DURATIONS)[0]);
+  const [itemDurationHours, setItemDurationHours] = useState('24');
+  const [itemDescription, setItemDescription] = useState('');
+  const [itemBusy, setItemBusy] = useState(false);
+  const [grantOpenId, setGrantOpenId] = useState(null);
+  const [grantTarget, setGrantTarget] = useState([]);
+  const [grantColor, setGrantColor] = useState(Object.keys(ITEM_RARITY_COLORS)[0]);
+  const [grantBusy, setGrantBusy] = useState(false);
+
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
@@ -108,6 +121,7 @@ export default function Admin() {
   const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
   const loadMarket = () => api.adminMarketList().then(setMarketListings).catch(e => toast(e.message));
   const loadBlackMarket = () => api.adminBlackMarketList().then(setBlackListings).catch(e => toast(e.message));
+  const loadItems = () => api.adminListItems().then(setItemsList).catch(e => toast(e.message));
 
   useEffect(() => {
     loadCampaigns();
@@ -115,7 +129,7 @@ export default function Admin() {
     loadSpyPending();
     loadRoleplayPending();
     loadMapData();
-    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); }
+    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); }
   }, []);
 
   useEffect(() => {
@@ -365,6 +379,50 @@ export default function Admin() {
   const removeAdmin = async (tgId) => {
     try { await api.adminRemoveAdmin(tgId); haptic(); toast('ادمین حذف شد'); loadAdmins(); }
     catch (e) { toast(e.message); }
+  };
+
+  const createItem = async () => {
+    if (!itemName.trim()) { toast('نام آیتم را بنویس'); return; }
+    if (itemDuration === 'temporary' && (!itemDurationHours || +itemDurationHours <= 0)) {
+      toast('برای آیتم موقتی، مدت (ساعت) را مشخص کن'); return;
+    }
+    setItemBusy(true);
+    try {
+      await api.adminCreateItem({
+        name: itemName.trim(), type: itemType, duration: itemDuration,
+        duration_hours: itemDuration === 'temporary' ? +itemDurationHours : null,
+        description: itemDescription.trim(),
+      });
+      haptic('medium');
+      toast('آیتم ساخته شد');
+      setItemName(''); setItemDescription(''); setItemDurationHours('24');
+      loadItems();
+    } catch (e) { toast(e.message); }
+    setItemBusy(false);
+  };
+
+  const deleteItem = async (id) => {
+    try { await api.adminDeleteItem(id); haptic(); toast('آیتم حذف شد'); loadItems(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const openGrant = (id) => {
+    haptic();
+    setGrantOpenId(prev => prev === id ? null : id);
+    setGrantTarget([]); setGrantColor(Object.keys(ITEM_RARITY_COLORS)[0]);
+  };
+
+  const grantItem = async (id) => {
+    if (!grantTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    setGrantBusy(true);
+    try {
+      await api.adminGrantItem(id, grantTarget[0].tg_id, grantColor);
+      haptic('medium');
+      toast(`آیتم به «${grantTarget[0].name}» داده شد`);
+      setGrantOpenId(null); setGrantTarget([]);
+      loadItems();
+    } catch (e) { toast(e.message); }
+    setGrantBusy(false);
   };
 
   if (!me.admin_role) {
@@ -683,6 +741,84 @@ export default function Admin() {
             <label className="f">عنوان تازه</label>
             <input value={epithetText} onChange={e => setEpithetText(e.target.value)} placeholder="مثلاً: شکنندهٔ زنجیرها" />
             <button className="btn" style={{ marginTop: 14 }} onClick={setEpithet}>ثبت عنوان</button>
+          </div>
+        </>
+      )}
+
+      {tab === 'items' && isFull && (
+        <>
+          <div className="sect up u2">ساخت آیتم تازه</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>نام آیتم</label>
+            <input value={itemName} onChange={e => setItemName(e.target.value)} maxLength={60} placeholder="مثلاً «شمشیر فولاد والریایی»" />
+            <label className="f">نوع</label>
+            <select value={itemType} onChange={e => setItemType(e.target.value)}>
+              {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <label className="f">مدت</label>
+            <select value={itemDuration} onChange={e => setItemDuration(e.target.value)}>
+              {Object.entries(ITEM_DURATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            {itemDuration === 'temporary' && (
+              <>
+                <label className="f">مدت (ساعت)</label>
+                <input type="number" min="1" value={itemDurationHours} onChange={e => setItemDurationHours(e.target.value)} />
+              </>
+            )}
+            <label className="f">توضیح (اختیاری)</label>
+            <textarea value={itemDescription} onChange={e => setItemDescription(e.target.value)} placeholder="این آیتم چه می‌کند..." />
+            <button className="btn" style={{ marginTop: 14 }} disabled={itemBusy} onClick={createItem}>
+              {itemBusy ? 'در حال ساخت...' : 'ساخت آیتم'}
+            </button>
+          </div>
+
+          <div className="sect up u3">آیتم‌های ساخته‌شده</div>
+          <div className="up u3">
+            {(!itemsList || itemsList.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز آیتمی نساخته‌ای</div>
+            )}
+            {itemsList && itemsList.map(it => (
+              <div className="card" key={it.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Warehouse s={16} /></div>
+                  <div className="n">
+                    {it.name}
+                    <small>
+                      {it.type_name} · {it.duration_name}{it.duration_hours ? ` (${it.duration_hours.toLocaleString('fa-IR')} ساعت)` : ''} ·{' '}
+                      {it.grant_count.toLocaleString('fa-IR')} بار داده‌شده
+                    </small>
+                  </div>
+                </div>
+                {it.description && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0' }}>{it.description}</div>}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => openGrant(it.id)}>
+                    افزودن به یک لرد
+                  </button>
+                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => deleteItem(it.id)}>
+                    حذف آیتم
+                  </button>
+                </div>
+                {grantOpenId === it.id && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
+                    <label className="f" style={{ marginTop: 0 }}>لرد</label>
+                    <PlayerPicker value={grantTarget} onChange={setGrantTarget} single />
+                    <label className="f">میزان خاص‌بودن (رنگ)</label>
+                    <div className="grid2">
+                      {Object.entries(ITEM_RARITY_COLORS).map(([k, v]) => (
+                        <div key={k} className={`pick ${grantColor === k ? 'sel' : ''}`}
+                             style={{ borderColor: grantColor === k ? ITEM_RARITY_HEX[k] : undefined }}
+                             onClick={() => { haptic(); setGrantColor(k); }}>
+                          <div className="n" style={{ color: ITEM_RARITY_HEX[k] }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <button className="btn" style={{ marginTop: 14 }} disabled={grantBusy} onClick={() => grantItem(it.id)}>
+                      {grantBusy ? 'در حال افزودن...' : 'افزودن به دارایی‌های این لرد'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </>
       )}

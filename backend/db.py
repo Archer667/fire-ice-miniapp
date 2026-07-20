@@ -18,3 +18,5 @@ caravans   = db.caravans
 market_listings = db.market_listings
 black_market_listings = db.black_market_listings
 roleplays = db.roleplays
+items      = db.items
+item_grants = db.item_grants
