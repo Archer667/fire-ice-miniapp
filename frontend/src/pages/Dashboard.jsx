@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { api } from '../api.js';
-import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake } from '../components/Icons.jsx';
+import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake, Gift } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
@@ -28,6 +28,22 @@ export default function Dashboard({ goTo }) {
   const { name: seasonName, from: seasonFrom, to: seasonTo } = SEASONS[season];
   const SeasonIcon = SEASON_ICON[season];
 
+  const [daily, setDaily] = useState(null);
+  const [dailyBusy, setDailyBusy] = useState(false);
+  useEffect(() => { api.dailyStatus().then(setDaily).catch(() => {}); }, []);
+
+  const claimDaily = async () => {
+    setDailyBusy(true);
+    try {
+      const res = await api.dailyClaim();
+      haptic('medium');
+      setMe({ ...me, resources: res.resources });
+      setDaily(prev => ({ ...prev, claimed_today: true, current_streak: res.streak }));
+      toast(`روز ${res.day_in_cycle.toLocaleString('fa-IR')} از ۷ — جایزه گرفته شد!`);
+    } catch (e) { toast(e.message); }
+    setDailyBusy(false);
+  };
+
   const changeTax = async (delta) => {
     const rate = Math.max(0, Math.min(me.max_tax_rate, me.tax_rate + delta));
     if (rate === me.tax_rate) return;
@@ -42,6 +58,27 @@ export default function Dashboard({ goTo }) {
 
   return (
     <>
+      {daily && (
+        <div className={`daily-card up ${daily.claimed_today ? 'done' : ''}`}>
+          <div className="daily-ic"><Gift s={22} /></div>
+          <div className="daily-mid">
+            <div className="daily-t1">
+              {daily.claimed_today ? 'جایزهٔ امروز رو گرفتی' : `جایزهٔ روز ${daily.day_in_cycle.toLocaleString('fa-IR')} از ۷`}
+            </div>
+            <div className="daily-t2">
+              {daily.claimed_today
+                ? `استریک: ${daily.current_streak.toLocaleString('fa-IR')} روز — فردا دوباره سر بزن`
+                : Object.entries(daily.reward).map(([k, v]) => `${v.toLocaleString('fa-IR')} ${RES_META[k]?.name || k}`).join(' · ')}
+            </div>
+          </div>
+          {!daily.claimed_today && (
+            <button type="button" className="rbtn daily-btn" disabled={dailyBusy} onClick={claimDaily}>
+              {dailyBusy ? '...' : 'دریافت'}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className={`season up ${season}`}>
         <SeasonIcon s={92} className="season-deco" />
         <div className="ring">

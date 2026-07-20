@@ -3,10 +3,11 @@
 مقام‌ها (بالادستی/والی/پادشاه) همه به‌صورت دستی توسط ادمین تعیین می‌شوند — معمولاً
 بعد از یک رای‌گیری بین بازیکن‌ها (سکشن دیپلماسی). امتیاز فقط برای لیدربرد استفاده
 می‌شود، دیگر خودکار کسی را بالادستی نمی‌کند."""
+from datetime import datetime, timedelta
 from db import players, hierarchy
 from game_data import REGIONS, WARDEN_GROUPS, BUILDINGS
 from config import SCORE_W_ECONOMY, SCORE_W_MILITARY, SCORE_W_POPULARITY, SCORE_W_ALLIANCE, TITLE_SCORE_BONUS
-from game import normalize_building_state
+from game import normalize_building_state, now
 
 HIERARCHY_ID = "main"
 
@@ -61,3 +62,30 @@ async def scored_players() -> list:
         rows.append({"player": p, "score": score, "rank_label": rank_label})
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows
+
+def current_week_start() -> datetime:
+    """نیمه‌شب دوشنبهٔ همین هفته (UTC) — مرز محاسبهٔ لیدربرد هفتگی"""
+    n = now()
+    return (n - timedelta(days=n.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+
+async def weekly_scored_players() -> list:
+    """امتیاز کسب‌شده از ابتدای همین هفته — انگیزهٔ رقابت تازه به‌جای فقط انباشت کلی.
+    baseline هر بازیکن lazily وقتی هفتهٔ تازه شروع شده و اولین‌بار خوانده می‌شود ریست می‌شود"""
+    week_start = current_week_start()
+    rows = await scored_players()
+    out = []
+    for row in rows:
+        p = row["player"]
+        baseline_at = p.get("weekly_baseline_at")
+        if isinstance(baseline_at, str):
+            baseline_at = datetime.fromisoformat(baseline_at)
+        if not baseline_at or baseline_at < week_start:
+            baseline_score = row["score"]
+            await players.update_one({"tg_id": p["tg_id"]}, {"$set": {
+                "weekly_baseline_score": baseline_score, "weekly_baseline_at": week_start,
+            }})
+        else:
+            baseline_score = p.get("weekly_baseline_score", 0)
+        out.append({**row, "weekly_score": max(0, row["score"] - baseline_score)})
+    out.sort(key=lambda r: r["weekly_score"], reverse=True)
+    return out

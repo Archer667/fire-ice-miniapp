@@ -4,16 +4,19 @@ from auth import get_user
 from db import players, messages
 from game import now
 from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
+import telegram_bot
 
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
 async def send_system_message(to_tg_id: int, to_name: str, text: str):
-    """پیام از طرف «شورای جنگ» — برای روایت نتیجهٔ نبردها که ادمین می‌نویسد"""
+    """پیام از طرف «شورای جنگ» — برای روایت نتیجهٔ نبردها که ادمین می‌نویسد. علاوه بر
+    صندوق داخل اپ، یک پوش واقعی تلگرام هم می‌رود تا کاربر بیرون از اپ هم خبردار شود"""
     await messages.insert_one({
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
         "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
         "text": text[:2000], "read": False, "created_at": now(),
     })
+    telegram_bot.push(to_tg_id, f"🐦 {text}")
 
 class SendBody(BaseModel):
     to_tg_ids: list[int]
@@ -40,6 +43,8 @@ async def send(body: SendBody, user: dict = Depends(get_user)):
         "from_name": me["name"], "to_name": t["name"],
         "text": text[:1000], "read": False, "created_at": now(),
     } for t in targets])
+    for t in targets:
+        telegram_bot.push(t["tg_id"], f"🐦 نامه‌ای از {me['name']}: {text[:300]}")
     return {"ok": True, "sent_to": len(targets)}
 
 @router.get("/unread")

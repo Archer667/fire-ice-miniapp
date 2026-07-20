@@ -30,10 +30,21 @@ import {
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
-  RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS,
+  RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
+const mockDaily = { streak: 0, lastClaimDate: null };
+
+function dailyTodayStr() { return new Date().toISOString().slice(0, 10); }
+function dailyYesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); }
+function dailyPendingStreak() {
+  const today = dailyTodayStr();
+  if (mockDaily.lastClaimDate === today) return { streak: mockDaily.streak, claimedToday: true };
+  if (mockDaily.lastClaimDate === dailyYesterdayStr()) return { streak: mockDaily.streak + 1, claimedToday: false };
+  return { streak: 1, claimedToday: false };
+}
+function dailyDayInCycle(streak) { return ((streak - 1) % DAILY_REWARDS.length) + 1; }
 const mockHierarchy = { king_tg_id: 1, small_council: {} }; // seat -> tg_id — تک‌بازیکنه: خودت همیشه پادشاهی
 const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = [
@@ -663,6 +674,31 @@ const M = {
     { rank: 3, name: 'مارگری تایرل', castle: 'های‌گاردن', region: 'ریچ', points: 1990 },
     { rank: 4, name: mockMe.name || 'تو', castle: mockMe.castle || '—', region: mockMe.region_name || '—', points: 100, me: true },
   ],
+  weeklyLeaderboard: () => [
+    { rank: 1, name: 'مارگری تایرل', castle: 'های‌گاردن', region: 'ریچ', points: 340 },
+    { rank: 2, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 295 },
+    { rank: 3, name: 'تایوین لنیستر', castle: 'کسترلی راک', region: 'وسترلندز', points: 210 },
+    { rank: 4, name: mockMe.name || 'تو', castle: mockMe.castle || '—', region: mockMe.region_name || '—', points: 40, me: true },
+  ],
+  dailyStatus: () => {
+    const { streak, claimedToday } = dailyPendingStreak();
+    const dayInCycle = dailyDayInCycle(streak);
+    return {
+      current_streak: mockDaily.streak, claimed_today: claimedToday,
+      day_in_cycle: dayInCycle, cycle_length: DAILY_REWARDS.length,
+      reward: DAILY_REWARDS[dayInCycle - 1],
+    };
+  },
+  dailyClaim: () => {
+    if (!mockMe.resources) throw new Error('اول باید خاندان و قلعه‌ات تعیین شده باشد');
+    const { streak, claimedToday } = dailyPendingStreak();
+    if (claimedToday) throw new Error('امروز جایزه‌ات را گرفته‌ای — فردا دوباره سر بزن');
+    const dayInCycle = dailyDayInCycle(streak);
+    const reward = DAILY_REWARDS[dayInCycle - 1];
+    for (const [k, v] of Object.entries(reward)) mockMe.resources[k] = (mockMe.resources[k] ?? 0) + v;
+    mockDaily.streak = streak; mockDaily.lastClaimDate = dailyTodayStr();
+    return { ok: true, streak, day_in_cycle: dayInCycle, reward, resources: mockMe.resources };
+  },
   ravensUnread: () => ({ count: 0 }),
   inbox: () => [
     { with_tg_id: 0, with_name: 'شورای جنگ', last_text: 'لشکرت از وینترفل به ریوران رسید.', last_at: '', unread: 1 },
@@ -967,6 +1003,9 @@ export const api = {
   adminSetPlayerResources: (tgId, resources) => MOCK ? Promise.resolve(M.adminSetPlayerResources(tgId, resources))
     : req(`/api/admin/players/${tgId}/resources`, { method: 'POST', body: JSON.stringify({ resources }) }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
+  weeklyLeaderboard: () => MOCK ? Promise.resolve(M.weeklyLeaderboard()) : req('/api/leaderboard/weekly'),
+  dailyStatus: () => MOCK ? Promise.resolve(M.dailyStatus()) : req('/api/daily/status'),
+  dailyClaim: () => MOCK ? Promise.resolve(M.dailyClaim()) : req('/api/daily/claim', { method: 'POST' }),
   ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
   thread:    (name) => MOCK ? Promise.resolve(M.thread(name)) : req('/api/ravens/thread/' + encodeURIComponent(name)),

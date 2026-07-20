@@ -230,6 +230,17 @@ export const RUMOR_GOLD_COST = 100;
 export const RUMOR_POPULARITY_DAMAGE = 3;
 export const RUMOR_COOLDOWN_HOURS = 6;
 
+// جایزهٔ ورود روزانه — چرخهٔ ۷ روزه با منحنی افزایشی (باید با DAILY_REWARDS بک‌اند یکی بماند)
+export const DAILY_REWARDS = [
+  { gold: 50 },
+  { gold: 80,  food: 40 },
+  { gold: 120, food: 60 },
+  { gold: 180, wood: 40, stone: 40 },
+  { gold: 260, iron: 40, men: 20 },
+  { gold: 350, wine: 10, men: 30 },
+  { gold: 600, men: 80,  wine: 20, food: 200 },
+];
+
 export function maxTaxRate(popularity) {
   return Math.max(0, TAX_RATE_BASE_MAX + Math.floor((popularity - POPULARITY_START) / 5));
 }
