@@ -7,6 +7,7 @@ import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
+  NAVAL_TROOP, NAVAL_CAMP_BUILDING,
 } from '../gamedata.js';
 
 const TABS = [
@@ -61,6 +62,7 @@ export default function War() {
   const allTroops = [
     ...COMMON_TROOPS.map(t => ({ ...t, special: false })),
     ...specials.map(n => ({ id: n, name: n, cost: SPECIAL_COST, special: true })),
+    ...(me.is_port ? [{ ...NAVAL_TROOP, special: false, naval: true }] : []),
   ];
 
   const stationedOrigins = useMemo(
@@ -85,13 +87,23 @@ export default function War() {
     }
     return me.region;
   };
+  const isPortCastle = (name) => {
+    if (!mapData) return name === me.castle && me.is_port;
+    for (const r of mapData.regions) {
+      const c = r.castles.find(c => c.name === name);
+      if (c) return !!c.port;
+    }
+    return false;
+  };
 
   const sameCastle = !op.needsTarget || (target && target.name === origin);
   const originRegion = findCastleRegion(origin);
   const targetRegion = op.needsTarget && target ? (target.region || findCastleRegion(target.name)) : originRegion;
   const eta = travelMinutes(sameCastle, originRegion, targetRegion);
+  const badOriginForNaval = op.portOnly && !isPortCastle(origin);
 
   const unlocked = (troop) => {
+    if (troop.naval) return builtLevels[NAVAL_CAMP_BUILDING] > 0;
     if (troop.special) return true;
     const req = TROOP_UNIT_BUILDINGS[troop.id];
     if (!req) return true;
@@ -107,7 +119,7 @@ export default function War() {
     [counts]
   );
   const foodPerDay = useMemo(
-    () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * (t.special ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR), 0),
+    () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR), 0),
     [counts]
   );
   const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
@@ -118,6 +130,7 @@ export default function War() {
     : overMen ? 'نفرات کافی نیست'
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
     : badPortTarget ? 'مقصد باید بندر باشد'
+    : badOriginForNaval ? 'مبدا باید بندر باشد'
     : menCommitted <= 0 ? 'نیرویی گسیل نکرده‌ای'
     : null;
 
@@ -129,6 +142,7 @@ export default function War() {
   const send = async () => {
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
+    if (badOriginForNaval) { toast('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است'); return; }
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
@@ -260,6 +274,11 @@ export default function War() {
                     {target.name} بندر نیست — غارت دریایی فقط علیه اهداف بندری ممکن است
                   </div>
                 )}
+                {op.portOnly && badOriginForNaval && (
+                  <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
+                    {origin} بندر نیست — غارت دریایی فقط از قلعه/شهرهای بندری ممکن است
+                  </div>
+                )}
               </>
             ) : (
               <div className="page-sub" style={{ margin: '10px 4px 0' }}>عملیات دفاعی برای قلعهٔ مبدا — نیازی به مقصد نیست</div>
@@ -277,19 +296,24 @@ export default function War() {
           </div>
 
           <div className="sect up u3">گسیل نیرو</div>
+          <div className="page-sub up u3" style={{ margin: '0 4px 10px' }}>
+            هر نیروی عمومی به پادگان و کارگاه تسلیحاتِ همان یگان نیاز دارد؛ کشتی جنگی فقط در قلعه/شهر بندری و بعد از ساخت بندر ممکن است — تا نسازی، ردیفش قفل می‌ماند.
+          </div>
           <div className="card up u3">
             {allTroops.map(t => {
               const ok = unlocked(t);
-              const req = !t.special && TROOP_UNIT_BUILDINGS[t.id];
+              const req = !t.special && !t.naval && TROOP_UNIT_BUILDINGS[t.id];
               return (
                 <div className="troop" key={t.id}>
                   <div className="tn">
                     {t.name}
                     {t.special && <span className="troop-tag">ویژهٔ اقلیم</span>}
+                    {t.naval && <span className="troop-tag">ویژهٔ بندر</span>}
                     <small>
-                      {t.cost.toLocaleString('fa-IR')} طلا/نفر · {(t.special ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
+                      {t.cost.toLocaleString('fa-IR')} طلا/نفر · {((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
                     </small>
                     {!ok && req && <small className="troop-locked">نیاز به پادگان و کارگاه تسلیحاتِ این یگان</small>}
+                    {!ok && t.naval && <small className="troop-locked">نیاز به ساختن بندر</small>}
                   </div>
                   <input type="number" min="0" value={counts[t.id]} disabled={!ok}
                          onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, +e.target.value || 0) })} />

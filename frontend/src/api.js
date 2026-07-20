@@ -28,7 +28,7 @@ import {
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
-  campaignPower, REPORT_VISIBLE_HOURS,
+  campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -71,6 +71,10 @@ function mockResolveRegion(name) {
   }
   const custom = mockMapCastles.find(m => m.name === name);
   return custom ? custom.region : null;
+}
+function mockIsPortCastle(name) {
+  return Object.values(REGIONS_STATIC).some(r => r.ports.includes(name))
+    || mockMapCastles.some(m => m.name === name && m.kind === 'port');
 }
 const mockPolls = [
   { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
@@ -236,9 +240,8 @@ const M = {
       if (!body.target_castle) throw new Error('مقصد را مشخص کن');
       targetCastle = body.target_castle;
       if (op.portOnly) {
-        const isPort = Object.values(REGIONS_STATIC).some(r => r.ports.includes(targetCastle))
-          || mockMapCastles.some(m => m.name === targetCastle && m.kind === 'port');
-        if (!isPort) throw new Error('غارت دریایی فقط علیه اهداف بندری ممکن است');
+        if (!mockIsPortCastle(targetCastle)) throw new Error('غارت دریایی فقط علیه اهداف بندری ممکن است');
+        if (!mockIsPortCastle(body.origin_castle)) throw new Error('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است — لشکرکشی از راه آبی');
       }
     }
 
@@ -258,6 +261,12 @@ const M = {
         }
         gold += common.cost * n;
         food += FOOD_COST_REGULAR * n;
+      } else if (tid === NAVAL_TROOP.id) {
+        if (!mockMe.is_port) throw new Error('فقط قلعه/شهرهای بندری می‌توانند کشتی جنگی بسازند');
+        const portLevel = mockBuildings[NAVAL_CAMP_BUILDING]?.level || 0;
+        if (portLevel <= 0) throw new Error(`برای ساخت ${NAVAL_TROOP.name} باید ${BUILDINGS_STATIC[NAVAL_CAMP_BUILDING].name} را بنا کرده باشی`);
+        gold += NAVAL_TROOP.cost * n;
+        food += FOOD_COST_SPECIAL * n;
       } else if (specials.includes(tid)) {
         gold += SPECIAL_COST * n;
         food += FOOD_COST_SPECIAL * n;

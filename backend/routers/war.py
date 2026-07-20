@@ -5,7 +5,10 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, map_castles, roleplays
 from game import now, can_afford, pay, normalize_building_state
-from game_data import COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes
+from game_data import (
+    COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes,
+    NAVAL_TROOP, NAVAL_CAMP_BUILDING,
+)
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
 
@@ -60,7 +63,7 @@ async def resolve_region(name: str) -> str | None:
     doc = await map_castles.find_one({"name": name})
     return doc["region"] if doc else None
 
-def troop_food_and_gold(region: str, troops: dict, buildings: dict):
+def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: bool):
     """هزینهٔ طلا (یک‌باره)، نفرات کل، و آذوقهٔ روزانهٔ این ترکیب لشکر را حساب می‌کند.
     برای هر نیروی عمومی، ساخته‌بودن پادگان و کارگاه تسلیحاتش را هم اعتبارسنجی می‌کند."""
     specials = REGIONS[region]["special"]
@@ -82,6 +85,14 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict):
                     )
             gold += COMMON_TROOPS[tid]["cost"] * n
             food += FOOD_COST_REGULAR * n
+        elif tid == NAVAL_TROOP["id"]:
+            if not is_port:
+                raise HTTPException(400, "فقط قلعه/شهرهای بندری می‌توانند کشتی جنگی بسازند")
+            port_level = normalize_building_state(buildings.get(NAVAL_CAMP_BUILDING))["level"]
+            if port_level <= 0:
+                raise HTTPException(400, f"برای ساخت {NAVAL_TROOP['name']} باید {BUILDINGS[NAVAL_CAMP_BUILDING]['name']} را بنا کرده باشی")
+            gold += NAVAL_TROOP["cost"] * n
+            food += FOOD_COST_SPECIAL * n
         elif tid in specials:
             gold += SPECIAL_TROOP_COST * n
             food += FOOD_COST_SPECIAL * n
@@ -136,11 +147,13 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "این قلعه در بازی شناخته‌شده نیست")
         if op["port_only"] and body.target_castle not in ports:
             raise HTTPException(400, "غارت دریایی فقط علیه اهداف بندری ممکن است")
+        if op["port_only"] and body.origin_castle not in ports:
+            raise HTTPException(400, "غارت دریایی فقط از قلعه/شهرهای بندری ممکن است — لشکرکشی از راه آبی")
         target_castle = body.target_castle
     else:
         target_castle = body.origin_castle
 
-    gold, men, food_per_day = troop_food_and_gold(p["region"], body.troops, p.get("buildings", {}))
+    gold, men, food_per_day = troop_food_and_gold(p["region"], body.troops, p.get("buildings", {}), p.get("is_port", False))
     if men <= 0:
         raise HTTPException(400, "هیچ نیرویی گسیل نکرده‌ای")
     if not can_afford(p["resources"], {"gold": gold}):

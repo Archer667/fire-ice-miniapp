@@ -38,6 +38,11 @@ export const COMMON_TROOPS = [
 export const SPECIAL_COST = 4;
 export const SPECIAL_POWER = 5;       // نیروهای ویژه پادگان ندارند، پس توانشان ثابت است
 export const CAMP_POWER_STEP = 0.05;  // هر سطح پادگانِ یک یگان، توان همان یگان را ۵٪ بالا می‌برد
+
+// کشتی جنگی — فقط قلعه/شهرهای بندری می‌توانند بسازندش؛ «بندر» به‌جای پادگان+کارگاه
+// تسلیحات پیش‌نیازش است و سطح بندر مثل سطح پادگان توان کشتی را بالا می‌برد
+export const NAVAL_TROOP = { id: 'ship', name: 'کشتی جنگی', cost: 5, power: 10 };
+export const NAVAL_CAMP_BUILDING = 'port';
 export const FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
 export const FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
 
@@ -60,6 +65,9 @@ export function campaignPower(troops, builtLevels) {
       const req = TROOP_UNIT_BUILDINGS[tid];
       const campLevel = (req && builtLevels?.[req.camp]) || 0;
       total += common.power * (1 + campLevel * CAMP_POWER_STEP) * n;
+    } else if (tid === NAVAL_TROOP.id) {
+      const portLevel = builtLevels?.[NAVAL_CAMP_BUILDING] || 0;
+      total += NAVAL_TROOP.power * (1 + portLevel * CAMP_POWER_STEP) * n;
     } else {
       total += SPECIAL_POWER * n;
     }

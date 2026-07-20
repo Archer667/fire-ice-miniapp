@@ -66,6 +66,11 @@ COMMON_TROOPS = {
 SPECIAL_TROOP_COST = 4
 SPECIAL_TROOP_POWER = 5   # نیروهای ویژهٔ اقلیمی پادگان ندارند، پس توانشان ثابت است
 
+# کشتی جنگی — فقط قلعه/شهرهای بندری می‌توانند بسازندش، و «بندر» به‌جای پادگان+کارگاه
+# تسلیحات، پیش‌نیازش است (سطح بندر مثل سطح پادگان توان کشتی را بالا می‌برد)
+NAVAL_TROOP = {"id": "ship", "name": "کشتی جنگی", "cost": 5, "power": 10}
+NAVAL_CAMP_BUILDING = "port"
+
 # هر سطح پادگانِ یک یگان، توانِ همان یگان را وقتی از آن پادگان گسیل می‌شود بالا می‌برد —
 # نیروهای ویژه چون پادگان ندارند، همیشه توان پایه‌شان ثابت می‌ماند
 CAMP_POWER_STEP = 0.05
@@ -160,6 +165,9 @@ def unit_power(troop_id: str, building_levels: dict) -> float:
         req = UNIT_REQUIREMENTS.get(troop_id, {})
         camp_level = building_levels.get(req.get("camp"), 0)
         return common["power"] * (1 + camp_level * CAMP_POWER_STEP)
+    if troop_id == NAVAL_TROOP["id"]:
+        port_level = building_levels.get(NAVAL_CAMP_BUILDING, 0)
+        return NAVAL_TROOP["power"] * (1 + port_level * CAMP_POWER_STEP)
     return SPECIAL_TROOP_POWER
 
 def campaign_power(troops: dict, building_levels: dict) -> int:
