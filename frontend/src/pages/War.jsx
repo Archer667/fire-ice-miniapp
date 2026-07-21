@@ -7,7 +7,7 @@ import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
-  NAVAL_TROOP, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES,
+  NAVAL_TROOP, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES, WEAPON_NAMES,
 } from '../gamedata.js';
 
 const TABS = [
@@ -113,7 +113,7 @@ export default function War() {
     if (troop.special) return true;
     const req = TROOP_UNIT_BUILDINGS[troop.id];
     if (!req) return true;
-    return (builtLevels[req.camp] > 0) && (builtLevels[req.armory] > 0);
+    return builtLevels[req.camp] > 0;
   };
 
   const goldCost = useMemo(
@@ -128,12 +128,24 @@ export default function War() {
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR), 0),
     [counts]
   );
+  const weaponsNeeded = useMemo(() => {
+    const need = {};
+    for (const t of allTroops) {
+      const n = counts[t.id] || 0;
+      if (n <= 0 || t.special || t.naval) continue;
+      const weaponKey = TROOP_UNIT_BUILDINGS[t.id]?.weapon;
+      if (weaponKey) need[weaponKey] = (need[weaponKey] || 0) + n;
+    }
+    return need;
+  }, [counts]);
+  const shortWeapon = Object.entries(weaponsNeeded).find(([wkey, n]) => n > (me.resources[wkey] ?? 0));
   const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
   const overGold = goldCost > gold;
   const overMen = menCommitted > men;
   const badPortTarget = op.portOnly && target && !target.port;
   const formIssue = overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
+    : shortWeapon ? `${WEAPON_NAMES[shortWeapon[0]]} کافی نیست`
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
     : badPortTarget ? 'مقصد باید بندر باشد'
     : badOriginForNaval ? 'مبدا باید بندر باشد'
@@ -152,6 +164,7 @@ export default function War() {
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
+    if (shortWeapon) { toast(`${WEAPON_NAMES[shortWeapon[0]]} کافی نداری`); return; }
     setBusy(true);
     try {
       await api.submitCampaign({
@@ -160,9 +173,12 @@ export default function War() {
         name: name.trim(), troops: counts,
       });
       haptic('medium');
+      const weaponUpdates = Object.fromEntries(
+        Object.entries(weaponsNeeded).map(([wkey, n]) => [wkey, (me.resources[wkey] ?? 0) - n])
+      );
       setMe({
         ...me,
-        resources: { ...me.resources, gold: gold - goldCost, men: men - menCommitted },
+        resources: { ...me.resources, gold: gold - goldCost, men: men - menCommitted, ...weaponUpdates },
         active_campaigns: (me.active_campaigns ?? 0) + 1,
       });
       toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
@@ -276,12 +292,14 @@ export default function War() {
 
           <div className="sect up u3">گسیل نیرو</div>
           <div className="page-sub up u3" style={{ margin: '0 4px 10px' }}>
-            هر نیروی عمومی به پادگان و کارگاه تسلیحاتِ همان یگان نیاز دارد؛ کشتی جنگی فقط در قلعه/شهر بندری و بعد از ساخت بندر ممکن است — تا نسازی، ردیفش قفل می‌ماند.
+            هر نیروی عمومی به پادگانِ همان یگان نیاز دارد؛ کارگاه تسلیحاتش هم لازم است اما فقط برای تولید تسلیحات — هر سرباز موقع اعزام یک واحد از تسلیحاتِ همان یگان مصرف می‌کند. کشتی جنگی فقط در قلعه/شهر بندری و بعد از ساخت بندر ممکن است.
           </div>
           <div className="card up u3">
             {allTroops.map(t => {
               const ok = unlocked(t);
-              const req = !t.special && !t.naval && TROOP_UNIT_BUILDINGS[t.id];
+              const weaponKey = !t.special && !t.naval && TROOP_UNIT_BUILDINGS[t.id]?.weapon;
+              const weaponStock = weaponKey ? (me.resources[weaponKey] ?? 0) : null;
+              const weaponShort = weaponKey && (counts[t.id] || 0) > weaponStock;
               return (
                 <div className="troop" key={t.id}>
                   <div className="tn">
@@ -290,9 +308,11 @@ export default function War() {
                     {t.naval && <span className="troop-tag">ویژهٔ بندر</span>}
                     <small>
                       {t.cost.toLocaleString('fa-IR')} طلا/نفر · {((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
+                      {weaponKey && ok && ` · ${weaponStock.toLocaleString('fa-IR')} ${WEAPON_NAMES[weaponKey]} موجود`}
                     </small>
-                    {!ok && req && <small className="troop-locked">نیاز به پادگان و کارگاه تسلیحاتِ این یگان</small>}
+                    {!ok && weaponKey && <small className="troop-locked">نیاز به پادگانِ این یگان</small>}
                     {!ok && t.naval && <small className="troop-locked">نیاز به ساختن بندر</small>}
+                    {ok && weaponShort && <small className="troop-locked">{WEAPON_NAMES[weaponKey]} کافی نیست</small>}
                   </div>
                   <input type="number" min="0" value={counts[t.id] || ''} disabled={!ok} placeholder="۰"
                          onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, parseInt(e.target.value, 10) || 0) })} />

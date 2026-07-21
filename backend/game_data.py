@@ -105,12 +105,13 @@ BUILDINGS = {
     "camp_lcav":   {"name": "پادگان سوارهٔ سبک",   "cost": {"gold": 350, "iron": 60,  "wood": 110}, "hours": 8,  "type": "barracks", "unit": "light_cav"},
     "camp_hcav":   {"name": "پادگان سوارهٔ سنگین", "cost": {"gold": 500, "iron": 120, "wood": 140}, "hours": 12, "type": "barracks", "unit": "heavy_cav"},
 
-    # --- نظامی: کارگاه تسلیحات هر یگان (منبع سلاح، پیش‌نیاز دوم استخدام) ---
-    "armory_sword":  {"name": "کارگاه تسلیحات پیاده‌نظام",   "cost": {"gold": 200, "iron": 80,  "wood": 40}, "hours": 6,  "type": "armory", "unit": "infantry"},
-    "armory_spear":  {"name": "کارگاه تسلیحات نیزه‌داران",   "cost": {"gold": 160, "iron": 60,  "wood": 40}, "hours": 5,  "type": "armory", "unit": "spearman"},
-    "armory_archer": {"name": "کارگاه تسلیحات کمانداران",    "cost": {"gold": 160, "iron": 50,  "wood": 60}, "hours": 5,  "type": "armory", "unit": "archer"},
-    "armory_lcav":   {"name": "کارگاه تسلیحات سوارهٔ سبک",   "cost": {"gold": 280, "iron": 100, "wood": 50}, "hours": 8,  "type": "armory", "unit": "light_cav"},
-    "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180, "wood": 60}, "hours": 12, "type": "armory", "unit": "heavy_cav"},
+    # --- نظامی: کارگاه تسلیحات هر یگان — ساختمان تولیدی است، مثل معدن/مزرعه؛ روزانه
+    # تسلیحاتِ همان یگان را طبق سطحش تولید می‌کند (نه پیش‌نیاز خودِ استخدام) ---
+    "armory_sword":  {"name": "کارگاه تسلیحات پیاده‌نظام",   "cost": {"gold": 200, "iron": 80,  "wood": 40}, "hours": 6,  "type": "armory", "unit": "infantry",  "produces": {"weapon_sword": 6}},
+    "armory_spear":  {"name": "کارگاه تسلیحات نیزه‌داران",   "cost": {"gold": 160, "iron": 60,  "wood": 40}, "hours": 5,  "type": "armory", "unit": "spearman",  "produces": {"weapon_spear": 6}},
+    "armory_archer": {"name": "کارگاه تسلیحات کمانداران",    "cost": {"gold": 160, "iron": 50,  "wood": 60}, "hours": 5,  "type": "armory", "unit": "archer",    "produces": {"weapon_archer": 6}},
+    "armory_lcav":   {"name": "کارگاه تسلیحات سوارهٔ سبک",   "cost": {"gold": 280, "iron": 100, "wood": 50}, "hours": 8,  "type": "armory", "unit": "light_cav", "produces": {"weapon_lcav": 4}},
+    "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180, "wood": 60}, "hours": 12, "type": "armory", "unit": "heavy_cav", "produces": {"weapon_hcav": 3}},
 
     # --- دفاعی و زیرساخت ---
     "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200, "wood": 260}, "hours": 12, "type": "defense", "requires_port": True},
@@ -147,8 +148,10 @@ def building_hours(building_id: str, level: int) -> float:
     mult = 1 + (level - 1) * LEVEL_HOURS_STEP
     return round(base * mult, 1)
 
-# ---- پیش‌نیاز اعزام هر نیروی عمومی: پادگان + کارگاه تسلیحات همان یگان ----
-# نیروهای ویژهٔ اقلیمی (special) این پیش‌نیاز را ندارند — ساختمان مربوطه در بازی تعریف نشده
+# ---- پیش‌نیاز اعزام هر نیروی عمومی: فقط پادگان همان یگان ----
+# نیروهای ویژهٔ اقلیمی (special) این پیش‌نیاز را ندارند — ساختمان مربوطه در بازی تعریف نشده.
+# کارگاه تسلیحات دیگر پیش‌نیاز نیست — فقط تسلیحات همان یگان را تولید می‌کند و همان تسلیحات
+# به‌ازای هر سرباز موقع اعزام مصرف می‌شود (پایین‌تر: TROOP_WEAPON_KEY)
 UNIT_REQUIREMENTS = {}
 for _bid, _b in BUILDINGS.items():
     if _b.get("type") == "barracks":
@@ -162,6 +165,20 @@ def unit_requirements(troop_id: str):
     if not req:
         return None
     return req.get("camp"), req.get("armory")
+
+# تسلیحاتی که هر یگان عمومی به‌ازای هر سرباز مصرف می‌کند — از روی id کارگاه تسلیحاتش مشتق می‌شود
+TROOP_WEAPON_KEY = {
+    unit: bid.replace("armory_", "weapon_", 1)
+    for bid, b in BUILDINGS.items() if b.get("type") == "armory" for unit in [b["unit"]]
+}
+WEAPON_PER_SOLDIER = 1   # هر سرباز عمومی، ۱ واحد تسلیحاتِ همان یگان مصرف می‌کند
+WEAPON_NAMES = {
+    "weapon_sword":  "سلاح پیاده‌نظام",
+    "weapon_spear":  "سلاح نیزه‌داران",
+    "weapon_archer": "سلاح کمانداران",
+    "weapon_lcav":   "سلاح سوارهٔ سبک",
+    "weapon_hcav":   "سلاح سوارهٔ سنگین",
+}
 
 def unit_power(troop_id: str, building_levels: dict) -> float:
     """تک‌بهٔ توان یک یگان — برای نیروی عمومی با سطح پادگانِ همان یگان بالا می‌رود،

@@ -46,13 +46,22 @@ export const NAVAL_CAMP_BUILDING = 'port';
 export const FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
 export const FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
 
-// پیش‌نیاز اعزام هر نیروی عمومی: پادگان + کارگاه تسلیحاتِ همان یگان باید ساخته شده باشد
+// پیش‌نیاز اعزام هر نیروی عمومی: فقط پادگانِ همان یگان باید ساخته شده باشد — کارگاه
+// تسلیحات دیگر پیش‌نیاز نیست، فقط منبع تسلیحاتی‌ست که موقع اعزام مصرف می‌شود (weapon کلید زیر)
 export const TROOP_UNIT_BUILDINGS = {
-  heavy_cav: { camp: 'camp_hcav',   armory: 'armory_hcav' },
-  infantry:  { camp: 'camp_sword',  armory: 'armory_sword' },
-  light_cav: { camp: 'camp_lcav',   armory: 'armory_lcav' },
-  archer:    { camp: 'camp_archer', armory: 'armory_archer' },
-  spearman:  { camp: 'camp_spear',  armory: 'armory_spear' },
+  heavy_cav: { camp: 'camp_hcav',   armory: 'armory_hcav',   weapon: 'weapon_hcav' },
+  infantry:  { camp: 'camp_sword',  armory: 'armory_sword',  weapon: 'weapon_sword' },
+  light_cav: { camp: 'camp_lcav',   armory: 'armory_lcav',   weapon: 'weapon_lcav' },
+  archer:    { camp: 'camp_archer', armory: 'armory_archer', weapon: 'weapon_archer' },
+  spearman:  { camp: 'camp_spear',  armory: 'armory_spear',  weapon: 'weapon_spear' },
+};
+export const WEAPON_PER_SOLDIER = 1;
+export const WEAPON_NAMES = {
+  weapon_sword:  'سلاح پیاده‌نظام',
+  weapon_spear:  'سلاح نیزه‌داران',
+  weapon_archer: 'سلاح کمانداران',
+  weapon_lcav:   'سلاح سوارهٔ سبک',
+  weapon_hcav:   'سلاح سوارهٔ سنگین',
 };
 
 // توان کل یک لشکر — troops: {troop_id: count}, builtLevels: {building_id: level}
@@ -139,12 +148,12 @@ export const BUILDINGS_STATIC = {
   camp_archer: { name: 'پادگان کمانداران',    cost: { gold: 200, iron: 20,  wood: 80 },  hours: 5,  type: 'barracks', unit: 'archer' },
   camp_lcav:   { name: 'پادگان سوارهٔ سبک',   cost: { gold: 350, iron: 60,  wood: 110 }, hours: 8,  type: 'barracks', unit: 'light_cav' },
   camp_hcav:   { name: 'پادگان سوارهٔ سنگین', cost: { gold: 500, iron: 120, wood: 140 }, hours: 12, type: 'barracks', unit: 'heavy_cav' },
-  // کارگاه تسلیحات هر یگان
-  armory_sword:  { name: 'کارگاه تسلیحات پیاده‌نظام',   cost: { gold: 200, iron: 80,  wood: 40 }, hours: 6,  type: 'armory', unit: 'infantry' },
-  armory_spear:  { name: 'کارگاه تسلیحات نیزه‌داران',   cost: { gold: 160, iron: 60,  wood: 40 }, hours: 5,  type: 'armory', unit: 'spearman' },
-  armory_archer: { name: 'کارگاه تسلیحات کمانداران',    cost: { gold: 160, iron: 50,  wood: 60 }, hours: 5,  type: 'armory', unit: 'archer' },
-  armory_lcav:   { name: 'کارگاه تسلیحات سوارهٔ سبک',   cost: { gold: 280, iron: 100, wood: 50 }, hours: 8,  type: 'armory', unit: 'light_cav' },
-  armory_hcav:   { name: 'کارگاه تسلیحات سوارهٔ سنگین', cost: { gold: 400, iron: 180, wood: 60 }, hours: 12, type: 'armory', unit: 'heavy_cav' },
+  // کارگاه تسلیحات هر یگان — ساختمان تولیدی است، تسلیحاتِ همان یگان را روزانه طبق سطحش می‌سازد
+  armory_sword:  { name: 'کارگاه تسلیحات پیاده‌نظام',   cost: { gold: 200, iron: 80,  wood: 40 }, hours: 6,  type: 'armory', unit: 'infantry',  produces: { weapon_sword: 6 } },
+  armory_spear:  { name: 'کارگاه تسلیحات نیزه‌داران',   cost: { gold: 160, iron: 60,  wood: 40 }, hours: 5,  type: 'armory', unit: 'spearman',  produces: { weapon_spear: 6 } },
+  armory_archer: { name: 'کارگاه تسلیحات کمانداران',    cost: { gold: 160, iron: 50,  wood: 60 }, hours: 5,  type: 'armory', unit: 'archer',    produces: { weapon_archer: 6 } },
+  armory_lcav:   { name: 'کارگاه تسلیحات سوارهٔ سبک',   cost: { gold: 280, iron: 100, wood: 50 }, hours: 8,  type: 'armory', unit: 'light_cav', produces: { weapon_lcav: 4 } },
+  armory_hcav:   { name: 'کارگاه تسلیحات سوارهٔ سنگین', cost: { gold: 400, iron: 180, wood: 60 }, hours: 12, type: 'armory', unit: 'heavy_cav', produces: { weapon_hcav: 3 } },
   // دفاعی
   port:        { name: 'بندر',         cost: { gold: 600, stone: 200, wood: 260 }, hours: 12, type: 'defense', requires_port: true },
   wall:        { name: 'دیوار دفاعی', cost: { gold: 400, stone: 300, iron: 60 }, hours: 12, type: 'defense' },

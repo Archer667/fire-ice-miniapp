@@ -31,6 +31,7 @@ import {
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
+  WEAPON_NAMES, WEAPON_PER_SOLDIER,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -68,7 +69,10 @@ const mockBlackMarket = [
   { id: 'bm1', resource: 'wine', qty: 40, price: 5, expires_at: Date.now() + 3 * 3600 * 1000 },
 ];
 let mockBlackMarketSeq = 2;
-const DEFAULT_MOCK_PLAYER_RESOURCES = { gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 30, men: 500 };
+const DEFAULT_MOCK_PLAYER_RESOURCES = {
+  gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 30, men: 500,
+  weapon_sword: 20, weapon_spear: 20, weapon_archer: 20, weapon_lcav: 20, weapon_hcav: 20,
+};
 const mockPlayerResources = {}; // tg_id -> {gold,wood,stone,iron,food,wine,men} — برای تست ویرایش منابع در پنل ادمین
 const mockMapCastles = []; // {region, name, kind, x, y, custom}
 const mockSpyMissions = []; // {id, target, travel_minutes, arrival_at, success, report, created_at}
@@ -182,7 +186,10 @@ const M = {
       pending: false, region, region_name: r.name, castle,
       is_port: r.ports.includes(castle),
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
-      resources: mockMe.resources || { gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30 },
+      resources: mockMe.resources || {
+        gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30,
+        weapon_sword: 20, weapon_spear: 20, weapon_archer: 20, weapon_lcav: 20, weapon_hcav: 20,
+      },
       points: mockMe.points ?? 100, alliance_count: mockMe.alliance_count ?? 0,
       popularity: mockMe.popularity ?? POPULARITY_START, tax_rate: mockMe.tax_rate ?? TAX_RATE_DEFAULT,
       max_tax_rate: maxTaxRate(mockMe.popularity ?? POPULARITY_START),
@@ -299,6 +306,7 @@ const M = {
 
     const specials = REGIONS_STATIC[mockMe.region]?.special || [];
     let gold = 0, men = 0, food = 0;
+    const weapons = {};
     for (const [tid, n] of Object.entries(body.troops || {})) {
       if (!n || n <= 0) continue;
       const common = COMMON_TROOPS.find(t => t.id === tid);
@@ -306,10 +314,10 @@ const M = {
         const req = TROOP_UNIT_BUILDINGS[tid];
         if (req) {
           const campLevel = mockBuildings[req.camp]?.level || 0;
-          const armoryLevel = mockBuildings[req.armory]?.level || 0;
-          if (campLevel <= 0 || armoryLevel <= 0) {
-            throw new Error(`برای گسیل ${common.name} باید ${BUILDINGS_STATIC[req.camp].name} و ${BUILDINGS_STATIC[req.armory].name} را ساخته باشی`);
+          if (campLevel <= 0) {
+            throw new Error(`برای گسیل ${common.name} باید ${BUILDINGS_STATIC[req.camp].name} را ساخته باشی`);
           }
+          if (req.weapon) weapons[req.weapon] = (weapons[req.weapon] || 0) + n * WEAPON_PER_SOLDIER;
         }
         gold += common.cost * n;
         food += FOOD_COST_REGULAR * n;
@@ -330,8 +338,13 @@ const M = {
     if (men <= 0) throw new Error('هیچ نیرویی گسیل نکرده‌ای');
     if (!mockCanAfford({ gold })) throw new Error('خزانه کافی نیست');
     if ((mockMe.resources.men ?? 0) < men) throw new Error('نفرات کافی نداری');
+    for (const [wkey, needed] of Object.entries(weapons)) {
+      if ((mockMe.resources[wkey] ?? 0) < needed) {
+        throw new Error(`${WEAPON_NAMES[wkey]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود`);
+      }
+    }
 
-    mockPay({ gold });
+    mockPay({ gold, ...weapons });
     mockMe.resources.men -= men;
 
     const sameCastle = targetCastle === body.origin_castle;

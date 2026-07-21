@@ -463,7 +463,10 @@ async def admin_black_market_delete(listing_id: str, user: dict = Depends(full_a
         raise HTTPException(404, "این نشانی بازار سیاه پیدا نشد")
     return {"ok": True}
 
-PLAYER_RESOURCE_KEYS = {"gold", "wood", "stone", "iron", "food", "wine", "men"}
+PLAYER_RESOURCE_KEYS = {
+    "gold", "wood", "stone", "iron", "food", "wine", "men",
+    "weapon_sword", "weapon_spear", "weapon_archer", "weapon_lcav", "weapon_hcav",
+}
 
 @router.get("/items")
 async def admin_list_items(user: dict = Depends(full_admin_user)):

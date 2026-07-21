@@ -7,7 +7,7 @@ import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import { REGION_COORDS } from '../mapCoords.js';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -55,6 +55,7 @@ const PLAYER_RES = [
   { key: 'food',  label: 'غذا',  Icon: Wheat },
   { key: 'wine',  label: 'شراب', Icon: Wine },
   { key: 'men',   label: 'نیروی انسانی', Icon: People },
+  ...Object.entries(WEAPON_NAMES).map(([key, label]) => ({ key, label, Icon: Swords })),
 ];
 
 export default function Admin() {

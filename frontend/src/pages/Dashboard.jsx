@@ -4,6 +4,7 @@ import { haptic } from '../telegram.js';
 import { api } from '../api.js';
 import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake, Gift } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
+import { WEAPON_NAMES } from '../gamedata.js';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
 
@@ -15,6 +16,14 @@ const RES_META = {
   iron:  { name: 'آهن', d: 'معدن آهن', Icon: Pick, max: 500 },
   stone: { name: 'سنگ', d: 'معدن سنگ', Icon: Rock, max: 500 },
   wine:  { name: 'شراب', d: 'می‌کده · ضیافت و پیمان‌ها', Icon: Wine, max: 300 },
+};
+
+const WEAPON_META = {
+  weapon_sword:  { d: 'کارگاه تسلیحات پیاده‌نظام', max: 300 },
+  weapon_spear:  { d: 'کارگاه تسلیحات نیزه‌داران', max: 300 },
+  weapon_archer: { d: 'کارگاه تسلیحات کمانداران', max: 300 },
+  weapon_lcav:   { d: 'کارگاه تسلیحات سوارهٔ سبک', max: 200 },
+  weapon_hcav:   { d: 'کارگاه تسلیحات سوارهٔ سنگین', max: 200 },
 };
 
 const RANK_LABEL_FA = { overlord: 'بالادستی اقلیم', warden: 'والی', king: 'پادشاه/ملکه' };
@@ -127,6 +136,22 @@ export default function Dashboard({ goTo }) {
             <div className="res" key={k}>
               <div className="ic"><m.Icon s={18} /></div>
               <div className="n">{m.name}<small>{m.d}</small></div>
+              <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: pct + '%' }} /></div>
+              <div className="val">{v.toLocaleString('fa-IR')}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="sect up u2">تسلیحات</div>
+      <div className="card up u2">
+        {Object.entries(WEAPON_META).map(([k, m]) => {
+          const v = me.resources[k] ?? 0;
+          const pct = Math.round((v / m.max) * 100);
+          return (
+            <div className="res" key={k}>
+              <div className="ic"><Swords s={18} /></div>
+              <div className="n">{WEAPON_NAMES[k]}<small>{m.d}</small></div>
               <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: pct + '%' }} /></div>
               <div className="val">{v.toLocaleString('fa-IR')}</div>
             </div>

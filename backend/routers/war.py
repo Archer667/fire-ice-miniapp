@@ -7,7 +7,7 @@ from db import players, campaigns, map_castles, roleplays
 from game import now, can_afford, pay, normalize_building_state
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes,
-    NAVAL_TROOP, NAVAL_CAMP_BUILDING,
+    NAVAL_TROOP, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -64,25 +64,26 @@ async def resolve_region(name: str) -> str | None:
     return doc["region"] if doc else None
 
 def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: bool):
-    """هزینهٔ طلا (یک‌باره)، نفرات کل، و آذوقهٔ روزانهٔ این ترکیب لشکر را حساب می‌کند.
-    برای هر نیروی عمومی، ساخته‌بودن پادگان و کارگاه تسلیحاتش را هم اعتبارسنجی می‌کند."""
+    """هزینهٔ طلا (یک‌باره)، نفرات کل، آذوقهٔ روزانه، و تسلیحات مصرفی این ترکیب لشکر را حساب
+    می‌کند. برای هر نیروی عمومی فقط ساخته‌بودن پادگانش شرط است — کارگاه تسلیحات دیگر
+    پیش‌نیاز نیست، فقط منبع تسلیحاتی‌ست که موقع اعزام مصرف می‌شود (چک کافی‌بودنش را
+    فراخوان بعد از این تابع، روی resources واقعی بازیکن انجام می‌دهد)"""
     specials = REGIONS[region]["special"]
     gold = men = food = 0
+    weapons = {}
     for tid, n in troops.items():
         if n <= 0:
             continue
         if tid in COMMON_TROOPS:
             req = unit_requirements(tid)
             if req:
-                camp_id, armory_id = req
+                camp_id, _armory_id = req
                 camp_level = normalize_building_state(buildings.get(camp_id))["level"]
-                armory_level = normalize_building_state(buildings.get(armory_id))["level"]
-                if camp_level <= 0 or armory_level <= 0:
-                    raise HTTPException(
-                        400,
-                        f"برای گسیل {COMMON_TROOPS[tid]['name']} باید {BUILDINGS[camp_id]['name']} "
-                        f"و {BUILDINGS[armory_id]['name']} را ساخته باشی",
-                    )
+                if camp_level <= 0:
+                    raise HTTPException(400, f"برای گسیل {COMMON_TROOPS[tid]['name']} باید {BUILDINGS[camp_id]['name']} را ساخته باشی")
+            weapon_key = TROOP_WEAPON_KEY.get(tid)
+            if weapon_key:
+                weapons[weapon_key] = weapons.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
             gold += COMMON_TROOPS[tid]["cost"] * n
             food += FOOD_COST_REGULAR * n
         elif tid == NAVAL_TROOP["id"]:
@@ -99,7 +100,7 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
         else:
             raise HTTPException(400, f"نیروی نامعتبر: {tid}")
         men += n
-    return gold, men, food
+    return gold, men, food, weapons
 
 async def stationed_origins(tg_id: int) -> set:
     """قلعه‌هایی که لشکر فعلی این بازیکن با عملیات «جای‌گیری» در آن‌ها مستقر است"""
@@ -153,13 +154,16 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     else:
         target_castle = body.origin_castle
 
-    gold, men, food_per_day = troop_food_and_gold(p["region"], body.troops, p.get("buildings", {}), p.get("is_port", False))
+    gold, men, food_per_day, weapons = troop_food_and_gold(p["region"], body.troops, p.get("buildings", {}), p.get("is_port", False))
     if men <= 0:
         raise HTTPException(400, "هیچ نیرویی گسیل نکرده‌ای")
     if not can_afford(p["resources"], {"gold": gold}):
         raise HTTPException(400, "خزانه کافی نیست")
     if p["resources"].get("men", 0) < men:
         raise HTTPException(400, "نفرات کافی نداری")
+    for weapon_key, needed in weapons.items():
+        if p["resources"].get(weapon_key, 0) < needed:
+            raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
 
     same_castle = target_castle == body.origin_castle
     origin_region = await resolve_region(body.origin_castle) or p["region"]
@@ -168,7 +172,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p))
 
-    pay(p["resources"], {"gold": gold})
+    pay(p["resources"], {"gold": gold, **weapons})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
 
