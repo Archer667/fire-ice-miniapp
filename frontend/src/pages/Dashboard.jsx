@@ -39,7 +39,7 @@ export default function Dashboard({ goTo }) {
       haptic('medium');
       setMe({ ...me, resources: res.resources });
       setDaily(prev => ({ ...prev, claimed_today: true, current_streak: res.streak }));
-      toast(`روز ${res.day_in_cycle.toLocaleString('fa-IR')} از ۷ — جایزه گرفته شد!`);
+      toast(`روز ${res.day_in_cycle.toLocaleString('fa-IR')} از ۷ — جایزه گرفته شد`);
     } catch (e) { toast(e.message); }
     setDailyBusy(false);
   };
@@ -67,7 +67,7 @@ export default function Dashboard({ goTo }) {
             </div>
             <div className="daily-t2">
               {daily.claimed_today
-                ? `استریک: ${daily.current_streak.toLocaleString('fa-IR')} روز — فردا دوباره سر بزن`
+                ? `${daily.current_streak.toLocaleString('fa-IR')} روز پیاپی سر زدی — فردا دوباره بیا`
                 : Object.entries(daily.reward).map(([k, v]) => `${v.toLocaleString('fa-IR')} ${RES_META[k]?.name || k}`).join(' · ')}
             </div>
           </div>
