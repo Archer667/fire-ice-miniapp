@@ -41,6 +41,7 @@ fire-ice/
    ADMIN_IDS=آیدی_عددی_تلگرامت
    CORS_ORIGINS=https://آدرس-vercel-تو.vercel.app
    ```
+   (`PUBLIC_BASE_URL` و `MINI_APP_URL` را بعداً تو گام ۴ اضافه می‌کنی — الان آدرس هیچ‌کدام را نداری)
 6. Deploy → آدرس بگیر: `https://fire-ice-api.onrender.com`
 7. تست: `آدرس/api/health` باید `{"ok":true}` بدهد
 
@@ -54,11 +55,25 @@ fire-ice/
 4. Deploy → آدرس: `https://fire-ice.vercel.app`
 
 ### گام ۴ — اتصال به بات (۲ دقیقه)
+
+**روش ۱ — Menu Button (بدون کد، همیشه کار می‌کند):**
 ```
 @BotFather → /mybots → بات تو → Bot Settings
 → Menu Button → آدرس Vercel را بده
 ```
 بات را باز کن → دکمهٔ منو → 🎮 بازی داخل تلگرام!
+
+**روش ۲ — فعال‌کردن دستور `/start`:** بات وقتی کسی `/start` می‌زند یک پیام خوش‌آمد
+با دکمهٔ «ورود به بازی» برایش می‌فرستد. برای این یکی، برخلاف روش ۱، به کد نیازی
+نیست — کدش از قبل تو بک‌اند هست، فقط باید دو تا Environment Variable روی Render
+اضافه کنی (بعد از این‌که آدرس هر دو سرویس را از گام‌های ۲ و ۳ داری):
+```
+PUBLIC_BASE_URL=https://fire-ice-api.onrender.com   ← آدرس همین Backend (گام ۲)
+MINI_APP_URL=https://fire-ice.vercel.app             ← آدرس Frontend (گام ۳)
+```
+بعد از اضافه‌کردن، Render را دوباره Deploy کن — بک‌اند موقع بالاآمدن خودش webhook
+را پیش تلگرام ثبت می‌کند (نیازی به دستور دستی نیست). از اون به بعد `/start` هم
+همون دکمهٔ «ورود به بازی» را می‌فرستد.
 
 ## تست بدون سرور
 `VITE_API_URL` را خالی بگذار → حالت mock: کل UI با دیتای نمایشی کار می‌کند.

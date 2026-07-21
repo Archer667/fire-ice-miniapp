@@ -13,6 +13,14 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 # همهٔ پریویوهای یک پروژه بدون ویرایش دستی CORS_ORIGINS با هر پوش قبول شوند
 CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", "") or None
 
+# ---- بات تلگرام: دستور /start ----
+# MINI_APP_URL = آدرس Vercel فرانت‌اند — همان دکمه‌ای که با /start زیر پیام خوش‌آمد می‌آید
+# PUBLIC_BASE_URL = آدرس عمومی همین بک‌اند — برای ثبت webhook پیش تلگرام لازم است
+# هر دو خالی باشند یعنی /start غیرفعال می‌ماند (مثلاً موقع تست لوکال)
+MINI_APP_URL     = os.getenv("MINI_APP_URL", "")
+PUBLIC_BASE_URL  = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+TELEGRAM_WEBHOOK_PATH = "/api/telegram/webhook"
+
 # ---- ثابت‌های اقتصاد بازی ----
 # wine=30 عمدی است: DAILY_PRODUCTION.wine=0 (بدون می‌کده صفر تولید می‌شود) و هر سه نوع
 # پیمان دیپلماتیک هزینهٔ شراب دارند (حداقل «پیمان تجاری»=۳۰) — با شراب شروع صفر، بازیکن

@@ -4,16 +4,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
-from db import players, map_castles, admin_roles
+# نکته: اسم players اینجا عمداً players_col است، نه players (که چند خط پایین‌تر
+# ماژول routers.players است) — قبلاً همین‌جا با هم قاطی می‌شدند و _ensure_indexes
+# داشت روی ماژول روتر create_index صدا می‌زد (بی‌اثر، ولی چون توی try/except بود
+# بی‌سروصدا فقط لاگ می‌شد و هیچ‌وقت هیچ ایندکس یکتایی واقعاً ساخته نمی‌شد)
+from db import players as players_col, map_castles, admin_roles
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
     polls as polls_router, trade as trade_router, market as market_router, roleplay as roleplay_router,
-    assets as assets_router, rumors as rumors_router, daily as daily_router,
+    assets as assets_router, rumors as rumors_router, daily as daily_router, bot as bot_router,
 )
 from routers.war import notify_arrivals
 from routers.trade import notify_caravan_arrivals
 from routers.market import drift_market_prices
+import telegram_bot
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +50,7 @@ app.include_router(roleplay_router.router)
 app.include_router(assets_router.router)
 app.include_router(rumors_router.router)
 app.include_router(daily_router.router)
+app.include_router(bot_router.router)
 
 async def _arrival_watcher():
     """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد"""
@@ -69,8 +75,8 @@ async def _ensure_indexes():
     """ایندکس‌های یکتا برای جلوگیری از رکورد دوتایی زیر بار همزمان (race condition) —
     مثلاً دو ثبت‌نام هم‌زمان با یک قلعه، یا دو بار افزودن یک اسم به نقشه توسط ادمین"""
     try:
-        await players.create_index("tg_id", unique=True)
-        await players.create_index("castle", unique=True)
+        await players_col.create_index("tg_id", unique=True)
+        await players_col.create_index("castle", unique=True)
         await map_castles.create_index("name", unique=True)
         await admin_roles.create_index("tg_id", unique=True)
     except Exception:
@@ -79,6 +85,7 @@ async def _ensure_indexes():
 @app.on_event("startup")
 async def start_background_watchers():
     await _ensure_indexes()
+    await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
 
