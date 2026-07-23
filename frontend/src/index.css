@@ -1,4 +1,57 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-thin.woff2') format('woff2');
+  font-weight: 100;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-extralight.woff2') format('woff2');
+  font-weight: 200;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-light.woff2') format('woff2');
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-medium.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-semibold.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-extrabold.woff2') format('woff2');
+  font-weight: 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Peyda';
+  src: url('/fonts/peyda-black.woff2') format('woff2');
+  font-weight: 900;
+  font-display: swap;
+}
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -35,7 +88,7 @@ html, body, #root { height: 100%; }
 }
 
 body {
-  font-family: 'Vazirmatn', sans-serif;
+  font-family: 'Peyda', sans-serif;
   background: var(--bg); color: var(--hi);
   direction: rtl; -webkit-font-smoothing: antialiased; overflow: hidden;
 }
@@ -80,7 +133,7 @@ body {
 
 .btn {
   width: 100%; padding: 16px; border: none; border-radius: 18px;
-  font: 700 14.5px 'Vazirmatn'; color: #041022; cursor: pointer;
+  font: 700 14.5px 'Peyda'; color: #041022; cursor: pointer;
   background: linear-gradient(120deg, var(--az2), var(--az) 55%, #3d8bff);
   box-shadow: 0 12px 32px rgba(56,150,255,0.35), inset 0 1px 0 rgba(255,255,255,0.4);
   transition: transform 0.15s ease;
@@ -93,7 +146,7 @@ input, select, textarea {
   width: 100%; padding: 14px 16px;
   background: rgba(8,14,28,0.55);
   border: 1px solid var(--edge); border-radius: 16px;
-  color: var(--hi); font: 500 14px 'Vazirmatn'; direction: rtl;
+  color: var(--hi); font: 500 14px 'Peyda'; direction: rtl;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 input:focus, select:focus, textarea:focus {
