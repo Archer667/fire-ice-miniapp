@@ -431,6 +431,10 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   padding: 11px 13px; border-radius: 4px;
   background: rgba(14,14,14,0.95); border: 1px solid var(--iron);
   box-shadow: 0 10px 26px rgba(0,0,0,0.55);
+  /* .mapview-frame پدرش line-height:0 دارد (برای چسباندن عکس نقشه بدون فاصلهٔ
+     اضافه) — همین باعث می‌شد خطوط متن این پاپ‌آپ هم ارتفاع تقریباً صفر بگیرند
+     و روی هم بیفتند؛ اینجا line-height را برای کل این زیردرخت ریست می‌کنیم */
+  line-height: normal;
 }
 .pi-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }
 .pi-mine { font-size: 10px; font-weight: 600; color: var(--az); background: rgba(233,193,118,0.15); border: 1px solid rgba(233,193,118,0.35); border-radius: 4px; padding: 2px 7px; }
