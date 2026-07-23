@@ -3,7 +3,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, campaigns, map_castles, roleplays
+from db import players, campaigns, map_castles, roleplays, game_settings
 from game import now, can_afford, pay, normalize_building_state
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes,
@@ -32,6 +32,21 @@ ROLEPLAY_WINDOW_HOURS = 6
 
 # ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
 REPORT_VISIBLE_HOURS = 24
+
+WAR_WINDOW_ID = "war_window"
+
+async def get_war_window() -> dict:
+    """پیش‌فرض باز است — تا وقتی ادمین صریحاً نبندتش، رفتار بازی مثل قبل می‌ماند"""
+    doc = await game_settings.find_one({"_id": WAR_WINDOW_ID})
+    if not doc:
+        return {"open": True, "updated_at": None, "updated_by": None}
+    return {"open": doc.get("open", True), "updated_at": doc.get("updated_at"), "updated_by": doc.get("updated_by")}
+
+@router.get("/window")
+async def war_window(user: dict = Depends(get_user)):
+    """وضعیت فعلی پنجرهٔ لشکرکشی — پلیر باید بتواند قبل از پرکردن فرم ببیند بسته است یا باز"""
+    w = await get_war_window()
+    return {"open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None}
 
 def _building_levels(player: dict) -> dict:
     return {bid: normalize_building_state(raw)["level"] for bid, raw in player.get("buildings", {}).items()}
@@ -133,6 +148,9 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     op = OP_TYPES.get(body.op_type)
     if not op:
         raise HTTPException(400, "نوع عملیات نامعتبر")
+
+    if not (await get_war_window())["open"]:
+        raise HTTPException(403, "پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی")
 
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
 

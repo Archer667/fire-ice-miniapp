@@ -4,11 +4,11 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants, alliances
+from db import campaigns, players, admin_roles, map_castles, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants, alliances, game_settings
 from game import now, normalize_building_state
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES
 from config import ADMIN_IDS
-from routers.war import OP_TYPES
+from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID
 from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -662,6 +662,41 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
             f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و نفراتش به خانه برگشتند.",
         )
     return {"ok": True}
+
+@router.get("/war-window")
+async def admin_get_war_window(user: dict = Depends(admin_user)):
+    """وضعیت فعلیِ پنجرهٔ لشکرکشی — پیش‌فرض باز است تا وقتی ادمین صریحاً ببندتش"""
+    w = await get_war_window()
+    updated_by_name = None
+    if w["updated_by"]:
+        p = await players.find_one({"tg_id": w["updated_by"]})
+        updated_by_name = p["name"] if p else None
+    return {"open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None, "updated_by": updated_by_name}
+
+class WarWindowBody(BaseModel):
+    open: bool
+
+@router.post("/war-window")
+async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(admin_user)):
+    """باز/بستن پنجرهٔ لشکرکشی برای همهٔ بازیکنان — مثلاً فقط چند ساعت در روز
+    اجازهٔ فرمانِ گسیل بدهی؛ بستن، لشکرهای در حال حرکت را متوقف نمی‌کند، فقط
+    فرمان تازه نمی‌گیرد. با هر تغییر همهٔ بازیکنان کلاغ می‌گیرند"""
+    was = await get_war_window()
+    if was["open"] == body.open:
+        raise HTTPException(400, f"پنجرهٔ لشکرکشی همین الان هم {'باز' if body.open else 'بسته'} است")
+    await game_settings.update_one(
+        {"_id": WAR_WINDOW_ID},
+        {"$set": {"open": body.open, "updated_at": now(), "updated_by": user["id"]}},
+        upsert=True,
+    )
+    text = (
+        "پنجرهٔ لشکرکشی باز شد — از این لحظه می‌توانی فرمان گسیل نیرو بدهی."
+        if body.open else
+        "پنجرهٔ لشکرکشی بسته شد — تا اطلاع بعدی فرمان گسیل نیروی تازه ممکن نیست؛ لشکرهایی که در راهند دست‌نخورده می‌مانند."
+    )
+    async for p in players.find({}, {"tg_id": 1, "name": 1}):
+        await send_system_message(p["tg_id"], p["name"], text)
+    return {"ok": True, "open": body.open}
 
 @router.get("/alliances")
 async def admin_list_alliances(user: dict = Depends(admin_user)):

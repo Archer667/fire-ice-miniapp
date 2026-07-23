@@ -71,6 +71,7 @@ const mockAlliances = [
 ]; // {id, mine_proposed, other_id, other_name, type, type_name, name, public, status}
 let mockAllianceSeq = 1;
 let mockLastFeast = null;
+let mockWarWindowOpen = true; // پیش‌فرض باز — تا ادمین صریحاً نبندتش
 const mockCampaigns = []; // {id, origin_castle, op_type, target_castle, troops, gold_cost, men_committed, food_per_day, active, created_at, last_food_tick, travel_minutes, arrival_at}
 let mockCampaignSeq = 1;
 const mockCaravans = []; // {id, from, to, from_castle, to_castle, resources, active, arrived, travel_minutes, arrival_at, created_at}
@@ -316,6 +317,7 @@ const M = {
     mockResolveCampaigns();
     const op = OP_TYPES.find(o => o.id === body.op_type);
     if (!op) throw new Error('نوع عملیات نامعتبر');
+    if (!mockWarWindowOpen) throw new Error('پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی');
 
     const validOrigins = [mockMe.castle, ...mockStationedOrigins()];
     if (!validOrigins.includes(body.origin_castle)) {
@@ -410,6 +412,18 @@ const M = {
       }
     }
     return { ok: true, men_refunded: c.men_committed, gold_refunded: c.gold_cost, weapons_refunded: weaponsRefund };
+  },
+  warWindow: () => ({ open: mockWarWindowOpen, updated_at: null }),
+  adminGetWarWindow: () => ({ open: mockWarWindowOpen, updated_at: null, updated_by: null }),
+  adminSetWarWindow: (open) => {
+    if (mockWarWindowOpen === open) throw new Error(`پنجرهٔ لشکرکشی همین الان هم ${open ? 'باز' : 'بسته'} است`);
+    mockWarWindowOpen = open;
+    mockSendSystemMessage(
+      open
+        ? 'پنجرهٔ لشکرکشی باز شد — از این لحظه می‌توانی فرمان گسیل نیرو بدهی.'
+        : 'پنجرهٔ لشکرکشی بسته شد — تا اطلاع بعدی فرمان گسیل نیروی تازه ممکن نیست؛ لشکرهایی که در راهند دست‌نخورده می‌مانند.',
+    );
+    return { ok: true, open };
   },
   legions: () => {
     mockResolveCampaigns();
@@ -1103,6 +1117,9 @@ export const api = {
   map:       () => MOCK ? Promise.resolve(M.map()) : req('/api/map'),
   warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
   legions:   () => MOCK ? Promise.resolve(M.legions()) : req('/api/war/legions'),
+  warWindow: () => MOCK ? Promise.resolve(M.warWindow()) : req('/api/war/window'),
+  adminGetWarWindow: () => MOCK ? Promise.resolve(M.adminGetWarWindow()) : req('/api/admin/war-window'),
+  adminSetWarWindow: (open) => MOCK ? Promise.resolve(M.adminSetWarWindow(open)) : req('/api/admin/war-window', { method: 'POST', body: JSON.stringify({ open }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),

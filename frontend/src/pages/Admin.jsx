@@ -76,6 +76,8 @@ export default function Admin() {
   const [warSubTab, setWarSubTab] = useState('campaigns'); // 'campaigns' | 'espionage' | 'roleplay'
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
+  const [warWindow, setWarWindow] = useState(null);
+  const [warWindowBusy, setWarWindowBusy] = useState(false);
   const [alliancesList, setAlliancesList] = useState(null);
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
   const [spyResolved, setSpyResolved] = useState(null);
@@ -145,6 +147,7 @@ export default function Admin() {
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
+  const loadWarWindow = () => api.adminGetWarWindow().then(setWarWindow).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
   const loadSpyResolved = () => api.adminSpyResolved().then(setSpyResolved).catch(e => toast(e.message));
   const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
@@ -161,6 +164,7 @@ export default function Admin() {
     loadPendingPlayers();
     loadRoster();
     loadCampaigns();
+    loadWarWindow();
     loadSpyPending();
     loadSpyResolved();
     loadRoleplayPending();
@@ -286,6 +290,18 @@ export default function Admin() {
       toast(`منابع «${resTarget[0].name}» به‌روزرسانی شد`);
     } catch (e) { toast(e.message); }
     setResBusy(false);
+  };
+
+  const toggleWarWindow = async () => {
+    if (!warWindow) return;
+    setWarWindowBusy(true);
+    try {
+      const res = await api.adminSetWarWindow(!warWindow.open);
+      haptic('medium');
+      toast(res.open ? 'پنجرهٔ لشکرکشی برای همه باز شد' : 'پنجرهٔ لشکرکشی برای همه بسته شد');
+      loadWarWindow();
+    } catch (e) { toast(e.message); }
+    setWarWindowBusy(false);
   };
 
   const disbandCampaign = async (id) => {
@@ -640,6 +656,20 @@ export default function Admin() {
 
           {warSubTab === 'campaigns' && (
           <div className="up u2">
+            <div className="card" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  پنجرهٔ لشکرکشی: {warWindow ? (warWindow.open ? 'باز' : 'بسته') : '...'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 4 }}>
+                  وقتی بسته باشد هیچ بازیکنی نمی‌تواند فرمان گسیل تازه بدهد؛ لشکرهای در راه دست‌نخورده می‌مانند
+                </div>
+              </div>
+              <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
+                      disabled={!warWindow || warWindowBusy} onClick={toggleWarWindow}>
+                {warWindowBusy ? '...' : warWindow?.open ? 'بستن' : 'باز کردن'}
+              </button>
+            </div>
             {(!campaignsInfo || campaignsInfo.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
             )}

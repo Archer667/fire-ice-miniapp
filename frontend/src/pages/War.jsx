@@ -31,6 +31,7 @@ export default function War() {
   const [mine, setMine] = useState(null);
   const [legions, setLegions] = useState(null);
   const [seenIds, setSeenIds] = useState(loadSeenIds);
+  const [warWindow, setWarWindow] = useState(null);
 
   const loadMap = () => {
     setMapError(false);
@@ -39,8 +40,10 @@ export default function War() {
   const loadBuildings = () => api.buildings().then(setBuildings).catch(e => { toast(e.message); setBuildings([]); });
   const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
   const loadLegions = () => api.legions().then(setLegions).catch(e => { toast(e.message); setLegions([]); });
+  const loadWarWindow = () => api.warWindow().then(setWarWindow).catch(() => setWarWindow({ open: true }));
 
-  useEffect(() => { loadMap(); loadBuildings(); loadMine(); loadLegions(); }, []);
+  useEffect(() => { loadMap(); loadBuildings(); loadMine(); loadLegions(); loadWarWindow(); }, []);
+  const windowClosed = warWindow ? !warWindow.open : false;
 
   // گزارش لشکرکشی تازه، ۳۰ دقیقه بعد از ارسال در تب «گزارش‌ها» ظاهر می‌شود
   const visibleReports = useMemo(
@@ -146,7 +149,8 @@ export default function War() {
   const overGold = goldCost > gold;
   const overMen = menCommitted > men;
   const badPortTarget = op.portOnly && target && !target.port;
-  const formIssue = overGold ? 'خزانه کافی نیست'
+  const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
+    : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
     : shortWeapon ? `${WEAPON_NAMES[shortWeapon[0]]} کافی نیست`
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
@@ -161,6 +165,7 @@ export default function War() {
   };
 
   const send = async () => {
+    if (windowClosed) { toast('پنجرهٔ لشکرکشی الان بسته است'); return; }
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
     if (badOriginForNaval) { toast('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است'); return; }
@@ -251,6 +256,11 @@ export default function War() {
 
       {tab === 'command' && (
         <>
+          {windowClosed && (
+            <div className="card up u1" style={{ borderColor: 'var(--danger)', textAlign: 'center', color: 'var(--danger)', fontSize: 12.5 }}>
+              پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی. نقشه و لشکرهای در راه دست‌نخورده‌اند.
+            </div>
+          )}
           <div className="sect up u2">نقشهٔ وستروس</div>
           <div className="up u2">
             <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
