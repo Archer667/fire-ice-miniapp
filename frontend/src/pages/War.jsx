@@ -266,9 +266,9 @@ export default function War() {
             <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
           </div>
 
-          <div className="sect up u3">فرمان لشکرکشی</div>
+          <div className="sect up u3">ساخت لشکر</div>
           <div className="card up u3">
-            <label className="f" style={{ marginTop: 0 }}>نام لشکرکشی</label>
+            <label className="f" style={{ marginTop: 0 }}>نام لشکر</label>
             <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
 
             <label className="f">مبدا</label>
