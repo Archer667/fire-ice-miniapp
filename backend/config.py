@@ -7,6 +7,10 @@ BOT_TOKEN   = os.getenv("BOT_TOKEN", "")
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 DB_NAME     = os.getenv("DB_NAME", "fire_ice")
 ADMIN_IDS   = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
+# صاحبِ بازی — سخت‌گیرتر از ادمین کامل، فقط برای کارهای فاجعه‌بار مثل ری‌استارت
+# کل بازی. اگر تنظیم نشود، اولین آیدیِ ADMIN_IDS پیش‌فرض می‌شود (برای راحتیِ تست
+# محلی) — برای دیپلوی واقعی حتماً OWNER_ID را روی آیدیِ تلگرام خودت ست کن
+OWNER_ID = int(os.getenv("OWNER_ID")) if os.getenv("OWNER_ID", "").strip() else (ADMIN_IDS[0] if ADMIN_IDS else None)
 DEV_MODE    = os.getenv("DEV_MODE", "false").lower() == "true"
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 # Vercel روی هر دیپلوی/پریویو یک URL تصادفی می‌سازد — این regex اجازه می‌دهد

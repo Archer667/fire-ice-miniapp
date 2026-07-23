@@ -94,6 +94,8 @@ async def react_rumor(rumor_id: str, body: ReactBody, user: dict = Depends(get_u
     r = await rumors.find_one({"_id": oid})
     if not r:
         raise HTTPException(404, "این شایعه پیدا نشد")
+    if r["author_tg_id"] == user["id"]:
+        raise HTTPException(400, "نمی‌توانی به شایعهٔ خودت واکنش نشان بدهی")
     if body.reaction not in ("like", "dislike", None):
         raise HTTPException(400, "واکنش نامعتبر")
 

@@ -187,6 +187,7 @@ const M = {
       registered: true, pending: true, name: b.name,
       gender: b.gender, title: DEFAULT_TITLE[b.gender],
       admin_role: 'full', // حالت mock تک‌بازیکنه — خودت همیشه ادمینی تا بتونی خاندان خودت رو تخصیص بدی
+      is_owner: true,
     });
     return { ok: true };
   },
@@ -962,6 +963,7 @@ const M = {
   reactRumor: (rumorId, reaction) => {
     const r = mockRumors.find(x => x.id === rumorId);
     if (!r) throw new Error('این شایعه پیدا نشد');
+    if (r.author_tg_id === 1) throw new Error('نمی‌توانی به شایعهٔ خودت واکنش نشان بدهی');
     if (!['like', 'dislike', null].includes(reaction)) throw new Error('واکنش نامعتبر');
     if (reaction === null) delete r.reactions[1];
     else r.reactions[1] = reaction;
@@ -1106,6 +1108,21 @@ const M = {
   adminListAdmins: () => [],
   adminAddAdmin: () => ({ ok: true }),
   adminRemoveAdmin: () => ({ ok: true }),
+  adminResetGamePreview: () => ({ total_players: 1, non_admin_players: 0, admins_kept: 1 }),
+  adminResetGame: (confirm) => {
+    if (confirm !== 'RESET') throw new Error('برای تایید، دقیقاً عبارت RESET را تایپ کن');
+    // حالت آزمایشی تک‌بازیکنه — «خودت» همیشه ادمینی، پس کسی حذف نمی‌شود؛
+    // فقط تاریخچه‌ها مثل نسخهٔ واقعی پاک می‌شوند تا رفتار دکمه قابل‌آزمایش باشد
+    mockCampaigns.length = 0;
+    mockCaravans.length = 0;
+    mockSpyMissions.length = 0;
+    mockRoleplays.length = 0;
+    mockRumors.length = 0;
+    mockAlliances.length = 0;
+    mockPolls.length = 0;
+    mockMe.alliance_count = 0;
+    return { ok: true, players_deleted: 0 };
+  },
 };
 
 /* ---------- API عمومی ---------- */
@@ -1234,4 +1251,7 @@ export const api = {
     : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),
   adminRemoveAdmin: (tgId) => MOCK ? Promise.resolve(M.adminRemoveAdmin())
     : req(`/api/admin/admins/${tgId}`, { method: 'DELETE' }),
+  adminResetGamePreview: () => MOCK ? Promise.resolve(M.adminResetGamePreview()) : req('/api/admin/reset-game/preview'),
+  adminResetGame: (confirm) => MOCK ? Promise.resolve(M.adminResetGame(confirm))
+    : req('/api/admin/reset-game', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };

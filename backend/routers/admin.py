@@ -3,8 +3,12 @@ from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants, alliances, game_settings
+from auth import get_user, get_admin, get_full_admin, get_owner
+from db import (
+    campaigns, players, admin_roles, map_castles, market_listings, black_market_listings,
+    spy_missions, roleplays, items, item_grants, alliances, game_settings,
+    caravans, messages, rumors, hierarchy, polls,
+)
 from game import now, normalize_building_state
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES
 from config import ADMIN_IDS
@@ -20,6 +24,10 @@ async def admin_user(user: dict = Depends(get_user)):
 async def full_admin_user(user: dict = Depends(get_user)):
     """فقط ادمین کامل — برای مدیریت ادمین‌ها"""
     return await get_full_admin(user)
+
+async def owner_user(user: dict = Depends(get_user)):
+    """فقط صاحبِ بازی — برای ری‌استارت کامل"""
+    return await get_owner(user)
 
 @router.get("/campaigns")
 async def list_campaigns(user: dict = Depends(admin_user)):
@@ -732,3 +740,49 @@ async def admin_dissolve_alliance(alliance_id: str, user: dict = Depends(full_ad
     for tg_id, name, other_name in [(a["from_id"], a["from_name"], a["to_name"]), (a["to_id"], a["to_name"], a["from_name"])]:
         await send_system_message(tg_id, name, f"پیمانت با لرد {other_name} به فرمان ادمین منحل شد.")
     return {"ok": True}
+
+async def _current_admin_ids() -> set:
+    admin_ids = set(ADMIN_IDS)
+    async for a in admin_roles.find({}, {"tg_id": 1}):
+        admin_ids.add(a["tg_id"])
+    return admin_ids
+
+@router.get("/reset-game/preview")
+async def reset_game_preview(user: dict = Depends(owner_user)):
+    """پیش‌نمایشِ اثر ری‌استارت — قبل از تاییدِ نهایی نشان بده چند نفر حذف می‌شوند"""
+    admin_ids = await _current_admin_ids()
+    total = await players.count_documents({})
+    non_admin = await players.count_documents({"tg_id": {"$nin": list(admin_ids)}})
+    return {"total_players": total, "non_admin_players": non_admin, "admins_kept": total - non_admin}
+
+class ResetGameBody(BaseModel):
+    confirm: str
+
+@router.post("/reset-game")
+async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
+    """ری‌استارت کامل بازی — فقط صاحب بازی، فقط با تایپ عبارت تاییدیه (RESET).
+    حذف می‌شود: همهٔ بازیکنانِ غیرادمین و کل تاریخچهٔ لشکرکشی/جاسوسی/پیام/رول/
+    شایعه/اتحاد/رای‌گیری/کاروان/مقام‌ها.
+    دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه (map_castles)، آیتم‌ها و
+    بازارهایی که ادمین‌ها ساخته‌اند (items، market_listings، black_market_listings)،
+    خودِ نقش‌های ادمین (admin_roles)، و حساب/پیشرفتِ خودِ ادمین‌ها دست‌نخورده می‌ماند"""
+    if body.confirm.strip() != "RESET":
+        raise HTTPException(400, "برای تایید، دقیقاً عبارت RESET را تایپ کن")
+
+    admin_ids = await _current_admin_ids()
+    deleted = await players.delete_many({"tg_id": {"$nin": list(admin_ids)}})
+
+    await campaigns.delete_many({})
+    await spy_missions.delete_many({})
+    await messages.delete_many({})
+    await roleplays.delete_many({})
+    await rumors.delete_many({})
+    await alliances.delete_many({})
+    await polls.delete_many({})
+    await caravans.delete_many({})
+    await hierarchy.delete_many({})
+    await item_grants.delete_many({})
+    # اتحادها پاک شدند، پس شمارندهٔ اتحادِ ادمین‌هایی که نگه داشته شدند هم صفر شود
+    await players.update_many({}, {"$set": {"alliance_count": 0}})
+
+    return {"ok": True, "players_deleted": deleted.deleted_count}

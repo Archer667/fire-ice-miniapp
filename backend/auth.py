@@ -2,7 +2,7 @@
 import hashlib, hmac, json, time
 from urllib.parse import parse_qsl
 from fastapi import Header, HTTPException
-from config import BOT_TOKEN, DEV_MODE, ADMIN_IDS
+from config import BOT_TOKEN, DEV_MODE, ADMIN_IDS, OWNER_ID
 from db import admin_roles
 
 def _validate_init_data(init_data: str) -> dict:
@@ -57,4 +57,12 @@ async def get_full_admin(user: dict) -> dict:
     if role != "full":
         raise HTTPException(403, "این بخش فقط برای ادمین کامل است")
     user["admin_role"] = role
+    return user
+
+async def get_owner(user: dict) -> dict:
+    """فقط صاحبِ بازی (OWNER_ID) — سخت‌گیرتر از ادمین کامل، مخصوص کارهای
+    بازگشت‌ناپذیر مثل ری‌استارت کل بازی؛ حتی ادمین‌های کامل دیگر هم نمی‌توانند"""
+    if OWNER_ID is None or user["id"] != OWNER_ID:
+        raise HTTPException(403, "این بخش فقط برای صاحب بازی است")
+    user["admin_role"] = "full"
     return user

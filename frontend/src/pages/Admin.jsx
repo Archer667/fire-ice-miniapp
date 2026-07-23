@@ -95,6 +95,9 @@ export default function Admin() {
   const [polls, setPolls] = useState(null);
   const [admins, setAdmins] = useState(null);
   const [newAdminTarget, setNewAdminTarget] = useState([]);
+  const [resetPreview, setResetPreview] = useState(null);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
 
   const [mapRegion, setMapRegion] = useState('north');
   const [mapData, setMapData] = useState(null);
@@ -154,6 +157,7 @@ export default function Admin() {
   const loadAlliances = () => api.adminListAlliances().then(setAlliancesList).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
+  const loadResetPreview = () => api.adminResetGamePreview().then(setResetPreview).catch(e => toast(e.message));
   const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
   const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
   const loadMarket = () => api.adminMarketList().then(setMarketListings).catch(e => toast(e.message));
@@ -171,6 +175,7 @@ export default function Admin() {
     loadAlliances();
     loadMapData();
     if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); }
+    if (me.is_owner) loadResetPreview();
   }, []);
 
   useEffect(() => {
@@ -302,6 +307,21 @@ export default function Admin() {
       loadWarWindow();
     } catch (e) { toast(e.message); }
     setWarWindowBusy(false);
+  };
+
+  const resetGame = async () => {
+    if (resetConfirmText.trim() !== 'RESET') { toast('عبارت RESET را دقیقاً همون‌جوری تایپ کن'); return; }
+    if (!window.confirm('مطمئنی؟ این کار بازگشت‌ناپذیره — همهٔ بازیکن‌های غیرادمین حذف می‌شن و تاریخچهٔ بازی پاک می‌شه.')) return;
+    setResetBusy(true);
+    try {
+      const res = await api.adminResetGame(resetConfirmText.trim());
+      haptic('medium');
+      toast(`بازی ری‌استارت شد — ${(res.players_deleted ?? 0).toLocaleString('fa-IR')} بازیکن حذف شد`);
+      setResetConfirmText('');
+      loadResetPreview();
+      loadPendingPlayers(); loadRoster(); loadCampaigns();
+    } catch (e) { toast(e.message); }
+    setResetBusy(false);
   };
 
   const disbandCampaign = async (id) => {
@@ -1312,6 +1332,33 @@ export default function Admin() {
               </div>
             ))}
           </div>
+
+          {me.is_owner && (
+            <>
+              <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
+              <div className="card up u3" style={{ borderColor: 'var(--danger)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>ری‌استارت کامل بازی</div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
+                  همهٔ بازیکن‌های غیرادمین حذف می‌شوند و باید از نو ثبت‌نام کنند؛ تاریخچهٔ لشکرکشی‌ها، جاسوسی‌ها،
+                  پیام‌ها، رول‌ها، شایعات، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
+                  <br />
+                  دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه، آیتم‌ها و بازارهایی که خودت ساخته‌ای، و حساب/پیشرفت خودِ ادمین‌ها.
+                  <br />این کار بازگشت‌ناپذیر است.
+                </div>
+                {resetPreview && (
+                  <div style={{ fontSize: 12, color: 'var(--hi)', marginTop: 10, fontWeight: 700 }}>
+                    {resetPreview.non_admin_players.toLocaleString('fa-IR')} بازیکن حذف می‌شود · {resetPreview.admins_kept.toLocaleString('fa-IR')} ادمین می‌ماند
+                  </div>
+                )}
+                <label className="f">برای تایید، عبارت RESET را تایپ کن</label>
+                <input value={resetConfirmText} onChange={e => setResetConfirmText(e.target.value)} placeholder="RESET" style={{ direction: 'ltr', textAlign: 'center' }} />
+                <button className="btn" style={{ marginTop: 14, background: 'linear-gradient(160deg, #b3271b, #690000 60%, #4a0000)' }}
+                        disabled={resetConfirmText.trim() !== 'RESET' || resetBusy} onClick={resetGame}>
+                  {resetBusy ? 'در حال ری‌استارت...' : 'ری‌استارت کامل بازی'}
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </>

@@ -162,16 +162,23 @@ export default function Ravens() {
                 </div>
               </div>
               <div style={{ fontSize: 12.5, lineHeight: 1.8, color: 'var(--hi)', marginTop: 8 }}>{r.text}</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <button type="button" className={`rbtn reaction-btn ${r.my_reaction === 'like' ? 'on' : ''}`}
-                        style={{ width: 'auto' }} onClick={() => reactRumor(r.id, 'like')}>
-                  <ThumbsUp s={14} /> {r.likes.toLocaleString('fa-IR')}
-                </button>
-                <button type="button" className={`rbtn reaction-btn ${r.my_reaction === 'dislike' ? 'on' : ''}`}
-                        style={{ width: 'auto' }} onClick={() => reactRumor(r.id, 'dislike')}>
-                  <ThumbsDown s={14} /> {r.dislikes.toLocaleString('fa-IR')}
-                </button>
-              </div>
+              {r.mine ? (
+                <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 11.5, color: 'var(--mid)' }}>
+                  <span><ThumbsUp s={14} /> {r.likes.toLocaleString('fa-IR')}</span>
+                  <span><ThumbsDown s={14} /> {r.dislikes.toLocaleString('fa-IR')}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button type="button" className={`rbtn reaction-btn ${r.my_reaction === 'like' ? 'on' : ''}`}
+                          style={{ width: 'auto' }} onClick={() => reactRumor(r.id, 'like')}>
+                    <ThumbsUp s={14} /> {r.likes.toLocaleString('fa-IR')}
+                  </button>
+                  <button type="button" className={`rbtn reaction-btn ${r.my_reaction === 'dislike' ? 'on' : ''}`}
+                          style={{ width: 'auto' }} onClick={() => reactRumor(r.id, 'dislike')}>
+                    <ThumbsDown s={14} /> {r.dislikes.toLocaleString('fa-IR')}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

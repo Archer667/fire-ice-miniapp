@@ -5,7 +5,7 @@ from auth import get_user, get_admin_role
 from db import players, campaigns
 from game import now, apply_production
 from game_data import REGIONS
-from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate
+from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
 from routers.war import apply_campaign_upkeep
 
@@ -58,6 +58,7 @@ async def me(user: dict = Depends(get_user)):
             "name": p["name"], "gender": p.get("gender", "lord"),
             "title": p.get("title", DEFAULT_TITLE.get(p.get("gender", "lord"))),
             "admin_role": await get_admin_role(user),
+            "is_owner": user["id"] == OWNER_ID,
         }
     p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
@@ -85,6 +86,7 @@ async def me(user: dict = Depends(get_user)):
         "pending": False,
         "name": p["name"],
         "admin_role": admin_role,
+        "is_owner": user["id"] == OWNER_ID,
         "gender": p.get("gender", "lord"),
         "title": p.get("title", DEFAULT_TITLE.get(p.get("gender", "lord"))),
         "rank_label": rank_label,
