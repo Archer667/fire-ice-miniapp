@@ -37,6 +37,23 @@ import {
 const mockMe = { registered: false };
 const mockDaily = { streak: 0, lastClaimDate: null };
 
+// صندوق کلاغ‌ها — قبلاً inbox() یه آرایهٔ ثابت نمایشی بود که هیچ‌وقت با اکشن‌های
+// واقعی به‌روز نمی‌شد (برای همین نتیجهٔ جاسوسی/رول/... تو حالت آزمایشی هیچ‌جا دیده نمی‌شد)
+const SYSTEM_SENDER_NAME = 'شورای جنگ';
+const mockMessages = [ // {from_id, to_id, from_name, to_name, text, read, created_at} — دموی اولیه، هر اکشن واقعی هم بهش اضافه می‌شود
+  { from_id: 0, to_id: 1, from_name: SYSTEM_SENDER_NAME, to_name: 'تو', text: 'لشکرت از وینترفل به ریوران رسید.', read: false, created_at: new Date(Date.now() - 3600000).toISOString() },
+  { from_id: 9002, to_id: 1, from_name: 'تایوین لنیستر', to_name: 'تو', text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.', read: false, created_at: new Date(Date.now() - 7200000).toISOString() },
+  { from_id: 1, to_id: 9002, from_name: 'تو', to_name: 'تایوین لنیستر', text: 'شمال دربارهٔ پیشنهادت می‌اندیشد، لرد لنیستر.', read: true, created_at: new Date(Date.now() - 7100000).toISOString() },
+  { from_id: 9003, to_id: 1, from_name: 'مارگری تایرل', to_name: 'تو', text: 'ریچ آمادهٔ فروش گندم است. ۲۰۰ واحد در برابر ۱۵۰ طلا؟', read: false, created_at: new Date(Date.now() - 10800000).toISOString() },
+  { from_id: 9004, to_id: 1, from_name: 'یارا گریجوی', to_name: 'تو', text: 'آنچه مرده است هرگز نمی‌میرد.', read: true, created_at: new Date(Date.now() - 14400000).toISOString() },
+];
+function mockSendSystemMessage(text) {
+  mockMessages.push({
+    from_id: 0, to_id: 1, from_name: SYSTEM_SENDER_NAME, to_name: mockMe.name || 'تو',
+    text, read: false, created_at: new Date().toISOString(),
+  });
+}
+
 function dailyTodayStr() { return new Date().toISOString().slice(0, 10); }
 function dailyYesterdayStr() { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); }
 function dailyPendingStreak() {
@@ -638,6 +655,11 @@ const M = {
     origin: mockMe.castle, target: m.target, scenario: m.scenario,
     arrived: Date.now() >= new Date(m.arrival_at).getTime(), created_at: m.created_at,
   })),
+  adminSpyResolved: () => mockSpyMissions.filter(m => m.resolved).slice().reverse().map(m => ({
+    id: m.id, player: mockMe.name || 'تو', tg_id: 1,
+    target: m.target, scenario: m.scenario,
+    admin_score: m.admin_score, success: m.success, resolved_at: m.created_at,
+  })),
   adminScoreSpy: (missionId, score) => {
     const m = mockSpyMissions.find(x => x.id === missionId);
     if (!m) throw new Error('این ماموریت پیدا نشد');
@@ -658,8 +680,10 @@ const M = {
         campaigns: [],
       };
       mockMe.resources.men = (mockMe.resources.men ?? 0) + m.men_sent;
+      mockSendSystemMessage(`جاسوس‌های تو با موفقیت به ${m.target} نفوذ کردند و گزارش کاملی به دست آوردند — نتیجه در بخش جاسوسی منتظر توست.`);
     } else {
       m.report = null;
+      mockSendSystemMessage(`جاسوسی تو در ${m.target} شناسایی و دستگیر شد — نفرات اعزامی برنگشتند.`);
     }
     return { ok: true, success };
   },
@@ -720,6 +744,9 @@ const M = {
     const res = (result || '').trim();
     if (res.length < 3) throw new Error('متن نتیجه خیلی کوتاه است');
     r.result = res; r.resolved = true;
+    const catName = ROLEPLAY_CATEGORIES[r.category] || r.category;
+    const prefix = visibility === 'all' ? 'اعلامیهٔ عمومی' : `نتیجهٔ رول «${catName}»`;
+    mockSendSystemMessage(`${prefix}: ${res}`);
     if (visibility === 'all') return { ok: true, sent_to: MOCK_PLAYERS.length + 1 };
     const recipients = new Set([1, ...otherLords]);
     return { ok: true, sent_to: recipients.size };
@@ -755,19 +782,33 @@ const M = {
     mockDaily.streak = streak; mockDaily.lastClaimDate = dailyTodayStr();
     return { ok: true, streak, day_in_cycle: dayInCycle, reward, resources: mockMe.resources };
   },
-  ravensUnread: () => ({ count: 0 }),
-  inbox: () => [
-    { with_tg_id: 0, with_name: 'شورای جنگ', last_text: 'لشکرت از وینترفل به ریوران رسید.', last_at: '', unread: 1 },
-    { with_tg_id: 9002, with_name: 'تایوین لنیستر', last_text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان.', last_at: '', unread: 1 },
-    { with_tg_id: 9003, with_name: 'مارگری تایرل', last_text: 'ریچ آمادهٔ فروش گندم است. ۲۰۰ واحد در برابر ۱۵۰ طلا؟', last_at: '', unread: 1 },
-    { with_tg_id: 9004, with_name: 'یارا گریجوی', last_text: 'آنچه مرده است هرگز نمی‌میرد.', last_at: '', unread: 0 },
-  ],
-  thread: (name) => name === 'شورای جنگ' ? [
-    { mine: false, text: 'لشکرت از وینترفل به ریوران رسید.' },
-  ] : [
-    { mine: false, text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.' },
-    { mine: true, text: 'شمال دربارهٔ پیشنهادت می‌اندیشد، لرد لنیستر.' },
-  ],
+  ravensUnread: () => ({ count: mockMessages.filter(m => m.to_id === 1 && !m.read).length }),
+  inbox: () => {
+    const convos = {};
+    for (const m of mockMessages) {
+      const otherId = m.from_id === 1 ? m.to_id : m.from_id;
+      const otherName = m.from_id === 1 ? m.to_name : m.from_name;
+      if (!convos[otherId] || new Date(m.created_at) > new Date(convos[otherId].last_at)) {
+        convos[otherId] = { with_tg_id: otherId, with_name: otherName, last_text: m.text, last_at: m.created_at, unread: 0 };
+      }
+    }
+    for (const m of mockMessages) {
+      if (m.to_id === 1 && !m.read) {
+        const c = convos[m.from_id];
+        if (c) c.unread++;
+      }
+    }
+    return Object.values(convos).sort((a, b) => new Date(b.last_at) - new Date(a.last_at));
+  },
+  thread: (name) => {
+    const relevant = mockMessages.filter(m =>
+      (m.from_id === 1 && m.to_name === name) || (m.to_id === 1 && m.from_name === name)
+    );
+    relevant.forEach(m => { if (m.to_id === 1 && m.from_name === name) m.read = true; });
+    return relevant.slice()
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      .map(m => ({ mine: m.from_id === 1, text: m.text }));
+  },
   buildings: () => {
     mockResolve();
     return Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
@@ -973,6 +1014,22 @@ const M = {
     else mockMe.resources.wine = (mockMe.resources.wine ?? 0) + (a.wine_cost || 0);
     return { ok: true };
   },
+  adminListAlliances: () => mockAlliances.map(a => ({
+    id: a.id,
+    from: a.mine_proposed ? (mockMe.name || 'تو') : a.other_name,
+    to: a.mine_proposed ? a.other_name : (mockMe.name || 'تو'),
+    type: a.type, type_name: a.type_name, name: a.name || '',
+    status: a.status, public: a.public !== false,
+  })),
+  adminDissolveAlliance: (id) => {
+    const a = mockAlliances.find(x => x.id === id);
+    if (!a) throw new Error('این پیمان پیدا نشد');
+    if (a.status !== 'accepted') throw new Error('فقط پیمان برقرار را می‌شود منحل کرد');
+    a.status = 'dissolved';
+    mockMe.alliance_count = Math.max(0, (mockMe.alliance_count ?? 0) - 1);
+    mockSendSystemMessage(`پیمانت با لرد ${a.other_name} به فرمان ادمین منحل شد.`);
+    return { ok: true };
+  },
   feast: () => {
     const now = Date.now();
     if (mockLastFeast && now - mockLastFeast < 24 * 3600 * 1000) {
@@ -1013,7 +1070,15 @@ const M = {
   },
   sendRaven: (toTgIds, text) => {
     if (!toTgIds.length) throw new Error('هیچ گیرنده‌ای انتخاب نشده');
-    if (!text.trim()) throw new Error('نامه خالی است');
+    const t = text.trim();
+    if (!t) throw new Error('نامه خالی است');
+    for (const tgId of toTgIds) {
+      const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+      mockMessages.push({
+        from_id: 1, to_id: tgId, from_name: mockMe.name || 'تو', to_name: p ? p.name : String(tgId),
+        text: t, read: true, created_at: new Date().toISOString(),
+      });
+    }
     return { ok: true, sent_to: toTgIds.length };
   },
   // مقام‌ها/رای‌گیری در حالت mock پیاده نشده — این اپ دمو تک‌بازیکنه و پنل ادمین کامل به بک‌اند واقعی نیاز دارد
@@ -1103,6 +1168,9 @@ export const api = {
     : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
+  adminListAlliances: () => MOCK ? Promise.resolve(M.adminListAlliances()) : req('/api/admin/alliances'),
+  adminDissolveAlliance: (id) => MOCK ? Promise.resolve(M.adminDissolveAlliance(id))
+    : req(`/api/admin/alliances/${id}/dissolve`, { method: 'POST' }),
   feast: () => MOCK ? Promise.resolve(M.feast()) : req('/api/diplomacy/feast', { method: 'POST' }),
   regionLeaderboard: () => MOCK ? Promise.resolve(M.regionLeaderboard()) : req('/api/leaderboard/regions'),
   polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
@@ -1119,6 +1187,7 @@ export const api = {
     : req('/api/espionage/send', { method: 'POST', body: JSON.stringify({ target_castle: targetCastle, scenario }) }),
   spyMine: () => MOCK ? Promise.resolve(M.spyMine()) : req('/api/espionage/mine'),
   adminSpyPending: () => MOCK ? Promise.resolve(M.adminSpyPending()) : req('/api/admin/espionage'),
+  adminSpyResolved: () => MOCK ? Promise.resolve(M.adminSpyResolved()) : req('/api/admin/espionage/resolved'),
   adminScoreSpy: (missionId, score) => MOCK ? Promise.resolve(M.adminScoreSpy(missionId, score))
     : req(`/api/admin/espionage/${missionId}/score`, { method: 'POST', body: JSON.stringify({ score }) }),
 

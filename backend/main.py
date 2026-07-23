@@ -8,7 +8,10 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 # ماژول routers.players است) — قبلاً همین‌جا با هم قاطی می‌شدند و _ensure_indexes
 # داشت روی ماژول روتر create_index صدا می‌زد (بی‌اثر، ولی چون توی try/except بود
 # بی‌سروصدا فقط لاگ می‌شد و هیچ‌وقت هیچ ایندکس یکتایی واقعاً ساخته نمی‌شد)
-from db import players as players_col, map_castles, admin_roles
+from db import (
+    players as players_col, map_castles, admin_roles,
+    campaigns, caravans, spy_missions, messages, alliances, roleplays,
+)
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
@@ -81,6 +84,27 @@ async def _ensure_indexes():
         await admin_roles.create_index("tg_id", unique=True)
     except Exception:
         logger.exception("ensuring unique indexes failed — احتمالاً دادهٔ تکراری از قبل در دیتابیس هست")
+
+    # ایندکس‌های غیریکتا برای پرس‌وجوهایی که مستقیم روی این فیلدها فیلتر می‌کنند —
+    # بدون این‌ها هر واچر (هر ۳۰ ثانیه) و هر لیست پنل ادمین کل کالکشن را اسکن می‌کند،
+    # که با انباشته‌شدن تاریخچهٔ لشکرکشی/جاسوسی/پیام با تعداد بازیکن بیشتر کند می‌شود
+    try:
+        await campaigns.create_index([("active", 1), ("arrival_at", 1)])
+        await campaigns.create_index("tg_id")
+        await caravans.create_index([("active", 1), ("arrival_at", 1)])
+        await caravans.create_index("tg_id")
+        await caravans.create_index("target_tg_id")
+        await spy_missions.create_index("resolved")
+        await spy_missions.create_index("tg_id")
+        await messages.create_index("from_id")
+        await messages.create_index("to_id")
+        await alliances.create_index("from_id")
+        await alliances.create_index("to_id")
+        await alliances.create_index("status")
+        await roleplays.create_index("resolved")
+        await roleplays.create_index("tg_id")
+    except Exception:
+        logger.exception("ensuring secondary indexes failed")
 
 @app.on_event("startup")
 async def start_background_watchers():

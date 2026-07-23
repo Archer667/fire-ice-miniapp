@@ -4,9 +4,9 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from db import campaigns, players, admin_roles, map_castles, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants
+from db import campaigns, players, admin_roles, map_castles, market_listings, black_market_listings, spy_missions, roleplays, items, item_grants, alliances
 from game import now, normalize_building_state
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES
 from config import ADMIN_IDS
 from routers.war import OP_TYPES
 from routers.ravens import send_system_message
@@ -70,6 +70,21 @@ async def list_spy_pending(user: dict = Depends(admin_user)):
             "origin": m["origin_castle"], "target": m["target_castle"],
             "scenario": m["scenario"], "arrived": now() >= m["arrival_at"],
             "created_at": m["created_at"].isoformat(),
+        })
+    return out
+
+@router.get("/espionage/resolved")
+async def list_spy_resolved(user: dict = Depends(admin_user)):
+    """سناریوهای جاسوسی‌ای که قبلاً امتیازدهی شده‌اند — برای مرور نتیجه‌ای که ادمین
+    خودش قبلاً داده، چون بعد از امتیازدهی از لیست «در انتظار» ناپدید می‌شوند"""
+    out = []
+    cur = spy_missions.find({"resolved": True}).sort("resolved_at", -1).limit(50)
+    async for m in cur:
+        out.append({
+            "id": str(m["_id"]), "player": m["player_name"], "tg_id": m["tg_id"],
+            "target": m["target_castle"], "scenario": m["scenario"],
+            "admin_score": m.get("admin_score"), "success": m.get("success"),
+            "resolved_at": m["resolved_at"].isoformat() if m.get("resolved_at") else None,
         })
     return out
 
@@ -646,4 +661,39 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
             owner["tg_id"], owner["name"],
             f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و نفراتش به خانه برگشتند.",
         )
+    return {"ok": True}
+
+@router.get("/alliances")
+async def admin_list_alliances(user: dict = Depends(admin_user)):
+    """همهٔ پیمان‌ها — از جمله خصوصی و رد/در انتظار — برای مرور و در صورت نیاز انحلال"""
+    out = []
+    cur = alliances.find({}).sort("created_at", -1).limit(100)
+    async for a in cur:
+        out.append({
+            "id": str(a["_id"]), "from": a["from_name"], "from_tg_id": a["from_id"],
+            "to": a["to_name"], "to_tg_id": a["to_id"],
+            "type": a["type"], "type_name": ALLIANCE_TYPES.get(a["type"], {}).get("name", a["type"]),
+            "name": a.get("name") or "", "status": a["status"], "public": a.get("public", True),
+            "created_at": a["created_at"].isoformat(),
+        })
+    return out
+
+@router.post("/alliances/{alliance_id}/dissolve")
+async def admin_dissolve_alliance(alliance_id: str, user: dict = Depends(full_admin_user)):
+    """ادمین یک پیمانِ برقرار را زورکی منحل می‌کند — شمار اتحاد هر دو طرف کم می‌شود و هر دو باخبر می‌شوند"""
+    try:
+        oid = ObjectId(alliance_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ پیمان نامعتبر است")
+    a = await alliances.find_one({"_id": oid})
+    if not a:
+        raise HTTPException(404, "این پیمان پیدا نشد")
+    if a["status"] != "accepted":
+        raise HTTPException(400, "فقط پیمان برقرار را می‌شود منحل کرد")
+
+    await alliances.update_one({"_id": oid}, {"$set": {"status": "dissolved"}})
+    await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
+    await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
+    for tg_id, name, other_name in [(a["from_id"], a["from_name"], a["to_name"]), (a["to_id"], a["to_name"], a["from_name"])]:
+        await send_system_message(tg_id, name, f"پیمانت با لرد {other_name} به فرمان ادمین منحل شد.")
     return {"ok": True}

@@ -7,6 +7,7 @@ from db import players, alliances
 from game import now, apply_production, can_afford, pay
 from game_data import ALLIANCE_TYPES
 from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX, PRIVATE_ALLIANCE_MULTIPLIER
+from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
 
@@ -63,6 +64,13 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         "public": not body.private,
         "status": "pending", "created_at": now(),
     } for t in valid_targets])
+
+    type_name = ALLIANCE_TYPES[body.type]["name"]
+    for t in valid_targets:
+        await send_system_message(
+            t["tg_id"], t["name"],
+            f"لرد {me['name']} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد — از تب دیپلماسی پاسخ بده.",
+        )
     return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
 
 @router.get("/mine")
@@ -113,9 +121,11 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "accepted"}})
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
+        await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را پذیرفت.")
     else:
         await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "rejected"}})
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"resources.wine": a["wine_cost"]}})
+        await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را رد کرد — شرابت برگشت.")
     return {"ok": True}
 
 @router.post("/feast")

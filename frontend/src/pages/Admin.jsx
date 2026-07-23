@@ -31,9 +31,10 @@ const TAB_GROUPS = [
   {
     label: 'رویدادها',
     tabs: [
-      { key: 'war',    label: 'جنگ و رول‌ها' },
-      { key: 'titles', label: 'مقام‌ها' },
-      { key: 'polls',  label: 'رای‌گیری', fullOnly: true },
+      { key: 'war',       label: 'جنگ و رول‌ها' },
+      { key: 'alliances', label: 'اتحادها' },
+      { key: 'titles',    label: 'مقام‌ها' },
+      { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
     ],
   },
   {
@@ -72,8 +73,13 @@ export default function Admin() {
   const [unassignBusyId, setUnassignBusyId] = useState(null);
   const [reassignOpenId, setReassignOpenId] = useState(null);
 
+  const [warSubTab, setWarSubTab] = useState('campaigns'); // 'campaigns' | 'espionage' | 'roleplay'
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
+  const [alliancesList, setAlliancesList] = useState(null);
+  const [dissolveBusyId, setDissolveBusyId] = useState(null);
+  const [spyResolved, setSpyResolved] = useState(null);
+  const [spyResultsView, setSpyResultsView] = useState('pending'); // 'pending' | 'resolved'
   const [overlordTarget, setOverlordTarget] = useState([]);
   const [overlordRegion, setOverlordRegion] = useState('north');
   const [wardenTarget, setWardenTarget] = useState([]);
@@ -140,7 +146,9 @@ export default function Admin() {
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
+  const loadSpyResolved = () => api.adminSpyResolved().then(setSpyResolved).catch(e => toast(e.message));
   const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
+  const loadAlliances = () => api.adminListAlliances().then(setAlliancesList).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
   const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
@@ -154,7 +162,9 @@ export default function Admin() {
     loadRoster();
     loadCampaigns();
     loadSpyPending();
+    loadSpyResolved();
     loadRoleplayPending();
+    loadAlliances();
     loadMapData();
     if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); }
   }, []);
@@ -303,8 +313,20 @@ export default function Admin() {
       toast(res.success ? 'نتیجه ثبت شد — جاسوسی موفق بود' : 'نتیجه ثبت شد — جاسوس دستگیر شد');
       setSpyScores(prev => { const n = { ...prev }; delete n[missionId]; return n; });
       loadSpyPending();
+      loadSpyResolved();
     } catch (e) { toast(e.message); }
     setSpyBusyId(null);
+  };
+
+  const dissolveAlliance = async (id) => {
+    setDissolveBusyId(id);
+    try {
+      await api.adminDissolveAlliance(id);
+      haptic('medium');
+      toast('پیمان منحل شد و به هر دو طرف اطلاع داده شد');
+      loadAlliances();
+    } catch (e) { toast(e.message); }
+    setDissolveBusyId(null);
   };
 
   const respondRoleplay = async (roleplayId) => {
@@ -604,7 +626,19 @@ export default function Admin() {
 
       {tab === 'war' && (
         <>
-          <div className="sect up u2">اطلاعات لشکرکشی‌ها</div>
+          <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ و رول‌ها">
+            {[
+              { key: 'campaigns', label: 'لشکرکشی‌ها' },
+              { key: 'espionage', label: 'جاسوسی' },
+              { key: 'roleplay',  label: 'رول‌ها' },
+            ].map(t => (
+              <button type="button" key={t.key} role="tab" aria-selected={warSubTab === t.key}
+                   className={`rbtn tab ${warSubTab === t.key ? 'on' : ''}`}
+                   onClick={() => { haptic(); setWarSubTab(t.key); }}>{t.label}</button>
+            ))}
+          </div>
+
+          {warSubTab === 'campaigns' && (
           <div className="up u2">
             {(!campaignsInfo || campaignsInfo.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
@@ -640,9 +674,26 @@ export default function Admin() {
               </div>
             ))}
           </div>
+          )}
 
-          <div className="sect up u3">جاسوسی‌های در انتظار بررسی</div>
-          <div className="page-sub up u3" style={{ marginTop: -10 }}>
+          {warSubTab === 'espionage' && (
+          <>
+          <div className="grid2 up u2" role="radiogroup" aria-label="نمای جاسوسی">
+            <button type="button" role="radio" aria-checked={spyResultsView === 'pending'}
+                    className={`rbtn pick ${spyResultsView === 'pending' ? 'sel' : ''}`}
+                    onClick={() => { haptic(); setSpyResultsView('pending'); }}>
+              <div className="n">در انتظار بررسی</div>
+            </button>
+            <button type="button" role="radio" aria-checked={spyResultsView === 'resolved'}
+                    className={`rbtn pick ${spyResultsView === 'resolved' ? 'sel' : ''}`}
+                    onClick={() => { haptic(); setSpyResultsView('resolved'); }}>
+              <div className="n">بررسی‌شده‌ها</div>
+            </button>
+          </div>
+
+          {spyResultsView === 'pending' && (
+          <>
+          <div className="page-sub up u3">
             نقشهٔ هر بازیکن را بخوان و بر اساس هوشمندی و منطقی‌بودنش امتیاز جاسوسی (۰ تا ۱۰۰) بده — همان امتیاز مستقیماً شانس موفقیتش می‌شود
           </div>
           <div className="up u3">
@@ -670,9 +721,34 @@ export default function Admin() {
               </div>
             ))}
           </div>
+          </>
+          )}
 
-          <div className="sect up u3">رول‌های در انتظار پاسخ</div>
-          <div className="page-sub up u3" style={{ marginTop: -10 }}>
+          {spyResultsView === 'resolved' && (
+          <div className="up u3">
+            {(!spyResolved || spyResolved.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز جاسوسی‌ای بررسی نشده</div>
+            )}
+            {spyResolved && spyResolved.map(m => (
+              <div className="card" key={m.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Eye s={16} /></div>
+                  <div className="n">
+                    {m.player}
+                    <small>{m.target} · امتیاز {m.admin_score.toLocaleString('fa-IR')} · {m.success ? 'موفق' : 'دستگیر شد'}</small>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{m.scenario}</div>
+              </div>
+            ))}
+          </div>
+          )}
+          </>
+          )}
+
+          {warSubTab === 'roleplay' && (
+          <>
+          <div className="page-sub up u3">
             سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
           </div>
           <div className="up u3">
@@ -724,6 +800,44 @@ export default function Admin() {
                 <button className="btn" style={{ marginTop: 14 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
                   {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
                 </button>
+              </div>
+            ))}
+          </div>
+          </>
+          )}
+        </>
+      )}
+
+      {tab === 'alliances' && (
+        <>
+          <div className="sect up u2">اتحادهای بازی</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            همهٔ پیمان‌های پیشنهادشده بین بازیکنان — پیمان‌های برقرار را در صورت نیاز می‌توانی زورکی منحل کنی
+          </div>
+          <div className="up u2">
+            {(!alliancesList || alliancesList.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز پیمانی بسته نشده</div>
+            )}
+            {alliancesList && alliancesList.map(a => (
+              <div className="card" key={a.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Scroll s={16} /></div>
+                  <div className="n">
+                    {a.from} ← {a.to}
+                    <small>{a.type_name}{a.name ? ` · «${a.name}»` : ''} · {a.public ? 'عمومی' : 'خصوصی'}</small>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--low)' }}>
+                    {{ pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده' }[a.status] || a.status}
+                  </div>
+                  {a.status === 'accepted' && isFull && (
+                    <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                            disabled={dissolveBusyId === a.id} onClick={() => dissolveAlliance(a.id)}>
+                      {dissolveBusyId === a.id ? 'در حال انحلال...' : 'منحل کن'}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
