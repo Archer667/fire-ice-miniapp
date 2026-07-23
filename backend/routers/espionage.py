@@ -57,16 +57,22 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):
+    """با .get() و مقدار پیش‌فرض می‌خوانیم، نه اندیس مستقیم — یک رکورد قدیمی‌تر
+    (از نسخه‌ای از کد که هنوز فلان فیلد را نداشت) نباید کل این endpoint را با
+    KeyError بترکاند و به فرانت به‌شکل «Failed to fetch» برسد"""
     cur = spy_missions.find({"tg_id": user["id"]}).sort("created_at", -1).limit(30)
     out = []
     async for m in cur:
+        resolved = m.get("resolved", False)
+        success = m.get("success") if resolved else None
+        created_at = m.get("created_at") or now()
         out.append({
-            "id": str(m["_id"]), "target": m["target_castle"],
-            "scenario": m["scenario"],
-            "travel_minutes": m["travel_minutes"], "arrived": now() >= m["arrival_at"],
-            "resolved": m["resolved"],
-            "success": m["success"] if m["resolved"] else None,
-            "report": m["report"] if m["resolved"] and m["success"] else None,
-            "created_at": m["created_at"].isoformat(),
+            "id": str(m["_id"]), "target": m.get("target_castle", ""),
+            "scenario": m.get("scenario", ""),
+            "travel_minutes": m.get("travel_minutes", 0), "arrived": now() >= m.get("arrival_at", now()),
+            "resolved": resolved,
+            "success": success,
+            "report": m.get("report") if resolved and success else None,
+            "created_at": created_at.isoformat(),
         })
     return out

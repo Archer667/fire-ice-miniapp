@@ -1,7 +1,9 @@
 import asyncio
 import logging
-from fastapi import FastAPI
+import re
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
 # نکته: اسم players اینجا عمداً players_col است، نه players (که چند خط پایین‌تر
@@ -35,6 +37,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """اگر اینجا نبود، یک خطای برنامه‌نویسیِ مدیریت‌نشده (مثلاً KeyError روی
+    دادهٔ قدیمی) به‌جای پاسخ ۵۰۰ معمولی، پاسخی بدون هدرهای CORS برمی‌گرداند —
+    چون CORSMiddleware فقط پاسخِ عادیِ خروجی از ExceptionMiddleware را می‌بیند،
+    نه پاسخی که این هندلر مستقیماً می‌سازد؛ برای همین هدرهای CORS را اینجا
+    خودمان دستی می‌زنیم. بدون این، مرورگر خطای واقعی را نشان نمی‌دهد و فقط
+    «Failed to fetch» می‌گوید — یعنی هم برای بازیکن هم برای اشکال‌زدایی ما
+    غیرقابل‌ردیابی می‌شود"""
+    logger.exception("unhandled exception on %s %s", request.method, request.url.path)
+    headers = {}
+    origin = request.headers.get("origin")
+    if "*" in CORS_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = "*"
+    elif origin and (origin in CORS_ORIGINS or (CORS_ORIGIN_REGEX and re.match(CORS_ORIGIN_REGEX, origin))):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    return JSONResponse(
+        status_code=500, content={"detail": "خطای غیرمنتظرهٔ سرور — دوباره امتحان کن"}, headers=headers,
+    )
 
 app.include_router(players.router)
 app.include_router(war.router)
