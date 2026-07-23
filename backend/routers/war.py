@@ -194,14 +194,59 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
 @router.post("/{campaign_id}/cancel")
 async def cancel(campaign_id: str, user: dict = Depends(get_user)):
+    """لغو لشکر فعال — طلا، نفرات، و تسلیحاتِ مصرف‌شده (بر اساس ترکیب نیروها) کامل
+    برمی‌گردد؛ فقط غله‌ای که تا همین الان به‌عنوان آذوقهٔ روزانه مصرف شده برنمی‌گردد"""
     c = await campaigns.find_one({"_id": ObjectId(campaign_id)})
     if not c or c["tg_id"] != user["id"]:
         raise HTTPException(404, "لشکر پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
+
+    weapons_refund = {}
+    for tid, n in c.get("troops", {}).items():
+        if not n or n <= 0:
+            continue
+        weapon_key = TROOP_WEAPON_KEY.get(tid)
+        if weapon_key:
+            weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
+
     await campaigns.update_one({"_id": c["_id"]}, {"$set": {"active": False, "status": "cancelled"}})
-    await players.update_one({"tg_id": user["id"]}, {"$inc": {"resources.men": c["men_committed"]}})
-    return {"ok": True, "men_refunded": c["men_committed"]}
+    inc = {"resources.men": c["men_committed"], "resources.gold": c["gold_cost"]}
+    for wkey, n in weapons_refund.items():
+        inc[f"resources.{wkey}"] = n
+    await players.update_one({"tg_id": user["id"]}, {"$inc": inc})
+    return {
+        "ok": True, "men_refunded": c["men_committed"], "gold_refunded": c["gold_cost"],
+        "weapons_refunded": weapons_refund,
+    }
+
+@router.get("/legions")
+async def legions(user: dict = Depends(get_user)):
+    """همهٔ لشکرهای فعالِ من — از جمله دفاعی/جای‌گیری — برای مدیریت (لغو یا حرکت‌دادن).
+    برخلاف /mine که فقط برای گزارش تهاجمی‌ها و با تأخیر/بازهٔ زمانی محدود است، اینجا
+    خودِ صاحبِ لشکرهاست که دارد می‌بیند، پس نه چیزی حذف می‌شود نه پنهان"""
+    cur = campaigns.find({"tg_id": user["id"], "active": True}).sort("created_at", -1).limit(50)
+    out = []
+    async for c in cur:
+        arrival_at = c.get("arrival_at")
+        arrived = (now() >= arrival_at) if arrival_at else True
+        troops = [
+            {"name": COMMON_TROOPS[t]["name"] if t in COMMON_TROOPS else t, "count": n}
+            for t, n in c.get("troops", {}).items() if n and n > 0
+        ]
+        out.append({
+            "id": str(c["_id"]),
+            "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            "origin": c["origin_castle"], "target": c["target_castle"],
+            "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
+            "travel_minutes": c.get("travel_minutes", 0),
+            "arrived": arrived,
+            "can_relaunch": c["op_type"] == "garrison" and arrived,
+            "created_at": c["created_at"].isoformat(),
+            "arrival_at": arrival_at.isoformat() if arrival_at else None,
+        })
+    return out
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):

@@ -144,6 +144,17 @@ function mockCanAfford(cost) {
 function mockPay(cost) {
   for (const [k, v] of Object.entries(cost)) mockMe.resources[k] -= v;
 }
+function rumorBrief(r) {
+  const reactions = r.reactions || {};
+  const values = Object.values(reactions);
+  return {
+    id: r.id, target: r.target_name, target_tg_id: r.target_tg_id,
+    text: r.text, created_at: r.created_at, mine: r.author_tg_id === 1,
+    likes: values.filter(v => v === 'like').length,
+    dislikes: values.filter(v => v === 'dislike').length,
+    my_reaction: reactions[1] ?? null,
+  };
+}
 const M = {
   gamedata: { regions: REGIONS_STATIC },
   me: () => {
@@ -371,7 +382,37 @@ const M = {
     if (!c.active) throw new Error('این لشکر دیگر فعال نیست');
     c.active = false;
     mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
-    return { ok: true, men_refunded: c.men_committed };
+    mockMe.resources.gold = (mockMe.resources.gold ?? 0) + c.gold_cost;
+    const weaponsRefund = {};
+    for (const [tid, n] of Object.entries(c.troops || {})) {
+      if (!n || n <= 0) continue;
+      const weaponKey = TROOP_UNIT_BUILDINGS[tid]?.weapon;
+      if (weaponKey) {
+        weaponsRefund[weaponKey] = (weaponsRefund[weaponKey] || 0) + n * WEAPON_PER_SOLDIER;
+        mockMe.resources[weaponKey] = (mockMe.resources[weaponKey] ?? 0) + n * WEAPON_PER_SOLDIER;
+      }
+    }
+    return { ok: true, men_refunded: c.men_committed, gold_refunded: c.gold_cost, weapons_refunded: weaponsRefund };
+  },
+  legions: () => {
+    mockResolveCampaigns();
+    const nowMs = Date.now();
+    return mockCampaigns.slice().reverse()
+      .filter(c => c.active)
+      .map(c => ({
+        id: c.id,
+        op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
+        origin: c.origin_castle, target: c.target_castle,
+        troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
+          name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+        })),
+        men_committed: c.men_committed, power: c.power || 0,
+        travel_minutes: c.travel_minutes,
+        arrived: nowMs >= new Date(c.arrival_at).getTime(),
+        can_relaunch: c.op_type === 'garrison' && nowMs >= new Date(c.arrival_at).getTime(),
+        created_at: c.created_at, arrival_at: c.arrival_at,
+      }));
   },
   warMine: () => {
     // گزارش‌ها عمداً حداقلی‌اند: فقط اسم، فرستنده، مبدا/مقصد و زمان رسیدن — نه توان نه نیرو.
@@ -672,14 +713,16 @@ const M = {
     category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
     text: r.text, campaign_id: r.campaign_id, sibling: null, created_at: r.created_at,
   })),
-  adminRespondRoleplay: (roleplayId, result, visibility) => {
+  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = []) => {
     const r = mockRoleplays.find(x => x.id === roleplayId);
     if (!r) throw new Error('این رول پیدا نشد');
     if (r.resolved) throw new Error('این رول قبلاً پاسخ داده شده');
     const res = (result || '').trim();
     if (res.length < 3) throw new Error('متن نتیجه خیلی کوتاه است');
     r.result = res; r.resolved = true;
-    return { ok: true, sent_to: visibility === 'all' ? MOCK_PLAYERS.length + 1 : 1 };
+    if (visibility === 'all') return { ok: true, sent_to: MOCK_PLAYERS.length + 1 };
+    const recipients = new Set([1, ...otherLords]);
+    return { ok: true, sent_to: recipients.size };
   },
   leaderboard: () => [
     { rank: 1, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region: 'کراون‌لندز', points: 2380 },
@@ -856,15 +899,19 @@ const M = {
     mockRumors.unshift({
       id: String(mockRumorSeq++), author_tg_id: 1, author_name: mockMe.name,
       target_tg_id: targetTgId, target_name: target.name,
-      text: t.slice(0, 400), created_at: new Date().toISOString(),
+      text: t.slice(0, 400), created_at: new Date().toISOString(), reactions: {},
     });
     return { ok: true };
   },
-  listRumors: () => mockRumors.map(r => ({
-    id: r.id, author: r.author_name, author_tg_id: r.author_tg_id,
-    target: r.target_name, target_tg_id: r.target_tg_id,
-    text: r.text, created_at: r.created_at, mine: r.author_tg_id === 1,
-  })),
+  listRumors: () => mockRumors.map(r => rumorBrief(r)),
+  reactRumor: (rumorId, reaction) => {
+    const r = mockRumors.find(x => x.id === rumorId);
+    if (!r) throw new Error('این شایعه پیدا نشد');
+    if (!['like', 'dislike', null].includes(reaction)) throw new Error('واکنش نامعتبر');
+    if (reaction === null) delete r.reactions[1];
+    else r.reactions[1] = reaction;
+    return rumorBrief(r);
+  },
   titles: () => {
     const brief = (p) => p ? { tg_id: p.tg_id, name: p.name, title: p.title, castle: p.castle } : null;
     const meBrief = { tg_id: 1, name: mockMe.name, title: mockMe.title, castle: mockMe.castle };
@@ -976,6 +1023,7 @@ const M = {
   adminSetEpithet: () => ({ ok: true }),
   adminCreatePoll: () => ({ ok: true }),
   adminClosePoll: () => ({ ok: true }),
+  adminDeletePoll: () => ({ ok: true }),
   adminListAdmins: () => [],
   adminAddAdmin: () => ({ ok: true }),
   adminRemoveAdmin: () => ({ ok: true }),
@@ -989,6 +1037,7 @@ export const api = {
   register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
   map:       () => MOCK ? Promise.resolve(M.map()) : req('/api/map'),
   warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
+  legions:   () => MOCK ? Promise.resolve(M.legions()) : req('/api/war/legions'),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
@@ -1030,6 +1079,8 @@ export const api = {
   sendRumor: (targetTgId, text) => MOCK ? Promise.resolve(M.sendRumor(targetTgId, text))
     : req('/api/rumors/send', { method: 'POST', body: JSON.stringify({ target_tg_id: targetTgId, text }) }),
   listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
+  reactRumor: (rumorId, reaction) => MOCK ? Promise.resolve(M.reactRumor(rumorId, reaction))
+    : req(`/api/rumors/${rumorId}/react`, { method: 'POST', body: JSON.stringify({ reaction }) }),
   adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
   adminListRoster: () => MOCK ? Promise.resolve(M.adminListRoster()) : req('/api/admin/players/roster'),
   adminUnassignHouse: (tgId) => MOCK ? Promise.resolve(M.adminUnassignHouse(tgId)) : req(`/api/admin/players/${tgId}/unassign`, { method: 'POST' }),
@@ -1076,8 +1127,8 @@ export const api = {
     : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
-  adminRespondRoleplay: (roleplayId, result, visibility) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility))
-    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants' }) }),
+  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = []) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords))
+    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords }) }),
   warRoleplayEligible: () => MOCK ? Promise.resolve(M.warRoleplayEligible()) : req('/api/war/roleplay-eligible'),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
@@ -1091,6 +1142,7 @@ export const api = {
   adminCreatePoll: (question, options, eligibleTgIds) => MOCK ? Promise.resolve(M.adminCreatePoll())
     : req('/api/polls/admin/create', { method: 'POST', body: JSON.stringify({ question, options, eligible_tg_ids: eligibleTgIds }) }),
   adminClosePoll: (id) => MOCK ? Promise.resolve(M.adminClosePoll()) : req(`/api/polls/admin/${id}/close`, { method: 'POST' }),
+  adminDeletePoll: (id) => MOCK ? Promise.resolve(M.adminDeletePoll()) : req(`/api/polls/admin/${id}`, { method: 'DELETE' }),
   adminListAdmins: () => MOCK ? Promise.resolve(M.adminListAdmins()) : req('/api/admin/admins'),
   adminAddAdmin: (tgId) => MOCK ? Promise.resolve(M.adminAddAdmin())
     : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),

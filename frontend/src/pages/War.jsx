@@ -12,6 +12,7 @@ import {
 
 const TABS = [
   { key: 'command', label: 'نقشه و فرمان' },
+  { key: 'legions', label: 'لشکرها' },
   { key: 'reports', label: 'گزارش‌ها' },
 ];
 const SEEN_KEY = 'fireice_war_reports_seen';
@@ -28,6 +29,7 @@ export default function War() {
   const [mapError, setMapError] = useState(false);
   const [buildings, setBuildings] = useState(null);
   const [mine, setMine] = useState(null);
+  const [legions, setLegions] = useState(null);
   const [seenIds, setSeenIds] = useState(loadSeenIds);
 
   const loadMap = () => {
@@ -36,8 +38,9 @@ export default function War() {
   };
   const loadBuildings = () => api.buildings().then(setBuildings).catch(e => { toast(e.message); setBuildings([]); });
   const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
+  const loadLegions = () => api.legions().then(setLegions).catch(e => { toast(e.message); setLegions([]); });
 
-  useEffect(() => { loadMap(); loadBuildings(); loadMine(); }, []);
+  useEffect(() => { loadMap(); loadBuildings(); loadMine(); loadLegions(); }, []);
 
   // گزارش لشکرکشی تازه، ۳۰ دقیقه بعد از ارسال در تب «گزارش‌ها» ظاهر می‌شود
   const visibleReports = useMemo(
@@ -192,14 +195,29 @@ export default function War() {
     try {
       const res = await api.cancelCampaign(c.id);
       haptic('medium');
+      const weaponUpdates = Object.fromEntries(
+        Object.entries(res.weapons_refunded || {}).map(([wkey, n]) => [wkey, (me.resources[wkey] ?? 0) + n])
+      );
       setMe({
         ...me,
-        resources: { ...me.resources, men: men + (res.men_refunded ?? 0) },
+        resources: {
+          ...me.resources,
+          men: men + (res.men_refunded ?? 0),
+          gold: gold + (res.gold_refunded ?? 0),
+          ...weaponUpdates,
+        },
         active_campaigns: Math.max(0, (me.active_campaigns ?? 0) - 1),
       });
-      toast('لشکر لغو شد و نفراتش به خانه برگشتند');
-      loadMine(); loadMap();
+      toast('لشکر لغو شد و طلا، نفرات و تسلیحاتش به خانه برگشت');
+      loadMine(); loadMap(); loadLegions();
     } catch (e) { toast(e.message); }
+  };
+
+  const relaunchFrom = (c) => {
+    haptic();
+    setOrigin(c.target);
+    setTab('command');
+    toast(`مبدا فرمان روی «${c.target}» تنظیم شد — لشکر جدید رو از همون‌جا بفرست`);
   };
 
   if (mapError) return (
@@ -349,6 +367,43 @@ export default function War() {
             </button>
           </div>
         </>
+      )}
+
+      {tab === 'legions' && (
+        <div className="up u2">
+          <div className="page-sub" style={{ margin: '0 4px 10px' }}>
+            همهٔ لشکرهای فعالت — از جمله دفاعی و جای‌گیری‌ها؛ لغو کردن، طلا و نفرات و تسلیحات مصرف‌شده (منهای غلهٔ خرج‌شده) را برمی‌گرداند
+          </div>
+          {legions === null && <div className="loading">در حال بارگذاری...</div>}
+          {legions && legions.length === 0 && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هیچ لشکر فعالی نداری</div>
+          )}
+          {legions && legions.map(c => (
+            <div className="card" key={c.id} style={{ marginBottom: 10 }}>
+              <div className="res">
+                <div className="ic"><Swords s={16} /></div>
+                <div className="n">
+                  {c.name}
+                  <small>{c.op_name} · توان {c.power.toLocaleString('fa-IR')} · {c.men_committed.toLocaleString('fa-IR')} نفر</small>
+                </div>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+                نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
+                {c.origin} ← {c.target}
+                {' · '}
+                {c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {c.can_relaunch && (
+                  <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => relaunchFrom(c)}>حرکت بده</button>
+                )}
+                <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => cancelCampaign(c)}>لغو لشکر</button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {tab === 'reports' && (

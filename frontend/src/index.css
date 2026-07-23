@@ -521,6 +521,14 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 .tmsg.theirs { align-self: flex-end; }
 .composer { display: flex; gap: 9px; margin-top: 14px; }
 .composer input { flex: 1; border-radius: 99px; }
+
+.reaction-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 12px; font-size: 11.5px; font-weight: 700;
+  background: rgba(160,195,255,0.06); border: 1px solid var(--edge); color: var(--mid);
+}
+.reaction-btn.on { color: var(--az2); border-color: rgba(96,178,255,0.4); background: rgba(77,163,255,0.12); }
+.reaction-btn:active { transform: scale(0.96); }
 .composer button {
   width: 48px; flex-shrink: 0; border: none; border-radius: 50%;
   background: linear-gradient(140deg, var(--az2), var(--az)); color: #041022; cursor: pointer;
@@ -545,7 +553,7 @@ label.f { display: block; font-size: 12px; font-weight: 600; color: var(--mid); 
 }
 .hamburger {
   width: 38px; height: 38px; border-radius: 13px; flex-shrink: 0; cursor: pointer;
-  border: 1px solid var(--edge); background: var(--glass); color: var(--hi);
+  border: 1px solid rgba(255,209,102,0.3); background: var(--glass); color: #ffd166;
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(18px); transition: transform 0.15s ease;
 }

@@ -10,6 +10,7 @@ const STATUS_FA = { pending: 'در انتظار پاسخ', accepted: 'برقرا
 const TABS = [
   { key: 'main',      label: 'دیپلماسی' },
   { key: 'alliances', label: 'اتحادها' },
+  { key: 'polls',     label: 'رای‌گیری' },
 ];
 
 export default function Diplomacy() {
@@ -190,41 +191,6 @@ export default function Diplomacy() {
         ))}
       </div>
 
-      <div className="sect up u2">رای‌گیری</div>
-      <div className="up u2">
-        {(!polls || polls.length === 0) && (
-          <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-            فعلاً هیچ رای‌گیری‌ای باز نیست — هروقت ادمین یکی باز کنه، همین‌جا می‌بینیش
-          </div>
-        )}
-        {polls && polls.map(p => (
-          <div className="card poll" key={p.id}>
-            <div className="poll-q">
-              {p.question}
-              <span className={`poll-status ${p.status}`}>{p.status === 'open' ? 'باز' : 'بسته'}</span>
-            </div>
-            {p.options.map((opt, i) => {
-              const pct = p.total_votes ? Math.round((p.tally[i] / p.total_votes) * 100) : 0;
-              const mine = p.my_vote === i;
-              const canVote = p.status === 'open' && p.eligible;
-              return (
-                <div key={i} className={`poll-opt ${mine ? 'mine' : ''}`}
-                     onClick={() => canVote && castVote(p.id, i)} style={canVote ? {} : { cursor: 'default' }}>
-                  <div className="poll-opt-bar"><i style={{ width: pct + '%' }} /></div>
-                  <div className="poll-opt-row">
-                    <span>{opt}{mine ? ' ✓' : ''}</span>
-                    <span>{pct}٪ ({p.tally[i].toLocaleString('fa-IR')})</span>
-                  </div>
-                </div>
-              );
-            })}
-            {!p.eligible && p.status === 'open' && (
-              <div className="poll-note">این یکی رو نمی‌تونی رای بدی — فقط نتیجه‌اش رو می‌بینی</div>
-            )}
-          </div>
-        ))}
-      </div>
-
       <div className="sect up u3">سلسله‌مراتب قدرت</div>
       <div className="card up u3">
         <div className="res">
@@ -301,6 +267,42 @@ export default function Diplomacy() {
                   <small>{a.type_name}{a.name ? ` · ${a.from_name} و ${a.to_name}` : ''}</small>
                 </div>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'polls' && (
+        <div className="up u2">
+          {(!polls || polls.length === 0) && (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
+              فعلاً هیچ رای‌گیری‌ای باز نیست — هروقت ادمین یکی باز کنه، همین‌جا می‌بینیش
+            </div>
+          )}
+          {polls && polls.map(p => (
+            <div className="card poll" key={p.id}>
+              <div className="poll-q">
+                {p.question}
+                <span className={`poll-status ${p.status}`}>{p.status === 'open' ? 'باز' : 'بسته'}</span>
+              </div>
+              {p.options.map((opt, i) => {
+                const pct = p.total_votes ? Math.round((p.tally[i] / p.total_votes) * 100) : 0;
+                const mine = p.my_vote === i;
+                const canVote = p.status === 'open' && p.eligible;
+                return (
+                  <div key={i} className={`poll-opt ${mine ? 'mine' : ''}`}
+                       onClick={() => canVote && castVote(p.id, i)} style={canVote ? {} : { cursor: 'default' }}>
+                    <div className="poll-opt-bar"><i style={{ width: pct + '%' }} /></div>
+                    <div className="poll-opt-row">
+                      <span>{opt}{mine ? ' ✓' : ''}</span>
+                      <span>{pct}٪ ({p.tally[i].toLocaleString('fa-IR')})</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {!p.eligible && p.status === 'open' && (
+                <div className="poll-note">این یکی رو نمی‌تونی رای بدی — فقط نتیجه‌اش رو می‌بینی</div>
+              )}
             </div>
           ))}
         </div>

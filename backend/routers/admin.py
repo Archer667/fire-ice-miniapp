@@ -161,11 +161,16 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
 class RoleplayResultBody(BaseModel):
     result: str
     visibility: str = "participants"   # "participants" | "all" — چه کسی نتیجه را کلاغ می‌گیرد
+    other_lords: list[int] = []        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
+                                        # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
+                                        # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
 
 @router.post("/roleplay/{roleplay_id}/respond")
 async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
     """برای دستهٔ «جنگ»، نتیجه برای هر دو طرف نبرد فرستاده می‌شود — چه هر دو سناریو
     فرستاده باشند چه فقط یکی؛ طرفی که ننوشته هم از طریق خودِ لشکرکشی پیدا و باخبر می‌شود.
+    ادمین می‌تواند دستی هم لردهای دیگری را به‌عنوان «طرف این رول» اضافه کند (other_lords) —
+    اسم‌شان در پیام هم نوشته می‌شود تا برای گیرنده روشن باشد این نتیجه بین چه کسانی بوده.
     اگر visibility=all باشد، علاوه بر شرکت‌کننده‌ها، همهٔ بازیکنان بازی هم کلاغ می‌گیرند —
     جایگزین «روایت جنگ» قدیمی برای وقتی نتیجه باید عمومی اعلام شود"""
     result = body.result.strip()
@@ -204,6 +209,13 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             if defender:
                 recipient_tg_ids.add(defender["tg_id"])
 
+    other_lord_names = []
+    for tg_id in body.other_lords:
+        lord = await players.find_one({"tg_id": tg_id})
+        if lord:
+            recipient_tg_ids.add(tg_id)
+            other_lord_names.append(lord["name"])
+
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
     }})
@@ -213,10 +225,14 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
     cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
     prefix = "اعلامیهٔ عمومی" if body.visibility == "all" else f"نتیجهٔ رول «{cat_name}»{'ِ نبرد' if r['category'] == 'war' else ''}"
+    parties_line = ""
+    if other_lord_names:
+        all_names = list(dict.fromkeys([r["player_name"], *other_lord_names]))
+        parties_line = f"\nطرف‌های این رول: {' و '.join(all_names)}"
     for tg_id in recipient_tg_ids:
         player = await players.find_one({"tg_id": tg_id})
         if player:
-            await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}")
+            await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}")
 
     return {"ok": True, "sent_to": len(recipient_tg_ids)}
 

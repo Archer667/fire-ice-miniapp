@@ -89,3 +89,11 @@ async def close_poll(poll_id: str, user: dict = Depends(admin_user)):
     if res.matched_count == 0:
         raise HTTPException(404, "رای‌گیری پیدا نشد")
     return {"ok": True}
+
+@router.delete("/admin/{poll_id}")
+async def delete_poll(poll_id: str, user: dict = Depends(admin_user)):
+    """حذف کامل یک رای‌گیری — چه باز چه بسته"""
+    res = await polls.delete_one({"_id": ObjectId(poll_id)})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "رای‌گیری پیدا نشد")
+    return {"ok": True}

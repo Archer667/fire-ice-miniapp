@@ -1,4 +1,5 @@
 from datetime import timedelta
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
@@ -49,7 +50,7 @@ async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
     doc = {
         "author_tg_id": user["id"], "author_name": me["name"],
         "target_tg_id": target["tg_id"], "target_name": target["name"],
-        "text": text[:400], "created_at": now(),
+        "text": text[:400], "created_at": now(), "reactions": {},
     }
     res = await rumors.insert_one(doc)
 
@@ -59,16 +60,48 @@ async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
     )
     return {"ok": True, "id": str(res.inserted_id)}
 
+def _rumor_brief(r: dict, user_id: int) -> dict:
+    reactions = r.get("reactions", {})
+    return {
+        "id": str(r["_id"]),
+        # نویسنده عمداً فاش نمی‌شود — شایعه باید ناشناس بماند؛ فقط خودِ نویسنده با mine تشخیص می‌دهد
+        "target": r["target_name"], "target_tg_id": r["target_tg_id"],
+        "text": r["text"], "created_at": r["created_at"].isoformat(),
+        "mine": r["author_tg_id"] == user_id,
+        "likes": sum(1 for v in reactions.values() if v == "like"),
+        "dislikes": sum(1 for v in reactions.values() if v == "dislike"),
+        "my_reaction": reactions.get(str(user_id)),
+    }
+
 @router.get("")
 async def list_rumors(user: dict = Depends(get_user)):
-    """فید عمومی شایعات — همهٔ بازیکنان همه‌چیز را می‌بینند"""
+    """فید عمومی شایعات — همهٔ بازیکنان همه‌چیز را می‌بینند، ولی نویسنده فاش نمی‌شود"""
     out = []
     cur = rumors.find({}).sort("created_at", -1).limit(50)
     async for r in cur:
-        out.append({
-            "id": str(r["_id"]), "author": r["author_name"], "author_tg_id": r["author_tg_id"],
-            "target": r["target_name"], "target_tg_id": r["target_tg_id"],
-            "text": r["text"], "created_at": r["created_at"].isoformat(),
-            "mine": r["author_tg_id"] == user["id"],
-        })
+        out.append(_rumor_brief(r, user["id"]))
     return out
+
+class ReactBody(BaseModel):
+    reaction: str | None = None   # "like" | "dislike" | None (حذف واکنش)
+
+@router.post("/{rumor_id}/react")
+async def react_rumor(rumor_id: str, body: ReactBody, user: dict = Depends(get_user)):
+    try:
+        oid = ObjectId(rumor_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ شایعه نامعتبر است")
+    r = await rumors.find_one({"_id": oid})
+    if not r:
+        raise HTTPException(404, "این شایعه پیدا نشد")
+    if body.reaction not in ("like", "dislike", None):
+        raise HTTPException(400, "واکنش نامعتبر")
+
+    key = f"reactions.{user['id']}"
+    if body.reaction is None:
+        await rumors.update_one({"_id": oid}, {"$unset": {key: ""}})
+    else:
+        await rumors.update_one({"_id": oid}, {"$set": {key: body.reaction}})
+
+    r = await rumors.find_one({"_id": oid})
+    return _rumor_brief(r, user["id"])

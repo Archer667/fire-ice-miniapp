@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Send, Plus, Back, Eye } from '../components/Icons.jsx';
+import { Send, Plus, Back, Eye, ThumbsUp, ThumbsDown } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 
 const SYSTEM_TG_ID = 0;
@@ -30,6 +30,16 @@ export default function Ravens() {
   const loadRumors = () => api.listRumors().then(setRumors).catch(e => { toast(e.message); setRumors([]); });
   useEffect(() => { loadInbox(); }, []);
   useEffect(() => { if (tab === 'rumors' && rumors === null) loadRumors(); }, [tab]);
+
+  const reactRumor = async (rumorId, reaction) => {
+    const r = rumors.find(x => x.id === rumorId);
+    const next = r?.my_reaction === reaction ? null : reaction;
+    try {
+      const updated = await api.reactRumor(rumorId, next);
+      haptic();
+      setRumors(prev => prev.map(x => x.id === rumorId ? updated : x));
+    } catch (e) { toast(e.message); }
+  };
 
   const openThread = async (m) => {
     haptic();
@@ -148,10 +158,20 @@ export default function Ravens() {
                 <div className="ic"><Eye s={16} /></div>
                 <div className="n">
                   علیه {r.target}
-                  <small>{r.mine ? 'از طرف تو' : `از طرف ${r.author}`} · {timeAgo(r.created_at)}</small>
+                  <small>{r.mine ? 'از طرف تو' : 'شایعه‌سازش ناشناس مانده'} · {timeAgo(r.created_at)}</small>
                 </div>
               </div>
               <div style={{ fontSize: 12.5, lineHeight: 1.8, color: 'var(--hi)', marginTop: 8 }}>{r.text}</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button type="button" className={`rbtn reaction-btn ${r.my_reaction === 'like' ? 'on' : ''}`}
+                        style={{ width: 'auto' }} onClick={() => reactRumor(r.id, 'like')}>
+                  <ThumbsUp s={14} /> {r.likes.toLocaleString('fa-IR')}
+                </button>
+                <button type="button" className={`rbtn reaction-btn ${r.my_reaction === 'dislike' ? 'on' : ''}`}
+                        style={{ width: 'auto' }} onClick={() => reactRumor(r.id, 'dislike')}>
+                  <ThumbsDown s={14} /> {r.dislikes.toLocaleString('fa-IR')}
+                </button>
+              </div>
             </div>
           ))}
         </div>

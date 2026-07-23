@@ -121,6 +121,7 @@ export default function Admin() {
   const [roleplayPending, setRoleplayPending] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
+  const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
   const [itemsList, setItemsList] = useState(null);
@@ -310,13 +311,15 @@ export default function Admin() {
     const result = (roleplayResults[roleplayId] || '').trim();
     if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
     const visibility = roleplayVisibility[roleplayId] || 'participants';
+    const otherLords = (roleplayOtherLords[roleplayId] || []).map(p => p.tg_id);
     setRoleplayBusyId(roleplayId);
     try {
-      const res = await api.adminRespondRoleplay(roleplayId, result, visibility);
+      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords);
       haptic('medium');
       toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
       setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayVisibility(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayOtherLords(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
@@ -378,6 +381,11 @@ export default function Admin() {
 
   const closePoll = async (id) => {
     try { await api.adminClosePoll(id); haptic(); toast('رای‌گیری بسته شد'); loadPolls(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const deletePoll = async (id) => {
+    try { await api.adminDeletePoll(id); haptic(); toast('رای‌گیری حذف شد'); loadPolls(); }
     catch (e) { toast(e.message); }
   };
 
@@ -695,6 +703,9 @@ export default function Admin() {
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
                           placeholder="نتیجهٔ این رول چه شد..." />
+                <label className="f">این رول بین این لرد و چه لردهای دیگری بوده؟ (اختیاری)</label>
+                <PlayerPicker value={roleplayOtherLords[r.id] || []}
+                              onChange={(v) => setRoleplayOtherLords(prev => ({ ...prev, [r.id]: v }))} />
                 <label className="f">این نتیجه برای چه کسانی نمایش داده شود؟</label>
                 <div className="grid2" role="radiogroup" aria-label="نمایش نتیجه">
                   <button type="button" role="radio" aria-checked={(roleplayVisibility[r.id] || 'participants') === 'participants'}
@@ -1123,9 +1134,12 @@ export default function Admin() {
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginBottom: 8 }}>
                   {p.total_votes.toLocaleString('fa-IR')} رای — {p.options.join(' · ')}
                 </div>
-                {p.status === 'open' && (
-                  <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => closePoll(p.id)}>بستن رای‌گیری</button>
-                )}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {p.status === 'open' && (
+                    <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => closePoll(p.id)}>بستن رای‌گیری</button>
+                  )}
+                  <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1, color: 'var(--danger)' }} onClick={() => deletePoll(p.id)}>حذف رای‌گیری</button>
+                </div>
               </div>
             ))}
           </div>
