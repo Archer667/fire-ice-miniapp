@@ -6,7 +6,7 @@ import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart, Scroll, Wa
 export const NAV_ITEMS = [
   { index: 0, Icon: Realm,  label: 'قلمرو' },
   { index: 1, Icon: Build,  label: 'ساختمان‌ها' },
-  { index: 2, Icon: Swords, label: 'نیروها/لشکرکشی' },
+  { index: 2, Icon: Swords, label: 'نیرو' },
   { index: 3, Icon: Crown,  label: 'تاج‌وتخت' },
   { index: 5, Icon: Heart,  label: 'دیپلماسی' },
 ];
