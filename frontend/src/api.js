@@ -39,7 +39,7 @@ const mockDaily = { streak: 0, lastClaimDate: null };
 
 // صندوق کلاغ‌ها — قبلاً inbox() یه آرایهٔ ثابت نمایشی بود که هیچ‌وقت با اکشن‌های
 // واقعی به‌روز نمی‌شد (برای همین نتیجهٔ جاسوسی/رول/... تو حالت آزمایشی هیچ‌جا دیده نمی‌شد)
-const SYSTEM_SENDER_NAME = 'شورای جنگ';
+const SYSTEM_SENDER_NAME = 'رخدادها';
 const mockMessages = [ // {from_id, to_id, from_name, to_name, text, read, created_at} — دموی اولیه، هر اکشن واقعی هم بهش اضافه می‌شود
   { from_id: 0, to_id: 1, from_name: SYSTEM_SENDER_NAME, to_name: 'تو', text: 'لشکرت از وینترفل به ریوران رسید.', read: false, created_at: new Date(Date.now() - 3600000).toISOString() },
   { from_id: 9002, to_id: 1, from_name: 'تایوین لنیستر', to_name: 'تو', text: 'پیشنهاد پیمان عدم‌تجاوز — تا پایان زمستان. پاسخت را با همین کلاغ بفرست.', read: false, created_at: new Date(Date.now() - 7200000).toISOString() },
@@ -430,6 +430,13 @@ const M = {
         : 'پنجرهٔ لشکرکشی بسته شد — تا اطلاع بعدی فرمان گسیل نیروی تازه ممکن نیست؛ لشکرهایی که در راهند دست‌نخورده می‌مانند.',
     );
     return { ok: true, open };
+  },
+  adminAnnounceEvent: (title, description) => {
+    const t = (title || '').trim().slice(0, 80);
+    const d = (description || '').trim().slice(0, 1500);
+    if (!t || !d) throw new Error('عنوان و توضیحِ رویداد نمی‌توانند خالی باشند');
+    mockSendSystemMessage(`🎉 رویداد: ${t}\n\n${d}`);
+    return { ok: true };
   },
   legions: () => {
     mockResolveCampaigns();
@@ -1149,6 +1156,8 @@ export const api = {
   warWindow: () => MOCK ? Promise.resolve(M.warWindow()) : req('/api/war/window'),
   adminGetWarWindow: () => MOCK ? Promise.resolve(M.adminGetWarWindow()) : req('/api/admin/war-window'),
   adminSetWarWindow: (open) => MOCK ? Promise.resolve(M.adminSetWarWindow(open)) : req('/api/admin/war-window', { method: 'POST', body: JSON.stringify({ open }) }),
+  adminAnnounceEvent: (title, description) => MOCK ? Promise.resolve(M.adminAnnounceEvent(title, description))
+    : req('/api/admin/announce-event', { method: 'POST', body: JSON.stringify({ title, description }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),

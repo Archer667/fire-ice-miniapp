@@ -698,6 +698,23 @@ async def admin_get_war_window(user: dict = Depends(admin_user)):
         updated_by_name = p["name"] if p else None
     return {"open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None, "updated_by": updated_by_name}
 
+class AnnounceEventBody(BaseModel):
+    title: str
+    description: str
+
+@router.post("/announce-event")
+async def announce_event(body: AnnounceEventBody, user: dict = Depends(admin_user)):
+    """توضیحِ یک رویدادِ در-حالِ-بازی (مثلاً یک فصل/چالش تازه) — برای همهٔ بازیکنان
+    به‌عنوان یک «رخداد» در تب اطلاعیه‌های کلاغ‌ها می‌رود"""
+    title = body.title.strip()[:80]
+    description = body.description.strip()[:1500]
+    if not title or not description:
+        raise HTTPException(400, "عنوان و توضیحِ رویداد نمی‌توانند خالی باشند")
+    text = f"🎉 رویداد: {title}\n\n{description}"
+    async for p in players.find({}, {"tg_id": 1, "name": 1}):
+        await send_system_message(p["tg_id"], p["name"], text)
+    return {"ok": True}
+
 class WarWindowBody(BaseModel):
     open: bool
 

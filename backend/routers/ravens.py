@@ -9,7 +9,7 @@ import telegram_bot
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
 async def send_system_message(to_tg_id: int, to_name: str, text: str):
-    """پیام از طرف «شورای جنگ» — برای روایت نتیجهٔ نبردها که ادمین می‌نویسد. علاوه بر
+    """پیام از طرف «رخدادها» — برای روایت نتیجهٔ نبردها و اطلاعیه‌های ادمین. علاوه بر
     صندوق داخل اپ، یک پوش واقعی تلگرام هم می‌رود تا کاربر بیرون از اپ هم خبردار شود"""
     await messages.insert_one({
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,

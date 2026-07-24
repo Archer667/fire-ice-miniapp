@@ -110,7 +110,7 @@ export default function Ravens() {
   return (
     <>
       <div className="page-title up">کلاغ‌ها</div>
-      <div className="page-sub up">نامه‌های خصوصی و اطلاعیه‌های شورای جنگ</div>
+      <div className="page-sub up">نامه‌های خصوصی و رخدادهای بازی</div>
 
       <div className="tabs up u1" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'announcements'}

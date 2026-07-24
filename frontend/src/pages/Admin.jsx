@@ -34,6 +34,7 @@ const TAB_GROUPS = [
       { key: 'alliances', label: 'اتحادها' },
       { key: 'titles',    label: 'مقام‌ها' },
       { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
+      { key: 'events',    label: 'ایونت' },
     ],
   },
   {
@@ -77,6 +78,9 @@ export default function Admin() {
   const [disbandBusyId, setDisbandBusyId] = useState(null);
   const [warWindow, setWarWindow] = useState(null);
   const [warWindowBusy, setWarWindowBusy] = useState(false);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventBusy, setEventBusy] = useState(false);
   const [alliancesList, setAlliancesList] = useState(null);
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
   const [spyResolved, setSpyResolved] = useState(null);
@@ -306,6 +310,18 @@ export default function Admin() {
       loadWarWindow();
     } catch (e) { toast(e.message); }
     setWarWindowBusy(false);
+  };
+
+  const sendEvent = async () => {
+    if (!eventTitle.trim() || !eventDescription.trim()) { toast('عنوان و توضیحِ رویداد را بنویس'); return; }
+    setEventBusy(true);
+    try {
+      await api.adminAnnounceEvent(eventTitle.trim(), eventDescription.trim());
+      haptic('medium');
+      toast('رویداد برای همهٔ بازیکنان با کلاغ فرستاده شد');
+      setEventTitle(''); setEventDescription('');
+    } catch (e) { toast(e.message); }
+    setEventBusy(false);
   };
 
   const resetGame = async () => {
@@ -1329,6 +1345,27 @@ export default function Admin() {
                 </div>
               </div>
             ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'events' && (
+        <>
+          <div className="sect up u2">اعلام رویداد به همهٔ بازیکنان</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            توضیحِ یک اتفاق در طولِ بازی (مثلاً شروعِ یک چالش، تغییرِ قانون، جشنِ فصلی، ...) —
+            برای همهٔ بازیکنان با کلاغ می‌رود و توی تبِ «اطلاعیه‌ها»ی صفحهٔ کلاغ‌ها می‌بینندش
+          </div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>عنوان رویداد</label>
+            <input value={eventTitle} onChange={e => setEventTitle(e.target.value)} maxLength={80}
+                   placeholder="مثلاً: جشن پیروزی زمستان" />
+            <label className="f">توضیحات</label>
+            <textarea value={eventDescription} onChange={e => setEventDescription(e.target.value)} maxLength={1500}
+                      rows={5} placeholder="این رویداد چیه، چه‌کاری باید انجام بدن، تا کِی ادامه داره..." />
+            <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
+              {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
+            </button>
           </div>
         </>
       )}
