@@ -349,6 +349,20 @@ async def admin_unassign_house(tg_id: int, user: dict = Depends(admin_user)):
     )
     return {"ok": True}
 
+@router.delete("/players/{tg_id}/pending")
+async def delete_pending_player(tg_id: int, user: dict = Depends(admin_user)):
+    """درخواستِ ثبت‌نامِ یک بازیکنِ هنوز-تخصیص‌نیافته را کاملاً پاک می‌کند — برای
+    ثبت‌نام‌های آزمایشی/اشتباهی که اصلاً نباید وارد صف تخصیص خاندان بمانند.
+    فقط روی کسی کار می‌کند که هنوز خاندان/قلعه ندارد — برای بازیکنِ واقعاً
+    واردشده به بازی باید اول از خاندانش خارجش کرد"""
+    target = await players.find_one({"tg_id": tg_id})
+    if not target:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    if target.get("region") or target.get("castle"):
+        raise HTTPException(400, "این بازیکن وارد بازی شده — اول باید از خاندانش خارجش کنی")
+    await players.delete_one({"tg_id": tg_id})
+    return {"ok": True}
+
 MAP_KINDS = {"castle", "city", "ruin", "port"}
 
 @router.get("/map/options")

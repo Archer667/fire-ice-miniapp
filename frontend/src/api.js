@@ -240,6 +240,12 @@ const M = {
     Object.assign(mockMe, { pending: true, region: null, region_name: null, castle: null, is_port: false });
     return { ok: true };
   },
+  adminDeletePendingPlayer: (tgId) => {
+    if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی خودت را حذف کنی');
+    if (!mockMe.registered || !mockMe.pending) throw new Error('این بازیکن وارد بازی شده — اول باید از خاندانش خارجش کنی');
+    Object.assign(mockMe, { registered: false, pending: false });
+    return { ok: true };
+  },
   setTax: (rate) => {
     const cap = maxTaxRate(mockMe.popularity ?? POPULARITY_START);
     if (rate < 0 || rate > cap) throw new Error(`نرخ مالیات باید بین ۰ تا ${cap} درصد باشد`);
@@ -1204,6 +1210,7 @@ export const api = {
   adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
   adminListRoster: () => MOCK ? Promise.resolve(M.adminListRoster()) : req('/api/admin/players/roster'),
   adminUnassignHouse: (tgId) => MOCK ? Promise.resolve(M.adminUnassignHouse(tgId)) : req(`/api/admin/players/${tgId}/unassign`, { method: 'POST' }),
+  adminDeletePendingPlayer: (tgId) => MOCK ? Promise.resolve(M.adminDeletePendingPlayer(tgId)) : req(`/api/admin/players/${tgId}/pending`, { method: 'DELETE' }),
   adminAssignHouse: (tgId, region, castle) => MOCK ? Promise.resolve(M.adminAssignHouse(tgId, region, castle))
     : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
   castleAssets: () => MOCK ? Promise.resolve(M.castleAssets()) : req('/api/assets/castle'),

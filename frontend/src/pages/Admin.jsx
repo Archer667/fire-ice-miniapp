@@ -71,6 +71,7 @@ export default function Admin() {
   const [assignCastle, setAssignCastle] = useState({}); // tg_id -> castle name
   const [assignBusyId, setAssignBusyId] = useState(null);
   const [unassignBusyId, setUnassignBusyId] = useState(null);
+  const [deletePendingBusyId, setDeletePendingBusyId] = useState(null);
   const [reassignOpenId, setReassignOpenId] = useState(null);
 
   const [warSubTab, setWarSubTab] = useState('campaigns'); // 'campaigns' | 'espionage' | 'roleplay'
@@ -505,6 +506,18 @@ export default function Admin() {
     setUnassignBusyId(null);
   };
 
+  const deletePendingPlayer = async (tgId, name) => {
+    if (!window.confirm(`درخواستِ ثبت‌نامِ «${name}» کاملاً پاک بشه؟ این کار برگشت‌ناپذیره.`)) return;
+    setDeletePendingBusyId(tgId);
+    try {
+      await api.adminDeletePendingPlayer(tgId);
+      haptic('medium');
+      toast('درخواست ثبت‌نام حذف شد');
+      loadPendingPlayers();
+    } catch (e) { toast(e.message); }
+    setDeletePendingBusyId(null);
+  };
+
   const toggleReassign = (tgId) => {
     haptic();
     setReassignOpenId(prev => prev === tgId ? null : tgId);
@@ -638,9 +651,15 @@ export default function Admin() {
                     <option value="" disabled>انتخاب کن...</option>
                     {castleOptions.map(c => <option key={c.n} value={c.n}>{c.n}{c.port ? ' ⚓ بندر' : ''}</option>)}
                   </select>
-                  <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
-                    {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'تخصیص خاندان و قلعه'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <button className="btn" style={{ flex: 1 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
+                      {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'تخصیص خاندان و قلعه'}
+                    </button>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '0 14px', color: 'var(--danger)' }}
+                            disabled={deletePendingBusyId === p.tg_id} onClick={() => deletePendingPlayer(p.tg_id, p.name)}>
+                      {deletePendingBusyId === p.tg_id ? '...' : 'حذف درخواست'}
+                    </button>
+                  </div>
                 </div>
               );
             })}
