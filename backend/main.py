@@ -103,7 +103,19 @@ async def _ensure_indexes():
     مثلاً دو ثبت‌نام هم‌زمان با یک قلعه، یا دو بار افزودن یک اسم به نقشه توسط ادمین"""
     try:
         await players_col.create_index("tg_id", unique=True)
-        await players_col.create_index("castle", unique=True)
+        # «castle» باید یکتا باشد، اما فقط وقتی واقعاً یک قلعه است — بازیکنِ تازه‌ثبت‌نامی
+        # یا بازیکنی که ادمین از خاندانش بیرونش کرده castle=null دارد، و mongo روی ایندکسِ
+        # یکتای معمولی، null را هم مثل یک مقدار عادی می‌بیند؛ یعنی به‌محض این‌که *دومین*
+        # بازیکنِ بی‌خاندان پیدا می‌شد (ثبت‌نام تازه یا حذف از خاندان)، نوشتن با
+        # E11000 duplicate key error رد می‌شد. ایندکسِ قدیمی (غیرِ partial) را پاک
+        # می‌کنیم تا بشود همین کلید را این‌بار به‌صورت partial (فقط رشته‌ها) دوباره ساخت
+        try:
+            await players_col.drop_index("castle_1")
+        except Exception:
+            pass  # از اول وجود نداشته، یا از قبل partial بوده — بی‌اهمیت
+        await players_col.create_index(
+            "castle", unique=True, partialFilterExpression={"castle": {"$type": "string"}},
+        )
         await map_castles.create_index("name", unique=True)
         await admin_roles.create_index("tg_id", unique=True)
     except Exception:
