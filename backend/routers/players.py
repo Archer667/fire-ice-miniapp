@@ -68,7 +68,7 @@ async def me(user: dict = Depends(get_user)):
 
     rows = await scored_players()
     total = len(rows)
-    rank = 1
+    rank = None   # ادمین‌ها در لیدربرد نیستند، پس رتبه‌ای هم ندارند
     score = 0
     rank_label = None
     for i, row in enumerate(rows):

@@ -113,10 +113,12 @@ export default function Dashboard({ goTo }) {
           <div>
             <div className="nm">{me.name}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">{me.castle} · {me.region_name}{me.is_port ? ' · بندر' : ''}</div>
-            <div className="rk">
-              رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد
-              {me.rank_label && RANK_LABEL_FA[me.rank_label] ? ` · ${RANK_LABEL_FA[me.rank_label]}` : ''}
-            </div>
+            {me.rank != null ? (
+              <div className="rk">
+                رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد
+                {me.rank_label && RANK_LABEL_FA[me.rank_label] ? ` · ${RANK_LABEL_FA[me.rank_label]}` : ''}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="stats">
