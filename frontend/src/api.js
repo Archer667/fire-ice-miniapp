@@ -1026,6 +1026,15 @@ const M = {
     else mockMe.resources.wine = (mockMe.resources.wine ?? 0) + (a.wine_cost || 0);
     return { ok: true };
   },
+  diplomacyLeave: (id) => {
+    const a = mockAlliances.find(x => x.id === id);
+    if (!a) throw new Error('پیمان پیدا نشد');
+    if (a.type !== 'trade') throw new Error('فقط از پیمان تجاری می‌شود خودت خارج شد');
+    if (a.status !== 'accepted') throw new Error('فقط پیمان برقرار را می‌شود ترک کرد');
+    a.status = 'left';
+    mockMe.alliance_count = Math.max(0, (mockMe.alliance_count ?? 0) - 1);
+    return { ok: true };
+  },
   adminListAlliances: () => mockAlliances.map(a => ({
     id: a.id,
     from: a.mine_proposed ? (mockMe.name || 'تو') : a.other_name,
@@ -1198,6 +1207,8 @@ export const api = {
     : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate, penalty_gold: penaltyGold || 0 }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
+  diplomacyLeave: (id) => MOCK ? Promise.resolve(M.diplomacyLeave(id))
+    : req(`/api/diplomacy/${id}/leave`, { method: 'POST' }),
   adminListAlliances: () => MOCK ? Promise.resolve(M.adminListAlliances()) : req('/api/admin/alliances'),
   adminDissolveAlliance: (id) => MOCK ? Promise.resolve(M.adminDissolveAlliance(id))
     : req(`/api/admin/alliances/${id}/dissolve`, { method: 'POST' }),

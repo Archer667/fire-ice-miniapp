@@ -135,6 +135,29 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را رد کرد — شرابت برگشت.")
     return {"ok": True}
 
+@router.post("/{alliance_id}/leave")
+async def leave(alliance_id: str, user: dict = Depends(get_user)):
+    """پلیر می‌تواند از یک پیمانِ تجاریِ برقرار به میل خودش خارج شود — عدم‌تجاوز و
+    اتحاد کامل این راه ندارند (فقط ادمین می‌تواند منحلشان کند، یا خیانت باعث اخراج می‌شود)"""
+    a = await alliances.find_one({"_id": ObjectId(alliance_id)})
+    if not a:
+        raise HTTPException(404, "پیمان پیدا نشد")
+    if user["id"] not in (a["from_id"], a["to_id"]):
+        raise HTTPException(403, "این پیمان مال تو نیست")
+    if a["type"] != "trade":
+        raise HTTPException(400, "فقط از پیمان تجاری می‌شود خودت خارج شد")
+    if a["status"] != "accepted":
+        raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
+
+    await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "left", "left_by": user["id"]}})
+    await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
+    await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
+    other_id = a["to_id"] if a["from_id"] == user["id"] else a["from_id"]
+    other_name = a["to_name"] if other_id == a["to_id"] else a["from_name"]
+    me = await players.find_one({"tg_id": user["id"]})
+    await send_system_message(other_id, other_name, f"لرد {me['name'] if me else ''} از پیمان تجاری‌تان خارج شد.")
+    return {"ok": True}
+
 @router.post("/feast")
 async def feast(user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})

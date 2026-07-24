@@ -6,7 +6,10 @@ import { Wine, Heart, Crown, Scroll } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { REGIONS_STATIC, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
 
-const STATUS_FA = { pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده (ادمین)' };
+const STATUS_FA = {
+  pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده',
+  dissolved: 'منحل‌شده (ادمین)', broken: 'باطل‌شده (خیانت)', left: 'ترک‌شده',
+};
 const TABS = [
   { key: 'main',      label: 'دیپلماسی' },
   { key: 'alliances', label: 'اتحادها' },
@@ -84,6 +87,15 @@ export default function Diplomacy() {
       await api.diplomacyRespond(id, accept);
       haptic('medium');
       toast(accept ? 'پیمان پذیرفته شد' : 'پیمان رد شد');
+      load();
+    } catch (e) { toast(e.message); }
+  };
+
+  const leaveAlliance = async (id) => {
+    try {
+      await api.diplomacyLeave(id);
+      haptic('medium');
+      toast('از پیمان تجاری خارج شدی');
       load();
     } catch (e) { toast(e.message); }
   };
@@ -201,6 +213,9 @@ export default function Diplomacy() {
                 <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => respond(a.id, true)}>پذیرفتن</button>
                 <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => respond(a.id, false)}>رد</button>
               </div>
+            )}
+            {a.type === 'trade' && a.status === 'accepted' && (
+              <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => leaveAlliance(a.id)}>ترک پیمان</button>
             )}
           </div>
         ))}

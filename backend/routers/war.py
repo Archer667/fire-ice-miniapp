@@ -70,11 +70,16 @@ async def all_castle_names_and_ports():
             ports.add(m["name"])
     return names, ports
 
+PASSAGE_ALLIANCE_TYPES = ["non_aggression", "full_alliance"]  # پیمان تجاری فقط برای کاروان/مناسبات تجاریه، ربطی به عبورِ لشکر نداره
+
 async def allied_tg_ids(tg_id: int) -> set:
-    """هرکسی که با tg_id پیمانِ پذیرفته‌شده دارد (هر سه نوع — عدم‌تجاوز/تجاری/اتحاد
-    کامل، چون هرکدام دستِ‌کم اجازهٔ عبور از قلمرو را می‌دهند)"""
+    """هرکسی که با tg_id پیمانِ پذیرفته‌شدهٔ عدم‌تجاوز یا اتحاد کامل دارد — این دو
+    اجازهٔ عبورِ لشکر از قلمرو را می‌دهند، پیمان تجاری نه"""
     out = set()
-    async for a in alliances.find({"status": "accepted", "$or": [{"from_id": tg_id}, {"to_id": tg_id}]}):
+    async for a in alliances.find({
+        "status": "accepted", "type": {"$in": PASSAGE_ALLIANCE_TYPES},
+        "$or": [{"from_id": tg_id}, {"to_id": tg_id}],
+    }):
         out.add(a["to_id"] if a["from_id"] == tg_id else a["from_id"])
     return out
 
@@ -204,30 +209,35 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
     travel = travel_minutes(same_castle, body.origin_castle, target_castle, blocked)
     if travel is None:
-        raise HTTPException(400, "مسیر این لشکرکشی از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز/تجاری/اتحاد کامل) نداری — یا پیمان ببند، یا هدف نزدیک‌تری انتخاب کن")
+        raise HTTPException(400, "مسیر این لشکرکشی از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری — یا پیمان ببند، یا هدف نزدیک‌تری انتخاب کن")
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p))
 
     pay(p["resources"], {"gold": gold, **weapons})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
 
-    # خیانت به پیمان عدم‌تجاوز: حمله/غارت/محاصره علیه کسی که چنین پیمانی باهاش داری،
-    # غرامتِ همان پیمان را از طلایش کم می‌کند و اگر طلا کم بود از امتیازش
+    # خیانت به پیمان عدم‌تجاوز: حمله/غارت/محاصره (نه جای‌گیری، چون آن برای حمله نیست)
+    # علیه کسی که چنین پیمانی باهاش داری — غرامت از طلایش کم می‌شود (اگر طلا کم بود
+    # از امتیازش)، و خودِ خاطی از همان پیمان اخراج می‌شود (پیمان باطل می‌شود)
     penalty_charged = 0
     if body.op_type in ATTACK_OP_TYPES and not same_castle:
         target_player = await players.find_one({"castle": target_castle})
         if target_player:
             pact = await has_non_aggression_pact(user["id"], target_player["tg_id"])
-            penalty_charged = pact.get("penalty_gold", 0) if pact else 0
-            if penalty_charged > 0:
-                gold_paid = min(p["resources"].get("gold", 0), penalty_charged)
-                p["resources"]["gold"] -= gold_paid
-                shortfall = penalty_charged - gold_paid
-                if shortfall > 0:
-                    p["points"] = max(0, p.get("points", 0) - shortfall)
+            if pact:
+                penalty_charged = pact.get("penalty_gold", 0)
+                if penalty_charged > 0:
+                    gold_paid = min(p["resources"].get("gold", 0), penalty_charged)
+                    p["resources"]["gold"] -= gold_paid
+                    shortfall = penalty_charged - gold_paid
+                    if shortfall > 0:
+                        p["points"] = max(0, p.get("points", 0) - shortfall)
+                await alliances.update_one({"_id": pact["_id"]}, {"$set": {"status": "broken", "broken_by": user["id"]}})
+                await players.update_one({"tg_id": pact["from_id"]}, {"$inc": {"alliance_count": -1}})
+                await players.update_one({"tg_id": pact["to_id"]}, {"$inc": {"alliance_count": -1}})
                 await send_system_message(
                     target_player["tg_id"], target_player["name"],
-                    f"لرد {p['name']} با وجود پیمان عدم‌تجاوز به تو حمله کرد — {penalty_charged:,} سکه غرامت پرداخت.",
+                    f"لرد {p['name']} با وجود پیمان عدم‌تجاوز به تو حمله کرد — {penalty_charged:,} سکه غرامت پرداخت و از پیمان اخراج شد.",
                 )
 
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "points": p.get("points", 0)}})
