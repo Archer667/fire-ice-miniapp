@@ -67,8 +67,8 @@ export default function Espionage() {
   };
 
   const eta = useMemo(
-    () => (target ? spyTravelMinutes(me.region, target.region) : null),
-    [target, me.region]
+    () => (target ? spyTravelMinutes(me.castle, target.name) : null),
+    [target, me.castle]
   );
   const overGold = gold < SPY_GOLD_COST;
   const overMen = men < SPY_MEN_COST;

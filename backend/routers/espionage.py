@@ -40,7 +40,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
     p["resources"]["men"] -= SPY_MEN_COST
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
 
-    travel = spy_travel_minutes(p["region"], target["region"])
+    travel = spy_travel_minutes(p["castle"], target["castle"])
     arrival_at = now() + timedelta(minutes=travel)
 
     doc = {

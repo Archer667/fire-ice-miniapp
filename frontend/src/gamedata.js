@@ -84,30 +84,108 @@ export function campaignPower(troops, builtLevels) {
   return Math.round(total);
 }
 
-// زمان سفر لشکر — بر مبنای فاصلهٔ اقلیمی، تقریبی روی محور شمال-جنوب نقشه (هم‌راستا با بک‌اند)
-export const REGION_ORDER = { north: 0, vale: 1, iron: 1, river: 1, west: 2, crown: 2, reach: 3, storm: 3, dorne: 4 };
-export const TRAVEL_SAME_REGION_MINUTES = 20;
-export const TRAVEL_CROSS_BASE_MINUTES = 40;
-export const TRAVEL_PER_HOP_MINUTES = 25;
+// زمان سفر لشکر — گراف واقعیِ قلعه‌به‌قلعه، خوانده‌شده از روی خودِ نقشهٔ بازی
+// (همون گراف backend/game_data.py — هر تغییری اونجا دادی، اینجا هم بده تا هم‌راستا بمونن)
+const FALLBACK_SAME_REGION_MINUTES = 20;
 
-export function travelMinutes(sameCastle, originRegion, targetRegion) {
+const CASTLE_TRAVEL_EDGES = [
+  ['وینترفل', 'تورنز اسکوئر', 30], ['وینترفل', 'بارو‌تاون', 30], ['وینترفل', 'دردفورت', 60],
+  ['موت کلین', 'بارو‌تاون', 30], ['موت کلین', 'وایت هاربر', 10], ['موت کلین', 'وینترفل', 60],
+  ['موت کلین', 'فلینت', 60], ['قلعهٔ سروین', 'وینترفل', FALLBACK_SAME_REGION_MINUTES],
+  ['تال‌هارت', 'تورنز اسکوئر', FALLBACK_SAME_REGION_MINUTES], ['بارولندز', 'بارو‌تاون', FALLBACK_SAME_REGION_MINUTES],
+  ['کارهولد', 'دردفورت', FALLBACK_SAME_REGION_MINUTES], ['لاست‌هرت', 'کارهولد', FALLBACK_SAME_REGION_MINUTES],
+  ['دیپ‌وود موت', 'بندر دیپ‌وود', 5], ['دیپ‌وود موت', 'بارو‌تاون', FALLBACK_SAME_REGION_MINUTES],
+
+  ['موت کلین', '·لرد هاروِیز تاون', 60], ['·لرد هاروِیز تاون', 'هارنهال', 10],
+  ['·لرد هاروِیز تاون', '·این آو د نیلینگ من', 30], ['·این آو د نیلینگ من', 'ریورران', 30],
+  ['هارنهال', 'میدن‌پول', 30], ['هارنهال', 'سالت‌پنس', 5],
+  ['تویینز', 'سیگارد', 5], ['تویینز', '·الداستونز', 10], ['·الداستونز', 'راونتری', 5],
+  ['·الداستونز', '·فیرمارکت', 10], ['راونتری', '·فیرمارکت', 10], ['راونتری', 'ریورران', 5],
+  ['ریورران', 'آکورن هال', 10], ['راونتری', 'استون‌هج', FALLBACK_SAME_REGION_MINUTES],
+  ['هارنهال', 'دارری', FALLBACK_SAME_REGION_MINUTES], ['سیگارد', 'هارلاو هال', 30], ['گلدن‌توث', 'ریورران', 30],
+
+  ['·استرانگ‌سانگ', 'هارتز هوم', 10], ['هارتز هوم', 'لانگ‌بو هال', 10],
+  ['لانگ‌بو هال', 'ران‌استون', FALLBACK_SAME_REGION_MINUTES],
+  ['ایری', '·بلادی‌گیت', 5], ['ایری', 'گیتس آو د مون', 5], ['·استرانگ‌سانگ', '·بلادی‌گیت', 20],
+  ['·بلادی‌گیت', 'ردفورت', 30], ['·بلادی‌گیت', '·آیرون‌اوکس', 10],
+  ['·آیرون‌اوکس', '·اولد انکر', 5], ['·اولد انکر', 'ران‌استون', 30],
+  ['گال‌تاون', 'میدن‌پول', 30], ['گال‌تاون', 'ران‌استون', 5],
+  ['گال‌تاون', 'ردفورت', 30], ['گال‌تاون', 'دراگون‌استون', 30],
+
+  ['پایک', '·اسپار', 5], ['·اسپار', 'سالت‌کلیف', FALLBACK_SAME_REGION_MINUTES],
+  ['پایک', 'لردپورت', 5], ['پایک', '·بنفورت', 5], ['·بنفورت', 'کریگ', 30],
+  ['بلک‌تاید', 'اورکمونت', 5], ['اورکمونت', 'تن تاور', 5], ['تن تاور', 'هارلاو هال', 5],
+  ['هارلاو هال', 'بندر هارلاو', 5], ['بلک‌تاید', 'پایک', FALLBACK_SAME_REGION_MINUTES],
+
+  ['کسترلی راک', 'کی‌هال', 30], ['کسترلی راک', 'لنیسپورت', 5], ['کسترلی راک', 'گلدن‌توث', 40],
+  ['کریگ', 'فرکسل', 10], ['کریگ', 'کی‌هال', FALLBACK_SAME_REGION_MINUTES],
+
+  ['های‌گاردن', 'بریج‌واتر', 10], ['بریج‌واتر', 'هورن‌هیل', FALLBACK_SAME_REGION_MINUTES],
+  ['هورن‌هیل', 'تارلی‌هال', 5], ['های‌گاردن', 'اولدتاون', 40], ['اولدتاون', 'سان‌هوس', 30],
+  ['اولدتاون', 'بیتربریج', 60], ['های‌گاردن', 'آشبروک', 30], ['کریگ', 'ردلیک', 30],
+
+  ['استورمز اند', 'گریفینز روست', 30], ['استورمز اند', 'شیپ‌بریک بی', 5], ['استورمز اند', 'فل‌وود', 20],
+  ['استورمز اند', 'تارث', 20], ['تارث', 'رین‌هال', 10], ['کینگز لندینگ', 'استورمز اند', 75],
+
+  ['کینگز لندینگ', 'روزبی', 10], ['روزبی', 'دارک‌لین هال', 10], ['روزبی', 'استوک‌ورث', 10],
+  ['کینگز لندینگ', 'رد کیپ', 5], ['دارک‌لین هال', 'میدن‌پول', 40],
+  ['دارک‌لین هال', 'دراگون‌استون', 30], ['دراگون‌استون', 'کینگز لندینگ', 20],
+
+  ['اسکای‌ریچ', 'یرونوود', 30], ['یرونوود', '·گودزگریس', 30], ['·گودزگریس', 'واتر گاردنز', FALLBACK_SAME_REGION_MINUTES],
+  ['·گودزگریس', 'سان‌اسپیر', 30], ['·گودزگریس', 'هل‌هولت', 30], ['هل‌هولت', 'اسکای‌ریچ', 30],
+  ['اسکای‌ریچ', 'استارفال', 15], ['استارفال', 'بندر استارفال', 5],
+  ['سان‌اسپیر', 'واتر گاردنز', 10], ['سان‌اسپیر', 'پلنکی‌تاون', 5],
+  ['آشبروک', 'استارفال', 40], ['ردلیک', 'های‌گاردن', 20],
+];
+
+function buildTravelGraph() {
+  const graph = {};
+  for (const [a, b, mins] of CASTLE_TRAVEL_EDGES) {
+    graph[a] = graph[a] || {};
+    graph[b] = graph[b] || {};
+    graph[a][b] = Math.min(graph[a][b] ?? mins, mins);
+    graph[b][a] = Math.min(graph[b][a] ?? mins, mins);
+  }
+  return graph;
+}
+const TRAVEL_GRAPH = buildTravelGraph();
+const TRAVEL_CROSS_REGION_DEFAULT_MINUTES = 90;
+
+function shortestMinutes(originCastle, targetCastle) {
+  if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) return TRAVEL_CROSS_REGION_DEFAULT_MINUTES;
+  const dist = { [originCastle]: 0 };
+  const seen = new Set();
+  const pq = [[0, originCastle]];
+  while (pq.length) {
+    pq.sort((a, b) => a[0] - b[0]);
+    const [d, node] = pq.shift();
+    if (seen.has(node)) continue;
+    seen.add(node);
+    if (node === targetCastle) return d;
+    for (const [nb, w] of Object.entries(TRAVEL_GRAPH[node] || {})) {
+      const nd = d + w;
+      if (nd < (dist[nb] ?? Infinity)) {
+        dist[nb] = nd;
+        pq.push([nd, nb]);
+      }
+    }
+  }
+  return TRAVEL_CROSS_REGION_DEFAULT_MINUTES;
+}
+
+export function travelMinutes(sameCastle, originCastle, targetCastle) {
   if (sameCastle) return 0;
-  if (originRegion === targetRegion) return TRAVEL_SAME_REGION_MINUTES;
-  const hop = Math.abs((REGION_ORDER[originRegion] ?? 2) - (REGION_ORDER[targetRegion] ?? 2));
-  return TRAVEL_CROSS_BASE_MINUTES + hop * TRAVEL_PER_HOP_MINUTES;
+  return shortestMinutes(originCastle, targetCastle);
 }
 
 // جاسوس‌ها سریع‌تر از لشکر حرکت می‌کنند
 export const SPY_GOLD_COST = 1000;
 export const SPY_MEN_COST = 5;
-export const SPY_SAME_REGION_MINUTES = 8;
-export const SPY_CROSS_BASE_MINUTES = 15;
-export const SPY_PER_HOP_MINUTES = 8;
+const SPY_SPEED_FACTOR = 0.4;
 
-export function spyTravelMinutes(originRegion, targetRegion) {
-  if (originRegion === targetRegion) return SPY_SAME_REGION_MINUTES;
-  const hop = Math.abs((REGION_ORDER[originRegion] ?? 2) - (REGION_ORDER[targetRegion] ?? 2));
-  return SPY_CROSS_BASE_MINUTES + hop * SPY_PER_HOP_MINUTES;
+export function spyTravelMinutes(originCastle, targetCastle) {
+  if (originCastle === targetCastle) return 0;
+  return Math.max(1, Math.round(shortestMinutes(originCastle, targetCastle) * SPY_SPEED_FACTOR));
 }
 
 // گزینه‌های عملیات لشکرکشی

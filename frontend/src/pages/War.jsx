@@ -92,13 +92,6 @@ export default function War() {
 
   const op = OP_TYPES.find(o => o.id === opType);
 
-  const findCastleRegion = (name) => {
-    if (!mapData) return me.region;
-    for (const r of mapData.regions) {
-      if (r.castles.some(c => c.name === name)) return r.id;
-    }
-    return me.region;
-  };
   const isPortCastle = (name) => {
     if (!mapData) return name === me.castle && me.is_port;
     for (const r of mapData.regions) {
@@ -109,9 +102,7 @@ export default function War() {
   };
 
   const sameCastle = !op.needsTarget || (target && target.name === origin);
-  const originRegion = findCastleRegion(origin);
-  const targetRegion = op.needsTarget && target ? (target.region || findCastleRegion(target.name)) : originRegion;
-  const eta = travelMinutes(sameCastle, originRegion, targetRegion);
+  const eta = travelMinutes(sameCastle, origin, op.needsTarget && target ? target.name : origin);
   const badOriginForNaval = op.portOnly && !isPortCastle(origin);
 
   const unlocked = (troop) => {

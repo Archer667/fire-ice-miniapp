@@ -379,9 +379,7 @@ const M = {
     mockMe.resources.men -= men;
 
     const sameCastle = targetCastle === body.origin_castle;
-    const originRegion = mockResolveRegion(body.origin_castle) || mockMe.region;
-    const targetRegion = sameCastle ? originRegion : (mockResolveRegion(targetCastle) || originRegion);
-    const travel = travelMinutes(sameCastle, originRegion, targetRegion);
+    const travel = travelMinutes(sameCastle, body.origin_castle, targetCastle);
 
     const power = campaignPower(body.troops, mockBuiltLevels());
     const nowIso = new Date().toISOString();
@@ -485,9 +483,7 @@ const M = {
     if (!mockCanAfford(cost)) throw new Error('این مقدار کالا رو نداری');
     mockPay(cost);
 
-    const originRegion = mockMe.region;
-    const targetRegion = mockResolveRegion(p.castle) || originRegion;
-    const travel = travelMinutes(false, originRegion, targetRegion);
+    const travel = travelMinutes(mockMe.castle === p.castle, mockMe.castle, p.castle);
     const nowIso = new Date().toISOString();
     mockCaravans.push({
       id: String(mockCaravanSeq++), mine_sent: true,
@@ -642,8 +638,7 @@ const M = {
     mockPay({ gold: SPY_GOLD_COST });
     mockMe.resources.men -= SPY_MEN_COST;
 
-    const targetRegion = mockResolveRegion(targetCastle) || mockMe.region;
-    const travel = spyTravelMinutes(mockMe.region, targetRegion);
+    const travel = spyTravelMinutes(mockMe.castle, targetCastle);
 
     const nowIso = new Date().toISOString();
     mockSpyMissions.push({

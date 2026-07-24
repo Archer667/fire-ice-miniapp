@@ -70,14 +70,6 @@ async def all_castle_names_and_ports():
             ports.add(m["name"])
     return names, ports
 
-async def resolve_region(name: str) -> str | None:
-    """اقلیمی که یک قلعه/شهر در آن قرار دارد — چه از دیتای ثابت، چه آنچه ادمین اضافه کرده"""
-    for rid, r in REGIONS.items():
-        if name in r["castles"] or name in r["ports"]:
-            return rid
-    doc = await map_castles.find_one({"name": name})
-    return doc["region"] if doc else None
-
 def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: bool):
     """هزینهٔ طلا (یک‌باره)، نفرات کل، آذوقهٔ روزانه، و تسلیحات مصرفی این ترکیب لشکر را حساب
     می‌کند. برای هر نیروی عمومی فقط ساخته‌بودن پادگانش شرط است — کارگاه تسلیحات دیگر
@@ -184,9 +176,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
 
     same_castle = target_castle == body.origin_castle
-    origin_region = await resolve_region(body.origin_castle) or p["region"]
-    target_region = (await resolve_region(target_castle) or origin_region) if not same_castle else origin_region
-    travel = travel_minutes(same_castle, origin_region, target_region)
+    travel = travel_minutes(same_castle, body.origin_castle, target_castle)
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p))
 

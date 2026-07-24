@@ -49,9 +49,7 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     pay(p["resources"], cost)
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
 
-    origin_region = p["region"]
-    target_region = target["region"]
-    travel = travel_minutes(False, origin_region, target_region)
+    travel = travel_minutes(p["castle"] == target["castle"], p["castle"], target["castle"])
     arrival_at = now() + timedelta(minutes=travel)
 
     doc = {

@@ -197,32 +197,176 @@ def campaign_power(troops: dict, building_levels: dict) -> int:
     """توان کل یک لشکر — مجموع (تعداد × توان تک‌بهٔ هر یگان) روی سطح پادگان‌های *الان*"""
     return round(sum(unit_power(tid, building_levels) * n for tid, n in troops.items() if n and n > 0))
 
-# ---- زمان سفر لشکر — بر مبنای فاصلهٔ اقلیمی، تقریبی روی محور شمال-جنوب نقشه ----
-REGION_ORDER = {"north": 0, "vale": 1, "iron": 1, "river": 1, "west": 2, "crown": 2, "reach": 3, "storm": 3, "dorne": 4}
-TRAVEL_SAME_REGION_MINUTES = 20
-TRAVEL_CROSS_BASE_MINUTES = 40
-TRAVEL_PER_HOP_MINUTES = 25
+# ---- زمان سفر لشکر — گراف واقعیِ قلعه‌به‌قلعه، خوانده‌شده از روی خودِ نقشهٔ بازی
+# (frontend/public/maps/westeros.jpg) و تأییدشده توسط ادمین. هر یال، زمانِ واقعیِ
+# چاپ‌شده روی نقشه بین دو نقطه است. بعضی نقطه‌ها روی نقشه هستند ولی قلعهٔ قابل‌بازی
+# نیستند (چهارراه/شهرِ میان‌راهی)؛ این‌ها فقط برای صحتِ مسیر نگه داشته شده‌اند و
+# اسمشان با «·» شروع می‌شود تا با قلعه‌های واقعیِ REGIONS اشتباه نشوند.
+# برای قلعه‌هایی که مسیر دقیقشان روی نقشه خوانده نشد، یک یالِ پیش‌فرض به نزدیک‌ترین
+# قلعهٔ همان اقلیم وصل شده (مقدار FALLBACK_SAME_REGION_MINUTES) — این‌ها را می‌شود
+# بعداً با دادهٔ دقیق‌تر جایگزین کرد.
+FALLBACK_SAME_REGION_MINUTES = 20
 
-def travel_minutes(same_castle: bool, origin_region: str, target_region: str) -> int:
-    """زمان رسیدن لشکر (دقیقه): همان قلعه = بی‌درنگ، همان اقلیم = کوتاه،
-    اقلیم دیگر = پایه + فاصلهٔ اقلیمی روی محور شمال-جنوب"""
+CASTLE_TRAVEL_EDGES = [
+    # --- شمال ---
+    ("وینترفل", "تورنز اسکوئر", 30),
+    ("وینترفل", "بارو‌تاون", 30),
+    ("وینترفل", "دردفورت", 60),
+    ("موت کلین", "بارو‌تاون", 30),
+    ("موت کلین", "وایت هاربر", 10),
+    ("موت کلین", "وینترفل", 60),
+    ("موت کلین", "فلینت", 60),
+    ("قلعهٔ سروین", "وینترفل", FALLBACK_SAME_REGION_MINUTES),
+    ("تال‌هارت", "تورنز اسکوئر", FALLBACK_SAME_REGION_MINUTES),
+    ("بارولندز", "بارو‌تاون", FALLBACK_SAME_REGION_MINUTES),
+    ("کارهولد", "دردفورت", FALLBACK_SAME_REGION_MINUTES),
+    ("لاست‌هرت", "کارهولد", FALLBACK_SAME_REGION_MINUTES),
+    ("دیپ‌وود موت", "بندر دیپ‌وود", 5),
+    ("دیپ‌وود موت", "بارو‌تاون", FALLBACK_SAME_REGION_MINUTES),
+
+    # --- ریورلندز (شاملِ چند گرهٔ میان‌راهیِ واقعی روی نقشه) ---
+    ("موت کلین", "·لرد هاروِیز تاون", 60),          # مرزِ شمال↔ریورلندز
+    ("·لرد هاروِیز تاون", "هارنهال", 10),
+    ("·لرد هاروِیز تاون", "·این آو د نیلینگ من", 30),
+    ("·این آو د نیلینگ من", "ریورران", 30),
+    ("هارنهال", "میدن‌پول", 30),
+    ("هارنهال", "سالت‌پنس", 5),
+    ("تویینز", "سیگارد", 5),
+    ("تویینز", "·الداستونز", 10),
+    ("·الداستونز", "راونتری", 5),
+    ("·الداستونز", "·فیرمارکت", 10),
+    ("راونتری", "·فیرمارکت", 10),
+    ("راونتری", "ریورران", 5),
+    ("ریورران", "آکورن هال", 10),
+    ("راونتری", "استون‌هج", FALLBACK_SAME_REGION_MINUTES),
+    ("هارنهال", "دارری", FALLBACK_SAME_REGION_MINUTES),
+    ("سیگارد", "هارلاو هال", 30),                     # مرزِ ریورلندز↔جزایر آهن (دریایی)
+    ("گلدن‌توث", "ریورران", 30),                       # مرزِ وسترلندز↔ریورلندز
+
+    # --- درهٔ آرین (چند گرهٔ میان‌راهیِ کوهستانی) ---
+    ("·استرانگ‌سانگ", "هارتز هوم", 10),
+    ("هارتز هوم", "لانگ‌بو هال", 10),
+    ("لانگ‌بو هال", "ران‌استون", FALLBACK_SAME_REGION_MINUTES),
+    ("ایری", "·بلادی‌گیت", 5),
+    ("ایری", "گیتس آو د مون", 5),
+    ("·استرانگ‌سانگ", "·بلادی‌گیت", 20),
+    ("·بلادی‌گیت", "ردفورت", 30),
+    ("·بلادی‌گیت", "·آیرون‌اوکس", 10),
+    ("·آیرون‌اوکس", "·اولد انکر", 5),
+    ("·اولد انکر", "ران‌استون", 30),
+    ("گال‌تاون", "میدن‌پول", 30),                      # مرزِ درهٔ آرین↔ریورلندز (دریایی)
+    ("گال‌تاون", "ران‌استون", 5),
+    ("گال‌تاون", "ردفورت", 30),
+    ("گال‌تاون", "دراگون‌استون", 30),                  # مرزِ درهٔ آرین↔کراون‌لندز (دریایی)
+
+    # --- جزایر آهن ---
+    ("پایک", "·اسپار", 5),
+    ("·اسپار", "سالت‌کلیف", FALLBACK_SAME_REGION_MINUTES),
+    ("پایک", "لردپورت", 5),
+    ("پایک", "·بنفورت", 5),                            # مرزِ جزایر آهن↔وسترلندز
+    ("·بنفورت", "کریگ", 30),
+    ("بلک‌تاید", "اورکمونت", 5),
+    ("اورکمونت", "تن تاور", 5),
+    ("تن تاور", "هارلاو هال", 5),
+    ("هارلاو هال", "بندر هارلاو", 5),
+    ("بلک‌تاید", "پایک", FALLBACK_SAME_REGION_MINUTES),
+
+    # --- وسترلندز ---
+    ("کسترلی راک", "کی‌هال", 30),
+    ("کسترلی راک", "لنیسپورت", 5),
+    ("کسترلی راک", "گلدن‌توث", 40),
+    ("کریگ", "فرکسل", 10),
+    ("کریگ", "کی‌هال", FALLBACK_SAME_REGION_MINUTES),
+
+    # --- ریچ ---
+    ("های‌گاردن", "بریج‌واتر", 10),
+    ("بریج‌واتر", "هورن‌هیل", FALLBACK_SAME_REGION_MINUTES),
+    ("هورن‌هیل", "تارلی‌هال", 5),
+    ("های‌گاردن", "اولدتاون", 40),
+    ("اولدتاون", "سان‌هوس", 30),
+    ("اولدتاون", "بیتربریج", 60),
+    ("های‌گاردن", "آشبروک", 30),
+    ("کریگ", "ردلیک", 30),                             # مرزِ وسترلندز↔ریچ (چون رِدلیک جغرافیایی نزدیکِ وسترلندز است ولی در بازی جزو ریچ تعریف شده)
+
+    # --- استورملندز ---
+    ("استورمز اند", "گریفینز روست", 30),
+    ("استورمز اند", "شیپ‌بریک بی", 5),
+    ("استورمز اند", "فل‌وود", 20),
+    ("استورمز اند", "تارث", 20),
+    ("تارث", "رین‌هال", 10),
+    ("کینگز لندینگ", "استورمز اند", 75),                # مرزِ کراون‌لندز↔استورملندز (از راهِ کینگزوود)
+
+    # --- کراون‌لندز ---
+    ("کینگز لندینگ", "روزبی", 10),
+    ("روزبی", "دارک‌لین هال", 10),
+    ("روزبی", "استوک‌ورث", 10),
+    ("کینگز لندینگ", "رد کیپ", 5),
+    ("دارک‌لین هال", "میدن‌پول", 40),
+    ("دارک‌لین هال", "دراگون‌استون", 30),
+    ("دراگون‌استون", "کینگز لندینگ", 20),
+
+    # --- دورن ---
+    ("اسکای‌ریچ", "یرونوود", 30),
+    ("یرونوود", "·گودزگریس", 30),
+    ("·گودزگریس", "واتر گاردنز", FALLBACK_SAME_REGION_MINUTES),
+    ("·گودزگریس", "سان‌اسپیر", 30),
+    ("·گودزگریس", "هل‌هولت", 30),
+    ("هل‌هولت", "اسکای‌ریچ", 30),
+    ("اسکای‌ریچ", "استارفال", 15),
+    ("استارفال", "بندر استارفال", 5),
+    ("سان‌اسپیر", "واتر گاردنز", 10),
+    ("سان‌اسپیر", "پلنکی‌تاون", 5),
+    ("آشبروک", "استارفال", 40),                        # مرزِ ریچ↔دورن
+    ("ردلیک", "های‌گاردن", 20),                         # پل بین دو خوشهٔ ریچ (اتصال به بقیهٔ نقشه از راه کریگ/ردلیک)
+]
+
+def _build_travel_graph():
+    graph = {}
+    for a, b, mins in CASTLE_TRAVEL_EDGES:
+        graph.setdefault(a, {})[b] = min(graph.get(a, {}).get(b, mins), mins)
+        graph.setdefault(b, {})[a] = min(graph.get(b, {}).get(a, mins), mins)
+    return graph
+
+TRAVEL_GRAPH = _build_travel_graph()
+TRAVEL_CROSS_REGION_DEFAULT_MINUTES = 90  # اگر مسیری اصلاً پیدا نشد (گراف قطع بود یا قلعه ناشناخته)
+
+def _shortest_minutes(origin_castle: str, target_castle: str) -> int:
+    """کوتاه‌ترین مسیر (دایکسترا) روی گراف واقعیِ نقشه؛ اگر قلعه‌ای اصلاً روی گراف
+    نبود یا مسیری بینشان پیدا نشد، به TRAVEL_CROSS_REGION_DEFAULT_MINUTES برمی‌گردیم"""
+    import heapq
+    if origin_castle not in TRAVEL_GRAPH or target_castle not in TRAVEL_GRAPH:
+        return TRAVEL_CROSS_REGION_DEFAULT_MINUTES
+    dist = {origin_castle: 0}
+    pq = [(0, origin_castle)]
+    seen = set()
+    while pq:
+        d, node = heapq.heappop(pq)
+        if node in seen:
+            continue
+        seen.add(node)
+        if node == target_castle:
+            return d
+        for nb, w in TRAVEL_GRAPH.get(node, {}).items():
+            nd = d + w
+            if nd < dist.get(nb, float("inf")):
+                dist[nb] = nd
+                heapq.heappush(pq, (nd, nb))
+    return TRAVEL_CROSS_REGION_DEFAULT_MINUTES
+
+def travel_minutes(same_castle: bool, origin_castle: str, target_castle: str) -> int:
+    """زمان رسیدن لشکر (دقیقه): همان قلعه = بی‌درنگ، وگرنه کوتاه‌ترین مسیر روی
+    گراف واقعیِ نقشه بین دو قلعه"""
     if same_castle:
         return 0
-    if origin_region == target_region:
-        return TRAVEL_SAME_REGION_MINUTES
-    hop = abs(REGION_ORDER.get(origin_region, 2) - REGION_ORDER.get(target_region, 2))
-    return TRAVEL_CROSS_BASE_MINUTES + hop * TRAVEL_PER_HOP_MINUTES
+    return _shortest_minutes(origin_castle, target_castle)
 
 # جاسوس‌ها سبک‌بارتر و سریع‌تر از لشکر حرکت می‌کنند — حدود نصف زمان یک لشکر کامل
-SPY_SAME_REGION_MINUTES = 8
-SPY_CROSS_BASE_MINUTES = 15
-SPY_PER_HOP_MINUTES = 8
+SPY_SPEED_FACTOR = 0.4
 
-def spy_travel_minutes(origin_region: str, target_region: str) -> int:
-    if origin_region == target_region:
-        return SPY_SAME_REGION_MINUTES
-    hop = abs(REGION_ORDER.get(origin_region, 2) - REGION_ORDER.get(target_region, 2))
-    return SPY_CROSS_BASE_MINUTES + hop * SPY_PER_HOP_MINUTES
+def spy_travel_minutes(origin_castle: str, target_castle: str) -> int:
+    if origin_castle == target_castle:
+        return 0
+    return max(1, round(_shortest_minutes(origin_castle, target_castle) * SPY_SPEED_FACTOR))
 
 # --- بازار: کالاهایی که می‌شود کاروان فرستاد یا از بازار وستروس خرید (طلا خودش پول است، نه کالا) ---
 TRADE_GOODS = ["wood", "stone", "iron", "food", "wine"]
