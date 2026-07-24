@@ -6,7 +6,6 @@ import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, 
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
-import { REGION_COORDS } from '../mapCoords.js';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
@@ -911,7 +910,7 @@ export default function Admin() {
             {mapData && (() => {
               const r = mapData.regions.find(x => x.id === mapRegion);
               if (!r) return null;
-              const coords = { ...(REGION_COORDS[r.id] || {}), ...(r.coords || {}) };
+              const coords = r.coords || {};
               return (
                 <div className="mapview" style={{ marginTop: 4 }}>
                   <ZoomPanMap>

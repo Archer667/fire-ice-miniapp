@@ -5,13 +5,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
+from game import now
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
 # نکته: اسم players اینجا عمداً players_col است، نه players (که چند خط پایین‌تر
 # ماژول routers.players است) — قبلاً همین‌جا با هم قاطی می‌شدند و _ensure_indexes
 # داشت روی ماژول روتر create_index صدا می‌زد (بی‌اثر، ولی چون توی try/except بود
 # بی‌سروصدا فقط لاگ می‌شد و هیچ‌وقت هیچ ایندکس یکتایی واقعاً ساخته نمی‌شد)
 from db import (
-    players as players_col, map_castles, admin_roles,
+    players as players_col, map_castles, admin_roles, game_settings,
     campaigns, caravans, spy_missions, messages, alliances, roleplays,
 )
 from routers import (
@@ -142,9 +143,49 @@ async def _ensure_indexes():
     except Exception:
         logger.exception("ensuring secondary indexes failed")
 
+# مختصاتِ ثابتِ شمال — قبلاً فقط سمتِ فرانت (mapCoords.js) بود و هیچ‌وقت واقعاً توی
+# map_castles ذخیره نمی‌شد؛ یعنی روی نقشه دیده می‌شدند ولی ادمین راهی برای حذف/ادیتشان
+# نداشت چون آن بخش از پنل فقط قلعه‌های ثبت‌شده در دیتابیس را لیست می‌کند. با seed
+# کردنشان اینجا (فقط اگر از قبل نبودند — دست‌کاریِ دستیِ ادمین را رونویسی نمی‌کند)
+# قلعه‌های شمال هم مثل بقیه، واقعاً قابل‌حذف/ادیت می‌شوند.
+NORTH_SEED_COORDS = {
+    "وینترفل": (41, 23), "دردفورت": (55, 22.5), "بارولندز": (32, 36),
+    "کارهولد": (62, 18), "لاست‌هرت": (58, 8), "تورنز اسکوئر": (35, 26.5),
+    "دیپ‌وود موت": (20, 48), "موت کلین": (42, 42), "قلعهٔ سروین": (44, 26),
+    "تال‌هارت": (33, 26), "فلینت": (25, 40),
+    "وایت هاربر": (48, 39), "بارو‌تاون": (31, 35.5), "بندر دیپ‌وود": (19, 49),
+}
+NORTH_SEED_PORTS = {"وایت هاربر", "بارو‌تاون", "بندر دیپ‌وود"}
+
+NORTH_SEED_MARKER_ID = "north_map_castles_seeded"
+
+async def _seed_north_map_castles():
+    """فقط یک‌بار اجرا می‌شود (نشانه‌اش را در game_settings نگه می‌داریم) — وگرنه اگر
+    هر بار استارتاپ دوباره seed می‌کردیم، هر قلعه‌ای که ادمین از نقشه حذف کرده بود با
+    ری‌استارت بعدی دوباره زنده می‌شد و اصلاً حذف‌شدنی نمی‌ماند"""
+    try:
+        if await game_settings.find_one({"_id": NORTH_SEED_MARKER_ID}):
+            return
+        for name, (x, y) in NORTH_SEED_COORDS.items():
+            await map_castles.update_one(
+                {"region": "north", "name": name},
+                {"$setOnInsert": {
+                    "region": "north", "name": name, "x": x, "y": y,
+                    "kind": "port" if name in NORTH_SEED_PORTS else "castle",
+                    "custom": False, "created_at": now(),
+                }},
+                upsert=True,
+            )
+        await game_settings.update_one(
+            {"_id": NORTH_SEED_MARKER_ID}, {"$set": {"done_at": now()}}, upsert=True,
+        )
+    except Exception:
+        logger.exception("seeding north map castles failed")
+
 @app.on_event("startup")
 async def start_background_watchers():
     await _ensure_indexes()
+    await _seed_north_map_castles()
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())

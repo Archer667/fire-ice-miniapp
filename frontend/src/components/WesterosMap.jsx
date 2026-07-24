@@ -1,7 +1,7 @@
 import { useContext, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Build, Rock } from './Icons.jsx';
-import { MAP_IMAGE, REGION_COORDS } from '../mapCoords.js';
+import { MAP_IMAGE } from '../mapCoords.js';
 import { REGIONS_STATIC } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
 
@@ -93,7 +93,7 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
   const [pin, setPin] = useState(null);
 
   const mapped = data.regions.flatMap(r => {
-    const coords = { ...(REGION_COORDS[r.id] || {}), ...(r.coords || {}) };
+    const coords = r.coords || {};
     return r.castles
       .map(c => ({ ...c, region: r.id, mine: c.name === meCastle, xy: coords[c.name] }))
       .filter(c => c.xy);
