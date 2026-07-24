@@ -188,11 +188,18 @@ const M = {
       gender: b.gender, title: DEFAULT_TITLE[b.gender],
       admin_role: 'full', // حالت mock تک‌بازیکنه — خودت همیشه ادمینی تا بتونی خاندان خودت رو تخصیص بدی
       is_owner: true,
+      requested_castles: (b.requested_castles || []).slice(0, 5),
     });
     return { ok: true };
   },
   adminListPendingPlayers: () => (mockMe.registered && mockMe.pending)
-    ? [{ tg_id: 1, name: mockMe.name, title: mockMe.title, gender: mockMe.gender }] : [],
+    ? [{
+        tg_id: 1, name: mockMe.name, title: mockMe.title, gender: mockMe.gender,
+        requested_castles: (mockMe.requested_castles || []).map(name => ({
+          name, region: mockResolveRegion(name),
+          occupied: MOCK_PLAYERS.some(p => p.castle === name),
+        })),
+      }] : [],
   adminListRoster: () => {
     const out = [];
     if (mockMe.registered && !mockMe.pending) {

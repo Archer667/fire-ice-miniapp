@@ -586,6 +586,30 @@ export default function Admin() {
                     <div className="ic"><Shield s={16} /></div>
                     <div className="n">{p.name}<small>{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'}</small></div>
                   </div>
+                  {p.requested_castles && p.requested_castles.length > 0 && (
+                    <div style={{ margin: '2px 0 12px' }}>
+                      <div className="page-sub" style={{ margin: '0 4px 6px' }}>درخواستِ خودِ بازیکن (به‌ترتیب اولویت):</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {p.requested_castles.map((rc, i) => (
+                          <button type="button" key={rc.name}
+                                  className="rbtn" disabled={rc.occupied || !rc.region}
+                                  style={{
+                                    width: 'auto', padding: '6px 10px', fontSize: 11.5, borderRadius: 999,
+                                    border: '1px solid rgba(160,195,255,0.18)',
+                                    color: rc.occupied ? 'var(--mid)' : 'var(--az2)',
+                                    opacity: rc.occupied ? 0.6 : 1,
+                                  }}
+                                  onClick={() => {
+                                    haptic();
+                                    setAssignRegion(prev => ({ ...prev, [p.tg_id]: rc.region }));
+                                    setAssignCastle(prev => ({ ...prev, [p.tg_id]: rc.name }));
+                                  }}>
+                            {(i + 1).toLocaleString('fa-IR')}. {rc.name}{rc.occupied ? ' (اشغال‌شده)' : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <label className="f">اقلیم (خاندان)</label>
                   <select value={regionId} onChange={e => {
                     setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));

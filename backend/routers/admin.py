@@ -259,15 +259,32 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
     return {"ok": True, "sent_to": len(recipient_tg_ids)}
 
+async def _castle_region_map() -> dict:
+    """اسم قلعه/بندر → شناسهٔ اقلیمش، از دیتای ثابت + هرچه ادمین به نقشه اضافه کرده"""
+    out = {}
+    for rid, r in REGIONS.items():
+        for c in r["castles"] + r["ports"]:
+            out[c] = rid
+    async for m in map_castles.find({}, {"name": 1, "region": 1}):
+        out[m["name"]] = m["region"]
+    return out
+
 @router.get("/players/pending")
 async def list_pending_players(user: dict = Depends(admin_user)):
     """بازیکن‌هایی که فقط اسم‌نویسی کرده‌اند و هنوز خاندان (اقلیم) و قلعه‌شان تعیین نشده"""
+    castle_region = await _castle_region_map()
+    occupied = {p["castle"] async for p in players.find({"castle": {"$ne": None}}, {"castle": 1})}
     out = []
     cur = players.find({"$or": [{"region": None}, {"castle": None}]}).sort("created_at", 1)
     async for p in cur:
+        requested = [
+            {"name": c, "region": castle_region.get(c), "occupied": c in occupied}
+            for c in p.get("requested_castles", [])
+        ]
         out.append({
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "gender": p.get("gender"), "created_at": p["created_at"].isoformat(),
+            "requested_castles": requested,
         })
     return out
 

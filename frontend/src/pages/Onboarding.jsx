@@ -3,18 +3,20 @@ import { useGame } from '../store.jsx';
 import { api } from '../api.js';
 import { haptic, getTgUser } from '../telegram.js';
 import { Keep } from '../components/Icons.jsx';
+import CastlePicker from '../components/CastlePicker.jsx';
 
 export default function Onboarding() {
   const { setMe, toast } = useGame();
   const [name, setName] = useState(getTgUser()?.first_name || '');
   const [gender, setGender] = useState('lord');
+  const [requestedCastles, setRequestedCastles] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const enter = async () => {
     if (!name.trim()) { toast('نامت را بنویس، لرد بی‌نام'); return; }
     setBusy(true);
     try {
-      await api.register({ name: name.trim(), gender });
+      await api.register({ name: name.trim(), gender, requested_castles: requestedCastles });
       const me = await api.me();
       haptic('medium');
       setMe(me);
@@ -47,8 +49,16 @@ export default function Onboarding() {
           </button>
         </div>
       </div>
+      <div className="up u1" style={{ marginTop: 12 }}>
+        <label className="f">خاندان‌های درخواستی (اختیاری، به‌ترتیب اولویت)</label>
+        <CastlePicker value={requestedCastles} onChange={setRequestedCastles} />
+        <div className="page-sub" style={{ margin: '6px 4px 0' }}>
+          چون ممکنه اولی‌ها قبلاً اشغال شده باشن، چندتا اسم به‌ترتیبِ علاقه‌ات بده — ادمین با
+          توجه به همین لیست خاندان و قلعه‌ات را نهایی می‌کند
+        </div>
+      </div>
       <div className="page-sub up u2" style={{ margin: '4px 4px 0' }}>
-        اقلیم و قلعه‌ات را انتخاب نمی‌کنی — بعد از ثبت‌نام، ادمین بازی خاندان و قلعه‌ات را برایت مشخص می‌کند
+        اقلیم و قلعه‌ات را خودت نهایی نمی‌کنی — بعد از ثبت‌نام، ادمین بازی با توجه به درخواستت خاندان و قلعه‌ات را برایت مشخص می‌کند
       </div>
       <div className="up u2" style={{ marginTop: 16 }}>
         <button className="btn" onClick={enter} disabled={busy}>

@@ -7,23 +7,34 @@ from game import now, apply_production
 from game_data import REGIONS
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
-from routers.war import apply_campaign_upkeep
+from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
 
 router = APIRouter(prefix="/api/players", tags=["players"])
+
+MAX_REQUESTED_CASTLES = 5
 
 class RegisterBody(BaseModel):
     name: str
     gender: str   # "lord" | "lady"
+    requested_castles: list[str] = []   # اولویتِ خودِ بازیکن — چون ممکنه اولی‌ها قبلاً اشغال شده باشن
 
 @router.post("/register")
 async def register(body: RegisterBody, user: dict = Depends(get_user)):
-    """فقط نام و جنسیت — خاندان (اقلیم) و قلعه را ادمین بعداً از پنلش دستی تعیین می‌کند"""
+    """فقط نام، جنسیت، و لیستِ اولویتیِ خاندان‌های درخواستی — خودِ تخصیصِ نهاییِ
+    اقلیم/قلعه رو ادمین بعداً از پنلش دستی انجام می‌ده"""
     if body.gender not in DEFAULT_TITLE:
         raise HTTPException(400, "جنسیت نامعتبر")
     if not body.name.strip():
         raise HTTPException(400, "نام نمی‌تواند خالی باشد")
     if await players.find_one({"tg_id": user["id"]}):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
+
+    requested = list(dict.fromkeys(c.strip() for c in body.requested_castles if c.strip()))[:MAX_REQUESTED_CASTLES]
+    if requested:
+        names, _ports = await all_castle_names_and_ports()
+        bad = [c for c in requested if c not in names]
+        if bad:
+            raise HTTPException(400, f"این‌ها قلعه/شهرِ شناخته‌شده‌ای در بازی نیستند: {'، '.join(bad)}")
 
     doc = {
         "tg_id": user["id"],
@@ -33,6 +44,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "region": None,
         "castle": None,
         "is_port": False,
+        "requested_castles": requested,
         "resources": dict(STARTING_RESOURCES),
         "troops": {},
         "buildings": {},
