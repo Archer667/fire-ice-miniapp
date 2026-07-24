@@ -3,7 +3,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, campaigns, map_castles, roleplays, game_settings
+from db import players, campaigns, map_castles, roleplays, game_settings, alliances
 from game import now, can_afford, pay, normalize_building_state
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes,
@@ -69,6 +69,31 @@ async def all_castle_names_and_ports():
         if m.get("kind", "port" if m.get("port") else "castle") == "port":
             ports.add(m["name"])
     return names, ports
+
+async def allied_tg_ids(tg_id: int) -> set:
+    """هرکسی که با tg_id پیمانِ پذیرفته‌شده دارد (هر سه نوع — عدم‌تجاوز/تجاری/اتحاد
+    کامل، چون هرکدام دستِ‌کم اجازهٔ عبور از قلمرو را می‌دهند)"""
+    out = set()
+    async for a in alliances.find({"status": "accepted", "$or": [{"from_id": tg_id}, {"to_id": tg_id}]}):
+        out.add(a["to_id"] if a["from_id"] == tg_id else a["from_id"])
+    return out
+
+async def blocked_castles_for(tg_id: int) -> frozenset:
+    """قلعه‌های دیگر بازیکن‌هایی که با tg_id پیمانی ندارند — لشکرِ tg_id نمی‌تواند
+    از این قلعه‌ها رد شود (فقط برای مقصد نهایی استثنا می‌شود، نه عبور میان‌راه)"""
+    allies = await allied_tg_ids(tg_id)
+    blocked = set()
+    async for other in players.find({"tg_id": {"$ne": tg_id}}, {"tg_id": 1, "castle": 1}):
+        if other.get("castle") and other["tg_id"] not in allies:
+            blocked.add(other["castle"])
+    return frozenset(blocked)
+
+async def has_non_aggression_pact(a_id: int, b_id: int):
+    """پیمانِ عدم‌تجاوزِ پذیرفته‌شده بین این دو نفر، اگر باشد (برای چک غرامتِ خیانت)"""
+    return await alliances.find_one({
+        "status": "accepted", "type": "non_aggression",
+        "$or": [{"from_id": a_id, "to_id": b_id}, {"from_id": b_id, "to_id": a_id}],
+    })
 
 def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: bool):
     """هزینهٔ طلا (یک‌باره)، نفرات کل، آذوقهٔ روزانه، و تسلیحات مصرفی این ترکیب لشکر را حساب
@@ -176,13 +201,36 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
 
     same_castle = target_castle == body.origin_castle
-    travel = travel_minutes(same_castle, body.origin_castle, target_castle)
+    blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
+    travel = travel_minutes(same_castle, body.origin_castle, target_castle, blocked)
+    if travel is None:
+        raise HTTPException(400, "مسیر این لشکرکشی از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز/تجاری/اتحاد کامل) نداری — یا پیمان ببند، یا هدف نزدیک‌تری انتخاب کن")
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p))
 
     pay(p["resources"], {"gold": gold, **weapons})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
+
+    # خیانت به پیمان عدم‌تجاوز: حمله/غارت/محاصره علیه کسی که چنین پیمانی باهاش داری،
+    # غرامتِ همان پیمان را از طلایش کم می‌کند و اگر طلا کم بود از امتیازش
+    penalty_charged = 0
+    if body.op_type in ATTACK_OP_TYPES and not same_castle:
+        target_player = await players.find_one({"castle": target_castle})
+        if target_player:
+            pact = await has_non_aggression_pact(user["id"], target_player["tg_id"])
+            penalty_charged = pact.get("penalty_gold", 0) if pact else 0
+            if penalty_charged > 0:
+                gold_paid = min(p["resources"].get("gold", 0), penalty_charged)
+                p["resources"]["gold"] -= gold_paid
+                shortfall = penalty_charged - gold_paid
+                if shortfall > 0:
+                    p["points"] = max(0, p.get("points", 0) - shortfall)
+                await send_system_message(
+                    target_player["tg_id"], target_player["name"],
+                    f"لرد {p['name']} با وجود پیمان عدم‌تجاوز به تو حمله کرد — {penalty_charged:,} سکه غرامت پرداخت.",
+                )
+
+    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "points": p.get("points", 0)}})
 
     doc = {
         "tg_id": user["id"], "player_name": p["name"],
@@ -191,6 +239,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "name": body.name.strip()[:60] or op["name"], "troops": body.troops, "power": power,
         "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
         "travel_minutes": travel, "arrival_at": arrival_at,
+        "penalty_charged": penalty_charged,
         "active": True, "arrival_notified": False,
         "created_at": now(), "last_food_tick": now(),
     }
@@ -198,6 +247,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     return {
         "ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men, "power": power,
         "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
+        "penalty_charged": penalty_charged,
     }
 
 @router.post("/{campaign_id}/cancel")

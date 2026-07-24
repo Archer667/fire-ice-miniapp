@@ -999,9 +999,10 @@ const M = {
       from_name: a.mine_proposed ? mockMe.name : a.other_name,
       to_name: a.mine_proposed ? a.other_name : mockMe.name,
     })),
-  diplomacyPropose: (toTgIds, type, name, isPrivate) => {
+  diplomacyPropose: (toTgIds, type, name, isPrivate, penaltyGold) => {
     if (!ALLIANCE_TYPES[type]) throw new Error('نوع پیمان نامعتبر');
     if (!toTgIds.length) throw new Error('هیچ گیرنده‌ای انتخاب نشده');
+    if (type === 'non_aggression' && !(penaltyGold > 0)) throw new Error('برای پیمان عدم‌تجاوز باید مقدار غرامت (طلا) را مشخص کنی');
     const unitCost = ALLIANCE_TYPES[type].wine_cost * (isPrivate ? PRIVATE_ALLIANCE_MULTIPLIER : 1);
     const cost = unitCost * toTgIds.length;
     if (!mockCanAfford({ wine: cost })) throw new Error(`شراب کافی برای پیشنهاد به ${toTgIds.length} نفر نداری`);
@@ -1012,7 +1013,7 @@ const M = {
       mockAlliances.unshift({
         id: String(mockAllianceSeq++), mine_proposed: true, other_id: tgId, other_name: p ? p.name : String(tgId),
         type, type_name: ALLIANCE_TYPES[type].name, name: pactName, public: !isPrivate,
-        wine_cost: unitCost, status: 'pending',
+        wine_cost: unitCost, penalty_gold: type === 'non_aggression' ? penaltyGold : 0, status: 'pending',
       });
     }
     return { ok: true, sent_to: toTgIds.length };
@@ -1193,8 +1194,8 @@ export const api = {
     : req('/api/titles/small-council', { method: 'POST', body: JSON.stringify({ seat, tg_id: tgId }) }),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
   diplomacyPublic: () => MOCK ? Promise.resolve(M.diplomacyPublic()) : req('/api/diplomacy/public'),
-  diplomacyPropose: (toTgIds, type, name, isPrivate) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate))
-    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate }) }),
+  diplomacyPropose: (toTgIds, type, name, isPrivate, penaltyGold) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate, penaltyGold))
+    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate, penalty_gold: penaltyGold || 0 }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   adminListAlliances: () => MOCK ? Promise.resolve(M.adminListAlliances()) : req('/api/admin/alliances'),

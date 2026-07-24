@@ -24,6 +24,7 @@ export default function Diplomacy() {
   const [type, setType] = useState('non_aggression');
   const [pactName, setPactName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [penaltyGold, setPenaltyGold] = useState(500);
   const [busy, setBusy] = useState(false);
   const [feastBusy, setFeastBusy] = useState(false);
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
@@ -65,9 +66,10 @@ export default function Diplomacy() {
 
   const propose = async () => {
     if (targets.length === 0) { toast('حداقل یک لرد را برای پیشنهاد انتخاب کن'); return; }
+    if (type === 'non_aggression' && (!penaltyGold || penaltyGold <= 0)) { toast('مقدار غرامتِ خیانت را مشخص کن'); return; }
     setBusy(true);
     try {
-      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate);
+      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate, type === 'non_aggression' ? penaltyGold : 0);
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - unitCost * (res.sent_to || targets.length) } });
       toast(`پیشنهاد پیمان با کلاغ به ${res.sent_to || targets.length} لرد ارسال شد`);
@@ -146,6 +148,18 @@ export default function Diplomacy() {
             <option key={id} value={id}>{t.name} — {t.wine_cost.toLocaleString('fa-IR')} شراب هرکدام</option>
           ))}
         </select>
+        {type === 'non_aggression' && (
+          <>
+            <label className="f">غرامتِ خیانت (طلا)</label>
+            <input type="number" min={1} value={penaltyGold}
+                   onChange={e => setPenaltyGold(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                   placeholder="مثلاً ۵۰۰" />
+            <div className="page-sub" style={{ margin: '4px 4px 0' }}>
+              اگه یکی از طرفین با وجود این پیمان به اون یکی حمله/غارت/محاصره کنه، همین مقدار طلا
+              (یا اگه طلا کم بود، به همون میزان از امتیازش) ازش کم می‌شه.
+            </div>
+          </>
+        )}
         <label className="f">نمایش در تب عمومیِ «اتحادها»</label>
         <div className="grid2" role="radiogroup" aria-label="نمایش عمومی">
           <button type="button" role="radio" aria-checked={!isPrivate}
@@ -179,6 +193,7 @@ export default function Diplomacy() {
               <small>
                 {a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}
                 {a.public === false ? ' · خصوصی' : ''}
+                {a.type === 'non_aggression' && a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
               </small>
             </div>
             {!a.mine_proposed && a.status === 'pending' && (

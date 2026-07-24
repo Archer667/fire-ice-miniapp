@@ -330,12 +330,16 @@ def _build_travel_graph():
 TRAVEL_GRAPH = _build_travel_graph()
 TRAVEL_CROSS_REGION_DEFAULT_MINUTES = 90  # اگر مسیری اصلاً پیدا نشد (گراف قطع بود یا قلعه ناشناخته)
 
-def _shortest_minutes(origin_castle: str, target_castle: str) -> int:
-    """کوتاه‌ترین مسیر (دایکسترا) روی گراف واقعیِ نقشه؛ اگر قلعه‌ای اصلاً روی گراف
-    نبود یا مسیری بینشان پیدا نشد، به TRAVEL_CROSS_REGION_DEFAULT_MINUTES برمی‌گردیم"""
+def _shortest_minutes(origin_castle: str, target_castle: str, blocked: frozenset = frozenset()):
+    """کوتاه‌ترین مسیر (دایکسترا) روی گراف واقعیِ نقشه، با امکان مسدودکردن عبور از
+    قلعه‌های داخلِ «blocked» (برای قانونِ «فقط از قلمروِ هم‌پیمان رد می‌شوی»؛ مبدا/مقصد
+    حتی اگر داخل blocked باشند همیشه قابل‌ورودند، چون رسیدن به مقصد خودِ هدف است، نه عبور).
+    اگر قلعه‌ای اصلاً روی گراف نبود، به TRAVEL_CROSS_REGION_DEFAULT_MINUTES برمی‌گردیم.
+    اگر blocked خالی نبود و واقعاً هیچ مسیرِ مجازی پیدا نشد، None برمی‌گردانیم."""
     import heapq
     if origin_castle not in TRAVEL_GRAPH or target_castle not in TRAVEL_GRAPH:
         return TRAVEL_CROSS_REGION_DEFAULT_MINUTES
+    blocked = blocked - {origin_castle, target_castle}
     dist = {origin_castle: 0}
     pq = [(0, origin_castle)]
     seen = set()
@@ -347,18 +351,21 @@ def _shortest_minutes(origin_castle: str, target_castle: str) -> int:
         if node == target_castle:
             return d
         for nb, w in TRAVEL_GRAPH.get(node, {}).items():
+            if nb in blocked:
+                continue
             nd = d + w
             if nd < dist.get(nb, float("inf")):
                 dist[nb] = nd
                 heapq.heappush(pq, (nd, nb))
-    return TRAVEL_CROSS_REGION_DEFAULT_MINUTES
+    return None if blocked else TRAVEL_CROSS_REGION_DEFAULT_MINUTES
 
-def travel_minutes(same_castle: bool, origin_castle: str, target_castle: str) -> int:
+def travel_minutes(same_castle: bool, origin_castle: str, target_castle: str, blocked: frozenset = frozenset()):
     """زمان رسیدن لشکر (دقیقه): همان قلعه = بی‌درنگ، وگرنه کوتاه‌ترین مسیر روی
-    گراف واقعیِ نقشه بین دو قلعه"""
+    گراف واقعیِ نقشه بین دو قلعه. اگر «blocked» داده شود و مسیرِ مجازی‌ای پیدا نشود،
+    None برمی‌گردد (یعنی این لشکرکشی از قلمروِ کسی رد می‌شود که پیمان نداری)."""
     if same_castle:
         return 0
-    return _shortest_minutes(origin_castle, target_castle)
+    return _shortest_minutes(origin_castle, target_castle, blocked)
 
 # جاسوس‌ها سبک‌بارتر و سریع‌تر از لشکر حرکت می‌کنند — حدود نصف زمان یک لشکر کامل
 SPY_SPEED_FACTOR = 0.4

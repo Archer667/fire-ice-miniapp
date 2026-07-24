@@ -16,11 +16,14 @@ class ProposeBody(BaseModel):
     type: str
     name: str = ""
     private: bool = False
+    penalty_gold: int = 0   # فقط برای «پیمان عدم‌تجاوز» — غرامتی که خیانت‌کننده باید بپردازد
 
 @router.post("/propose")
 async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     if body.type not in ALLIANCE_TYPES:
         raise HTTPException(400, "نوع پیمان نامعتبر")
+    if body.type == "non_aggression" and body.penalty_gold <= 0:
+        raise HTTPException(400, "برای پیمان عدم‌تجاوز باید مقدار غرامت (طلا) را مشخص کنی")
     me = await players.find_one({"tg_id": user["id"]})
     if not me:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -57,19 +60,22 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
 
     pact_name = body.name.strip()[:60]
+    penalty_gold = body.penalty_gold if body.type == "non_aggression" else 0
     await alliances.insert_many([{
         "from_id": user["id"], "from_name": me["name"],
         "to_id": t["tg_id"], "to_name": t["name"],
         "type": body.type, "wine_cost": unit_cost, "name": pact_name,
+        "penalty_gold": penalty_gold,
         "public": not body.private,
         "status": "pending", "created_at": now(),
     } for t in valid_targets])
 
     type_name = ALLIANCE_TYPES[body.type]["name"]
+    penalty_note = f" — غرامتِ خیانت: {penalty_gold:,} سکه" if penalty_gold else ""
     for t in valid_targets:
         await send_system_message(
             t["tg_id"], t["name"],
-            f"لرد {me['name']} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد — از تب دیپلماسی پاسخ بده.",
+            f"لرد {me['name']} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد{penalty_note} — از تب دیپلماسی پاسخ بده.",
         )
     return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
 
@@ -87,6 +93,7 @@ async def mine(user: dict = Depends(get_user)):
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
             "name": a.get("name", ""),
             "public": a.get("public", True),
+            "penalty_gold": a.get("penalty_gold", 0),
             "status": a["status"],
         })
     return out
