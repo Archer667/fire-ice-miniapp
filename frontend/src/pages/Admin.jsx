@@ -956,11 +956,7 @@ export default function Admin() {
         <>
           <div className="sect up u2">افزودن قلعه/شهر به نقشه</div>
           <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>اقلیم</label>
-            <select value={mapRegion} onChange={e => setMapRegion(e.target.value)}>
-              {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
-            </select>
-            <div className="page-sub" style={{ margin: '10px 4px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
+            <div className="page-sub" style={{ margin: '0 4px 10px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
             {mapError && (
               <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5, margin: '10px 0' }}>
                 نقشه بارگذاری نشد — <button type="button" className="rbtn" style={{ width: 'auto', display: 'inline', color: 'var(--az2)', cursor: 'pointer', textDecoration: 'underline' }} onClick={loadMapData}>تلاش دوباره</button>
@@ -979,6 +975,10 @@ export default function Admin() {
                 </div>
               );
             })()}
+            <label className="f">اقلیم</label>
+            <select value={mapRegion} onChange={e => setMapRegion(e.target.value)}>
+              {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+            </select>
             {pendingPin && (
               <div style={{ marginTop: 12 }}>
                 <label className="f" style={{ marginTop: 0 }}>این نقطه کدام قلعه/شهر است؟</label>
