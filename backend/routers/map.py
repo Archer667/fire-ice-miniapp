@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from auth import get_user
 from db import campaigns, map_castles
 from game import now
-from game_data import REGIONS
+from game_data import REGIONS, CASTLE_HOUSES
 from config import CAMPAIGN_REVEAL_MINUTES
 from ranks import scored_players, get_hierarchy_doc
 
@@ -45,12 +45,13 @@ async def get_map(user: dict = Depends(get_user)):
             return {
                 "name": c, "owner": owners_by_castle.get(c), "port": is_port,
                 "kind": kind_by_name.get(c, "port" if is_port else "castle"),
+                "house": CASTLE_HOUSES.get(c),
             }
         castle_list = (
             [built_in(c, False) for c in r["castles"]] +
             [built_in(c, True) for c in r["ports"]] +
             [{"name": c["name"], "owner": owners_by_castle.get(c["name"]),
-              "port": c["kind"] == "port", "kind": c["kind"]}
+              "port": c["kind"] == "port", "kind": c["kind"], "house": CASTLE_HOUSES.get(c["name"])}
              for c in custom_by_region.get(rid, [])]
         )
         regions.append({

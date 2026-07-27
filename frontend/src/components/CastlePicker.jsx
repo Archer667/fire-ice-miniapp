@@ -3,10 +3,11 @@ import { api } from '../api.js';
 import { haptic } from '../telegram.js';
 import { Close } from './Icons.jsx';
 
-/** جست‌وجو و انتخابِ چندتایی از قلعه/شهرهای بازی، به‌ترتیبِ اولویت — برای
+/** لیستِ مرورپذیر برای انتخابِ چندتایی از قلعه/شهرهای بازی، به‌ترتیبِ اولویت — برای
  * درخواستِ خاندان موقع ثبت‌نام، چون خاندانِ اول‌اولویتِ بازیکن ممکنه از قبل
- * اشغال شده باشه و ادمین لازمه بدونه بعدی‌هاش چی‌ان */
-export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن...' }) {
+ * اشغال شده باشه و ادمین لازمه بدونه بعدی‌هاش چی‌ان. جست‌وجو هم می‌شه کرد، ولی
+ * بدونِ تایپ‌کردن هم همهٔ قلعه‌ها (با اسمِ خاندانشون) دیده می‌شن. */
+export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...' }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(null);
@@ -16,9 +17,10 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
       const list = [];
       for (const r of data.regions) {
         for (const c of r.castles) {
-          list.push({ name: c.name, region_name: r.name, occupied: !!c.owner });
+          list.push({ name: c.name, region_name: r.name, occupied: !!c.owner, house: c.house || null });
         }
       }
+      list.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
       setAll(list);
     }).catch(() => setAll([]));
   }, []);
@@ -26,8 +28,7 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
   const q = query.trim();
   const results = (all || [])
     .filter(c => !value.includes(c.name))
-    .filter(c => q.length >= 1 && c.name.includes(q))
-    .slice(0, 20);
+    .filter(c => q.length === 0 || c.name.includes(q));
 
   const pick = (name) => {
     if (value.length >= max) return;
@@ -58,13 +59,13 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
             onFocus={() => setOpen(true)}
             placeholder={all === null ? 'در حال بارگذاری قلعه‌ها...' : placeholder}
           />
-          {open && q.length >= 1 && (
+          {open && (
             <div className="ppicker-results">
               {results.length === 0 ? (
                 <div className="ppicker-empty">موردی پیدا نشد</div>
               ) : results.map(c => (
                 <button type="button" className="rbtn ppicker-row" key={c.name} onClick={() => pick(c.name)}>
-                  <span>{c.name}</span>
+                  <span>{c.name}{c.house ? ` · خاندان ${c.house}` : ''}</span>
                   <small>{c.region_name}{c.occupied ? ' · قبلاً گرفته شده' : ''}</small>
                 </button>
               ))}

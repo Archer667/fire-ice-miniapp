@@ -31,7 +31,7 @@ import {
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
-  WEAPON_NAMES, WEAPON_PER_SOLDIER,
+  WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -203,10 +203,10 @@ const M = {
   adminListRoster: () => {
     const out = [];
     if (mockMe.registered && !mockMe.pending) {
-      out.push({ tg_id: 1, name: mockMe.name, title: mockMe.title, region: mockMe.region, region_name: mockMe.region_name, castle: mockMe.castle, is_port: mockMe.is_port });
+      out.push({ tg_id: 1, name: mockMe.name, title: mockMe.title, region: mockMe.region, region_name: mockMe.region_name, castle: mockMe.castle, is_port: mockMe.is_port, house: CASTLE_HOUSES[mockMe.castle] || null });
     }
     for (const p of MOCK_PLAYERS) {
-      out.push({ tg_id: p.tg_id, name: p.name, title: p.title, region: mockResolveRegion(p.castle), region_name: p.region_name, castle: p.castle, is_port: false });
+      out.push({ tg_id: p.tg_id, name: p.name, title: p.title, region: mockResolveRegion(p.castle), region_name: p.region_name, castle: p.castle, is_port: false, house: CASTLE_HOUSES[p.castle] || null });
     }
     return out;
   },
@@ -221,6 +221,7 @@ const M = {
     const wasPending = mockMe.pending;
     Object.assign(mockMe, {
       pending: false, region, region_name: r.name, castle,
+      house: CASTLE_HOUSES[castle] || null,
       is_port: r.ports.includes(castle),
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
       resources: mockMe.resources || {
@@ -271,9 +272,9 @@ const M = {
         return {
           id, name: r.name,
           castles: [
-            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: false, kind: kindByName[n] || 'castle' })),
-            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: true, kind: kindByName[n] || 'port' })),
-            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: c.kind === 'port', kind: c.kind })),
+            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: false, kind: kindByName[n] || 'castle', house: CASTLE_HOUSES[n] || null })),
+            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: true, kind: kindByName[n] || 'port', house: CASTLE_HOUSES[n] || null })),
+            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: c.kind === 'port', kind: c.kind, house: CASTLE_HOUSES[c.name] || null })),
           ],
           coords,
         };

@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns
 from game import now, apply_production
-from game_data import REGIONS
+from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
 from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
@@ -105,6 +105,7 @@ async def me(user: dict = Depends(get_user)):
         "region": p["region"],
         "region_name": REGIONS[p["region"]]["name"],
         "castle": p["castle"],
+        "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
         "is_port": p["is_port"],
         "resources": p["resources"],
         "active_campaigns": active_campaigns,

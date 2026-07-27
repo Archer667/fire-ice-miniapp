@@ -111,7 +111,7 @@ export default function Dashboard({ goTo }) {
         <div className="me-row">
           <div className="ava">{me.name.charAt(0)}</div>
           <div>
-            <div className="nm">{me.name}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
+            <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">{me.castle} · {me.region_name}{me.is_port ? ' · بندر' : ''}</div>
             {me.rank != null ? (
               <div className="rk">

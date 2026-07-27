@@ -10,7 +10,7 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 from game import now, normalize_building_state
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID
 from routers.ravens import send_system_message
@@ -298,6 +298,7 @@ async def list_roster(user: dict = Depends(admin_user)):
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "region": p["region"], "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
             "castle": p["castle"], "is_port": p.get("is_port", False),
+            "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
         })
     return out
 
@@ -322,13 +323,16 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
         raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
 
     was_assigned = bool(target.get("region") and target.get("castle"))
+    house = CASTLE_HOUSES.get(body.castle)
     await players.update_one({"tg_id": tg_id}, {"$set": {
         "region": body.region, "castle": body.castle, "is_port": body.castle in region["ports"],
+        "house": house,
     }})
+    house_note = f" نام خانوادگی‌ات «خاندان {house}» شد." if house else ""
     msg = (
-        f"خاندانت جابه‌جا شد — حالا به {region['name']} تعلق داری و قلعه‌ات {body.castle} است."
+        f"خاندانت جابه‌جا شد — حالا به {region['name']} تعلق داری و قلعه‌ات {body.castle} است.{house_note}"
         if was_assigned else
-        f"خاندانت مشخص شد — به {region['name']} تعلق داری و قلعه‌ات {body.castle} است. اکنون می‌توانی وارد بازی شوی."
+        f"خاندانت مشخص شد — به {region['name']} تعلق داری و قلعه‌ات {body.castle} است.{house_note} اکنون می‌توانی وارد بازی شوی."
     )
     await send_system_message(tg_id, target["name"], msg)
     return {"ok": True}
@@ -342,7 +346,7 @@ async def admin_unassign_house(tg_id: int, user: dict = Depends(admin_user)):
         raise HTTPException(404, "بازیکن پیدا نشد")
     if not target.get("region") and not target.get("castle"):
         raise HTTPException(400, "این بازیکن اصلاً خاندانی ندارد")
-    await players.update_one({"tg_id": tg_id}, {"$set": {"region": None, "castle": None, "is_port": False}})
+    await players.update_one({"tg_id": tg_id}, {"$set": {"region": None, "castle": None, "is_port": False, "house": None}})
     await send_system_message(
         tg_id, target["name"],
         "خاندان و قلعه‌ات از تو گرفته شد — منتظر بمان تا ادمین دوباره خاندانی برایت مشخص کند.",

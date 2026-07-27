@@ -320,6 +320,13 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   padding: 3px 9px; border-radius: 99px;
 }
 
+.house-tag {
+  display: inline-block; margin-inline-start: 8px; vertical-align: middle;
+  font-size: 10px; font-weight: 700; color: var(--gold);
+  background: rgba(218,179,106,0.1); border: 1px solid rgba(218,179,106,0.3);
+  padding: 3px 9px; border-radius: 99px;
+}
+
 .tax-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(170,137,132,0.15); font-size: 12px; color: var(--mid); }
 .tax-row small { display: block; color: var(--low); font-size: 10px; margin-top: 2px; }
 .tax-stepper { display: flex; align-items: center; gap: 10px; }
