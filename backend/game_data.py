@@ -1,5 +1,11 @@
 # دیتای ثابت بازی — از فایل «اطلاعات بازی»
 
+# سه‌نوعِ دسترسیِ زمینی/دریاییِ هر قلعه — از پنل ادمین (تب نقشه) روی هر پین مشخص می‌شود:
+# land = صرفاً خشکی (هیچ ساختمان بندری/کشتی‌ای نمی‌سازد)، coastal = خشکی‌دریایی (هم راه
+# خشکی دارد هم می‌تواند بندر/کشتی بسازد)، sea = کاملاً دریایی (راهی به خشکی ندارد، همهٔ
+# جابه‌جاییِ نیرویش باید با ظرفیتِ کشتی‌های همان فرمان پوشش داده شود)
+MAP_TERRAINS = {"land": "صرفاً خشکی", "coastal": "خشکی‌دریایی", "sea": "کاملاً دریایی"}
+
 REGIONS = {
     "north":  {"name": "شمال", "special": ["نگهبان شمال", "سوار زمستان"],
                "castles": ["وینترفل","دردفورت","بارولندز","کارهولد","لاست‌هرت","تورنز اسکوئر","دیپ‌وود موت","موت کلین","قلعهٔ سروین","تال‌هارت","فلینت","گری‌واتر واچ"],
@@ -72,9 +78,15 @@ COMMON_TROOPS = {
 SPECIAL_TROOP_COST = 4
 SPECIAL_TROOP_POWER = 5   # نیروهای ویژهٔ اقلیمی پادگان ندارند، پس توانشان ثابت است
 
-# کشتی جنگی — فقط قلعه/شهرهای بندری می‌توانند بسازندش، و «بندر» به‌جای پادگان+کارگاه
-# تسلیحات، پیش‌نیازش است (سطح بندر مثل سطح پادگان توان کشتی را بالا می‌برد)
-NAVAL_TROOP = {"id": "ship", "name": "کشتی جنگی", "cost": 5, "power": 10}
+# دو نوع کشتی — فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند بسازندشان، و
+# «بندر» به‌جای پادگان+کارگاه تسلیحات پیش‌نیازشان است (سطح بندر مثل سطح پادگان توانشان
+# را بالا می‌برد). «capacity» یعنی هر کشتی از این نوع چند سرباز را می‌تواند حمل کند —
+# برای قلعه‌های کاملاً دریایی (بدون راه خشکی) الزامی است: کل نیروی غیردریاییِ هر فرمان
+# باید زیرِ مجموعِ ظرفیتِ کشتی‌های همان فرمان بماند
+NAVAL_TROOPS = {
+    "ship":       {"name": "کشتی جنگی",       "cost": 5, "power": 10, "capacity": 250},
+    "cargo_ship": {"name": "کشتی سادهٔ چوبی", "cost": 3, "power": 0,  "capacity": 100},
+}
 NAVAL_CAMP_BUILDING = "port"
 
 # هر سطح پادگانِ یک یگان، توانِ همان یگان را وقتی از آن پادگان گسیل می‌شود بالا می‌برد —
@@ -188,9 +200,10 @@ def unit_power(troop_id: str, building_levels: dict) -> float:
         req = UNIT_REQUIREMENTS.get(troop_id, {})
         camp_level = building_levels.get(req.get("camp"), 0)
         return common["power"] * (1 + camp_level * CAMP_POWER_STEP)
-    if troop_id == NAVAL_TROOP["id"]:
+    naval = NAVAL_TROOPS.get(troop_id)
+    if naval:
         port_level = building_levels.get(NAVAL_CAMP_BUILDING, 0)
-        return NAVAL_TROOP["power"] * (1 + port_level * CAMP_POWER_STEP)
+        return naval["power"] * (1 + port_level * CAMP_POWER_STEP)
     return SPECIAL_TROOP_POWER
 
 def campaign_power(troops: dict, building_levels: dict) -> int:

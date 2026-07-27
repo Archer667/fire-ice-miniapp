@@ -28,10 +28,10 @@ import {
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
-  campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOP, NAVAL_CAMP_BUILDING,
+  campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
-  WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES,
+  WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES, MAP_TERRAINS,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -92,7 +92,7 @@ const DEFAULT_MOCK_PLAYER_RESOURCES = {
   weapon_sword: 20, weapon_spear: 20, weapon_archer: 20, weapon_lcav: 20, weapon_hcav: 20,
 };
 const mockPlayerResources = {}; // tg_id -> {gold,wood,stone,iron,food,wine,men} — برای تست ویرایش منابع در پنل ادمین
-const mockMapCastles = []; // {region, name, kind, x, y, custom}
+const mockMapCastles = []; // {region, name, kind, terrain, x, y, custom}
 const mockSpyMissions = []; // {id, target, travel_minutes, arrival_at, success, report, created_at}
 let mockSpySeq = 1;
 const mockRoleplays = []; // {id, category, text, result, resolved, created_at}
@@ -111,9 +111,20 @@ function mockResolveRegion(name) {
   const custom = mockMapCastles.find(m => m.name === name);
   return custom ? custom.region : null;
 }
+// نوع زمینِ یک قلعه: land | coastal | sea — همان چیزی که ادمین از تب نقشه روی پینش
+// مشخص کرده (mockMapCastles.terrain)، وگرنه پیش‌فرضِ استاتیک (castles→land, ports→coastal)
+function mockCastleTerrain(name) {
+  const custom = mockMapCastles.find(m => m.name === name);
+  if (custom?.terrain) return custom.terrain;
+  for (const r of Object.values(REGIONS_STATIC)) {
+    if (r.ports.includes(name)) return 'coastal';
+    if (r.castles.includes(name)) return 'land';
+  }
+  if (custom) return custom.kind === 'port' ? 'coastal' : 'land';
+  return 'land';
+}
 function mockIsPortCastle(name) {
-  return Object.values(REGIONS_STATIC).some(r => r.ports.includes(name))
-    || mockMapCastles.some(m => m.name === name && m.kind === 'port');
+  return mockCastleTerrain(name) !== 'land';
 }
 const mockPolls = [
   { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
@@ -222,7 +233,7 @@ const M = {
     Object.assign(mockMe, {
       pending: false, region, region_name: r.name, castle,
       house: CASTLE_HOUSES[castle] || null,
-      is_port: r.ports.includes(castle),
+      is_port: mockCastleTerrain(castle) !== 'land',
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
       resources: mockMe.resources || {
         gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30,
@@ -272,9 +283,9 @@ const M = {
         return {
           id, name: r.name,
           castles: [
-            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: false, kind: kindByName[n] || 'castle', house: CASTLE_HOUSES[n] || null })),
-            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: true, kind: kindByName[n] || 'port', house: CASTLE_HOUSES[n] || null })),
-            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: c.kind === 'port', kind: c.kind, house: CASTLE_HOUSES[c.name] || null })),
+            ...r.castles.map(n => ({ name: n, owner: owners[n] || null, port: mockCastleTerrain(n) !== 'land', kind: kindByName[n] || 'castle', house: CASTLE_HOUSES[n] || null, terrain: mockCastleTerrain(n) })),
+            ...r.ports.map(n => ({ name: n, owner: owners[n] || null, port: mockCastleTerrain(n) !== 'land', kind: kindByName[n] || 'port', house: CASTLE_HOUSES[n] || null, terrain: mockCastleTerrain(n) })),
+            ...custom.map(c => ({ name: c.name, owner: owners[c.name] || null, port: mockCastleTerrain(c.name) !== 'land', kind: c.kind, house: CASTLE_HOUSES[c.name] || null, terrain: mockCastleTerrain(c.name) })),
           ],
           coords,
         };
@@ -295,8 +306,8 @@ const M = {
     if (!r) return [];
     const placed = new Set(mockMapCastles.filter(m => m.region === region).map(m => m.name));
     return [
-      ...r.castles.filter(n => !placed.has(n)).map(n => ({ name: n, kind: 'castle' })),
-      ...r.ports.filter(n => !placed.has(n)).map(n => ({ name: n, kind: 'port' })),
+      ...r.castles.filter(n => !placed.has(n)).map(n => ({ name: n, kind: 'castle', terrain: 'land' })),
+      ...r.ports.filter(n => !placed.has(n)).map(n => ({ name: n, kind: 'port', terrain: 'coastal' })),
     ];
   },
   adminAddMapCastle: (body) => {
@@ -317,9 +328,10 @@ const M = {
       if (mockMapCastles.some(m => m.region === body.region && m.name === name)) throw new Error('این قلعه از قبل روی نقشه گذاشته شده');
       custom = false;
     }
-    // نوع آیکن (قلعه/شهر/مخروبه/بندر) را ادمین دستی مشخص می‌کند
+    // نوع آیکن (قلعه/شهر/مخروبه/بندر) و نوع زمین (خشکی/خشکی‌دریایی/دریایی) را ادمین دستی مشخص می‌کند
     const kind = ['castle', 'city', 'ruin', 'port'].includes(body.kind) ? body.kind : 'castle';
-    mockMapCastles.push({ region: body.region, name, kind, x: body.x, y: body.y, custom });
+    const terrain = MAP_TERRAINS.some(t => t.key === body.terrain) ? body.terrain : 'land';
+    mockMapCastles.push({ region: body.region, name, kind, terrain, x: body.x, y: body.y, custom });
     return { ok: true, name };
   },
   adminDeleteMapCastle: (name) => {
@@ -366,11 +378,12 @@ const M = {
         }
         gold += common.cost * n;
         food += FOOD_COST_REGULAR * n;
-      } else if (tid === NAVAL_TROOP.id) {
-        if (!mockMe.is_port) throw new Error('فقط قلعه/شهرهای بندری می‌توانند کشتی جنگی بسازند');
+      } else if (NAVAL_TROOP_IDS.includes(tid)) {
+        const naval = NAVAL_TROOPS.find(t => t.id === tid);
+        if (!mockMe.is_port) throw new Error('فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند کشتی بسازند');
         const portLevel = mockBuildings[NAVAL_CAMP_BUILDING]?.level || 0;
-        if (portLevel <= 0) throw new Error(`برای ساخت ${NAVAL_TROOP.name} باید ${BUILDINGS_STATIC[NAVAL_CAMP_BUILDING].name} را بنا کرده باشی`);
-        gold += NAVAL_TROOP.cost * n;
+        if (portLevel <= 0) throw new Error(`برای ساخت ${naval.name} باید ${BUILDINGS_STATIC[NAVAL_CAMP_BUILDING].name} را بنا کرده باشی`);
+        gold += naval.cost * n;
         food += FOOD_COST_SPECIAL * n;
       } else if (specials.includes(tid)) {
         gold += SPECIAL_COST * n;
@@ -389,10 +402,22 @@ const M = {
       }
     }
 
+    const sameCastle = targetCastle === body.origin_castle;
+    if (!sameCastle && mockCastleTerrain(body.origin_castle) === 'sea') {
+      const capacity = Object.entries(body.troops || {})
+        .filter(([tid, n]) => NAVAL_TROOP_IDS.includes(tid) && n > 0)
+        .reduce((s, [tid, n]) => s + NAVAL_TROOPS.find(t => t.id === tid).capacity * n, 0);
+      const landMen = Object.entries(body.troops || {})
+        .filter(([tid, n]) => !NAVAL_TROOP_IDS.includes(tid) && n > 0)
+        .reduce((s, [, n]) => s + n, 0);
+      if (landMen > capacity) {
+        throw new Error(`این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط ${capacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست`);
+      }
+    }
+
     mockPay({ gold, ...weapons });
     mockMe.resources.men -= men;
 
-    const sameCastle = targetCastle === body.origin_castle;
     const travel = travelMinutes(sameCastle, body.origin_castle, targetCastle);
 
     const power = campaignPower(body.troops, mockBuiltLevels());

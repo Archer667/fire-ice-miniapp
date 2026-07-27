@@ -6,7 +6,7 @@ import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, 
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -113,6 +113,7 @@ export default function Admin() {
   const [castleResultsOpen, setCastleResultsOpen] = useState(false);
   const [newCastleName, setNewCastleName] = useState('');
   const [pinKind, setPinKind] = useState('castle');
+  const [pinTerrain, setPinTerrain] = useState('land');
 
   const [marketListings, setMarketListings] = useState(null);
   const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
@@ -203,23 +204,25 @@ export default function Admin() {
   const pickCastle = (name) => {
     haptic();
     setPickName(name); setCastleQuery(name); setCastleResultsOpen(false);
-    setPinKind((mapOptions || []).find(o => o.name === name)?.kind || 'castle');
+    const o = (mapOptions || []).find(o => o.name === name);
+    setPinKind(o?.kind || 'castle');
+    setPinTerrain(o?.terrain || 'land');
   };
   const pickNewCastle = () => {
     haptic();
     setPickName(NEW_CASTLE); setNewCastleName(castleQuery.trim()); setCastleResultsOpen(false);
-    setPinKind('castle');
+    setPinKind('castle'); setPinTerrain('land');
   };
 
   const resetCastlePicker = () => {
     setPendingPin(null); setPickName(''); setCastleQuery(''); setCastleResultsOpen(false);
-    setNewCastleName(''); setPinKind('castle');
+    setNewCastleName(''); setPinKind('castle'); setPinTerrain('land');
   };
 
   const addMapCastle = async () => {
     if (!pendingPin) return;
     if (!pickName) { toast('یک قلعه/شهر را انتخاب کن'); return; }
-    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y, kind: pinKind };
+    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y, kind: pinKind, terrain: pinTerrain };
     if (pickName === NEW_CASTLE) {
       if (!newCastleName.trim()) { toast('نام قلعه/شهر تازه را بنویس'); return; }
       body.new_name = newCastleName.trim();
@@ -1033,6 +1036,15 @@ export default function Admin() {
                         </div>
                       ))}
                     </div>
+                    <label className="f">نوع زمین (تعیین‌کنندهٔ ساخت کشتی/بندر)</label>
+                    <div className="grid2">
+                      {MAP_TERRAINS.map(t => (
+                        <div key={t.key} className={`pick ${pinTerrain === t.key ? 'sel' : ''}`}
+                             onClick={() => { haptic(); setPinTerrain(t.key); }}>
+                          <div className="n">{t.label}</div>
+                        </div>
+                      ))}
+                    </div>
                   </>
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -1055,7 +1067,7 @@ export default function Admin() {
                 <div className="region-castles up u3">
                   {placed.map(c => (
                     <div className="rc" key={c.name}>
-                      <span>{c.name}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind}</small></span>
+                      <span>{c.name}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind} · {MAP_TERRAINS.find(t => t.key === c.terrain)?.label || 'صرفاً خشکی'}</small></span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {c.owner ? <span className="own">{c.owner.name}</span> : <span className="empty">بدون لرد</span>}
                         <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}

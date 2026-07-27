@@ -10,9 +10,9 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 from game import now, normalize_building_state
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS
 from config import ADMIN_IDS
-from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID
+from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain
 from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -324,8 +324,10 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
 
     was_assigned = bool(target.get("region") and target.get("castle"))
     house = CASTLE_HOUSES.get(body.castle)
+    terrain = await all_castle_terrain()
+    is_port = terrain.get(body.castle, "land") in ("coastal", "sea")
     await players.update_one({"tg_id": tg_id}, {"$set": {
-        "region": body.region, "castle": body.castle, "is_port": body.castle in region["ports"],
+        "region": body.region, "castle": body.castle, "is_port": is_port,
         "house": house,
     }})
     house_note = f" نام خانوادگی‌ات «خاندان {house}» شد." if house else ""
@@ -376,8 +378,8 @@ async def map_options(region: str, user: dict = Depends(admin_user)):
         raise HTTPException(400, "اقلیم نامعتبر")
     placed = {m["name"] async for m in map_castles.find({"region": region}, {"name": 1})}
     r = REGIONS[region]
-    options = [{"name": c, "kind": "castle"} for c in r["castles"] if c not in placed]
-    options += [{"name": c, "kind": "port"} for c in r["ports"] if c not in placed]
+    options = [{"name": c, "kind": "castle", "terrain": "land"} for c in r["castles"] if c not in placed]
+    options += [{"name": c, "kind": "port", "terrain": "coastal"} for c in r["ports"] if c not in placed]
     return options
 
 class MapCastleBody(BaseModel):
@@ -387,6 +389,7 @@ class MapCastleBody(BaseModel):
     name: str | None = None       # انتخاب از دیتای موجودِ بازی
     new_name: str | None = None   # قلعه/شهر کاملاً جدید
     kind: str = "castle"          # نوع آیکن روی نقشه: castle | city | ruin | port
+    terrain: str = "land"         # نوع دسترسی زمینی/دریایی: land | coastal | sea
 
 @router.post("/map/castles")
 async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
@@ -396,6 +399,8 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
         raise HTTPException(400, "مختصات نامعتبر")
     if body.kind not in MAP_KINDS:
         raise HTTPException(400, "نوع آیکن نامعتبر")
+    if body.terrain not in MAP_TERRAINS:
+        raise HTTPException(400, "نوع زمین نامعتبر")
 
     r = REGIONS[body.region]
     all_names = {name async for doc in map_castles.find({}, {"name": 1}) for name in [doc["name"]]}
@@ -415,9 +420,10 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
             raise HTTPException(409, "این قلعه از قبل روی نقشه گذاشته شده")
         custom = False
 
-    # نوع آیکن (قلعه/شهر/مخروبه/بندر) را ادمین همیشه دستی مشخص می‌کند — چه برای اسم تازه چه موجود
+    # نوع آیکن (قلعه/شهر/مخروبه/بندر) و نوع زمین (خشکی/خشکی‌دریایی/دریایی) را ادمین
+    # همیشه دستی مشخص می‌کند — چه برای اسم تازه چه موجود
     await map_castles.insert_one({
-        "region": body.region, "name": name, "kind": body.kind,
+        "region": body.region, "name": name, "kind": body.kind, "terrain": body.terrain,
         "x": body.x, "y": body.y, "custom": custom, "created_at": now(),
     })
     return {"ok": True, "name": name}

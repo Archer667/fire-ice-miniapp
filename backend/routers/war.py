@@ -7,7 +7,7 @@ from db import players, campaigns, map_castles, roleplays, game_settings, allian
 from game import now, can_afford, pay, normalize_building_state
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes,
-    NAVAL_TROOP, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES,
+    NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -58,16 +58,32 @@ class CampaignBody(BaseModel):
     name: str = ""
     troops: dict            # {troop_id: count}
 
-async def all_castle_names_and_ports():
-    """اسم همهٔ قلعه/شهرهای بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) و زیرمجموعهٔ بندری‌ها"""
-    names, ports = set(), set()
+async def all_castle_terrain() -> dict:
+    """نگاشتِ اسمِ هر قلعه/شهرِ بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) به نوع
+    زمینش: land | coastal | sea. منبعِ اصلی فیلدِ terrain روی map_castles است — همان‌جا
+    که ادمین موقع گذاشتنِ پین از تب نقشه مشخصش می‌کند. برای قلعه‌هایی که هنوز پین
+    ندارند، پیش‌فرض روی دیتای استاتیکِ REGIONS است (castles→land, ports→coastal —
+    هیچ‌وقت خودکار sea فرض نمی‌شود، چون «راه‌نداشتن به خشکی» باید صریح علامت بخورد)"""
+    terrain = {}
     for r in REGIONS.values():
-        names |= set(r["castles"]) | set(r["ports"])
-        ports |= set(r["ports"])
+        for c in r["castles"]:
+            terrain[c] = "land"
+        for c in r["ports"]:
+            terrain[c] = "coastal"
     async for m in map_castles.find({}):
-        names.add(m["name"])
-        if m.get("kind", "port" if m.get("port") else "castle") == "port":
-            ports.add(m["name"])
+        t = m.get("terrain")
+        if t in MAP_TERRAINS:
+            terrain[m["name"]] = t
+        elif m["name"] not in terrain:
+            # پینِ قدیمی/سفارشیِ بدون فیلدِ terrain — بر اساسِ kindِ آیکنش حدس می‌زنیم
+            terrain[m["name"]] = "coastal" if m.get("kind", "port" if m.get("port") else "castle") == "port" else "land"
+    return terrain
+
+async def all_castle_names_and_ports():
+    """اسم همهٔ قلعه/شهرهای بازی و زیرمجموعهٔ بندری‌ها (خشکی‌دریایی یا کاملاً دریایی)"""
+    terrain = await all_castle_terrain()
+    names = set(terrain.keys())
+    ports = {n for n, t in terrain.items() if t in ("coastal", "sea")}
     return names, ports
 
 PASSAGE_ALLIANCE_TYPES = ["non_aggression", "full_alliance"]  # پیمان تجاری فقط برای کاروان/مناسبات تجاریه، ربطی به عبورِ لشکر نداره
@@ -123,13 +139,13 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
                 weapons[weapon_key] = weapons.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
             gold += COMMON_TROOPS[tid]["cost"] * n
             food += FOOD_COST_REGULAR * n
-        elif tid == NAVAL_TROOP["id"]:
+        elif tid in NAVAL_TROOPS:
             if not is_port:
-                raise HTTPException(400, "فقط قلعه/شهرهای بندری می‌توانند کشتی جنگی بسازند")
+                raise HTTPException(400, "فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند کشتی بسازند")
             port_level = normalize_building_state(buildings.get(NAVAL_CAMP_BUILDING))["level"]
             if port_level <= 0:
-                raise HTTPException(400, f"برای ساخت {NAVAL_TROOP['name']} باید {BUILDINGS[NAVAL_CAMP_BUILDING]['name']} را بنا کرده باشی")
-            gold += NAVAL_TROOP["cost"] * n
+                raise HTTPException(400, f"برای ساخت {NAVAL_TROOPS[tid]['name']} باید {BUILDINGS[NAVAL_CAMP_BUILDING]['name']} را بنا کرده باشی")
+            gold += NAVAL_TROOPS[tid]["cost"] * n
             food += FOOD_COST_SPECIAL * n
         elif tid in specials:
             gold += SPECIAL_TROOP_COST * n
@@ -206,6 +222,13 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
 
     same_castle = target_castle == body.origin_castle
+    if not same_castle:
+        terrain = await all_castle_terrain()
+        if terrain.get(body.origin_castle, "land") == "sea":
+            capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
+            land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
+            if land_men > capacity:
+                raise HTTPException(400, f"این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط {capacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
     blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
     travel = travel_minutes(same_castle, body.origin_castle, target_castle, blocked)
     if travel is None:

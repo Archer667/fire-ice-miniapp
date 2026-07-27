@@ -7,7 +7,7 @@ import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
-  NAVAL_TROOP, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES, WEAPON_NAMES,
+  NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES, WEAPON_NAMES,
 } from '../gamedata.js';
 
 const TABS = [
@@ -74,7 +74,7 @@ export default function War() {
   const allTroops = [
     ...COMMON_TROOPS.map(t => ({ ...t, special: false })),
     ...specials.map(n => ({ id: n, name: n, cost: SPECIAL_COST, special: true })),
-    ...(me.is_port ? [{ ...NAVAL_TROOP, special: false, naval: true }] : []),
+    ...(me.is_port ? NAVAL_TROOPS.map(t => ({ ...t, special: false, naval: true })) : []),
   ];
 
   const stationedOrigins = useMemo(
@@ -101,9 +101,19 @@ export default function War() {
     return false;
   };
 
+  const isSeaOnlyCastle = (name) => {
+    if (!mapData) return false;
+    for (const r of mapData.regions) {
+      const c = r.castles.find(c => c.name === name);
+      if (c) return c.terrain === 'sea';
+    }
+    return false;
+  };
+
   const sameCastle = !op.needsTarget || (target && target.name === origin);
   const eta = travelMinutes(sameCastle, origin, op.needsTarget && target ? target.name : origin);
   const badOriginForNaval = op.portOnly && !isPortCastle(origin);
+  const originIsSeaOnly = !sameCastle && isSeaOnlyCastle(origin);
 
   const unlocked = (troop) => {
     if (troop.naval) return builtLevels[NAVAL_CAMP_BUILDING] > 0;
@@ -140,6 +150,15 @@ export default function War() {
   const overGold = goldCost > gold;
   const overMen = menCommitted > men;
   const badPortTarget = op.portOnly && target && !target.port;
+  const seaCapacity = useMemo(
+    () => NAVAL_TROOP_IDS.reduce((s, tid) => s + (counts[tid] || 0) * NAVAL_TROOPS.find(t => t.id === tid).capacity, 0),
+    [counts]
+  );
+  const seaLandMen = useMemo(
+    () => allTroops.reduce((s, t) => s + (t.naval ? 0 : (counts[t.id] || 0)), 0),
+    [counts]
+  );
+  const overSeaCapacity = originIsSeaOnly && seaLandMen > seaCapacity;
   const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
     : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
@@ -147,6 +166,7 @@ export default function War() {
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
     : badPortTarget ? 'مقصد باید بندر باشد'
     : badOriginForNaval ? 'مبدا باید بندر باشد'
+    : overSeaCapacity ? `مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`
     : menCommitted <= 0 ? 'نیرویی گسیل نکرده‌ای'
     : null;
 
@@ -160,6 +180,7 @@ export default function War() {
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
     if (badOriginForNaval) { toast('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است'); return; }
+    if (overSeaCapacity) { toast(`مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }

@@ -6,6 +6,7 @@ from game import now
 from game_data import REGIONS, CASTLE_HOUSES
 from config import CAMPAIGN_REVEAL_MINUTES
 from ranks import scored_players, get_hierarchy_doc
+from routers.war import all_castle_terrain
 
 router = APIRouter(prefix="/api/map", tags=["map"])
 
@@ -37,21 +38,24 @@ async def get_map(user: dict = Depends(get_user)):
         if m.get("custom"):
             custom_by_region.setdefault(m["region"], []).append({"name": m["name"], "kind": kind_by_name[m["name"]]})
 
+    # terrain: land | coastal | sea — همان چیزی که ادمین از تب نقشه روی هر پین مشخص کرده
+    # (یا پیش‌فرضِ استاتیک برای قلعه‌هایی که هنوز پین نگرفته‌اند)؛ «port» از همین مشتق می‌شود
+    terrain_by_name = await all_castle_terrain()
+
     regions = []
     for rid, r in REGIONS.items():
-        def built_in(c, is_port):
-            # «port» همیشه از دیتای ثابت بازی می‌آید (برای غارت دریایی و امثالش) — نوع آیکنِ
-            # نمایشی را ادمین می‌تواند جدا مشخص کند، بدون اینکه به مکانیزم بازی اثر بگذارد
+        def built_in(c):
+            terrain = terrain_by_name.get(c, "land")
             return {
-                "name": c, "owner": owners_by_castle.get(c), "port": is_port,
-                "kind": kind_by_name.get(c, "port" if is_port else "castle"),
-                "house": CASTLE_HOUSES.get(c),
+                "name": c, "owner": owners_by_castle.get(c), "port": terrain in ("coastal", "sea"),
+                "kind": kind_by_name.get(c, "port" if terrain in ("coastal", "sea") else "castle"),
+                "house": CASTLE_HOUSES.get(c), "terrain": terrain,
             }
         castle_list = (
-            [built_in(c, False) for c in r["castles"]] +
-            [built_in(c, True) for c in r["ports"]] +
+            [built_in(c) for c in r["castles"] + r["ports"]] +
             [{"name": c["name"], "owner": owners_by_castle.get(c["name"]),
-              "port": c["kind"] == "port", "kind": c["kind"], "house": CASTLE_HOUSES.get(c["name"])}
+              "port": terrain_by_name.get(c["name"], "land") in ("coastal", "sea"), "kind": c["kind"],
+              "house": CASTLE_HOUSES.get(c["name"]), "terrain": terrain_by_name.get(c["name"], "land")}
              for c in custom_by_region.get(rid, [])]
         )
         regions.append({

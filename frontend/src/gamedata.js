@@ -39,10 +39,23 @@ export const SPECIAL_COST = 4;
 export const SPECIAL_POWER = 5;       // نیروهای ویژه پادگان ندارند، پس توانشان ثابت است
 export const CAMP_POWER_STEP = 0.05;  // هر سطح پادگانِ یک یگان، توان همان یگان را ۵٪ بالا می‌برد
 
-// کشتی جنگی — فقط قلعه/شهرهای بندری می‌توانند بسازندش؛ «بندر» به‌جای پادگان+کارگاه
-// تسلیحات پیش‌نیازش است و سطح بندر مثل سطح پادگان توان کشتی را بالا می‌برد
-export const NAVAL_TROOP = { id: 'ship', name: 'کشتی جنگی', cost: 5, power: 10 };
+// دو نوع کشتی — فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند بسازندشان؛
+// «بندر» به‌جای پادگان+کارگاه تسلیحات پیش‌نیازشان است و سطح بندر مثل سطح پادگان توانشان
+// را بالا می‌برد. «capacity» یعنی هر کشتی چند سرباز را می‌تواند حمل کند — برای قلعه‌های
+// کاملاً دریایی (بدون راه خشکی) الزامی است (نگاه کن به mapCoords/War.jsx)
+export const NAVAL_TROOPS = [
+  { id: 'ship',       name: 'کشتی جنگی',       cost: 5, power: 10, capacity: 250 },
+  { id: 'cargo_ship', name: 'کشتی سادهٔ چوبی', cost: 3, power: 0,  capacity: 100 },
+];
+export const NAVAL_TROOP_IDS = NAVAL_TROOPS.map(t => t.id);
 export const NAVAL_CAMP_BUILDING = 'port';
+
+// نوع دسترسیِ زمینی/دریاییِ هر قلعه — از پنل ادمین (تب نقشه) روی هر پین مشخص می‌شود
+export const MAP_TERRAINS = [
+  { key: 'land',    label: 'صرفاً خشکی' },
+  { key: 'coastal', label: 'خشکی‌دریایی' },
+  { key: 'sea',     label: 'کاملاً دریایی' },
+];
 export const FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
 export const FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
 
@@ -74,9 +87,10 @@ export function campaignPower(troops, builtLevels) {
       const req = TROOP_UNIT_BUILDINGS[tid];
       const campLevel = (req && builtLevels?.[req.camp]) || 0;
       total += common.power * (1 + campLevel * CAMP_POWER_STEP) * n;
-    } else if (tid === NAVAL_TROOP.id) {
+    } else if (NAVAL_TROOP_IDS.includes(tid)) {
+      const naval = NAVAL_TROOPS.find(t => t.id === tid);
       const portLevel = builtLevels?.[NAVAL_CAMP_BUILDING] || 0;
-      total += NAVAL_TROOP.power * (1 + portLevel * CAMP_POWER_STEP) * n;
+      total += naval.power * (1 + portLevel * CAMP_POWER_STEP) * n;
     } else {
       total += SPECIAL_POWER * n;
     }
