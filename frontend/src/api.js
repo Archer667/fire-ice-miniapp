@@ -340,6 +340,15 @@ const M = {
     mockMapCastles.splice(i, 1);
     return { ok: true };
   },
+  adminEditMapCastle: (name, body) => {
+    const m = mockMapCastles.find(m => m.name === name);
+    if (!m) throw new Error('این نشانه روی نقشه پیدا نشد');
+    const kind = ['castle', 'city', 'ruin', 'port'].includes(body.kind) ? body.kind : 'castle';
+    const terrain = MAP_TERRAINS.some(t => t.key === body.terrain) ? body.terrain : 'land';
+    m.kind = kind; m.terrain = terrain;
+    if (mockMe.registered && mockMe.castle === name) mockMe.is_port = terrain !== 'land';
+    return { ok: true };
+  },
   submitCampaign: (body) => {
     mockResolveCampaigns();
     const op = OP_TYPES.find(o => o.id === body.op_type);
@@ -1196,6 +1205,8 @@ export const api = {
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
   adminDeleteMapCastle: (name) => MOCK ? Promise.resolve(M.adminDeleteMapCastle(name))
     : req(`/api/admin/map/castles/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  adminEditMapCastle: (name, b) => MOCK ? Promise.resolve(M.adminEditMapCastle(name, b))
+    : req(`/api/admin/map/castles/${encodeURIComponent(name)}`, { method: 'PATCH', body: JSON.stringify(b) }),
   sendCaravan: (b) => MOCK ? Promise.resolve(M.sendCaravan(b)) : req('/api/trade/caravan', { method: 'POST', body: JSON.stringify(b) }),
   myCaravans: () => MOCK ? Promise.resolve(M.myCaravans()) : req('/api/trade/caravans/mine'),
   market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),

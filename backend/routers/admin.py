@@ -435,6 +435,25 @@ async def delete_map_castle(name: str, user: dict = Depends(admin_user)):
         raise HTTPException(404, "این نشانه روی نقشه پیدا نشد")
     return {"ok": True}
 
+class EditMapCastleBody(BaseModel):
+    kind: str = "castle"      # نوع آیکن روی نقشه: castle | city | ruin | port
+    terrain: str = "land"     # نوع دسترسی زمینی/دریایی: land | coastal | sea
+
+@router.patch("/map/castles/{name}")
+async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depends(admin_user)):
+    """آیکن یا نوع زمینِ یک نشانهٔ ازقبل‌گذاشته‌شده را عوض می‌کند — بدون نیاز به حذف و
+    دوباره‌گذاشتنش (مختصاتش دست‌نخورده می‌ماند)"""
+    if body.kind not in MAP_KINDS:
+        raise HTTPException(400, "نوع آیکن نامعتبر")
+    if body.terrain not in MAP_TERRAINS:
+        raise HTTPException(400, "نوع زمین نامعتبر")
+    res = await map_castles.update_one({"name": name}, {"$set": {"kind": body.kind, "terrain": body.terrain}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "این نشانه روی نقشه پیدا نشد")
+    # اگر بازیکنی همین الان صاحبِ این قلعه است، is_port ذخیره‌شده‌اش را هم فوراً هماهنگ کن
+    await players.update_one({"castle": name}, {"$set": {"is_port": body.terrain in ("coastal", "sea")}})
+    return {"ok": True}
+
 @router.get("/admins")
 async def list_admins(user: dict = Depends(full_admin_user)):
     """همهٔ ادمین‌ها — کامل (از env) و محدود (از دیتابیس)"""

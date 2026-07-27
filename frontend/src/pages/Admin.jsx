@@ -114,6 +114,9 @@ export default function Admin() {
   const [newCastleName, setNewCastleName] = useState('');
   const [pinKind, setPinKind] = useState('castle');
   const [pinTerrain, setPinTerrain] = useState('land');
+  const [editingCastle, setEditingCastle] = useState(null);
+  const [editKind, setEditKind] = useState('castle');
+  const [editTerrain, setEditTerrain] = useState('land');
 
   const [marketListings, setMarketListings] = useState(null);
   const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
@@ -186,6 +189,7 @@ export default function Admin() {
   useEffect(() => {
     loadMapOptions();
     resetCastlePicker();
+    setEditingCastle(null);
   }, [mapRegion]);
 
   useEffect(() => {
@@ -244,6 +248,21 @@ export default function Admin() {
       haptic('medium');
       toast(`نشانهٔ «${name}» از نقشه حذف شد`);
       loadMapData(); loadMapOptions();
+    } catch (e) { toast(e.message); }
+  };
+
+  const startEditMapCastle = (c) => {
+    haptic();
+    setEditingCastle(c.name); setEditKind(c.kind || 'castle'); setEditTerrain(c.terrain || 'land');
+  };
+  const cancelEditMapCastle = () => setEditingCastle(null);
+  const saveEditMapCastle = async () => {
+    try {
+      await api.adminEditMapCastle(editingCastle, { kind: editKind, terrain: editTerrain });
+      haptic('medium');
+      toast(`نشانهٔ «${editingCastle}» به‌روزرسانی شد`);
+      setEditingCastle(null);
+      loadMapData();
     } catch (e) { toast(e.message); }
   };
 
@@ -1066,13 +1085,43 @@ export default function Admin() {
                 <div className="sect up u3">نشانه‌های ثبت‌شدهٔ این اقلیم</div>
                 <div className="region-castles up u3">
                   {placed.map(c => (
-                    <div className="rc" key={c.name}>
-                      <span>{c.name}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind} · {MAP_TERRAINS.find(t => t.key === c.terrain)?.label || 'صرفاً خشکی'}</small></span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {c.owner ? <span className="own">{c.owner.name}</span> : <span className="empty">بدون لرد</span>}
-                        <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}
-                                onClick={() => deleteMapCastle(c.name)}>حذف</button>
+                    <div key={c.name}>
+                      <div className="rc">
+                        <span>{c.name}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind} · {MAP_TERRAINS.find(t => t.key === c.terrain)?.label || 'صرفاً خشکی'}</small></span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {c.owner ? <span className="own">{c.owner.name}</span> : <span className="empty">بدون لرد</span>}
+                          <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}
+                                  onClick={() => startEditMapCastle(c)}>ادیت</button>
+                          <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}
+                                  onClick={() => deleteMapCastle(c.name)}>حذف</button>
+                        </div>
                       </div>
+                      {editingCastle === c.name && (
+                        <div style={{ padding: '10px 4px 16px' }}>
+                          <label className="f">نوع آیکن روی نقشه</label>
+                          <div className="grid2">
+                            {MAP_KINDS.map(k => (
+                              <div key={k.key} className={`pick ${editKind === k.key ? 'sel' : ''}`}
+                                   onClick={() => { haptic(); setEditKind(k.key); }}>
+                                <div className="n">{k.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <label className="f">نوع زمین (تعیین‌کنندهٔ ساخت کشتی/بندر)</label>
+                          <div className="grid2">
+                            {MAP_TERRAINS.map(t => (
+                              <div key={t.key} className={`pick ${editTerrain === t.key ? 'sel' : ''}`}
+                                   onClick={() => { haptic(); setEditTerrain(t.key); }}>
+                                <div className="n">{t.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                            <button className="btn" style={{ padding: 11 }} onClick={saveEditMapCastle}>ذخیره</button>
+                            <button className="btn ghost" style={{ padding: 11 }} onClick={cancelEditMapCastle}>انصراف</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
