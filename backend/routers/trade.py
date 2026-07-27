@@ -6,6 +6,7 @@ from db import players, caravans, alliances
 from game import now, can_afford, pay
 from game_data import TRADE_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
+from routers.war import blocked_castles_for
 
 router = APIRouter(prefix="/api/trade", tags=["trade"])
 
@@ -46,10 +47,15 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], cost):
         raise HTTPException(400, "این مقدار کالا رو نداری")
 
+    same_castle = p["castle"] == target["castle"]
+    blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
+    travel = travel_minutes(same_castle, p["castle"], target["castle"], blocked)
+    if travel is None:
+        raise HTTPException(400, "مسیر این کاروان از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری")
+
     pay(p["resources"], cost)
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
 
-    travel = travel_minutes(p["castle"] == target["castle"], p["castle"], target["castle"])
     arrival_at = now() + timedelta(minutes=travel)
 
     doc = {
