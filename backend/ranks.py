@@ -35,6 +35,8 @@ async def get_hierarchy_doc() -> dict:
         "warden_north": doc.get("warden_north"),
         "king": doc.get("king"),
         "small_council": doc.get("small_council", {}),   # {seat_id: tg_id} — با دست خودِ پادشاه
+        "treasury_gold": doc.get("treasury_gold", 0),    # خزانهٔ رد کیپ — از خراجِ استاد سکه پر می‌شه
+        "council_salary_rates": doc.get("council_salary_rates", {}),  # {seat_id: gold} — با دست پادشاه
     }
 
 def wardens_of(h: dict) -> set:

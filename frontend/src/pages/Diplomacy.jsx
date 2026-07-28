@@ -42,6 +42,7 @@ export default function Diplomacy() {
   const [demandAmount, setDemandAmount] = useState('');
   const [demandBusy, setDemandBusy] = useState(false);
   const [payBusyId, setPayBusyId] = useState(null);
+  const [salaryDrafts, setSalaryDrafts] = useState({});
 
   const load = () => {
     api.titles().then(setTitles).catch(e => toast(e.message));
@@ -57,6 +58,17 @@ export default function Diplomacy() {
       setDemandTargetId(String(tribute.demand_targets[0].tg_id));
     }
   }, [tribute]);
+
+  useEffect(() => {
+    if (!titles?.council_salary_rates) return;
+    setSalaryDrafts(prev => {
+      const next = { ...prev };
+      for (const seat of Object.keys(SMALL_COUNCIL_SEATS)) {
+        if (next[seat] === undefined) next[seat] = String(titles.council_salary_rates[seat] || 0);
+      }
+      return next;
+    });
+  }, [titles]);
 
   const castVote = async (pollId, option) => {
     try {
@@ -134,6 +146,17 @@ export default function Diplomacy() {
       await api.setSmallCouncil(seat, null);
       haptic();
       toast('این کرسی خالی شد');
+      load();
+    } catch (e) { toast(e.message); }
+  };
+
+  const saveCouncilSalary = async (seat) => {
+    const amount = parseInt(salaryDrafts[seat], 10);
+    if (!Number.isFinite(amount) || amount < 0) { toast('مبلغ را درست وارد کن'); return; }
+    try {
+      await api.setCouncilSalary(seat, amount);
+      haptic('medium');
+      toast('حقوقِ این کرسی ثبت شد');
       load();
     } catch (e) { toast(e.message); }
   };
@@ -269,7 +292,7 @@ export default function Diplomacy() {
       <div className="card up u3">
         <div className="res">
           <div className="ic"><Crown s={18} /></div>
-          <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه</small></div>
+          <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه · حقوقِ ماهانه {titles?.king_salary_gold?.toLocaleString('fa-IR')} سکه</small></div>
           <div className="val">{titles?.king ? titles.king.title + ' ' + titles.king.name : '—'}</div>
         </div>
         {Object.entries(WARDEN_GROUPS).map(([gid, g]) => (
@@ -279,19 +302,36 @@ export default function Diplomacy() {
             <div className="val">{titles?.wardens?.[gid] ? titles.wardens[gid].name : '—'}</div>
           </div>
         ))}
+        <div className="res">
+          <div className="ic"><Coin s={18} /></div>
+          <div className="n">خزانهٔ رد کیپ<small>از خراجِ استاد سکه پر می‌شه، حقوقِ ماهانه ازش پرداخت می‌شه</small></div>
+          <div className="val">{(titles?.treasury_gold ?? 0).toLocaleString('fa-IR')} سکه</div>
+        </div>
       </div>
 
       <div className="sect up u3">شورای کوچک</div>
       <div className="card up u3">
         {Object.entries(SMALL_COUNCIL_SEATS).map(([seat, label]) => {
           const holder = titles?.small_council?.[seat];
+          const rate = titles?.council_salary_rates?.[seat] || 0;
           return (
-            <div className="res" key={seat}>
-              <div className="ic"><Scroll s={16} /></div>
-              <div className="n">{label}<small>{holder ? holder.name : 'کرسی خالی'}</small></div>
-              {titles?.is_king && holder && (
-                <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
-                        onClick={() => clearCouncilSeat(seat)}>خالی کن</button>
+            <div key={seat}>
+              <div className="res">
+                <div className="ic"><Scroll s={16} /></div>
+                <div className="n">{label}<small>{holder ? holder.name : 'کرسی خالی'} · حقوقِ ماهانه {rate.toLocaleString('fa-IR')} سکه</small></div>
+                {titles?.is_king && holder && (
+                  <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
+                          onClick={() => clearCouncilSeat(seat)}>خالی کن</button>
+                )}
+              </div>
+              {titles?.is_king && (
+                <div style={{ display: 'flex', gap: 6, margin: '0 0 10px' }}>
+                  <input type="number" min={0} value={salaryDrafts[seat] ?? ''}
+                         onChange={e => setSalaryDrafts(prev => ({ ...prev, [seat]: e.target.value }))}
+                         placeholder="حقوقِ ماهانه (سکه)" style={{ flex: 1 }} />
+                  <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }}
+                          onClick={() => saveCouncilSalary(seat)}>ثبت</button>
+                </div>
               )}
             </div>
           );

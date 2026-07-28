@@ -65,9 +65,11 @@ function dailyPendingStreak() {
 function dailyDayInCycle(streak) { return ((streak - 1) % DAILY_REWARDS.length) + 1; }
 const mockHierarchy = {
   king_tg_id: 1, small_council: {}, overlords: {}, wardens: { south: null, central: null, north: null },
+  treasury_gold: 0, council_salary_rates: {},
 }; // تک‌بازیکنه: خودت همیشه پادشاهی؛ overlords/wardens رو هیچ‌جای mock واقعاً پر نمی‌کنه
    // (adminSetOverlord/Warden هم no-op هستن)، پس نقشِ خراج‌گیریِ خودت همیشه None می‌مونه —
-   // این یعنی جریانِ «درخواستِ خراج» رو فقط رو سرورِ واقعی می‌شه به‌عنوانِ چند بازیکن تست کرد
+   // این یعنی جریانِ «درخواستِ خراج» و «حقوقِ ماهانه» رو فقط رو سرورِ واقعی می‌شه به‌عنوانِ چند بازیکن تست کرد
+const KING_SALARY_GOLD = 300;
 const mockTributes = []; // {id, from_id, from_name, from_role, to_id, to_name, amount, status, created_at, due_at, paid_at}
 let mockTributeSeq = 1;
 const ROLE_LABEL_FA = { coin: 'استاد سکه', warden: 'والی', overlord: 'بالادست' };
@@ -1064,6 +1066,9 @@ const M = {
       small_council_seats: SMALL_COUNCIL_SEATS,
       small_council: councilHolders,
       is_king: isKing,
+      treasury_gold: mockHierarchy.treasury_gold,
+      council_salary_rates: mockHierarchy.council_salary_rates,
+      king_salary_gold: KING_SALARY_GOLD,
     };
   },
   setSmallCouncil: (seat, tgId) => {
@@ -1072,6 +1077,13 @@ const M = {
     if (tgId === 1) throw new Error('پادشاه/ملکه نمی‌تواند خودش را عضو شورای کوچک کند');
     if (!MOCK_PLAYERS.find(x => x.tg_id === tgId)) throw new Error('لرد پیدا نشد');
     mockHierarchy.small_council[seat] = tgId;
+    return { ok: true };
+  },
+  setCouncilSalary: (seat, amount) => {
+    if (mockHierarchy.king_tg_id !== 1) throw new Error('فقط پادشاه/ملکهٔ فعلی می‌تواند حقوقِ شورای کوچک را تعیین کند');
+    if (!SMALL_COUNCIL_SEATS[seat]) throw new Error('کرسی نامعتبر');
+    if (amount < 0) throw new Error('حقوق نمی‌تواند منفی باشد');
+    mockHierarchy.council_salary_rates[seat] = amount;
     return { ok: true };
   },
   tributeMine: () => {
@@ -1340,6 +1352,8 @@ export const api = {
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
   setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
     : req('/api/titles/small-council', { method: 'POST', body: JSON.stringify({ seat, tg_id: tgId }) }),
+  setCouncilSalary: (seat, amount) => MOCK ? Promise.resolve(M.setCouncilSalary(seat, amount))
+    : req('/api/titles/council-salary', { method: 'POST', body: JSON.stringify({ seat, amount }) }),
   tributeMine: () => MOCK ? Promise.resolve(M.tributeMine()) : req('/api/tribute/mine'),
   demandTribute: (toTgId, amount) => MOCK ? Promise.resolve(M.demandTribute(toTgId, amount))
     : req('/api/tribute/demand', { method: 'POST', body: JSON.stringify({ to_tg_id: toTgId, amount }) }),

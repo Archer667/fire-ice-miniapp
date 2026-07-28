@@ -3,9 +3,9 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, tributes
+from db import players, tributes, hierarchy
 from game import now, can_afford, pay
-from ranks import my_tribute_role
+from ranks import my_tribute_role, HIERARCHY_ID
 from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/tribute", tags=["tribute"])
@@ -106,10 +106,19 @@ async def pay_tribute(tribute_id: str, user: dict = Depends(get_user)):
         raise HTTPException(400, "طلای کافی نداری")
     pay(p["resources"], {"gold": t["amount"]})
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
+
+    # خراجِ استاد سکه (از والی‌ها) می‌ره تو خزانهٔ رد کیپ، نه جیبِ شخصیِ خودش — بقیهٔ
+    # سطوح (والی از بالادست، بالادست از لرد) مستقیم به طلای شخصیِ خواهنده اضافه می‌شه
+    if t["from_role"] == "coin":
+        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$inc": {"treasury_gold": t["amount"]}}, upsert=True)
+    else:
+        await players.update_one({"tg_id": t["from_id"]}, {"$inc": {"resources.gold": t["amount"]}})
+
     await tributes.update_one({"_id": oid}, {"$set": {"status": "paid", "paid_at": now()}})
     await send_system_message(
         t["from_id"], t["from_name"],
-        f"{p['name']} خراجِ {t['amount']:,} سکه‌ای که خواسته بودی را پرداخت کرد.",
+        f"{p['name']} خراجِ {t['amount']:,} سکه‌ای که خواسته بودی را پرداخت کرد."
+        + (" (به خزانهٔ رد کیپ واریز شد)" if t["from_role"] == "coin" else ""),
     )
     return {"ok": True}
 
