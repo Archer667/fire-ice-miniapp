@@ -26,7 +26,7 @@ from routers.war import notify_arrivals
 from routers.trade import notify_caravan_arrivals
 from routers.market import drift_market_prices
 from routers.tribute import expire_unpaid_tributes
-from routers.titles import pay_monthly_salaries
+from routers.titles import pay_daily_salaries
 import telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -86,14 +86,14 @@ app.include_router(tribute_router.router)
 
 async def _arrival_watcher():
     """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد،
-    خراج‌هایی که ۲۴ ساعت مهلت‌شان گذشته و پرداخت نشده را منقضی می‌کند، و حقوقِ ماهانهٔ
-    پادشاه/شورای کوچک را (اگر ۳۰ روز گذشته و خزانهٔ رد کیپ کافی بود) واریز می‌کند"""
+    خراج‌هایی که ۲۴ ساعت مهلت‌شان گذشته و پرداخت نشده را منقضی می‌کند، و حقوقِ روزانهٔ
+    پادشاه/شورای کوچک را (اگر یک روز گذشته و خزانهٔ رد کیپ کافی بود) واریز می‌کند"""
     while True:
         try:
             await notify_arrivals()
             await notify_caravan_arrivals()
             await expire_unpaid_tributes()
-            await pay_monthly_salaries()
+            await pay_daily_salaries()
         except Exception:
             logger.exception("arrival watcher tick failed")
         await asyncio.sleep(30)

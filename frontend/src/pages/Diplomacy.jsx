@@ -292,7 +292,7 @@ export default function Diplomacy() {
       <div className="card up u3">
         <div className="res">
           <div className="ic"><Crown s={18} /></div>
-          <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه · حقوقِ ماهانه {titles?.king_salary_gold?.toLocaleString('fa-IR')} سکه</small></div>
+          <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه · حقوقِ روزانه {titles?.king_salary_gold?.toLocaleString('fa-IR')} سکه</small></div>
           <div className="val">{titles?.king ? titles.king.title + ' ' + titles.king.name : '—'}</div>
         </div>
         {Object.entries(WARDEN_GROUPS).map(([gid, g]) => (
@@ -304,7 +304,7 @@ export default function Diplomacy() {
         ))}
         <div className="res">
           <div className="ic"><Coin s={18} /></div>
-          <div className="n">خزانهٔ رد کیپ<small>از خراجِ استاد سکه پر می‌شه، حقوقِ ماهانه ازش پرداخت می‌شه</small></div>
+          <div className="n">خزانهٔ رد کیپ<small>از خراجِ استاد سکه پر می‌شه، حقوقِ روزانه ازش پرداخت می‌شه</small></div>
           <div className="val">{(titles?.treasury_gold ?? 0).toLocaleString('fa-IR')} سکه</div>
         </div>
       </div>
@@ -318,7 +318,7 @@ export default function Diplomacy() {
             <div key={seat}>
               <div className="res">
                 <div className="ic"><Scroll s={16} /></div>
-                <div className="n">{label}<small>{holder ? holder.name : 'کرسی خالی'} · حقوقِ ماهانه {rate.toLocaleString('fa-IR')} سکه</small></div>
+                <div className="n">{label}<small>{holder ? holder.name : 'کرسی خالی'} · حقوقِ روزانه {rate.toLocaleString('fa-IR')} سکه</small></div>
                 {titles?.is_king && holder && (
                   <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
                           onClick={() => clearCouncilSeat(seat)}>خالی کن</button>
@@ -328,7 +328,7 @@ export default function Diplomacy() {
                 <div style={{ display: 'flex', gap: 6, margin: '0 0 10px' }}>
                   <input type="number" min={0} value={salaryDrafts[seat] ?? ''}
                          onChange={e => setSalaryDrafts(prev => ({ ...prev, [seat]: e.target.value }))}
-                         placeholder="حقوقِ ماهانه (سکه)" style={{ flex: 1 }} />
+                         placeholder="حقوقِ روزانه (سکه)" style={{ flex: 1 }} />
                   <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }}
                           onClick={() => saveCouncilSalary(seat)}>ثبت</button>
                 </div>

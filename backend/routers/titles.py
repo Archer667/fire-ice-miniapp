@@ -162,7 +162,7 @@ class CouncilSalaryBody(BaseModel):
 
 @router.post("/council-salary")
 async def set_council_salary(body: CouncilSalaryBody, user: dict = Depends(get_user)):
-    """حقوقِ ماهانهٔ هر کرسیِ شورای کوچک (از خزانهٔ رد کیپ، طلا) را فقط خودِ پادشاه/ملکه تعیین می‌کند"""
+    """حقوقِ روزانهٔ هر کرسیِ شورای کوچک (از خزانهٔ رد کیپ، طلا) را فقط خودِ پادشاه/ملکه تعیین می‌کند"""
     h = await get_hierarchy_doc()
     if h.get("king") != user["id"]:
         raise HTTPException(403, "فقط پادشاه/ملکهٔ فعلی می‌تواند حقوقِ شورای کوچک را تعیین کند")
@@ -175,11 +175,11 @@ async def set_council_salary(body: CouncilSalaryBody, user: dict = Depends(get_u
     )
     return {"ok": True}
 
-async def pay_monthly_salaries():
-    """حقوقِ ماهانهٔ پادشاه (ثابت) و هر کرسیِ پرشدهٔ شورای کوچک (به تعیینِ خودِ پادشاه) را از
-    خزانهٔ رد کیپ واریز می‌کند — هر ۳۰ روز یک‌بار برای هر گیرنده، فقط اگر خزانه کافی باشد
+async def pay_daily_salaries():
+    """حقوقِ روزانهٔ پادشاه (ثابت) و هر کرسیِ پرشدهٔ شورای کوچک (به تعیینِ خودِ پادشاه) را از
+    خزانهٔ رد کیپ واریز می‌کند — هر روز یک‌بار برای هر گیرنده، فقط اگر خزانه کافی باشد
     (وگرنه تا دفعهٔ بعد که خزانه پر شود صبر می‌کند). وقتی نفرِ یک کرسی/تاجِ عوض بشه، ساعتِ
-    ۳۰روزه‌اش از همون لحظه دوباره شروع می‌شه (به نفرِ قبلی چیزی برای مدتِ نگرفته تعلق نمی‌گیره)"""
+    روزانه‌اش از همون لحظه دوباره شروع می‌شه (به نفرِ قبلی چیزی برای مدتِ نگرفته تعلق نمی‌گیره)"""
     doc = await hierarchy.find_one({"_id": HIERARCHY_ID}) or {}
     treasury = doc.get("treasury_gold", 0)
     n = now()
@@ -211,7 +211,7 @@ async def pay_monthly_salaries():
         updates[state_key] = {"holder": tg_id, "last_paid_at": n}
         await send_system_message(
             tg_id, p["name"],
-            f"حقوقِ ماهانه‌ات به‌عنوان {label} — {amount:,} سکه — از خزانهٔ رد کیپ واریز شد.",
+            f"حقوقِ روزانه‌ات به‌عنوان {label} — {amount:,} سکه — از خزانهٔ رد کیپ واریز شد.",
         )
 
     await try_pay("king_salary_state", doc.get("king"), KING_SALARY_GOLD, "پادشاه/ملکه", king_state)
