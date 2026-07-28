@@ -21,3 +21,4 @@ items      = db.items
 item_grants = db.item_grants
 rumors     = db.rumors
 game_settings = db.game_settings
+tributes   = db.tributes

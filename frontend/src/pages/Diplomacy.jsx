@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Wine, Heart, Crown, Scroll } from '../components/Icons.jsx';
+import { Wine, Heart, Crown, Scroll, Coin } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { REGIONS_STATIC, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
 
@@ -15,6 +15,10 @@ const TABS = [
   { key: 'alliances', label: 'اتحادها' },
   { key: 'polls',     label: 'رای‌گیری' },
 ];
+const TRIBUTE_STATUS_FA = { pending: 'در انتظار پرداخت', paid: 'پرداخت‌شده', expired: 'منقضی (پرداخت نشد)' };
+function hoursLeft(dueAt) {
+  return Math.max(0, Math.round((new Date(dueAt).getTime() - Date.now()) / 3600000));
+}
 
 export default function Diplomacy() {
   const { me, setMe, toast } = useGame();
@@ -33,14 +37,26 @@ export default function Diplomacy() {
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
   const [councilTarget, setCouncilTarget] = useState([]);
   const [councilBusy, setCouncilBusy] = useState(false);
+  const [tribute, setTribute] = useState(null);
+  const [demandTargetId, setDemandTargetId] = useState('');
+  const [demandAmount, setDemandAmount] = useState('');
+  const [demandBusy, setDemandBusy] = useState(false);
+  const [payBusyId, setPayBusyId] = useState(null);
 
   const load = () => {
     api.titles().then(setTitles).catch(e => toast(e.message));
     api.diplomacyMine().then(setAlliances).catch(e => toast(e.message));
     api.diplomacyPublic().then(setPublicAlliances).catch(e => toast(e.message));
     api.polls().then(setPolls).catch(e => toast(e.message));
+    api.tributeMine().then(setTribute).catch(e => toast(e.message));
   };
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (tribute?.demand_targets?.length && !demandTargetId) {
+      setDemandTargetId(String(tribute.demand_targets[0].tg_id));
+    }
+  }, [tribute]);
 
   const castVote = async (pollId, option) => {
     try {
@@ -120,6 +136,34 @@ export default function Diplomacy() {
       toast('این کرسی خالی شد');
       load();
     } catch (e) { toast(e.message); }
+  };
+
+  const demandTribute = async () => {
+    const amount = parseInt(demandAmount, 10);
+    if (!demandTargetId) { toast('یک نفر را انتخاب کن'); return; }
+    if (!Number.isFinite(amount) || amount <= 0) { toast('مبلغ را درست وارد کن'); return; }
+    setDemandBusy(true);
+    try {
+      await api.demandTribute(parseInt(demandTargetId, 10), amount);
+      haptic('medium');
+      toast('خراج با کلاغ درخواست شد — ۲۴ ساعت مهلت دارد');
+      setDemandAmount('');
+      load();
+    } catch (e) { toast(e.message); }
+    setDemandBusy(false);
+  };
+
+  const payTribute = async (id) => {
+    setPayBusyId(id);
+    try {
+      const owed = tribute.owed.find(t => t.id === id);
+      await api.payTribute(id);
+      haptic('medium');
+      toast('خراج پرداخت شد');
+      setMe({ ...me, resources: { ...me.resources, gold: me.resources.gold - owed.amount } });
+      load();
+    } catch (e) { toast(e.message); }
+    setPayBusyId(null);
   };
 
   return (
@@ -277,6 +321,67 @@ export default function Diplomacy() {
           <div className="val">{titles?.overlords?.[me.region] ? titles.overlords[me.region].name : '—'}</div>
         </div>
       </div>
+
+      {tribute?.owed?.length > 0 && (
+        <>
+          <div className="sect up u3">خراج‌هایی که باید بپردازم</div>
+          <div className="card up u3">
+            {tribute.owed.map(t => (
+              <div className="troop" key={t.id}>
+                <div className="tn">
+                  {t.from_role_label} {t.from_name}
+                  <small>{t.amount.toLocaleString('fa-IR')} سکه · {hoursLeft(t.due_at)} ساعت تا مهلت</small>
+                </div>
+                <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }}
+                        disabled={payBusyId === t.id} onClick={() => payTribute(t.id)}>
+                  {payBusyId === t.id ? 'در حال پرداخت...' : 'پرداخت'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tribute?.my_role && (
+        <>
+          <div className="sect up u3">خراج‌گیری ({tribute.my_role_label})</div>
+          <div className="card up u3">
+            {tribute.demand_targets.length === 0 ? (
+              <div className="page-sub" style={{ margin: '0 4px' }}>هنوز زیردستِ مستقیمی نداری تا ازش خراج بخوای</div>
+            ) : (
+              <>
+                <label className="f" style={{ marginTop: 0 }}>از چه کسی</label>
+                <select value={demandTargetId} onChange={e => setDemandTargetId(e.target.value)}>
+                  {tribute.demand_targets.map(p => <option key={p.tg_id} value={p.tg_id}>{p.name}</option>)}
+                </select>
+                <label className="f">مبلغ (طلا)</label>
+                <input type="number" min={1} value={demandAmount}
+                       onChange={e => setDemandAmount(e.target.value)} placeholder="مثلاً ۵۰۰" />
+                <div className="page-sub" style={{ margin: '4px 4px 0' }}>
+                  ۲۴ ساعت مهلت داره. اگه نده هیچ پیامدِ خودکاری نیست — فقط یه کلاغ برات میاد که بگه پرداخت نشد.
+                </div>
+                <button className="btn" style={{ marginTop: 14 }} disabled={demandBusy} onClick={demandTribute}>
+                  {demandBusy ? 'در حال ارسال...' : 'درخواستِ خراج با کلاغ'}
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {tribute?.demanded?.length > 0 && (
+        <>
+          <div className="sect up u3">خراج‌هایی که خواسته‌ام</div>
+          <div className="card up u3">
+            {tribute.demanded.map(t => (
+              <div className="res" key={t.id}>
+                <div className="ic"><Coin s={16} /></div>
+                <div className="n">{t.to_name}<small>{t.amount.toLocaleString('fa-IR')} سکه · {TRIBUTE_STATUS_FA[t.status]}</small></div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       </>
       )}
 

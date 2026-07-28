@@ -40,6 +40,24 @@ async def get_hierarchy_doc() -> dict:
 def wardens_of(h: dict) -> set:
     return {h.get("warden_south"), h.get("warden_central"), h.get("warden_north")} - {None}
 
+async def my_tribute_role(tg_id: int):
+    """اگه این بازیکن الان مقامی داره که بتونه از زیردست‌های مستقیمش خراج بخواد،
+    (نقش، مجموعهٔ tg_idِ زیردست‌های مستقیمش) را برمی‌گرداند؛ وگرنه (None, set()).
+    اولویت با بالاترین مقامیه که داره (استاد سکه > والی > بالادست) — دقیقاً مثل
+    title_bonus_and_rank که فقط بالاترین مقام را حساب می‌کند"""
+    h = await get_hierarchy_doc()
+    if h.get("small_council", {}).get("coin") == tg_id:
+        return "coin", wardens_of(h)
+    for gid, g in WARDEN_GROUPS.items():
+        if h.get(f"warden_{gid}") == tg_id:
+            targets = {h["overlords"][r] for r in g["regions"] if h.get("overlords", {}).get(r)}
+            return "warden", targets
+    for rid, holder in h.get("overlords", {}).items():
+        if holder == tg_id:
+            targets = {p["tg_id"] async for p in players.find({"region": rid, "tg_id": {"$ne": tg_id}}, {"tg_id": 1})}
+            return "overlord", targets
+    return None, set()
+
 def title_bonus_and_rank(tg_id: int, h: dict):
     """بونوس امتیاز و برچسب مقامی که این بازیکن الان داره (بالاترین مقامش)"""
     if h.get("king") == tg_id:

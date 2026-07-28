@@ -63,7 +63,14 @@ function dailyPendingStreak() {
   return { streak: 1, claimedToday: false };
 }
 function dailyDayInCycle(streak) { return ((streak - 1) % DAILY_REWARDS.length) + 1; }
-const mockHierarchy = { king_tg_id: 1, small_council: {} }; // seat -> tg_id — تک‌بازیکنه: خودت همیشه پادشاهی
+const mockHierarchy = {
+  king_tg_id: 1, small_council: {}, overlords: {}, wardens: { south: null, central: null, north: null },
+}; // تک‌بازیکنه: خودت همیشه پادشاهی؛ overlords/wardens رو هیچ‌جای mock واقعاً پر نمی‌کنه
+   // (adminSetOverlord/Warden هم no-op هستن)، پس نقشِ خراج‌گیریِ خودت همیشه None می‌مونه —
+   // این یعنی جریانِ «درخواستِ خراج» رو فقط رو سرورِ واقعی می‌شه به‌عنوانِ چند بازیکن تست کرد
+const mockTributes = []; // {id, from_id, from_name, from_role, to_id, to_name, amount, status, created_at, due_at, paid_at}
+let mockTributeSeq = 1;
+const ROLE_LABEL_FA = { coin: 'استاد سکه', warden: 'والی', overlord: 'بالادست' };
 const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
 const mockAlliances = [
   // یک اتحاد تجاری از قبل پذیرفته‌شده — برای تست کاروان بدون نیاز به شبیه‌سازی طرف مقابل
@@ -125,6 +132,27 @@ function mockCastleTerrain(name) {
 }
 function mockIsPortCastle(name) {
   return mockCastleTerrain(name) !== 'land';
+}
+// نقشِ خراج‌گیریِ فعلیِ این tg_id (اگه داشته باشه) + مجموعهٔ زیردست‌های مستقیمش —
+// آینهٔ my_tribute_role در backend/ranks.py
+function mockMyTributeRole(tgId) {
+  if (mockHierarchy.small_council.coin === tgId) {
+    return { role: 'coin', targets: new Set(Object.values(mockHierarchy.wardens).filter(v => v != null)) };
+  }
+  for (const [gid, g] of Object.entries(WARDEN_GROUPS)) {
+    if (mockHierarchy.wardens[gid] === tgId) {
+      const targets = new Set(g.regions.map(r => mockHierarchy.overlords[r]).filter(v => v != null));
+      return { role: 'warden', targets };
+    }
+  }
+  for (const [rid, holder] of Object.entries(mockHierarchy.overlords)) {
+    if (holder === tgId) {
+      const targets = new Set(MOCK_PLAYERS.filter(p => mockResolveRegion(p.castle) === rid).map(p => p.tg_id));
+      if (mockMe.registered && mockResolveRegion(mockMe.castle) === rid && tgId !== 1) targets.add(1);
+      return { role: 'overlord', targets };
+    }
+  }
+  return { role: null, targets: new Set() };
 }
 const mockPolls = [
   { id: 'p1', question: 'بالادستی ریچ چه کسی باشد؟', options: ['مارگری تایرل', 'راندیل تارلی'],
@@ -1046,6 +1074,57 @@ const M = {
     mockHierarchy.small_council[seat] = tgId;
     return { ok: true };
   },
+  tributeMine: () => {
+    const { role, targets } = mockMyTributeRole(1);
+    const demandTargets = [...targets].map(tgId => {
+      if (tgId === 1) return { tg_id: 1, name: mockMe.name, title: mockMe.title };
+      const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+      return p ? { tg_id: p.tg_id, name: p.name, title: p.title } : null;
+    }).filter(Boolean);
+    const demanded = mockTributes.filter(t => t.from_id === 1).map(t => ({
+      id: t.id, to_name: t.to_name, amount: t.amount, status: t.status,
+      created_at: t.created_at, due_at: t.due_at,
+    }));
+    const owed = mockTributes.filter(t => t.to_id === 1 && t.status === 'pending').map(t => ({
+      id: t.id, from_name: t.from_name, from_role: t.from_role, from_role_label: ROLE_LABEL_FA[t.from_role],
+      amount: t.amount, created_at: t.created_at, due_at: t.due_at,
+    }));
+    return {
+      my_role: role, my_role_label: role ? ROLE_LABEL_FA[role] : null,
+      demand_targets: demandTargets, demanded, owed,
+    };
+  },
+  demandTribute: (toTgId, amount) => {
+    if (!(amount > 0)) throw new Error('مبلغ باید مثبت باشد');
+    const { role, targets } = mockMyTributeRole(1);
+    if (!role) throw new Error('مقامی نداری که بتونی خراج بخوای');
+    if (!targets.has(toTgId)) throw new Error('این بازیکن زیردستِ مستقیمِ تو نیست');
+    if (mockTributes.some(t => t.from_id === 1 && t.to_id === toTgId && t.status === 'pending')) {
+      throw new Error('همین الان یک خراجِ پرداخت‌نشده از این نفر خواسته‌ای — صبر کن جواب بده');
+    }
+    const target = toTgId === 1 ? { name: mockMe.name } : MOCK_PLAYERS.find(x => x.tg_id === toTgId);
+    if (!target) throw new Error('این بازیکن پیدا نشد');
+    const createdAt = new Date();
+    const dueAt = new Date(createdAt.getTime() + 24 * 3600000);
+    const doc = {
+      id: String(mockTributeSeq++), from_id: 1, from_name: mockMe.name, from_role: role,
+      to_id: toTgId, to_name: target.name, amount, status: 'pending',
+      created_at: createdAt.toISOString(), due_at: dueAt.toISOString(), paid_at: null,
+    };
+    mockTributes.push(doc);
+    return { ok: true, id: doc.id };
+  },
+  payTribute: (id) => {
+    const t = mockTributes.find(x => x.id === id);
+    if (!t) throw new Error('این خراج پیدا نشد');
+    if (t.to_id !== 1) throw new Error('این خراجِ تو نیست');
+    if (t.status !== 'pending') throw new Error('این خراج دیگر در انتظار پرداخت نیست');
+    if (!mockCanAfford({ gold: t.amount })) throw new Error('طلای کافی نداری');
+    mockPay({ gold: t.amount });
+    t.status = 'paid'; t.paid_at = new Date().toISOString();
+    mockSendSystemMessage(`${mockMe.name} خراجِ ${t.amount.toLocaleString('fa-IR')} سکه‌ای که خواسته بودی را پرداخت کرد.`);
+    return { ok: true };
+  },
   diplomacyMine: () => mockAlliances,
   diplomacyPublic: () => mockAlliances
     .filter(a => a.status === 'accepted' && a.public !== false)
@@ -1261,6 +1340,11 @@ export const api = {
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
   setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
     : req('/api/titles/small-council', { method: 'POST', body: JSON.stringify({ seat, tg_id: tgId }) }),
+  tributeMine: () => MOCK ? Promise.resolve(M.tributeMine()) : req('/api/tribute/mine'),
+  demandTribute: (toTgId, amount) => MOCK ? Promise.resolve(M.demandTribute(toTgId, amount))
+    : req('/api/tribute/demand', { method: 'POST', body: JSON.stringify({ to_tg_id: toTgId, amount }) }),
+  payTribute: (id) => MOCK ? Promise.resolve(M.payTribute(id))
+    : req(`/api/tribute/${id}/pay`, { method: 'POST' }),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
   diplomacyPublic: () => MOCK ? Promise.resolve(M.diplomacyPublic()) : req('/api/diplomacy/public'),
   diplomacyPropose: (toTgIds, type, name, isPrivate, penaltyGold) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate, penaltyGold))

@@ -20,10 +20,12 @@ from routers import (
     buildings as buildings_router, titles as titles_router, diplomacy as diplomacy_router,
     polls as polls_router, trade as trade_router, market as market_router, roleplay as roleplay_router,
     assets as assets_router, rumors as rumors_router, daily as daily_router, bot as bot_router,
+    tribute as tribute_router,
 )
 from routers.war import notify_arrivals
 from routers.trade import notify_caravan_arrivals
 from routers.market import drift_market_prices
+from routers.tribute import expire_unpaid_tributes
 import telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -79,13 +81,16 @@ app.include_router(assets_router.router)
 app.include_router(rumors_router.router)
 app.include_router(daily_router.router)
 app.include_router(bot_router.router)
+app.include_router(tribute_router.router)
 
 async def _arrival_watcher():
-    """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد"""
+    """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد،
+    و خراج‌هایی که ۲۴ ساعت مهلت‌شان گذشته و پرداخت نشده را هم منقضی می‌کند"""
     while True:
         try:
             await notify_arrivals()
             await notify_caravan_arrivals()
+            await expire_unpaid_tributes()
         except Exception:
             logger.exception("arrival watcher tick failed")
         await asyncio.sleep(30)
