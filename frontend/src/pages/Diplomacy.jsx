@@ -43,6 +43,7 @@ export default function Diplomacy() {
   const [demandBusy, setDemandBusy] = useState(false);
   const [payBusyId, setPayBusyId] = useState(null);
   const [salaryDrafts, setSalaryDrafts] = useState({});
+  const [kingSalaryDraft, setKingSalaryDraft] = useState('');
 
   const load = () => {
     api.titles().then(setTitles).catch(e => toast(e.message));
@@ -68,6 +69,10 @@ export default function Diplomacy() {
       }
       return next;
     });
+  }, [titles]);
+
+  useEffect(() => {
+    if (titles && kingSalaryDraft === '') setKingSalaryDraft(String(titles.king_salary_gold || 0));
   }, [titles]);
 
   const castVote = async (pollId, option) => {
@@ -157,6 +162,17 @@ export default function Diplomacy() {
       await api.setCouncilSalary(seat, amount);
       haptic('medium');
       toast('حقوقِ این کرسی ثبت شد');
+      load();
+    } catch (e) { toast(e.message); }
+  };
+
+  const saveKingSalary = async () => {
+    const amount = parseInt(kingSalaryDraft, 10);
+    if (!Number.isFinite(amount) || amount < 0) { toast('مبلغ را درست وارد کن'); return; }
+    try {
+      await api.setKingSalary(amount);
+      haptic('medium');
+      toast('حقوقِ روزانه‌ات ثبت شد');
       load();
     } catch (e) { toast(e.message); }
   };
@@ -295,6 +311,15 @@ export default function Diplomacy() {
           <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه · حقوقِ روزانه {titles?.king_salary_gold?.toLocaleString('fa-IR')} سکه</small></div>
           <div className="val">{titles?.king ? titles.king.title + ' ' + titles.king.name : '—'}</div>
         </div>
+        {titles?.is_king && (
+          <div style={{ display: 'flex', gap: 6, margin: '0 0 10px' }}>
+            <input type="number" min={0} value={kingSalaryDraft}
+                   onChange={e => setKingSalaryDraft(e.target.value)}
+                   placeholder="حقوقِ روزانهٔ خودت (سکه)" style={{ flex: 1 }} />
+            <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }}
+                    onClick={saveKingSalary}>ثبت</button>
+          </div>
+        )}
         {Object.entries(WARDEN_GROUPS).map(([gid, g]) => (
           <div className="res" key={gid}>
             <div className="ic"><Scroll s={18} /></div>

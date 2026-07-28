@@ -6,7 +6,7 @@ from db import players, hierarchy
 from game import now
 from game_data import REGIONS, WARDEN_GROUPS, SMALL_COUNCIL_SEATS
 from ranks import get_hierarchy_doc, group_of_region, wardens_of, HIERARCHY_ID
-from config import SALARY_CYCLE_DAYS, KING_SALARY_GOLD
+from config import SALARY_CYCLE_DAYS
 from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/titles", tags=["titles"])
@@ -52,7 +52,7 @@ async def get_titles(user: dict = Depends(get_user)):
         "is_king": h.get("king") == user["id"],
         "treasury_gold": h["treasury_gold"],
         "council_salary_rates": h["council_salary_rates"],
-        "king_salary_gold": KING_SALARY_GOLD,
+        "king_salary_gold": h["king_salary_rate"],
     }
 
 async def admin_user(user: dict = Depends(get_user)):
@@ -175,8 +175,22 @@ async def set_council_salary(body: CouncilSalaryBody, user: dict = Depends(get_u
     )
     return {"ok": True}
 
+class KingSalaryBody(BaseModel):
+    amount: int   # صفر یعنی بدون حقوق
+
+@router.post("/king-salary")
+async def set_king_salary(body: KingSalaryBody, user: dict = Depends(get_user)):
+    """حقوقِ روزانهٔ خودِ پادشاه/ملکه (از خزانهٔ رد کیپ، طلا) — چون کسی بالاتر نیست، خودش تعیینش می‌کند"""
+    h = await get_hierarchy_doc()
+    if h.get("king") != user["id"]:
+        raise HTTPException(403, "فقط پادشاه/ملکهٔ فعلی می‌تواند حقوقِ خودش را تعیین کند")
+    if body.amount < 0:
+        raise HTTPException(400, "حقوق نمی‌تواند منفی باشد")
+    await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": {"king_salary_rate": body.amount}}, upsert=True)
+    return {"ok": True}
+
 async def pay_daily_salaries():
-    """حقوقِ روزانهٔ پادشاه (ثابت) و هر کرسیِ پرشدهٔ شورای کوچک (به تعیینِ خودِ پادشاه) را از
+    """حقوقِ روزانهٔ پادشاه (به تعیینِ خودش) و هر کرسیِ پرشدهٔ شورای کوچک (به تعیینِ پادشاه) را از
     خزانهٔ رد کیپ واریز می‌کند — هر روز یک‌بار برای هر گیرنده، فقط اگر خزانه کافی باشد
     (وگرنه تا دفعهٔ بعد که خزانه پر شود صبر می‌کند). وقتی نفرِ یک کرسی/تاجِ عوض بشه، ساعتِ
     روزانه‌اش از همون لحظه دوباره شروع می‌شه (به نفرِ قبلی چیزی برای مدتِ نگرفته تعلق نمی‌گیره)"""
@@ -214,7 +228,7 @@ async def pay_daily_salaries():
             f"حقوقِ روزانه‌ات به‌عنوان {label} — {amount:,} سکه — از خزانهٔ رد کیپ واریز شد.",
         )
 
-    await try_pay("king_salary_state", doc.get("king"), KING_SALARY_GOLD, "پادشاه/ملکه", king_state)
+    await try_pay("king_salary_state", doc.get("king"), doc.get("king_salary_rate", 0), "پادشاه/ملکه", king_state)
     for seat, tg_id in council.items():
         await try_pay(
             f"council_salary_state.{seat}", tg_id, rates.get(seat, 0),
