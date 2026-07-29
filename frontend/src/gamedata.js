@@ -427,6 +427,16 @@ export function maxTaxRate(popularity) {
   return Math.max(0, TAX_RATE_BASE_MAX + Math.floor((popularity - POPULARITY_START) / 5));
 }
 
+// تولید/سقفِ پایه (بدون ساختمان) — آینه‌ی DAILY_PRODUCTION/RESOURCE_CAPS در backend/config.py
+export const DAILY_PRODUCTION = { gold: 200, food: 300, men: 50, iron: 40, stone: 40, wood: 50, wine: 0 };
+export const RESOURCE_CAPS = {
+  gold: 2000, food: 2000, men: 1000, iron: 500, stone: 500, wood: 800, wine: 300,
+  weapon_sword: 300, weapon_spear: 300, weapon_archer: 300, weapon_lcav: 200, weapon_hcav: 200,
+};
+export function taxYieldMultiplier(popularity) {
+  return 0.5 + popularity / (2 * POPULARITY_MAX);
+}
+
 // کالاهایی که می‌شود کاروان فرستاد یا از بازار وستروس خرید — طلا خودش پول است، نه کالا
 export const TRADE_GOODS = ['wood', 'stone', 'iron', 'food', 'wine'];
 export const TRADE_GOOD_NAMES = { wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };

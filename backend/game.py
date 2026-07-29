@@ -64,19 +64,23 @@ def daily_production(player: dict) -> dict:
     return prod
 
 def apply_production(player: dict) -> dict:
-    """تولید lazy: از آخرین آپدیت تا الان، روزانه حساب می‌شود"""
+    """تولید lazy: نرخ‌ها روزانه‌اند (بر اساس لولِ ساختمان)، ولی به‌نسبتِ زمانِ واقعاً
+    گذشته (نه فقط روزهای کامل) اعمال می‌شوند — وگرنه بازیکن باید یک روزِ کامل صبر
+    می‌کرد تا اولین‌بار عددی ببیند. برای این‌که تولیدِ کم‌مقدار (مثلاً چند واحد در روز)
+    در چک‌های پیاپی صفر رند نشه و گم نشه، مقدارِ اعشاریِ دقیق نگه داشته می‌شود؛ فقط
+    موقعِ نمایش (پاسخِ /me) برای بازیکن رند می‌شود"""
     last = player.get("last_tick", player["created_at"])
     if isinstance(last, str):
         last = datetime.fromisoformat(last)
-    days = int((now() - last).total_seconds() // 86400)
-    if days <= 0:
+    elapsed_days = (now() - last).total_seconds() / 86400
+    if elapsed_days <= 0:
         return player
     res = player["resources"]
     caps = effective_caps(player)
     prod = daily_production(player)
     for k, per_day in prod.items():
-        res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + per_day * days)
-    player["last_tick"] = last.replace(microsecond=0) + timedelta(days=days)
+        res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + per_day * elapsed_days)
+    player["last_tick"] = now()
     return player
 
 def can_afford(resources: dict, cost: dict) -> bool:

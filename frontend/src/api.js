@@ -32,6 +32,7 @@ import {
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
   WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES, MAP_TERRAINS,
+  DAILY_PRODUCTION, RESOURCE_CAPS, taxYieldMultiplier,
 } from './gamedata.js';
 
 const mockMe = { registered: false };
@@ -176,6 +177,36 @@ function mockResolve() {
   }
 }
 
+// تولیدِ روزانه (طلا/غذا/... بر اساس لولِ ساختمان‌ها) به‌نسبتِ زمانِ واقعاً گذشته از آخرین
+// چک اعمال می‌شه — آینه‌ی apply_production در backend/game.py. مقدارِ اعشاریِ دقیق تو
+// mockMe.resources می‌مونه (که تولیدِ کم‌مقدار بینِ چک‌های پیاپی گم نشه)، فقط موقعِ
+// برگردوندن به فرانت (تابعِ me()) رند می‌شه
+function mockApplyProduction() {
+  if (!mockMe.resources) return;
+  const last = new Date(mockMe.last_tick || Date.now()).getTime();
+  const elapsedDays = (Date.now() - last) / 86400000;
+  if (elapsedDays <= 0) return;
+
+  const prod = { ...DAILY_PRODUCTION };
+  const caps = { ...RESOURCE_CAPS };
+  for (const [id, st] of Object.entries(mockBuildings)) {
+    if (!st.level) continue;
+    const { produces, cap_bonus } = buildingYield(id, st.level);
+    for (const [k, v] of Object.entries(produces)) prod[k] = (prod[k] || 0) + v;
+    for (const [k, v] of Object.entries(cap_bonus)) caps[k] = (caps[k] || 0) + v;
+  }
+  const men = mockMe.resources.men || 0;
+  const taxRate = Math.min(mockMe.tax_rate ?? TAX_RATE_DEFAULT, maxTaxRate(mockMe.popularity ?? POPULARITY_START));
+  const multiplier = taxYieldMultiplier(mockMe.popularity ?? POPULARITY_START);
+  prod.gold = (prod.gold || 0) + Math.round(men * (taxRate / 100) * multiplier);
+
+  for (const [k, perDay] of Object.entries(prod)) {
+    const cap = caps[k] ?? 1e9;
+    mockMe.resources[k] = Math.min(cap, (mockMe.resources[k] || 0) + perDay * elapsedDays);
+  }
+  mockMe.last_tick = new Date().toISOString();
+}
+
 function mockResolveCampaigns() {
   if (!mockMe.resources) return;
   const nowMs = Date.now();
@@ -218,7 +249,9 @@ const M = {
   me: () => {
     if (mockMe.registered && !mockMe.pending) {
       mockResolveCampaigns();
+      mockApplyProduction();
       mockMe.active_campaigns = mockCampaigns.filter(c => c.active).length;
+      return { ...mockMe, resources: Object.fromEntries(Object.entries(mockMe.resources).map(([k, v]) => [k, Math.round(v)])) };
     }
     return mockMe;
   },
@@ -229,6 +262,7 @@ const M = {
       admin_role: 'full', // حالت mock تک‌بازیکنه — خودت همیشه ادمینی تا بتونی خاندان خودت رو تخصیص بدی
       is_owner: true,
       requested_castles: (b.requested_castles || []).slice(0, 5),
+      last_tick: new Date().toISOString(),
     });
     return { ok: true };
   },

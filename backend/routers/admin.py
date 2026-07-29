@@ -330,7 +330,7 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
         "region": body.region, "castle": body.castle, "is_port": is_port,
         "house": house,
     }})
-    house_note = f" نام خانوادگی‌ات «خاندان {house}» شد." if house else ""
+    house_note = f" نامِ خاندانت «خاندان {house}» شد." if house else ""
     msg = (
         f"خاندانت جابه‌جا شد — حالا به {region['name']} تعلق داری و قلعه‌ات {body.castle} است.{house_note}"
         if was_assigned else
@@ -660,7 +660,7 @@ async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin
     p = await players.find_one({"tg_id": tg_id})
     if not p:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    res = {k: p.get("resources", {}).get(k, 0) for k in PLAYER_RESOURCE_KEYS}
+    res = {k: round(p.get("resources", {}).get(k, 0)) for k in PLAYER_RESOURCE_KEYS}
     return {"name": p["name"], "castle": p["castle"], "resources": res}
 
 class SetPlayerResourcesBody(BaseModel):

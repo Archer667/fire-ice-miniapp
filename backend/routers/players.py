@@ -77,6 +77,9 @@ async def me(user: dict = Depends(get_user)):
     await players.update_one({"tg_id": user["id"]},
         {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
     day = min(SEASON_LENGTH_DAYS, ( (now() - p["created_at"]).days % SEASON_LENGTH_DAYS ) + 1)
+    # موجودیِ واقعی تو دیتابیس اعشاریه (تا تولیدِ کم‌مقدار بینِ چک‌ها گم نشه) — برای
+    # نمایش به بازیکن رند می‌شود
+    display_resources = {k: (round(v) if isinstance(v, (int, float)) else v) for k, v in p["resources"].items()}
 
     rows = await scored_players()
     total = len(rows)
@@ -107,7 +110,7 @@ async def me(user: dict = Depends(get_user)):
         "castle": p["castle"],
         "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
         "is_port": p["is_port"],
-        "resources": p["resources"],
+        "resources": display_resources,
         "active_campaigns": active_campaigns,
         "points": score,
         "alliance_count": p.get("alliance_count", 0),
