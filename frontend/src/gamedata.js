@@ -536,11 +536,27 @@ export function buildingHours(id, level) {
   return Math.round(base * mult * 10) / 10;
 }
 
+// بازدهی/سقفِ سراسری‌ای که ادمین از تب «تعادل بازی» بازنویسی کرده — آینه‌ی
+// BUILDING_OVERRIDES در backend/game_data.py، فقط برای حالت MOCK (چون اینجا
+// دیتابیسی نیست که این بازنویسی‌ها رو نگه داره، در همین حافظهٔ مرورگر می‌مونن)
+export const BUILDING_OVERRIDES = {};
+
+export function buildingProduces(id) {
+  const override = BUILDING_OVERRIDES[id];
+  if (override && override.produces) return override.produces;
+  return BUILDINGS_STATIC[id].produces || {};
+}
+
+export function buildingCapBonus(id) {
+  const override = BUILDING_OVERRIDES[id];
+  if (override && override.cap_bonus) return override.cap_bonus;
+  return BUILDINGS_STATIC[id].cap_bonus || {};
+}
+
 // بازدهیِ فعلیِ یک ساختمان — تولید روزانه و افزایش سقفِ ذخیره‌سازی، به‌نسبت سطح فعلی‌اش
 export function buildingYield(id, level) {
-  const meta = BUILDINGS_STATIC[id];
-  const produces = Object.fromEntries(Object.entries(meta.produces || {}).map(([k, v]) => [k, v * level]));
-  const capBonus = Object.fromEntries(Object.entries(meta.cap_bonus || {}).map(([k, v]) => [k, v * level]));
+  const produces = Object.fromEntries(Object.entries(buildingProduces(id)).map(([k, v]) => [k, v * level]));
+  const capBonus = Object.fromEntries(Object.entries(buildingCapBonus(id)).map(([k, v]) => [k, v * level]));
   return { produces, cap_bonus: capBonus };
 }
 

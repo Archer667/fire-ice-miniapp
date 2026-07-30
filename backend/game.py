@@ -4,7 +4,7 @@ from config import (
     DAILY_PRODUCTION, RESOURCE_CAPS, TAX_RATE_DEFAULT,
     POPULARITY_START, max_tax_rate, tax_yield_multiplier,
 )
-from game_data import BUILDINGS
+from game_data import BUILDINGS, building_produces, building_cap_bonus
 
 def now():
     # naive UTC — با چیزی که MongoDB برای فیلدهای datetime برمی‌گرداند یکی است.
@@ -46,15 +46,16 @@ def _building_levels(player: dict):
 def effective_caps(player: dict) -> dict:
     caps = dict(RESOURCE_CAPS)
     for bid, level in _building_levels(player):
-        for k, v in BUILDINGS[bid].get("cap_bonus", {}).items():
+        for k, v in building_cap_bonus(bid).items():
             caps[k] = caps.get(k, 0) + v * level
     return caps
 
 def daily_production(player: dict) -> dict:
-    """تولید پایه + بونوس ساختمان‌ها + مالیات (وابسته به جمعیت، نرخ و محبوبیت)"""
+    """تولید پایه + بونوس ساختمان‌ها (طبق مقادیرِ سراسریِ فعلی — پیش‌فرض یا بازنویسیِ
+    ادمین) + مالیات (وابسته به جمعیت، نرخ و محبوبیت)"""
     prod = dict(DAILY_PRODUCTION)
     for bid, level in _building_levels(player):
-        for k, v in BUILDINGS[bid].get("produces", {}).items():
+        for k, v in building_produces(bid).items():
             prod[k] = prod.get(k, 0) + v * level
 
     men = player["resources"].get("men", 0)

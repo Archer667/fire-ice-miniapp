@@ -40,9 +40,10 @@ const TAB_GROUPS = [
   {
     label: 'دنیای بازی',
     tabs: [
-      { key: 'map',    label: 'نقشه' },
-      { key: 'market', label: 'بازار', fullOnly: true },
-      { key: 'items',  label: 'آیتم‌ها', fullOnly: true },
+      { key: 'map',     label: 'نقشه' },
+      { key: 'market',  label: 'بازار', fullOnly: true },
+      { key: 'items',   label: 'آیتم‌ها', fullOnly: true },
+      { key: 'balance', label: 'تعادل بازی', fullOnly: true },
     ],
   },
 ];
@@ -58,6 +59,7 @@ const PLAYER_RES = [
   { key: 'men',   label: 'نیروی انسانی', Icon: People },
   ...Object.entries(WEAPON_NAMES).map(([key, label]) => ({ key, label, Icon: Swords })),
 ];
+const RES_LABEL = Object.fromEntries(PLAYER_RES.map(r => [r.key, r.label]));
 
 export default function Admin() {
   const { me, toast } = useGame();
@@ -155,6 +157,10 @@ export default function Admin() {
   const [grantColor, setGrantColor] = useState(Object.keys(ITEM_RARITY_COLORS)[0]);
   const [grantBusy, setGrantBusy] = useState(false);
 
+  const [balanceList, setBalanceList] = useState(null);
+  const [balanceDrafts, setBalanceDrafts] = useState({}); // buildingId -> { resourceKey: stringValue }
+  const [balanceBusyId, setBalanceBusyId] = useState(null);
+
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
@@ -171,6 +177,20 @@ export default function Admin() {
   const loadMarket = () => api.adminMarketList().then(setMarketListings).catch(e => toast(e.message));
   const loadBlackMarket = () => api.adminBlackMarketList().then(setBlackListings).catch(e => toast(e.message));
   const loadItems = () => api.adminListItems().then(setItemsList).catch(e => toast(e.message));
+  const loadBalance = () => api.adminGetBuildingBalance().then(list => {
+    setBalanceList(list);
+    setBalanceDrafts(prev => {
+      const next = { ...prev };
+      for (const b of list) {
+        if (next[b.id]) continue;
+        next[b.id] = {
+          ...Object.fromEntries(Object.keys(b.base_produces).map(k => [k, String(b.produces[k] ?? '')])),
+          ...Object.fromEntries(Object.keys(b.base_cap_bonus).map(k => [k, String(b.cap_bonus[k] ?? '')])),
+        };
+      }
+      return next;
+    });
+  }).catch(e => toast(e.message));
 
   useEffect(() => {
     loadPendingPlayers();
@@ -182,7 +202,7 @@ export default function Admin() {
     loadRoleplayPending();
     loadAlliances();
     loadMapData();
-    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); }
+    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); }
     if (me.is_owner) loadResetPreview();
   }, []);
 
@@ -588,6 +608,46 @@ export default function Admin() {
       loadItems();
     } catch (e) { toast(e.message); }
     setGrantBusy(false);
+  };
+
+  const setBalanceDraft = (bid, key, value) => {
+    setBalanceDrafts(prev => ({ ...prev, [bid]: { ...prev[bid], [key]: value } }));
+  };
+
+  const saveBalance = async (b) => {
+    const draft = balanceDrafts[b.id] || {};
+    const produces = {};
+    for (const k of Object.keys(b.base_produces)) {
+      const n = parseInt(draft[k], 10);
+      if (isNaN(n) || n < 0) { toast('مقدارها باید عدد صحیح و غیرمنفی باشند'); return; }
+      produces[k] = n;
+    }
+    const capBonus = {};
+    for (const k of Object.keys(b.base_cap_bonus)) {
+      const n = parseInt(draft[k], 10);
+      if (isNaN(n) || n < 0) { toast('مقدارها باید عدد صحیح و غیرمنفی باشند'); return; }
+      capBonus[k] = n;
+    }
+    setBalanceBusyId(b.id);
+    try {
+      await api.adminSetBuildingBalance({ building_id: b.id, produces, cap_bonus: capBonus });
+      haptic('medium');
+      toast(`بازدهی «${b.name}» ذخیره شد`);
+      loadBalance();
+    } catch (e) { toast(e.message); }
+    setBalanceBusyId(null);
+  };
+
+  const resetBalance = async (b) => {
+    setBalanceBusyId(b.id);
+    try {
+      await api.adminResetBuildingBalance(b.id);
+      haptic();
+      toast(`«${b.name}» به مقدار پیش‌فرض برگشت`);
+      setBalanceDrafts(prev => { const next = { ...prev }; delete next[b.id]; return next; });
+      loadBalance();
+    } catch (e) { toast(e.message); }
+    setBalanceBusyId(null);
   };
 
   if (!me.admin_role) {
@@ -1248,6 +1308,54 @@ export default function Admin() {
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {tab === 'balance' && isFull && (
+        <>
+          <div className="sect up u2">بازدهی و سقفِ ساختمان‌ها</div>
+          <div className="page-sub up u2" style={{ marginTop: -4 }}>
+            هر مقداری اینجا تغییر بدی، سراسری روی همهٔ بازیکن‌ها اثر می‌ذاره — این‌ها مقدارِ افزوده به‌ازای هر سطحِ همان ساختمانه
+          </div>
+          {!balanceList && <div className="loading">در حال بارگذاری...</div>}
+          {balanceList && balanceList.map(b => {
+            const draft = balanceDrafts[b.id] || {};
+            const busy = balanceBusyId === b.id;
+            return (
+              <div className="card up u2" key={b.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="n">
+                    {b.name}
+                    {b.overridden && <small style={{ color: 'var(--az)' }}>سفارشی — با پیش‌فرض کد فرق دارد</small>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+                  {Object.keys(b.base_produces).map(k => (
+                    <div key={k} style={{ minWidth: 110 }}>
+                      <label className="f" style={{ marginTop: 0, fontSize: 11 }}>{RES_LABEL[k] || k} / روز <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_produces[k]})</small></label>
+                      <input type="number" min="0" value={draft[k] ?? ''} onChange={e => setBalanceDraft(b.id, k, e.target.value)} />
+                    </div>
+                  ))}
+                  {Object.keys(b.base_cap_bonus).map(k => (
+                    <div key={k} style={{ minWidth: 110 }}>
+                      <label className="f" style={{ marginTop: 0, fontSize: 11 }}>سقفِ {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cap_bonus[k]})</small></label>
+                      <input type="number" min="0" value={draft[k] ?? ''} onChange={e => setBalanceDraft(b.id, k, e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                  <button className="btn" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => saveBalance(b)}>
+                    {busy ? '...' : 'ذخیره'}
+                  </button>
+                  {b.overridden && (
+                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => resetBalance(b)}>
+                      بازگشت به پیش‌فرض
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </>
       )}
 

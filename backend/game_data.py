@@ -131,6 +131,24 @@ BUILDINGS = {
     "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120, "wood": 70},  "hours": 7,  "type": "defense"},
 }
 
+# ---- بازدهی/سقفِ سراسریِ ساختمان‌ها — ادمینِ کامل می‌تونه از پنل (تب «تعادل بازی»)
+# مقادیرِ produces/cap_bonus بالا رو برای همهٔ بازیکن‌ها بازنویسی کنه، بدون دیپلوی کد.
+# این دیکشنری در حافظه نگه داشته می‌شه (نه در BUILDINGS، که ثابت و مرجع می‌مونه) و
+# موقع استارتاپ از دیتابیس پر می‌شه؛ هر تغییرِ ادمین هم فوری همین‌جا آپدیت می‌شه.
+BUILDING_OVERRIDES: dict = {}
+
+def building_produces(building_id: str) -> dict:
+    override = BUILDING_OVERRIDES.get(building_id, {})
+    if "produces" in override:
+        return override["produces"]
+    return BUILDINGS.get(building_id, {}).get("produces", {})
+
+def building_cap_bonus(building_id: str) -> dict:
+    override = BUILDING_OVERRIDES.get(building_id, {})
+    if "cap_bonus" in override:
+        return override["cap_bonus"]
+    return BUILDINGS.get(building_id, {}).get("cap_bonus", {})
+
 # ---- قراردادهای سیاسی — شراب نقشی در بستن هر پیمان دارد ----
 ALLIANCE_TYPES = {
     "non_aggression": {"name": "پیمان عدم‌تجاوز", "wine_cost": 20},

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game import now
+import game_data
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
 # نکته: اسم players اینجا عمداً players_col است، نه players (که چند خط پایین‌تر
 # ماژول routers.players است) — قبلاً همین‌جا با هم قاطی می‌شدند و _ensure_indexes
@@ -151,6 +152,19 @@ async def _ensure_indexes():
     except Exception:
         logger.exception("ensuring secondary indexes failed")
 
+BUILDING_OVERRIDES_DOC_ID = "building_overrides"
+
+async def _load_building_overrides():
+    """مقادیرِ بازدهی/سقفِ سراسری‌ای که ادمین از تب «تعادل بازی» بازنویسی کرده رو موقع
+    استارتاپ تو حافظه می‌ریزه — بدونش، بعد از هر ری‌استارتِ سرور بازنویسی‌های ادمین
+    به مقادیرِ پیش‌فرضِ کدِ BUILDINGS برمی‌گشت"""
+    try:
+        doc = await game_settings.find_one({"_id": BUILDING_OVERRIDES_DOC_ID})
+        game_data.BUILDING_OVERRIDES.clear()
+        game_data.BUILDING_OVERRIDES.update((doc or {}).get("overrides", {}))
+    except Exception:
+        logger.exception("loading building overrides failed")
+
 CASTLE_ROSTER_V2_MARKER_ID = "castle_roster_v2_migrated"
 
 async def _migrate_castle_roster_v2():
@@ -192,6 +206,7 @@ async def _migrate_castle_roster_v2():
 async def start_background_watchers():
     await _ensure_indexes()
     await _migrate_castle_roster_v2()
+    await _load_building_overrides()
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())

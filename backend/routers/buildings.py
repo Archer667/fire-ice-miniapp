@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players
 from game import now, apply_production, can_afford, pay, normalize_building_state, resolve_building_upgrades
-from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours
+from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours, building_produces, building_cap_bonus
 
 router = APIRouter(prefix="/api/buildings", tags=["buildings"])
 
@@ -24,8 +24,8 @@ async def list_buildings(user: dict = Depends(get_user)):
         st = p["buildings"].get(bid, EMPTY_STATE)
         level = st["level"]
         target = st["upgrade_to"] or (level + 1 if level < MAX_BUILDING_LEVEL else None)
-        per_level_produces = meta.get("produces", {})
-        per_level_cap = meta.get("cap_bonus", {})
+        per_level_produces = building_produces(bid)
+        per_level_cap = building_cap_bonus(bid)
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
             "unit": meta.get("unit"), "requires_port": meta.get("requires_port", False),

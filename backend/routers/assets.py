@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
 from db import players, items, item_grants
 from game import now, normalize_building_state, resolve_building_upgrades
-from game_data import BUILDINGS, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS
+from game_data import BUILDINGS, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, building_produces, building_cap_bonus
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
@@ -20,8 +20,8 @@ async def castle_assets(user: dict = Depends(get_user)):
         if level <= 0 or bid not in BUILDINGS:
             continue
         meta = BUILDINGS[bid]
-        produces = {k: v * level for k, v in meta.get("produces", {}).items()}
-        cap_bonus = {k: v * level for k, v in meta.get("cap_bonus", {}).items()}
+        produces = {k: v * level for k, v in building_produces(bid).items()}
+        cap_bonus = {k: v * level for k, v in building_cap_bonus(bid).items()}
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
             "level": level, "produces": produces, "cap_bonus": cap_bonus,

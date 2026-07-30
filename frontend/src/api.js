@@ -29,7 +29,7 @@ import {
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
-  ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield,
+  ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield, buildingProduces, buildingCapBonus, BUILDING_OVERRIDES,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
   WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES, MAP_TERRAINS,
   DAILY_PRODUCTION, RESOURCE_CAPS, taxYieldMultiplier,
@@ -942,8 +942,8 @@ const M = {
     return Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
       const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
       const next = st.upgrade_to || (st.level < MAX_BUILDING_LEVEL ? st.level + 1 : null);
-      const perLevelProduces = meta.produces || {};
-      const perLevelCap = meta.cap_bonus || {};
+      const perLevelProduces = buildingProduces(id);
+      const perLevelCap = buildingCapBonus(id);
       return {
         id, name: meta.name, type: meta.type, unit: meta.unit, requires_port: !!meta.requires_port,
         level: st.level, max_level: MAX_BUILDING_LEVEL,
@@ -1042,6 +1042,38 @@ const M = {
     for (let j = mockItemGrants.length - 1; j >= 0; j--) {
       if (mockItemGrants[j].item_id === itemId) mockItemGrants.splice(j, 1);
     }
+    return { ok: true };
+  },
+  adminGetBuildingBalance: () => {
+    return Object.entries(BUILDINGS_STATIC)
+      .filter(([, meta]) => (meta.produces && Object.keys(meta.produces).length) || (meta.cap_bonus && Object.keys(meta.cap_bonus).length))
+      .map(([id, meta]) => ({
+        id, name: meta.name, type: meta.type,
+        base_produces: meta.produces || {}, base_cap_bonus: meta.cap_bonus || {},
+        overridden: !!BUILDING_OVERRIDES[id],
+        produces: buildingProduces(id), cap_bonus: buildingCapBonus(id),
+      }));
+  },
+  adminSetBuildingBalance: (body) => {
+    const meta = BUILDINGS_STATIC[body.building_id];
+    if (!meta) throw new Error('ساختمان نامعتبر');
+    const allowedProduces = Object.keys(meta.produces || {});
+    const allowedCap = Object.keys(meta.cap_bonus || {});
+    const produces = body.produces || {};
+    const capBonus = body.cap_bonus || {};
+    if (Object.keys(produces).some(k => !allowedProduces.includes(k)) || Object.keys(capBonus).some(k => !allowedCap.includes(k))) {
+      throw new Error('این ساختمان چنین منبعی تولید/ذخیره نمی‌کند');
+    }
+    if ([...Object.values(produces), ...Object.values(capBonus)].some(v => v < 0)) throw new Error('مقدار نمی‌تواند منفی باشد');
+    const override = {};
+    if (Object.keys(produces).length) override.produces = produces;
+    if (Object.keys(capBonus).length) override.cap_bonus = capBonus;
+    if (Object.keys(override).length) BUILDING_OVERRIDES[body.building_id] = override;
+    else delete BUILDING_OVERRIDES[body.building_id];
+    return { ok: true };
+  },
+  adminResetBuildingBalance: (id) => {
+    delete BUILDING_OVERRIDES[id];
     return { ok: true };
   },
   adminGrantItem: (itemId, tgId, color) => {
@@ -1393,6 +1425,11 @@ export const api = {
   adminDeleteItem: (id) => MOCK ? Promise.resolve(M.adminDeleteItem(id)) : req(`/api/admin/items/${id}`, { method: 'DELETE' }),
   adminGrantItem: (itemId, tgId, color) => MOCK ? Promise.resolve(M.adminGrantItem(itemId, tgId, color))
     : req(`/api/admin/items/${itemId}/grant`, { method: 'POST', body: JSON.stringify({ tg_id: tgId, color }) }),
+  adminGetBuildingBalance: () => MOCK ? Promise.resolve(M.adminGetBuildingBalance()) : req('/api/admin/building-balance'),
+  adminSetBuildingBalance: (b) => MOCK ? Promise.resolve(M.adminSetBuildingBalance(b))
+    : req('/api/admin/building-balance', { method: 'POST', body: JSON.stringify(b) }),
+  adminResetBuildingBalance: (id) => MOCK ? Promise.resolve(M.adminResetBuildingBalance(id))
+    : req(`/api/admin/building-balance/${id}/reset`, { method: 'POST' }),
   setTax:    (rate) => MOCK ? Promise.resolve(M.setTax(rate)) : req('/api/players/tax', { method: 'POST', body: JSON.stringify({ rate }) }),
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
   setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
