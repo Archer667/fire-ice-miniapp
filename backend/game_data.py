@@ -107,8 +107,8 @@ BUILDINGS = {
     "farm":        {"name": "مزرعه",       "cost": {"gold": 100, "wood": 50},  "hours": 3,  "type": "economy", "produces": {"food": 10}},
     "ranch":       {"name": "دامداری",     "cost": {"gold": 150, "wood": 60},  "hours": 4,  "type": "economy", "produces": {"food": 6}},
     "winery":      {"name": "می‌کده",      "cost": {"gold": 220, "food": 60, "wood": 70}, "hours": 6,  "type": "economy", "produces": {"wine": 5}},
-    "granary":     {"name": "انبار غله",   "cost": {"gold": 200, "stone": 50, "wood": 60}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 40}},
-    "warehouse":   {"name": "انبار",        "cost": {"gold": 200, "stone": 80, "wood": 50}, "hours": 5,  "type": "economy", "cap_bonus": {"stone": 15, "iron": 15}},
+    "warehouse":   {"name": "انبار",        "cost": {"gold": 220, "stone": 70, "wood": 60}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 40, "stone": 15, "iron": 15}},
+    "treasury":    {"name": "خزانه",        "cost": {"gold": 350, "stone": 100, "wood": 80}, "hours": 6,  "type": "economy", "cap_bonus": {"gold": 300}},
 
     # --- نظامی: پادگان هر یگان (پیش‌نیاز استخدام) ---
     "camp_sword":  {"name": "پادگان پیاده‌نظام",   "cost": {"gold": 250, "iron": 50,  "wood": 90},  "hours": 6,  "type": "barracks", "unit": "infantry"},

@@ -11,7 +11,7 @@ const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چو�
 // آیکن اختصاصی هر ساختمان — بر اساس id (کلید gamedata)؛ نبودش یعنی بازگشت به هامر عمومی
 const BUILDING_ICON = {
   market: Market, farm: Farm, ranch: Ranch, winery: Winery,
-  granary: Warehouse, warehouse: Warehouse, village: People,
+  warehouse: Warehouse, treasury: Coin, village: People,
   lumber_mill: Wood, stone_mine: Rock, iron_mine: Pick, gold_mine: Coin,
   camp_sword: Barracks, camp_spear: Barracks, camp_archer: Barracks, camp_lcav: Barracks, camp_hcav: Barracks,
 };
