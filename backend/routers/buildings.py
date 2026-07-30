@@ -24,6 +24,8 @@ async def list_buildings(user: dict = Depends(get_user)):
         st = p["buildings"].get(bid, EMPTY_STATE)
         level = st["level"]
         target = st["upgrade_to"] or (level + 1 if level < MAX_BUILDING_LEVEL else None)
+        per_level_produces = meta.get("produces", {})
+        per_level_cap = meta.get("cap_bonus", {})
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
             "unit": meta.get("unit"), "requires_port": meta.get("requires_port", False),
@@ -33,6 +35,12 @@ async def list_buildings(user: dict = Depends(get_user)):
             "next_level": target,
             "next_cost": building_cost(bid, target) if target else None,
             "next_hours": building_hours(bid, target) if target else None,
+            # بازدهیِ فعلی (بر اساس لولِ الان) و مقدارِ افزوده به‌ازای هر سطح — خطی‌ست،
+            # یعنی هر سطح دقیقاً همین مقدار رو به بازدهیِ قبلی اضافه می‌کنه
+            "produces_per_level": per_level_produces,
+            "current_yield": {k: v * level for k, v in per_level_produces.items()} if level else {},
+            "cap_bonus_per_level": per_level_cap,
+            "current_cap_bonus": {k: v * level for k, v in per_level_cap.items()} if level else {},
         })
     return out
 

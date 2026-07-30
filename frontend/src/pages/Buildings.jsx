@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Coin, Pick, Rock, Wood, Wheat, People, Hammer, Bastion, Market, Farm, Ranch, Winery, Warehouse, Barracks } from '../components/Icons.jsx';
+import { Coin, Pick, Rock, Wood, Wheat, People, Wine, Hammer, Bastion, Market, Farm, Ranch, Winery, Warehouse, Barracks } from '../components/Icons.jsx';
+import { WEAPON_NAMES } from '../gamedata.js';
 
-const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat };
-const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا' };
+const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat, men: People, wine: Wine };
+const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا', men: 'نیروی انسانی', wine: 'شراب', ...WEAPON_NAMES };
 
 // آیکن اختصاصی هر ساختمان — بر اساس id (کلید gamedata)؛ نبودش یعنی بازگشت به هامر عمومی
 const BUILDING_ICON = {
@@ -106,6 +107,17 @@ function BuildingRow({ row, busy, isPort, onAct }) {
         <div className="bld-lv">{row.level.toLocaleString('fa-IR')}</div>
       </div>
       <div className="bar"><i style={{ width: pct + '%' }} /></div>
+
+      {row.level > 0 && (Object.keys(row.current_yield || {}).length > 0 || Object.keys(row.current_cap_bonus || {}).length > 0) && (
+        <div className="bld-yield">
+          {Object.entries(row.current_yield || {}).map(([k, v]) => (
+            <span key={k}>+{v.toLocaleString('fa-IR')} {RES_NAME[k] || k}/روز</span>
+          ))}
+          {Object.entries(row.current_cap_bonus || {}).map(([k, v]) => (
+            <span key={k}>+{v.toLocaleString('fa-IR')} ظرفیتِ {RES_NAME[k] || k}</span>
+          ))}
+        </div>
+      )}
 
       {locked ? (
         <div className="bld-status">فقط قلعه/شهرهای دریایی و بندری می‌تونن این رو بسازن</div>

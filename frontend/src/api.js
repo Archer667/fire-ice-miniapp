@@ -942,6 +942,8 @@ const M = {
     return Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
       const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
       const next = st.upgrade_to || (st.level < MAX_BUILDING_LEVEL ? st.level + 1 : null);
+      const perLevelProduces = meta.produces || {};
+      const perLevelCap = meta.cap_bonus || {};
       return {
         id, name: meta.name, type: meta.type, unit: meta.unit, requires_port: !!meta.requires_port,
         level: st.level, max_level: MAX_BUILDING_LEVEL,
@@ -949,6 +951,10 @@ const M = {
         next_level: next,
         next_cost: next ? buildingCost(id, next) : null,
         next_hours: next ? buildingHours(id, next) : null,
+        produces_per_level: perLevelProduces,
+        current_yield: st.level ? Object.fromEntries(Object.entries(perLevelProduces).map(([k, v]) => [k, v * st.level])) : {},
+        cap_bonus_per_level: perLevelCap,
+        current_cap_bonus: st.level ? Object.fromEntries(Object.entries(perLevelCap).map(([k, v]) => [k, v * st.level])) : {},
       };
     });
   },

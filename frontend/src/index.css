@@ -495,6 +495,10 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .bld-cost .tm { margin-inline-start: auto; color: var(--low); }
 .bld-btn { margin-top: 10px; padding: 11px; font-size: 12.5px; }
 .bld-status { margin-top: 10px; font-size: 11px; color: var(--low); }
+.bld-yield {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  margin-top: 6px; font-size: 11px; font-weight: 700; color: #3ecf6b;
+}
 
 /* رای‌گیری */
 .poll { margin-bottom: 10px; }
