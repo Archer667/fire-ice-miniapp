@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { haptic } from '../telegram.js';
 import { Close } from './Icons.jsx';
+import { castleLabel } from '../gamedata.js';
 
 export default function PlayerPicker({ value, onChange, placeholder = 'اسم لرد یا قلعه را جست‌وجو کن...', single = false }) {
   const [query, setQuery] = useState('');
@@ -54,7 +55,7 @@ export default function PlayerPicker({ value, onChange, placeholder = 'اسم ل
           ) : results.map(p => (
             <button type="button" className="rbtn ppicker-row" key={p.tg_id} onClick={() => pick(p)}>
               <span>{p.name}</span>
-              <small>{p.castle} · {p.region_name}</small>
+              <small>{castleLabel(p.castle)} · {p.region_name}</small>
             </button>
           ))}
         </div>

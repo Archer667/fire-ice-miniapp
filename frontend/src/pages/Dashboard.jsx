@@ -4,7 +4,7 @@ import { haptic } from '../telegram.js';
 import { api } from '../api.js';
 import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake, Gift } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
-import { WEAPON_NAMES } from '../gamedata.js';
+import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
 
@@ -112,7 +112,7 @@ export default function Dashboard({ goTo }) {
           <div className="ava">{me.name.charAt(0)}</div>
           <div>
             <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
-            <div className="hs">{me.castle} · {me.region_name}{me.is_port ? ' · بندر' : ''}</div>
+            <div className="hs">{castleLabel(me.castle)} · {me.region_name}{me.is_port ? ' · بندر' : ''}</div>
             {me.rank != null ? (
               <div className="rk">
                 رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد

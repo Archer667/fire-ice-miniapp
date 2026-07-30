@@ -6,7 +6,7 @@ import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, 
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -715,7 +715,7 @@ export default function Admin() {
                                     setAssignRegion(prev => ({ ...prev, [p.tg_id]: rc.region }));
                                     setAssignCastle(prev => ({ ...prev, [p.tg_id]: rc.name }));
                                   }}>
-                            {(i + 1).toLocaleString('fa-IR')}. {rc.name}{rc.occupied ? ' (اشغال‌شده)' : ''}
+                            {(i + 1).toLocaleString('fa-IR')}. {castleLabel(rc.name)}{rc.occupied ? ' (اشغال‌شده)' : ''}
                           </button>
                         ))}
                       </div>
@@ -731,7 +731,7 @@ export default function Admin() {
                   <label className="f">قلعه</label>
                   <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
                     <option value="" disabled>انتخاب کن...</option>
-                    {castleOptions.map(c => <option key={c.n} value={c.n}>{c.n}{c.port ? ' ⚓ بندر' : ''}</option>)}
+                    {castleOptions.map(c => <option key={c.n} value={c.n}>{castleLabel(c.n)}{c.port ? ' ⚓ بندر' : ''}</option>)}
                   </select>
                   <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                     <button className="btn" style={{ flex: 1 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
@@ -763,7 +763,7 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}<small>{p.region_name} · {p.castle}{p.is_port ? ' ⚓' : ''}</small></div>
+                    <div className="n">{p.name}<small>{p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''}</small></div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                     <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
@@ -786,7 +786,7 @@ export default function Admin() {
                       <label className="f">قلعهٔ تازه</label>
                       <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
                         <option value="" disabled>انتخاب کن...</option>
-                        {castleOptions.map(c => <option key={c.n} value={c.n}>{c.n}{c.port ? ' ⚓ بندر' : ''}</option>)}
+                        {castleOptions.map(c => <option key={c.n} value={c.n}>{castleLabel(c.n)}{c.port ? ' ⚓ بندر' : ''}</option>)}
                       </select>
                       <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
                         {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'انتقال'}
@@ -951,7 +951,7 @@ export default function Admin() {
                   <div className="ic"><Scroll s={16} /></div>
                   <div className="n">
                     {r.player}
-                    <small>{r.category_name} · {r.castle}</small>
+                    <small>{r.category_name} · {castleLabel(r.castle)}</small>
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
@@ -1084,7 +1084,7 @@ export default function Admin() {
                           )}
                           {filteredCastleOptions.map(o => (
                             <button type="button" className="rbtn ppicker-row" key={o.name} onClick={() => pickCastle(o.name)}>
-                              <span>{o.name}{o.kind === 'port' ? ' ⚓ بندر' : ''}</span>
+                              <span>{castleLabel(o.name)}{o.kind === 'port' ? ' ⚓ بندر' : ''}</span>
                             </button>
                           ))}
                           <button type="button" className="rbtn ppicker-row" onClick={pickNewCastle} style={{ color: 'var(--az2)' }}>
@@ -1096,7 +1096,7 @@ export default function Admin() {
                   )}
                 </div>
                 {pickName && pickName !== NEW_CASTLE && (
-                  <div className="page-sub" style={{ margin: '8px 4px 0' }}>انتخاب شد: <b style={{ color: 'var(--az2)' }}>{pickName}</b></div>
+                  <div className="page-sub" style={{ margin: '8px 4px 0' }}>انتخاب شد: <b style={{ color: 'var(--az2)' }}>{castleLabel(pickName)}</b></div>
                 )}
                 {pickName === NEW_CASTLE && (
                   <>
@@ -1147,7 +1147,7 @@ export default function Admin() {
                   {placed.map(c => (
                     <div key={c.name}>
                       <div className="rc">
-                        <span>{c.name}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind} · {MAP_TERRAINS.find(t => t.key === c.terrain)?.label || 'صرفاً خشکی'}</small></span>
+                        <span>{castleLabel(c.name)}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind} · {MAP_TERRAINS.find(t => t.key === c.terrain)?.label || 'صرفاً خشکی'}</small></span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {c.owner ? <span className="own">{c.owner.name}</span> : <span className="empty">بدون لرد</span>}
                           <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}
@@ -1459,7 +1459,7 @@ export default function Admin() {
                       <div className="n">
                         {c.name}
                         <small>
-                          {c.op_name} · {c.from} ← {c.to} · توان {c.power.toLocaleString('fa-IR')} ·{' '}
+                          {c.op_name} · {castleLabel(c.from)} ← {castleLabel(c.to)} · توان {c.power.toLocaleString('fa-IR')} ·{' '}
                           {c.men_committed.toLocaleString('fa-IR')} نفر
                         </small>
                       </div>
@@ -1573,7 +1573,7 @@ export default function Admin() {
             {admins && admins.map(a => (
               <div className="res" key={a.tg_id}>
                 <div className="ic"><Shield s={16} /></div>
-                <div className="n">{a.name || a.tg_id}<small>{a.role === 'full' ? 'ادمین کامل' : 'ادمین محدود'}{a.castle ? ` · ${a.castle}` : ''}</small></div>
+                <div className="n">{a.name || a.tg_id}<small>{a.role === 'full' ? 'ادمین کامل' : 'ادمین محدود'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
                 {a.role === 'limited' && (
                   <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => removeAdmin(a.tg_id)}>حذف</button>
                 )}

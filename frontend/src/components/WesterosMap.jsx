@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Build, Rock } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
-import { REGIONS_STATIC } from '../gamedata.js';
+import { REGIONS_STATIC, castleLabel } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
 
 /** جای‌گذاری و ضدِمقیاسِ پاپ‌آپ اطلاعات — طوری که همیشه دقیقاً کنار پین بچسبد
@@ -62,7 +62,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
             <span className="dot"><Icon s={8} /></span>
             {active && onPinClick && (
               <div className="pin-popup" style={popupStyle} onClick={(e) => e.stopPropagation()}>
-                <div className="pi-name">{c.name}{c.port ? ' ⚓' : ''}{c.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
+                <div className="pi-name">{castleLabel(c.name)}{c.port ? ' ⚓' : ''}{c.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
                 <div className="pi-owner">اقلیم: {REGIONS_STATIC[c.region]?.name || '—'}</div>
                 {c.owner ? (
                   <div className="pi-owner-block">

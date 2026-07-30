@@ -7,7 +7,7 @@ import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
-  NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES, WEAPON_NAMES,
+  NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES, WEAPON_NAMES, castleLabel,
 } from '../gamedata.js';
 
 const TABS = [
@@ -275,7 +275,7 @@ export default function War() {
           )}
           <div className="sect up u2">نقشهٔ وستروس</div>
           <div className="up u2">
-            <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${c.name} به‌عنوان مقصد انتخاب شد`); }} />
+            <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${castleLabel(c.name)} به‌عنوان مقصد انتخاب شد`); }} />
           </div>
 
           <div className="sect up u3">ساخت لشکر</div>
@@ -285,7 +285,7 @@ export default function War() {
 
             <label className="f">مبدا</label>
             <select value={origin} onChange={e => setOrigin(e.target.value)}>
-              {originOptions.map(o => <option key={o} value={o}>{o}{o === me.castle ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
+              {originOptions.map(o => <option key={o} value={o}>{castleLabel(o)}{o === me.castle ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
             </select>
 
             <label className="f">نوع عملیات</label>
@@ -299,19 +299,19 @@ export default function War() {
                 <div className="target-pick">
                   {target ? (
                     <>
-                      <span>{target.name}</span>
+                      <span>{castleLabel(target.name)}</span>
                       <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11.5 }} onClick={() => setTarget(null)}>پاک‌کردن</button>
                     </>
                   ) : <span style={{ color: 'var(--mid)' }}>از روی نقشه در بالا انتخاب کن</span>}
                 </div>
                 {op.portOnly && target && !target.port && (
                   <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
-                    {target.name} بندر نیست — غارت دریایی فقط علیه اهداف بندری ممکن است
+                    {castleLabel(target.name)} بندر نیست — غارت دریایی فقط علیه اهداف بندری ممکن است
                   </div>
                 )}
                 {op.portOnly && badOriginForNaval && (
                   <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
-                    {origin} بندر نیست — غارت دریایی فقط از قلعه/شهرهای بندری ممکن است
+                    {castleLabel(origin)} بندر نیست — غارت دریایی فقط از قلعه/شهرهای بندری ممکن است
                   </div>
                 )}
               </>
@@ -413,7 +413,7 @@ export default function War() {
                 نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
               </div>
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
-                {c.origin} ← {c.target}
+                {castleLabel(c.origin)} ← {castleLabel(c.target)}
                 {' · '}
                 {c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
               </div>
@@ -448,7 +448,7 @@ export default function War() {
                 </div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>
-                {c.origin} ← {c.target}
+                {castleLabel(c.origin)} ← {castleLabel(c.target)}
                 {' · '}
                 {!c.active ? 'لغوشده'
                   : c.arrived ? 'رسیده به مقصد'

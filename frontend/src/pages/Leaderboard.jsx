@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
+import { castleLabel } from '../gamedata.js';
 
 const TABS = [
   { id: 'regions', label: 'اقلیم‌ها' },
@@ -59,7 +60,7 @@ export default function Leaderboard() {
                 <div className="n">
                   {r.name}{r.me ? ' — تو' : ''}
                   {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
-                  <small>{r.castle} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
+                  <small>{castleLabel(r.castle)} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
                 </div>
                 <div className="p">{r.points.toLocaleString('fa-IR')}</div>
               </div>
@@ -79,7 +80,7 @@ export default function Leaderboard() {
                   <div className="n">
                     {r.name}{r.me ? ' — تو' : ''}
                     {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
-                    <small>{r.castle} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
+                    <small>{castleLabel(r.castle)} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
                   </div>
                   <div className="p">{r.points.toLocaleString('fa-IR')}</div>
                 </div>

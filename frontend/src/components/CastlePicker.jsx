@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { haptic } from '../telegram.js';
 import { Close } from './Icons.jsx';
+import { castleLabel, CASTLE_EN_NAMES } from '../gamedata.js';
 
 /** لیستِ مرورپذیر برای انتخابِ چندتایی از قلعه/شهرهای بازی، به‌ترتیبِ اولویت — برای
  * درخواستِ خاندان موقع ثبت‌نام، چون خاندانِ اول‌اولویتِ بازیکن ممکنه از قبل
@@ -25,10 +26,10 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
     }).catch(() => setAll([]));
   }, []);
 
-  const q = query.trim();
+  const q = query.trim().toLowerCase();
   const results = (all || [])
     .filter(c => !value.includes(c.name))
-    .filter(c => q.length === 0 || c.name.includes(q));
+    .filter(c => q.length === 0 || c.name.includes(q) || (CASTLE_EN_NAMES[c.name] || '').toLowerCase().includes(q));
 
   const pick = (name) => {
     if (value.length >= max) return;
@@ -45,7 +46,7 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
         <div className="ppicker-chips">
           {value.map((name, i) => (
             <span className="ppicker-chip" key={name}>
-              {(i + 1).toLocaleString('fa-IR')}. {name}
+              {(i + 1).toLocaleString('fa-IR')}. {castleLabel(name)}
               <button type="button" aria-label={`حذف ${name}`} onClick={() => remove(name)}><Close s={11} /></button>
             </span>
           ))}
@@ -65,7 +66,7 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
                 <div className="ppicker-empty">موردی پیدا نشد</div>
               ) : results.map(c => (
                 <button type="button" className="rbtn ppicker-row" key={c.name} onClick={() => pick(c.name)}>
-                  <span>{c.name}{c.house ? ` · خاندان ${c.house}` : ''}</span>
+                  <span>{castleLabel(c.name)}{c.house ? ` · خاندان ${c.house}` : ''}</span>
                   <small>{c.region_name}{c.occupied ? ' · قبلاً گرفته شده' : ''}</small>
                 </button>
               ))}

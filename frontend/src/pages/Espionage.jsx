@@ -5,7 +5,7 @@ import { haptic } from '../telegram.js';
 import { Eye, Swords, Bastion, Coin, Wheat, People, Wood, Rock, Pick, Wine } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
-import { SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE } from '../gamedata.js';
+import { SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, castleLabel } from '../gamedata.js';
 
 const RES_ICONS = [
   { key: 'gold', Icon: Coin, name: 'طلا' },
@@ -136,7 +136,7 @@ export default function Espionage() {
               <div className="target-pick">
                 {target ? (
                   <>
-                    <span>{target.name}{target.mine ? ' (قلعهٔ خودت)' : ''}</span>
+                    <span>{castleLabel(target.name)}{target.mine ? ' (قلعهٔ خودت)' : ''}</span>
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11.5 }} onClick={() => setTarget(null)}>پاک‌کردن</button>
                   </>
                 ) : <span style={{ color: 'var(--mid)' }}>از روی نقشه در بالا انتخاب کن</span>}
@@ -179,7 +179,7 @@ export default function Espionage() {
                 <div className="res">
                   <div className="ic"><Eye s={16} /></div>
                   <div className="n">
-                    {m.target}
+                    {castleLabel(m.target)}
                     <small>
                       {!m.arrived ? `در راه — حدود ${m.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر`
                         : !m.resolved ? 'رسیده — منتظر بررسی شورای جنگ'
@@ -234,7 +234,7 @@ export default function Espionage() {
                         <div key={i} className="warband" style={{ marginBottom: 8 }}>
                           <div className="wi"><Swords s={15} /></div>
                           <div className="t">
-                            {c.op_name} <b>{c.origin}</b> ← <b>{c.target}</b>
+                            {c.op_name} <b>{castleLabel(c.origin)}</b> ← <b>{castleLabel(c.target)}</b>
                             <div className="tm">{c.men_committed.toLocaleString('fa-IR')} نفر · {c.arrived ? 'رسیده به مقصد' : 'در راه'}</div>
                           </div>
                         </div>

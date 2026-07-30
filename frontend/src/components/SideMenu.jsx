@@ -2,6 +2,7 @@ import { haptic } from '../telegram.js';
 import { Close } from './Icons.jsx';
 import { NAV_ITEMS, EXTRA_PAGES } from './NavBar.jsx';
 import { useGame } from '../store.jsx';
+import { castleLabel } from '../gamedata.js';
 
 export default function SideMenu({ open, tab, onChange, onClose }) {
   const { me, toast } = useGame();
@@ -13,7 +14,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
           <div className="ava" style={{ width: 44, height: 44, fontSize: 18 }}>{me?.name?.charAt(0)}</div>
           <div>
             <div className="nm" style={{ fontSize: 14 }}>{me?.name}</div>
-            <div className="hs" style={{ fontSize: 10.5 }}>{me?.castle}</div>
+            <div className="hs" style={{ fontSize: 10.5 }}>{me?.castle ? castleLabel(me.castle) : ''}</div>
           </div>
           <button className="sidemenu-close" onClick={onClose} aria-label="بستن"><Close s={17} /></button>
         </div>
