@@ -12,7 +12,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 # داشت روی ماژول روتر create_index صدا می‌زد (بی‌اثر، ولی چون توی try/except بود
 # بی‌سروصدا فقط لاگ می‌شد و هیچ‌وقت هیچ ایندکس یکتایی واقعاً ساخته نمی‌شد)
 from db import (
-    players as players_col, map_castles, admin_roles,
+    players as players_col, map_castles, admin_roles, game_settings,
     campaigns, caravans, spy_missions, messages, alliances, roleplays,
 )
 from routers import (
@@ -151,9 +151,47 @@ async def _ensure_indexes():
     except Exception:
         logger.exception("ensuring secondary indexes failed")
 
+CASTLE_ROSTER_V2_MARKER_ID = "castle_roster_v2_migrated"
+
+async def _migrate_castle_roster_v2():
+    """فقط یک‌بار اجرا می‌شود — با جایگزین‌شدنِ کامل نقشه (REGIONS/CASTLE_HOUSES/
+    CASTLE_TRAVEL_EDGES با قلعه‌های جدید)، پین‌های قدیمیِ map_castles دیگر معنی
+    ندارند و پاک می‌شوند. چیزی از players پاک نمی‌شود — فقط بازیکن‌هایی که به
+    قلعه‌ای تخصیص دارند که در نقشهٔ جدید نیست، در لاگ گزارش می‌شوند تا از پنل
+    ادمین دوباره برایشان قلعهٔ جدید تعیین شود."""
+    try:
+        if await game_settings.find_one({"_id": CASTLE_ROSTER_V2_MARKER_ID}):
+            return
+        new_names = set()
+        for region in REGIONS.values():
+            new_names |= set(region["castles"]) | set(region["ports"])
+
+        deleted = await map_castles.delete_many({})
+        logger.info("castle_roster_v2: پاک شد %d پینِ قلعهٔ قدیمی از map_castles", deleted.deleted_count)
+
+        orphaned = []
+        async for p in players_col.find({"castle": {"$exists": True, "$ne": None}}, {"tg_id": 1, "name": 1, "castle": 1}):
+            if p.get("castle") and p["castle"] not in new_names:
+                orphaned.append(p)
+        if orphaned:
+            logger.warning(
+                "castle_roster_v2: %d بازیکن به قلعه‌ای تخصیص دارند که در نقشهٔ جدید نیست — از پنل ادمین دوباره تخصیص بده: %s",
+                len(orphaned),
+                ", ".join(f"{p.get('name')}(tg_id={p['tg_id']}):{p['castle']}" for p in orphaned),
+            )
+        else:
+            logger.info("castle_roster_v2: هیچ بازیکنی به قلعهٔ حذف‌شده تخصیص نداشت")
+
+        await game_settings.update_one(
+            {"_id": CASTLE_ROSTER_V2_MARKER_ID}, {"$set": {"done_at": now(), "orphaned_count": len(orphaned)}}, upsert=True,
+        )
+    except Exception:
+        logger.exception("castle roster v2 migration failed")
+
 @app.on_event("startup")
 async def start_background_watchers():
     await _ensure_indexes()
+    await _migrate_castle_roster_v2()
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
