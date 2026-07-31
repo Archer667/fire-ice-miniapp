@@ -602,6 +602,67 @@ export function travelMinutes(sameCastle, originCastle, targetCastle) {
   return shortestMinutes(originCastle, targetCastle);
 }
 
+function dijkstraPath(originCastle, targetCastle) {
+  if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) return { minutes: null, path: null };
+  const dist = { [originCastle]: 0 };
+  const prev = {};
+  const seen = new Set();
+  const pq = [[0, originCastle]];
+  while (pq.length) {
+    pq.sort((a, b) => a[0] - b[0]);
+    const [d, node] = pq.shift();
+    if (seen.has(node)) continue;
+    seen.add(node);
+    if (node === targetCastle) {
+      const path = [node];
+      while (path[path.length - 1] !== originCastle) path.push(prev[path[path.length - 1]]);
+      path.reverse();
+      return { minutes: d, path };
+    }
+    for (const [nb, w] of Object.entries(TRAVEL_GRAPH[node] || {})) {
+      const nd = d + w;
+      if (nd < (dist[nb] ?? Infinity)) {
+        dist[nb] = nd;
+        prev[nb] = node;
+        pq.push([nd, nb]);
+      }
+    }
+  }
+  return { minutes: null, path: null };
+}
+
+// یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — آینه‌ی travel_routes در
+// backend/game_data.py؛ اگه یالِ روی بهترین مسیر رو موقتاً حذف کنیم و دوباره
+// دایکسترا بزنیم، ممکنه یه مسیرِ واقعاً متفاوت (نه فقط دورتر روی همون یال‌ها) پیدا بشه
+export function travelRoutes(originCastle, targetCastle, maxRoutes = 2) {
+  const best = dijkstraPath(originCastle, targetCastle);
+  if (!best.path) return [];
+  const routes = [{ minutes: best.minutes, path: best.path }];
+  if (maxRoutes <= 1 || best.path.length < 2) return routes;
+
+  const seenPaths = new Set([best.path.join('→')]);
+  const candidates = [];
+  for (let i = 0; i < best.path.length - 1; i++) {
+    const a = best.path[i], b = best.path[i + 1];
+    const wAB = TRAVEL_GRAPH[a]?.[b];
+    const wBA = TRAVEL_GRAPH[b]?.[a];
+    if (wAB !== undefined) delete TRAVEL_GRAPH[a][b];
+    if (wBA !== undefined) delete TRAVEL_GRAPH[b][a];
+    const alt = dijkstraPath(originCastle, targetCastle);
+    if (wAB !== undefined) TRAVEL_GRAPH[a][b] = wAB;
+    if (wBA !== undefined) TRAVEL_GRAPH[b][a] = wBA;
+    if (alt.path && !seenPaths.has(alt.path.join('→'))) {
+      seenPaths.add(alt.path.join('→'));
+      candidates.push({ minutes: alt.minutes, path: alt.path });
+    }
+  }
+  if (candidates.length) {
+    candidates.sort((x, y) => x.minutes - y.minutes);
+    routes.push(candidates[0]);
+  }
+  return routes.slice(0, maxRoutes);
+}
+
 // جاسوس‌ها سریع‌تر از لشکر حرکت می‌کنند
 export const SPY_GOLD_COST = 1000;
 export const SPY_MEN_COST = 5;

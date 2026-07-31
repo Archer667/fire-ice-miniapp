@@ -111,9 +111,24 @@ export default function War() {
   };
 
   const sameCastle = !op.needsTarget || (target && target.name === origin);
-  const eta = travelMinutes(sameCastle, origin, op.needsTarget && target ? target.name : origin);
+  const targetName = op.needsTarget && target ? target.name : origin;
   const badOriginForNaval = op.portOnly && !isPortCastle(origin);
   const originIsSeaOnly = !sameCastle && isSeaOnlyCastle(origin);
+
+  const [routeOptions, setRouteOptions] = useState(null); // [{minutes, path}] | null
+  const [routeChoice, setRouteChoice] = useState(0);
+  useEffect(() => {
+    if (sameCastle || !targetName) { setRouteOptions(null); setRouteChoice(0); return; }
+    let cancelled = false;
+    setRouteOptions(null);
+    api.warRoutes(origin, targetName).then(res => {
+      if (!cancelled) { setRouteOptions(res.routes || []); setRouteChoice(0); }
+    }).catch(() => { if (!cancelled) setRouteOptions([]); });
+    return () => { cancelled = true; };
+  }, [origin, targetName, sameCastle]);
+
+  const chosenRoute = routeOptions && routeOptions[routeChoice];
+  const eta = sameCastle ? 0 : (chosenRoute ? chosenRoute.minutes : travelMinutes(sameCastle, origin, targetName));
 
   const unlocked = (troop) => {
     if (troop.naval) return builtLevels[NAVAL_CAMP_BUILDING] > 0;
@@ -191,6 +206,7 @@ export default function War() {
         origin_castle: origin, op_type: opType,
         target_castle: op.needsTarget ? target.name : null,
         name: name.trim(), troops: counts,
+        via: chosenRoute ? chosenRoute.path : undefined,
       });
       haptic('medium');
       const weaponUpdates = Object.fromEntries(
@@ -203,7 +219,7 @@ export default function War() {
       });
       toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
       resetForm();
-      loadMine(); loadMap();
+      loadMine(); loadMap(); loadLegions();
     } catch (e) { toast(e.message); }
     setBusy(false);
   };
@@ -323,6 +339,29 @@ export default function War() {
               زمان رسیدن لشکر: <b style={{ color: 'var(--az2)' }}>{eta > 0 ? `حدود ${eta.toLocaleString('fa-IR')} دقیقه` : 'بی‌درنگ — همین‌جاست'}</b>
             </div>
 
+            {!sameCastle && targetName && (
+              routeOptions === null ? (
+                <div className="page-sub" style={{ margin: '8px 4px 0' }}>در حال یافتن مسیر...</div>
+              ) : routeOptions.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <label className="f" style={{ marginTop: 0 }}>
+                    مسیر لشکرکشی{routeOptions.length > 1 ? ' — یکی رو انتخاب کن' : ''}
+                  </label>
+                  {routeOptions.map((r, i) => (
+                    <div key={i}
+                         onClick={() => { if (routeOptions.length > 1) { haptic(); setRouteChoice(i); } }}
+                         className={`pick ${routeChoice === i ? 'sel' : ''}`}
+                         style={{ marginBottom: 6, textAlign: 'right', cursor: routeOptions.length > 1 ? 'pointer' : 'default' }}>
+                      <div className="n" style={{ fontSize: 11.5, lineHeight: 1.9 }}>
+                        {r.path.map(castleLabel).join('  ←  ')}
+                      </div>
+                      <div className="c">{r.minutes.toLocaleString('fa-IR')} دقیقه{routeOptions.length > 1 && i === 0 ? ' · کوتاه‌ترین' : ''}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
             {op.needsTarget && opType !== 'garrison' && (
               <div className="page-sub" style={{ margin: '10px 4px 0' }}>
                 سناریوی نبرد اینجا نوشته نمی‌شود — وقتی لشکر برسد، آمار دو طرف رد و بدل می‌شود و تا ۶ ساعت بعد می‌توانی از صفحهٔ «رول‌ها» سناریوی جنگ را بفرستی.
@@ -412,9 +451,16 @@ export default function War() {
               <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
                 نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
               </div>
+              {c.route_path && c.route_path.length > 2 ? (
+                <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 4 }}>
+                  مسیر: {c.route_path.map(castleLabel).join('  ←  ')}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 4 }}>
+                  {castleLabel(c.origin)} ← {castleLabel(c.target)}
+                </div>
+              )}
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
-                {castleLabel(c.origin)} ← {castleLabel(c.target)}
-                {' · '}
                 {c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -447,9 +493,16 @@ export default function War() {
                   <small>{c.op_name} · فرستنده: {c.sender}</small>
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0' }}>
-                {castleLabel(c.origin)} ← {castleLabel(c.target)}
-                {' · '}
+              {c.route_path && c.route_path.length > 2 ? (
+                <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0 4px' }}>
+                  مسیر: {c.route_path.map(castleLabel).join('  ←  ')}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0 4px' }}>
+                  {castleLabel(c.origin)} ← {castleLabel(c.target)}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 8 }}>
                 {!c.active ? 'لغوشده'
                   : c.arrived ? 'رسیده به مقصد'
                   : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}

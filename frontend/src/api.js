@@ -25,7 +25,7 @@ import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS,
-  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes,
+  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
@@ -490,7 +490,14 @@ const M = {
     mockPay({ gold, ...weapons });
     mockMe.resources.men -= men;
 
-    const travel = travelMinutes(sameCastle, body.origin_castle, targetCastle);
+    let travel, routePath;
+    if (sameCastle) {
+      travel = 0; routePath = [body.origin_castle];
+    } else {
+      const opts = travelRoutes(body.origin_castle, targetCastle);
+      const chosen = (body.via && opts.find(r => r.path.join('→') === body.via.join('→'))) || opts[0] || { minutes: travelMinutes(sameCastle, body.origin_castle, targetCastle), path: [body.origin_castle, targetCastle] };
+      travel = chosen.minutes; routePath = chosen.path;
+    }
 
     const power = campaignPower(body.troops, mockBuiltLevels());
     const nowIso = new Date().toISOString();
@@ -500,10 +507,16 @@ const M = {
       name: (body.name || '').trim().slice(0, 60) || op.name, troops: body.troops, power,
       gold_cost: gold, men_committed: men, food_per_day: food,
       active: true, created_at: nowIso, last_food_tick: nowIso, arrival_notified: false,
-      travel_minutes: travel, arrival_at: new Date(Date.now() + travel * 60000).toISOString(),
+      travel_minutes: travel, route_path: routePath, arrival_at: new Date(Date.now() + travel * 60000).toISOString(),
     };
     mockCampaigns.push(doc);
-    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food, travel_minutes: travel, power };
+    return { ok: true, id: doc.id, gold_cost: gold, men_committed: men, food_per_day: food, travel_minutes: travel, route_path: routePath, power };
+  },
+  warRoutes: (origin, target) => {
+    if (origin === target) return { routes: [{ minutes: 0, path: [origin] }] };
+    const opts = travelRoutes(origin, target);
+    if (!opts.length) throw new Error('مسیری بین این دو قلعه پیدا نشد');
+    return { routes: opts };
   },
   cancelCampaign: (id) => {
     const c = mockCampaigns.find(x => x.id === id);
@@ -556,7 +569,7 @@ const M = {
           name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
         })),
         men_committed: c.men_committed, power: c.power || 0,
-        travel_minutes: c.travel_minutes,
+        travel_minutes: c.travel_minutes, route_path: c.route_path,
         arrived: nowMs >= new Date(c.arrival_at).getTime(),
         can_relaunch: c.op_type === 'garrison' && nowMs >= new Date(c.arrival_at).getTime(),
         created_at: c.created_at, arrival_at: c.arrival_at,
@@ -581,7 +594,7 @@ const M = {
         sender: c.player_name,
         origin: c.origin_castle, target: c.target_castle,
         active: c.active,
-        travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
+        travel_minutes: c.travel_minutes, route_path: c.route_path, arrived: nowMs >= new Date(c.arrival_at).getTime(),
         created_at: c.created_at, arrival_at: c.arrival_at,
       }));
   },
@@ -1368,6 +1381,8 @@ export const api = {
   adminAnnounceEvent: (title, description) => MOCK ? Promise.resolve(M.adminAnnounceEvent(title, description))
     : req('/api/admin/announce-event', { method: 'POST', body: JSON.stringify({ title, description }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
+  warRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
+    : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),

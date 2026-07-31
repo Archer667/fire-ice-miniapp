@@ -736,6 +736,72 @@ def travel_minutes(same_castle: bool, origin_castle: str, target_castle: str, bl
         return 0
     return _shortest_minutes(origin_castle, target_castle, blocked)
 
+def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = frozenset()):
+    """مثل _shortest_minutes، ولی علاوه بر زمان، خودِ مسیر (لیستِ قلعه‌ها از مبدا تا
+    مقصد، شاملِ خودِ مبدا و مقصد) رو هم برمی‌گردونه. اگر مسیری نبود، (None, None)."""
+    import heapq
+    if origin_castle not in TRAVEL_GRAPH or target_castle not in TRAVEL_GRAPH:
+        return None, None
+    blocked = blocked - {origin_castle, target_castle}
+    dist = {origin_castle: 0}
+    prev = {}
+    pq = [(0, origin_castle)]
+    seen = set()
+    while pq:
+        d, node = heapq.heappop(pq)
+        if node in seen:
+            continue
+        seen.add(node)
+        if node == target_castle:
+            path = [node]
+            while path[-1] != origin_castle:
+                path.append(prev[path[-1]])
+            path.reverse()
+            return d, path
+        for nb, w in TRAVEL_GRAPH.get(node, {}).items():
+            if nb in blocked:
+                continue
+            nd = d + w
+            if nd < dist.get(nb, float("inf")):
+                dist[nb] = nd
+                prev[nb] = node
+                heapq.heappush(pq, (nd, nb))
+    return None, None
+
+def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = frozenset(), max_routes: int = 2):
+    """یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — هرکدوم {"minutes", "path"}
+    (path شاملِ خودِ مبدا و مقصد است). گزینهٔ دوم فقط وقتی اضافه می‌شود که واقعاً
+    مسیرِ دیگری (نه همون توالیِ قلعه‌ها) پیدا بشه — با حذفِ موقتِ هر یالِ روی
+    بهترین مسیر و دوباره دایکسترازدن (نسخهٔ سبکِ الگوریتم Yen). اگر origin/target
+    قابل‌رسیدن نبودند، لیستِ خالی برمی‌گردد."""
+    best_min, best_path = _dijkstra_path(origin_castle, target_castle, blocked)
+    if best_path is None:
+        return []
+    routes = [{"minutes": best_min, "path": best_path}]
+    if max_routes <= 1 or len(best_path) < 2:
+        return routes
+
+    candidates = []
+    seen_paths = {tuple(best_path)}
+    for i in range(len(best_path) - 1):
+        a, b = best_path[i], best_path[i + 1]
+        w_ab = TRAVEL_GRAPH.get(a, {}).pop(b, None)
+        w_ba = TRAVEL_GRAPH.get(b, {}).pop(a, None)
+        try:
+            alt_min, alt_path = _dijkstra_path(origin_castle, target_castle, blocked)
+        finally:
+            if w_ab is not None:
+                TRAVEL_GRAPH[a][b] = w_ab
+            if w_ba is not None:
+                TRAVEL_GRAPH[b][a] = w_ba
+        if alt_path and tuple(alt_path) not in seen_paths:
+            seen_paths.add(tuple(alt_path))
+            candidates.append({"minutes": alt_min, "path": alt_path})
+    if candidates:
+        candidates.sort(key=lambda r: r["minutes"])
+        routes.append(candidates[0])
+    return routes[:max_routes]
+
 # جاسوس‌ها سبک‌بارتر و سریع‌تر از لشکر حرکت می‌کنند — حدود نصف زمان یک لشکر کامل
 SPY_SPEED_FACTOR = 0.4
 

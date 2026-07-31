@@ -6,8 +6,8 @@ from auth import get_user
 from db import players, campaigns, map_castles, roleplays, game_settings, alliances
 from game import now, can_afford, pay, normalize_building_state
 from game_data import (
-    COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power, travel_minutes,
-    NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS,
+    COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
+    NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -57,6 +57,7 @@ class CampaignBody(BaseModel):
     target_castle: str | None = None
     name: str = ""
     troops: dict            # {troop_id: count}
+    via: list[str] | None = None   # مسیرِ انتخابیِ بازیکن (اگر چند گزینهٔ مسیر بود) — از /war/routes
 
 async def all_castle_terrain() -> dict:
     """نگاشتِ اسمِ هر قلعه/شهرِ بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) به نوع
@@ -177,6 +178,21 @@ async def apply_campaign_upkeep(tg_id: int, resources: dict) -> dict:
         await campaigns.update_one({"_id": c["_id"]}, {"$set": {"last_food_tick": last + timedelta(days=days)}})
     return resources
 
+@router.get("/routes")
+async def routes(origin_castle: str, target_castle: str, user: dict = Depends(get_user)):
+    """گزینه‌های مسیرِ واقعیِ بین دو قلعه (۱ یا ۲ تا) — قبل از فرستادنِ فرمان، برای
+    اینکه بازیکن ببینه از کجاها رد می‌شود و اگه چند مسیر بود انتخاب کند"""
+    if origin_castle == target_castle:
+        return {"routes": [{"minutes": 0, "path": [origin_castle]}]}
+    names, _ports = await all_castle_names_and_ports()
+    if origin_castle not in names or target_castle not in names:
+        raise HTTPException(400, "قلعهٔ مبدا یا مقصد شناخته‌شده نیست")
+    blocked = await blocked_castles_for(user["id"])
+    opts = travel_routes(origin_castle, target_castle, blocked)
+    if not opts:
+        raise HTTPException(400, "مسیری بین این دو قلعه پیدا نشد — یا مسیرها از قلمروِ لردی می‌گذرد که با او پیمان نداری")
+    return {"routes": opts}
+
 @router.post("/submit")
 async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
@@ -230,9 +246,15 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             if land_men > capacity:
                 raise HTTPException(400, f"این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط {capacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
     blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
-    travel = travel_minutes(same_castle, body.origin_castle, target_castle, blocked)
-    if travel is None:
-        raise HTTPException(400, "مسیر این لشکرکشی از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری — یا پیمان ببند، یا هدف نزدیک‌تری انتخاب کن")
+    if same_castle:
+        travel, route_path = 0, [body.origin_castle]
+    else:
+        opts = travel_routes(body.origin_castle, target_castle, blocked)
+        if not opts:
+            raise HTTPException(400, "مسیر این لشکرکشی از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری — یا پیمان ببند، یا هدف نزدیک‌تری انتخاب کن")
+        chosen = next((r for r in opts if r["path"] == body.via), None) if body.via else None
+        chosen = chosen or opts[0]
+        travel, route_path = chosen["minutes"], chosen["path"]
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p))
 
@@ -271,7 +293,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "op_type": body.op_type, "target_castle": target_castle,
         "name": body.name.strip()[:60] or op["name"], "troops": body.troops, "power": power,
         "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
-        "travel_minutes": travel, "arrival_at": arrival_at,
+        "travel_minutes": travel, "arrival_at": arrival_at, "route_path": route_path,
         "penalty_charged": penalty_charged,
         "active": True, "arrival_notified": False,
         "created_at": now(), "last_food_tick": now(),
@@ -280,7 +302,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     return {
         "ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men, "power": power,
         "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
-        "penalty_charged": penalty_charged,
+        "route_path": route_path, "penalty_charged": penalty_charged,
     }
 
 @router.post("/{campaign_id}/cancel")
@@ -331,7 +353,7 @@ async def legions(user: dict = Depends(get_user)):
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "origin": c["origin_castle"], "target": c["target_castle"],
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
-            "travel_minutes": c.get("travel_minutes", 0),
+            "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
             "can_relaunch": c["op_type"] == "garrison" and arrived,
             "created_at": c["created_at"].isoformat(),
@@ -358,7 +380,7 @@ async def mine(user: dict = Depends(get_user)):
             "sender": c["player_name"],
             "origin": c["origin_castle"], "target": c["target_castle"],
             "active": c.get("active", False),
-            "travel_minutes": c.get("travel_minutes", 0),
+            "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
             "created_at": c["created_at"].isoformat(),
             "arrival_at": arrival_at.isoformat() if arrival_at else None,
