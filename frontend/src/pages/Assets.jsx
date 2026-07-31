@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Coin, Pick, Rock, Wood, Wheat, Wine, People, Hammer, Market, Farm, Ranch, Winery, Warehouse } from '../components/Icons.jsx';
-import { ITEM_RARITY_HEX } from '../gamedata.js';
+import { ITEM_RARITY_HEX, castleLabel } from '../gamedata.js';
 
 const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat, wine: Wine, men: People };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا', wine: 'شراب', men: 'نیروی انسانی' };
@@ -26,13 +26,27 @@ function fmtRemaining(iso) {
 export default function Assets() {
   const { toast } = useGame();
   const [tab, setTab] = useState('castle');
+  const [myCastles, setMyCastles] = useState(null);
+  const [activeCastle, setActiveCastle] = useState(null);
   const [castle, setCastle] = useState(null);
   const [items, setItems] = useState(null);
 
-  const loadCastle = () => api.castleAssets().then(setCastle).catch(e => { toast(e.message); setCastle([]); });
+  const loadCastle = (c) => api.castleAssets(c).then(setCastle).catch(e => { toast(e.message); setCastle([]); });
   const loadItems = () => api.myItems().then(setItems).catch(e => { toast(e.message); setItems([]); });
 
-  useEffect(() => { loadCastle(); loadItems(); }, []);
+  useEffect(() => {
+    loadCastle();
+    loadItems();
+    api.myCastles().then(list => { setMyCastles(list); setActiveCastle(list.find(c => c.home)?.name || list[0]?.name || null); }).catch(() => setMyCastles([]));
+  }, []);
+
+  const switchCastle = (name) => {
+    if (name === activeCastle) return;
+    haptic();
+    setCastle(null);
+    setActiveCastle(name);
+    loadCastle(name);
+  };
 
   return (
     <>
@@ -49,6 +63,15 @@ export default function Assets() {
 
       {tab === 'castle' && (
         <div className="up u2">
+          {myCastles && myCastles.length > 1 && (
+            <div className="tabs up" role="tablist" aria-label="قلعه" style={{ marginBottom: 10 }}>
+              {myCastles.map(c => (
+                <button type="button" key={c.name} role="tab" aria-selected={activeCastle === c.name}
+                     className={`rbtn tab ${activeCastle === c.name ? 'on' : ''}`}
+                     onClick={() => switchCastle(c.name)}>{castleLabel(c.name)}</button>
+              ))}
+            </div>
+          )}
           {castle === null && <div className="loading">در حال بارگذاری...</div>}
           {castle && castle.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>

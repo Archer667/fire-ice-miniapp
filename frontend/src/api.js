@@ -73,7 +73,33 @@ const mockHierarchy = {
 const mockTributes = []; // {id, from_id, from_name, from_role, to_id, to_name, amount, status, created_at, due_at, paid_at}
 let mockTributeSeq = 1;
 const ROLE_LABEL_FA = { coin: 'استاد سکه', warden: 'والی', overlord: 'بالادست' };
-const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at }
+const mockBuildings = {}; // building_id -> { level, upgrade_to, ready_at } — قلعهٔ اصلیِ خودت
+const mockCastleBuildings = {}; // castle_name -> (building_id -> state) — قلعه‌های اضافه (غنیمتِ جنگ/تصمیمِ ادمین)
+
+function mockOwnedCastles() {
+  return mockMe.castle ? [mockMe.castle, ...Object.keys(mockCastleBuildings)] : [];
+}
+function mockCastleBuildingState(castle) {
+  if (castle === mockMe.castle) return mockBuildings;
+  return (mockCastleBuildings[castle] ||= {});
+}
+function mockAllBuildingLevels() {
+  const total = {};
+  for (const castle of mockOwnedCastles()) {
+    for (const [id, st] of Object.entries(mockCastleBuildingState(castle))) {
+      if (st.level) total[id] = (total[id] || 0) + st.level;
+    }
+  }
+  return total;
+}
+function mockResolveCastleUpgrades(state) {
+  const now = Date.now();
+  for (const st of Object.values(state)) {
+    if (st.upgrade_to && st.ready_at && new Date(st.ready_at).getTime() <= now) {
+      st.level = st.upgrade_to; st.upgrade_to = null; st.ready_at = null;
+    }
+  }
+}
 const mockAlliances = [
   // یک اتحاد تجاری از قبل پذیرفته‌شده — برای تست کاروان بدون نیاز به شبیه‌سازی طرف مقابل
   { id: 'a1', mine_proposed: false, other_id: 9002, other_name: 'تایوین لنیستر', type: 'trade', type_name: 'پیمان تجاری', name: '', public: true, status: 'accepted' },
@@ -169,12 +195,8 @@ const MOCK_PLAYERS = [
 ];
 
 function mockResolve() {
-  const now = Date.now();
-  for (const st of Object.values(mockBuildings)) {
-    if (st.upgrade_to && st.ready_at && new Date(st.ready_at).getTime() <= now) {
-      st.level = st.upgrade_to; st.upgrade_to = null; st.ready_at = null;
-    }
-  }
+  mockResolveCastleUpgrades(mockBuildings);
+  for (const state of Object.values(mockCastleBuildings)) mockResolveCastleUpgrades(state);
 }
 
 // تولیدِ روزانه (طلا/غذا/... بر اساس لولِ ساختمان‌ها) به‌نسبتِ زمانِ واقعاً گذشته از آخرین
@@ -183,9 +205,8 @@ function mockResolve() {
 // برگردوندن به فرانت (تابعِ me()) رند می‌شه
 function mockEffectiveCaps() {
   const caps = { ...RESOURCE_CAPS };
-  for (const [id, st] of Object.entries(mockBuildings)) {
-    if (!st.level) continue;
-    const { cap_bonus } = buildingYield(id, st.level);
+  for (const [id, level] of Object.entries(mockAllBuildingLevels())) {
+    const { cap_bonus } = buildingYield(id, level);
     for (const [k, v] of Object.entries(cap_bonus)) caps[k] = (caps[k] || 0) + v;
   }
   return caps;
@@ -211,9 +232,8 @@ function mockApplyProduction() {
 
   const prod = { ...DAILY_PRODUCTION };
   const caps = mockEffectiveCaps();
-  for (const [id, st] of Object.entries(mockBuildings)) {
-    if (!st.level) continue;
-    const { produces } = buildingYield(id, st.level);
+  for (const [id, level] of Object.entries(mockAllBuildingLevels())) {
+    const { produces } = buildingYield(id, level);
     for (const [k, v] of Object.entries(produces)) prod[k] = (prod[k] || 0) + v;
   }
   const men = mockMe.resources.men || 0;
@@ -245,8 +265,9 @@ function mockStationedOrigins() {
   return mockCampaigns.filter(c => c.active && c.op_type === 'garrison').map(c => c.target_castle);
 }
 
-function mockBuiltLevels() {
-  return Object.fromEntries(Object.entries(mockBuildings).map(([k, v]) => [k, v.level || 0]));
+function mockBuiltLevels(castle) {
+  const state = castle ? mockCastleBuildingState(castle) : mockBuildings;
+  return Object.fromEntries(Object.entries(state).map(([k, v]) => [k, v.level || 0]));
 }
 function mockCanAfford(cost) {
   return Object.entries(cost).every(([k, v]) => (mockMe.resources?.[k] ?? 0) >= v);
@@ -272,7 +293,10 @@ const M = {
       mockResolveCampaigns();
       mockApplyProduction();
       mockMe.active_campaigns = mockCampaigns.filter(c => c.active).length;
-      return { ...mockMe, resources: Object.fromEntries(Object.entries(mockMe.resources).map(([k, v]) => [k, Math.round(v)])) };
+      return {
+        ...mockMe, castles: Object.keys(mockCastleBuildings),
+        resources: Object.fromEntries(Object.entries(mockMe.resources).map(([k, v]) => [k, Math.round(v)])),
+      };
     }
     return mockMe;
   },
@@ -298,12 +322,39 @@ const M = {
   adminListRoster: () => {
     const out = [];
     if (mockMe.registered && !mockMe.pending) {
-      out.push({ tg_id: 1, name: mockMe.name, title: mockMe.title, region: mockMe.region, region_name: mockMe.region_name, castle: mockMe.castle, is_port: mockMe.is_port, house: CASTLE_HOUSES[mockMe.castle] || null });
+      out.push({
+        tg_id: 1, name: mockMe.name, title: mockMe.title, region: mockMe.region, region_name: mockMe.region_name,
+        castle: mockMe.castle, is_port: mockMe.is_port, house: CASTLE_HOUSES[mockMe.castle] || null,
+        castles: Object.keys(mockCastleBuildings),
+      });
     }
     for (const p of MOCK_PLAYERS) {
-      out.push({ tg_id: p.tg_id, name: p.name, title: p.title, region: mockResolveRegion(p.castle), region_name: p.region_name, castle: p.castle, is_port: false, house: CASTLE_HOUSES[p.castle] || null });
+      if (!p.castle) continue; // قلعه‌اش رو از دست داده (مثلاً تو mock تصرف شده)
+      out.push({ tg_id: p.tg_id, name: p.name, title: p.title, region: mockResolveRegion(p.castle), region_name: p.region_name, castle: p.castle, is_port: false, house: CASTLE_HOUSES[p.castle] || null, castles: [] });
     }
     return out;
+  },
+  adminAddCastle: (tgId, castle) => {
+    if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی خودت را تخصیص بدهی');
+    if (!mockMe.registered || mockMe.pending) throw new Error('اول باید خاندان و قلعهٔ اصلی داشته باشد');
+    const allCastles = Object.values(REGIONS_STATIC).flatMap(r => [...r.castles, ...r.ports]);
+    if (!allCastles.includes(castle)) throw new Error('این قلعه در بازی شناخته‌شده نیست');
+    if (castle === mockMe.castle || castle in mockCastleBuildings) throw new Error('این قلعه از قبل مالِ همین بازیکن است');
+
+    let capturedFrom = null;
+    const npc = MOCK_PLAYERS.find(p => p.castle === castle);
+    if (npc) {
+      capturedFrom = npc.name;
+      npc.castle = null; // در mock فقط قلعهٔ اصلیِ NPCها هست، پس بدونِ قلعه می‌مونه
+    }
+    mockCastleBuildings[castle] = {};
+    return { ok: true, captured_from: capturedFrom };
+  },
+  adminRemoveCastle: (tgId, castle) => {
+    if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی قلعه‌های خودت را پس بدهی');
+    if (!(castle in mockCastleBuildings)) throw new Error('این قلعه جزوِ قلعه‌های اضافهٔ این بازیکن نیست');
+    delete mockCastleBuildings[castle];
+    return { ok: true };
   },
   adminAssignHouse: (tgId, region, castle) => {
     if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی خودت را تخصیص بدهی');
@@ -334,6 +385,7 @@ const M = {
     if (tgId !== 1) throw new Error('در حالت آزمایشی (بدون سرور) فقط می‌توانی خودت را از خاندان خارج کنی');
     if (!mockMe.registered || mockMe.pending) throw new Error('این بازیکن اصلاً خاندانی ندارد');
     Object.assign(mockMe, { pending: true, region: null, region_name: null, castle: null, is_port: false });
+    for (const k of Object.keys(mockCastleBuildings)) delete mockCastleBuildings[k];
     return { ok: true };
   },
   adminDeletePendingPlayer: (tgId) => {
@@ -352,10 +404,12 @@ const M = {
     mockResolveCampaigns();
     const owners = {};
     for (const p of MOCK_PLAYERS) {
+      if (!p.castle) continue;
       owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null, region: p.region };
     }
-    if (mockMe.registered) {
-      owners[mockMe.castle] = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockMe.region };
+    if (mockMe.registered && !mockMe.pending) {
+      const mine = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockMe.region };
+      for (const c of mockOwnedCastles()) owners[c] = mine;
     }
     const nowMs = Date.now();
     return {
@@ -439,7 +493,7 @@ const M = {
     if (!op) throw new Error('نوع عملیات نامعتبر');
     if (!mockWarWindowOpen) throw new Error('پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی');
 
-    const validOrigins = [mockMe.castle, ...mockStationedOrigins()];
+    const validOrigins = [mockMe.castle, ...Object.keys(mockCastleBuildings), ...mockStationedOrigins()];
     if (!validOrigins.includes(body.origin_castle)) {
       throw new Error('مبدا باید قلعهٔ خودت یا جایی باشد که لشکرت همین الان مستقر است');
     }
@@ -454,6 +508,8 @@ const M = {
       }
     }
 
+    const originBuildings = mockCastleBuildingState(body.origin_castle);
+    const originIsPort = mockCastleTerrain(body.origin_castle) !== 'land';
     const specials = REGIONS_STATIC[mockMe.region]?.special || [];
     let gold = 0, men = 0, food = 0;
     const weapons = {};
@@ -463,7 +519,7 @@ const M = {
       if (common) {
         const req = TROOP_UNIT_BUILDINGS[tid];
         if (req) {
-          const campLevel = mockBuildings[req.camp]?.level || 0;
+          const campLevel = originBuildings[req.camp]?.level || 0;
           if (campLevel <= 0) {
             throw new Error(`برای گسیل ${common.name} باید ${BUILDINGS_STATIC[req.camp].name} را ساخته باشی`);
           }
@@ -473,8 +529,8 @@ const M = {
         food += FOOD_COST_REGULAR * n;
       } else if (NAVAL_TROOP_IDS.includes(tid)) {
         const naval = NAVAL_TROOPS.find(t => t.id === tid);
-        if (!mockMe.is_port) throw new Error('فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند کشتی بسازند');
-        const portLevel = mockBuildings[NAVAL_CAMP_BUILDING]?.level || 0;
+        if (!originIsPort) throw new Error('فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند کشتی بسازند');
+        const portLevel = originBuildings[NAVAL_CAMP_BUILDING]?.level || 0;
         if (portLevel <= 0) throw new Error(`برای ساخت ${naval.name} باید ${BUILDINGS_STATIC[NAVAL_CAMP_BUILDING].name} را بنا کرده باشی`);
         gold += naval.cost * n;
         food += FOOD_COST_SPECIAL * n;
@@ -520,7 +576,7 @@ const M = {
       travel = chosen.minutes; routePath = chosen.path;
     }
 
-    const power = campaignPower(body.troops, mockBuiltLevels());
+    const power = campaignPower(body.troops, mockBuiltLevels(body.origin_castle));
     const nowIso = new Date().toISOString();
     const doc = {
       id: String(mockCampaignSeq++), tg_id: 1, player_name: mockMe.name,
@@ -967,10 +1023,13 @@ const M = {
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map(m => ({ mine: m.from_id === 1, text: m.text }));
   },
-  buildings: () => {
+  buildings: (castle) => {
     mockResolve();
-    return Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
-      const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
+    const targetCastle = castle && mockOwnedCastles().includes(castle) ? castle : mockMe.castle;
+    const state = mockCastleBuildingState(targetCastle);
+    const isPort = mockCastleTerrain(targetCastle) !== 'land';
+    const rows = Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
+      const st = state[id] || { level: 0, upgrade_to: null, ready_at: null };
       const next = st.upgrade_to || (st.level < MAX_BUILDING_LEVEL ? st.level + 1 : null);
       const perLevelProduces = buildingProduces(id);
       const perLevelCap = buildingCapBonus(id);
@@ -987,15 +1046,19 @@ const M = {
         current_cap_bonus: st.level ? Object.fromEntries(Object.entries(perLevelCap).map(([k, v]) => [k, v * st.level])) : {},
       };
     });
+    return { castle: targetCastle, is_port: isPort, castles: mockOwnedCastles(), buildings: rows };
   },
-  buildAction: (id, requireBuilt) => {
+  buildAction: (id, requireBuilt, castle) => {
     mockResolve();
-    const st = mockBuildings[id] || { level: 0, upgrade_to: null, ready_at: null };
+    const targetCastle = castle && mockOwnedCastles().includes(castle) ? castle : mockMe.castle;
+    const state = mockCastleBuildingState(targetCastle);
+    const isPort = mockCastleTerrain(targetCastle) !== 'land';
+    const st = state[id] || { level: 0, upgrade_to: null, ready_at: null };
     if (st.upgrade_to) throw new Error('این ساختمان هم‌اکنون در حال ساخت است');
     if (requireBuilt && st.level === 0) throw new Error('اول این ساختمان را بنا کن');
     if (!requireBuilt && st.level > 0) throw new Error('این ساختمان قبلاً بنا شده — آن را ارتقا بده');
     if (st.level >= MAX_BUILDING_LEVEL) throw new Error('این ساختمان به بیشینهٔ سطح رسیده');
-    if (!requireBuilt && BUILDINGS_STATIC[id]?.requires_port && !mockMe.is_port) {
+    if (!requireBuilt && BUILDINGS_STATIC[id]?.requires_port && !isPort) {
       throw new Error('این ساختمان فقط در قلعه/شهرهای دریایی و بندری ساخته می‌شود');
     }
     const target = st.level + 1;
@@ -1004,12 +1067,17 @@ const M = {
     mockPay(cost);
     st.upgrade_to = target;
     st.ready_at = new Date(Date.now() + buildingHours(id, target) * 3600 * 1000).toISOString();
-    mockBuildings[id] = st;
+    state[id] = st;
     return { ok: true, target_level: target, cost, ready_at: st.ready_at };
   },
-  castleAssets: () => {
+  myCastles: () => mockOwnedCastles().map(c => ({
+    name: c, home: c === mockMe.castle, house: CASTLE_HOUSES[c] || null,
+    is_port: mockCastleTerrain(c) !== 'land',
+  })),
+  castleAssets: (castle) => {
     mockResolve();
-    return Object.entries(mockBuildings)
+    const targetCastle = castle && mockOwnedCastles().includes(castle) ? castle : mockMe.castle;
+    return Object.entries(mockCastleBuildingState(targetCastle))
       .filter(([, st]) => st.level > 0)
       .map(([id, st]) => {
         const meta = BUILDINGS_STATIC[id];
@@ -1436,9 +1504,9 @@ export const api = {
   thread:    (name) => MOCK ? Promise.resolve(M.thread(name)) : req('/api/ravens/thread/' + encodeURIComponent(name)),
   sendRaven: (toTgIds, text) => MOCK ? Promise.resolve(M.sendRaven(toTgIds, text))
     : req('/api/ravens/send', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, text }) }),
-  buildings: () => MOCK ? Promise.resolve(M.buildings()) : req('/api/buildings'),
-  buildBuilding:   (id) => MOCK ? Promise.resolve(M.buildAction(id, false)) : req('/api/buildings/build',   { method: 'POST', body: JSON.stringify({ building_id: id }) }),
-  upgradeBuilding: (id) => MOCK ? Promise.resolve(M.buildAction(id, true))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id }) }),
+  buildings: (castle) => MOCK ? Promise.resolve(M.buildings(castle)) : req('/api/buildings' + (castle ? '?castle=' + encodeURIComponent(castle) : '')),
+  buildBuilding:   (id, castle) => MOCK ? Promise.resolve(M.buildAction(id, false, castle)) : req('/api/buildings/build',   { method: 'POST', body: JSON.stringify({ building_id: id, castle }) }),
+  upgradeBuilding: (id, castle) => MOCK ? Promise.resolve(M.buildAction(id, true, castle))  : req('/api/buildings/upgrade', { method: 'POST', body: JSON.stringify({ building_id: id, castle }) }),
   sendRumor: (targetTgId, text) => MOCK ? Promise.resolve(M.sendRumor(targetTgId, text))
     : req('/api/rumors/send', { method: 'POST', body: JSON.stringify({ target_tg_id: targetTgId, text }) }),
   listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
@@ -1450,7 +1518,12 @@ export const api = {
   adminDeletePendingPlayer: (tgId) => MOCK ? Promise.resolve(M.adminDeletePendingPlayer(tgId)) : req(`/api/admin/players/${tgId}/pending`, { method: 'DELETE' }),
   adminAssignHouse: (tgId, region, castle) => MOCK ? Promise.resolve(M.adminAssignHouse(tgId, region, castle))
     : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
-  castleAssets: () => MOCK ? Promise.resolve(M.castleAssets()) : req('/api/assets/castle'),
+  adminAddCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminAddCastle(tgId, castle))
+    : req(`/api/admin/players/${tgId}/castles`, { method: 'POST', body: JSON.stringify({ castle }) }),
+  adminRemoveCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminRemoveCastle(tgId, castle))
+    : req(`/api/admin/players/${tgId}/castles/${encodeURIComponent(castle)}`, { method: 'DELETE' }),
+  myCastles: () => MOCK ? Promise.resolve(M.myCastles()) : req('/api/assets/castles'),
+  castleAssets: (castle) => MOCK ? Promise.resolve(M.castleAssets(castle)) : req('/api/assets/castle' + (castle ? '?castle=' + encodeURIComponent(castle) : '')),
   myItems: () => MOCK ? Promise.resolve(M.myItems()) : req('/api/assets/items'),
   adminListItems: () => MOCK ? Promise.resolve(M.adminListItems()) : req('/api/admin/items'),
   adminCreateItem: (b) => MOCK ? Promise.resolve(M.adminCreateItem(b)) : req('/api/admin/items', { method: 'POST', body: JSON.stringify(b) }),

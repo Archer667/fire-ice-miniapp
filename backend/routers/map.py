@@ -4,6 +4,7 @@ from auth import get_user
 from db import campaigns, map_castles
 from game import now
 from game_data import REGIONS, CASTLE_HOUSES
+from game import owned_castles
 from config import CAMPAIGN_REVEAL_MINUTES
 from ranks import scored_players, get_hierarchy_doc
 from routers.war import all_castle_terrain
@@ -23,11 +24,13 @@ async def get_map(user: dict = Depends(get_user)):
     owners_by_castle = {}
     for r in rows:
         p = r["player"]
-        owners_by_castle[p["castle"]] = {
+        owner_info = {
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "points": r["score"], "overlord_name": overlord_name.get(p["region"]),
             "region": p["region"],
         }
+        for c in owned_castles(p):
+            owners_by_castle[c] = owner_info
 
     # مختصات و نوع آیکنِ هرچه ادمین از پنلش روی نقشه گذاشته (چه اسم موجود چه کاملاً تازه)
     coords_by_region = {}

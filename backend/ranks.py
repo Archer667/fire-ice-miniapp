@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from db import players, hierarchy
 from game_data import REGIONS, WARDEN_GROUPS, BUILDINGS
 from config import SCORE_W_ECONOMY, SCORE_W_MILITARY, SCORE_W_POPULARITY, SCORE_W_ALLIANCE, TITLE_SCORE_BONUS
-from game import normalize_building_state, now
+from game import now, all_building_levels
 
 HIERARCHY_ID = "main"
 
@@ -18,9 +18,9 @@ def group_of_region(region_id: str):
     return None
 
 def base_score(p: dict) -> float:
-    """امتیاز پایه: امتیاز خام + قدرت اقتصادی + قدرت نظامی + قدرت سیاسی (بدون بونوس مقام)"""
-    b = p.get("buildings", {})
-    levels = {bid: normalize_building_state(raw)["level"] for bid, raw in b.items()}
+    """امتیاز پایه: امتیاز خام + قدرت اقتصادی + قدرت نظامی + قدرت سیاسی (بدون بونوس مقام)
+    — قدرتِ اقتصادی/نظامی روی همهٔ قلعه‌های این بازیکن (اصلی + فتح‌شده‌ها) جمع می‌شود"""
+    levels = all_building_levels(p)
     economy = sum(lvl for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") == "economy")
     military = sum(lvl for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") in ("barracks", "armory"))
     political = p.get("popularity", 0) * SCORE_W_POPULARITY + p.get("alliance_count", 0) * SCORE_W_ALLIANCE

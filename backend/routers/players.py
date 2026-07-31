@@ -108,6 +108,7 @@ async def me(user: dict = Depends(get_user)):
         "region": p["region"],
         "region_name": REGIONS[p["region"]]["name"],
         "castle": p["castle"],
+        "castles": list(p.get("castle_buildings", {}).keys()),
         "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
         "is_port": p["is_port"],
         "resources": display_resources,

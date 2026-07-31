@@ -1,21 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
 from db import players, items, item_grants
-from game import now, normalize_building_state, resolve_building_upgrades
-from game_data import BUILDINGS, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, building_produces, building_cap_bonus
+from game import now, normalize_building_state, resolve_building_upgrades, owned_castles, castle_building_state
+from game_data import BUILDINGS, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, building_produces, building_cap_bonus, CASTLE_HOUSES
+from routers.war import all_castle_terrain
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
+@router.get("/castles")
+async def my_castles(user: dict = Depends(get_user)):
+    """همهٔ قلعه‌های این بازیکن — اصلی + هرچی به‌عنوانِ غنیمتِ جنگ یا تصمیمِ ادمین گرفته"""
+    p = await players.find_one({"tg_id": user["id"]})
+    if not p:
+        raise HTTPException(403, "اول ثبت‌نام کن")
+    terrain = await all_castle_terrain()
+    return [
+        {"name": c, "home": c == p["castle"], "house": CASTLE_HOUSES.get(c),
+         "is_port": terrain.get(c, "land") in ("coastal", "sea")}
+        for c in owned_castles(p)
+    ]
+
 @router.get("/castle")
-async def castle_assets(user: dict = Depends(get_user)):
-    """دارایی‌های قلعه — هر ساختمانِ ساخته‌شده و بازدهیِ روزانه/سقفِ فعلی‌اش"""
+async def castle_assets(castle: str | None = None, user: dict = Depends(get_user)):
+    """دارایی‌های یک قلعهٔ مشخص — هر ساختمانِ ساخته‌شده و بازدهیِ روزانه/سقفِ فعلی‌اش"""
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
     p = resolve_building_upgrades(p)
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"buildings": p["buildings"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": {
+        "buildings": p["buildings"], "castle_buildings": p.get("castle_buildings", {}),
+    }})
+    target_castle = castle or p["castle"]
+    if target_castle not in owned_castles(p):
+        raise HTTPException(403, "این قلعه مالِ تو نیست")
+    state = castle_building_state(p, target_castle)
     out = []
-    for bid, raw in p.get("buildings", {}).items():
+    for bid, raw in state.items():
         level = normalize_building_state(raw)["level"]
         if level <= 0 or bid not in BUILDINGS:
             continue

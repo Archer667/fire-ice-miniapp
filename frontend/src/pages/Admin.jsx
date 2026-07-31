@@ -4,6 +4,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse, Swords } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
+import CastlePicker from '../components/CastlePicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel } from '../gamedata.js';
@@ -75,6 +76,10 @@ export default function Admin() {
   const [unassignBusyId, setUnassignBusyId] = useState(null);
   const [deletePendingBusyId, setDeletePendingBusyId] = useState(null);
   const [reassignOpenId, setReassignOpenId] = useState(null);
+  const [addCastleOpenId, setAddCastleOpenId] = useState(null);
+  const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
+  const [addCastleBusyId, setAddCastleBusyId] = useState(null);
+  const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
 
   const [warSubTab, setWarSubTab] = useState('campaigns'); // 'campaigns' | 'espionage' | 'roleplay'
   const [campaignsInfo, setCampaignsInfo] = useState(null);
@@ -549,6 +554,32 @@ export default function Admin() {
     setUnassignBusyId(null);
   };
 
+  const addCastle = async (tgId) => {
+    const castle = addCastleValue[0];
+    if (!castle) { toast('یک قلعه انتخاب کن'); return; }
+    setAddCastleBusyId(tgId);
+    try {
+      const res = await api.adminAddCastle(tgId, castle);
+      haptic('medium');
+      toast(res.captured_from ? `قلعه از «${res.captured_from}» گرفته شد و به این بازیکن اضافه شد` : 'قلعهٔ اضافه به این بازیکن داده شد');
+      setAddCastleValue([]);
+      setAddCastleOpenId(null);
+      loadRoster();
+    } catch (e) { toast(e.message); }
+    setAddCastleBusyId(null);
+  };
+
+  const removeCastle = async (tgId, castle) => {
+    setRemoveCastleBusyKey(`${tgId}:${castle}`);
+    try {
+      await api.adminRemoveCastle(tgId, castle);
+      haptic('medium');
+      toast(`قلعهٔ «${castle}» از این بازیکن گرفته شد`);
+      loadRoster();
+    } catch (e) { toast(e.message); }
+    setRemoveCastleBusyKey(null);
+  };
+
   const deletePendingPlayer = async (tgId, name) => {
     if (!window.confirm(`درخواستِ ثبت‌نامِ «${name}» کاملاً پاک بشه؟ این کار برگشت‌ناپذیره.`)) return;
     setDeletePendingBusyId(tgId);
@@ -565,6 +596,12 @@ export default function Admin() {
     haptic();
     setReassignOpenId(prev => prev === tgId ? null : tgId);
     setAssignCastle(prev => ({ ...prev, [tgId]: '' }));
+  };
+
+  const toggleAddCastle = (tgId) => {
+    haptic();
+    setAddCastleOpenId(prev => prev === tgId ? null : tgId);
+    setAddCastleValue([]);
   };
 
   const createItem = async () => {
@@ -766,13 +803,34 @@ export default function Admin() {
                     <div className="ic"><Shield s={16} /></div>
                     <div className="n">{p.name}<small>{p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''}</small></div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                  {p.castles && p.castles.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {p.castles.map(c => (
+                        <span key={c} className="rbtn" style={{
+                          width: 'auto', padding: '4px 8px', fontSize: 11, borderRadius: 999, display: 'flex',
+                          alignItems: 'center', gap: 5, border: '1px solid rgba(160,195,255,0.18)',
+                        }}>
+                          {castleLabel(c)} — پایگاهِ دوم
+                          <button type="button" aria-label={`پس‌گرفتن ${c}`}
+                                  disabled={removeCastleBusyKey === `${p.tg_id}:${c}`}
+                                  onClick={() => removeCastle(p.tg_id, c)}
+                                  style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
+                            <Close s={11} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                     <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
                             disabled={unassignBusyId === p.tg_id} onClick={() => unassignHouse(p.tg_id)}>
                       {unassignBusyId === p.tg_id ? 'در حال حذف...' : 'حذف از خاندان'}
                     </button>
                     <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => toggleReassign(p.tg_id)}>
                       انتقال به خاندان دیگر
+                    </button>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => toggleAddCastle(p.tg_id)}>
+                      افزودن قلعه
                     </button>
                   </div>
                   {reassignOpenId === p.tg_id && (
@@ -791,6 +849,18 @@ export default function Admin() {
                       </select>
                       <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
                         {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'انتقال'}
+                      </button>
+                    </div>
+                  )}
+                  {addCastleOpenId === p.tg_id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
+                      <div className="page-sub" style={{ margin: '0 0 8px' }}>
+                        قلعهٔ اضافه — پایگاهِ دومِ کاملِ این بازیکن؛ از هر اقلیمی می‌تونه باشه. اگه الان دستِ بازیکنِ
+                        دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، خودکار به‌عنوانِ غنیمتِ جنگ ازش گرفته می‌شود.
+                      </div>
+                      <CastlePicker value={addCastleValue} onChange={setAddCastleValue} max={1} />
+                      <button className="btn" style={{ marginTop: 14 }} disabled={addCastleBusyId === p.tg_id} onClick={() => addCastle(p.tg_id)}>
+                        {addCastleBusyId === p.tg_id ? 'در حال ثبت...' : 'افزودن'}
                       </button>
                     </div>
                   )}

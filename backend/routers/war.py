@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, map_castles, roleplays, game_settings, alliances
-from game import now, can_afford, pay, normalize_building_state, add_resources
+from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
@@ -49,8 +49,11 @@ async def war_window(user: dict = Depends(get_user)):
     w = await get_war_window()
     return {"open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None}
 
-def _building_levels(player: dict) -> dict:
-    return {bid: normalize_building_state(raw)["level"] for bid, raw in player.get("buildings", {}).items()}
+def _building_levels(player: dict, castle: str | None = None) -> dict:
+    """سطحِ ساختمان‌های یک قلعهٔ مشخصِ این بازیکن — پیش‌فرض قلعهٔ اصلی‌اش. برای قدرتِ
+    حمله/دفاع باید همیشه قلعهٔ واقعاً درگیر در نبرد را داد، نه لزوماً خانه‌اش، چون
+    ممکن است این بازیکن چند قلعه (پایگاه) داشته باشد"""
+    return dict(building_levels_for(player, castle or player.get("castle")))
 
 class CampaignBody(BaseModel):
     origin_castle: str
@@ -100,6 +103,12 @@ async def allied_tg_ids(tg_id: int) -> set:
     }):
         out.add(a["to_id"] if a["from_id"] == tg_id else a["from_id"])
     return out
+
+async def owner_of_castle(castle: str) -> dict | None:
+    """صاحبِ یک قلعه — چه قلعهٔ اصلی‌اش باشه چه یکی از قلعه‌های اضافه‌ای که فتح کرده"""
+    return await players.find_one({"$or": [
+        {"castle": castle}, {f"castle_buildings.{castle}": {"$exists": True}},
+    ]})
 
 async def blocked_castles_for(tg_id: int) -> frozenset:
     """قلعه‌های دیگر بازیکن‌هایی که با tg_id پیمانی ندارند — لشکرِ tg_id نمی‌تواند
@@ -230,7 +239,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
 
-    valid_origins = {p["castle"]} | await stationed_origins(user["id"])
+    valid_origins = {p["castle"]} | set(p.get("castle_buildings", {})) | await stationed_origins(user["id"])
     if body.origin_castle not in valid_origins:
         raise HTTPException(400, "مبدا باید قلعهٔ خودت یا جایی باشد که لشکرت همین الان مستقر است")
 
@@ -248,7 +257,11 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     else:
         target_castle = body.origin_castle
 
-    gold, men, food_per_day, weapons = troop_food_and_gold(p["region"], body.troops, p.get("buildings", {}), p.get("is_port", False))
+    terrain = await all_castle_terrain()
+    origin_is_port = terrain.get(body.origin_castle, "land") in ("coastal", "sea")
+    gold, men, food_per_day, weapons = troop_food_and_gold(
+        p["region"], body.troops, _building_levels(p, body.origin_castle), origin_is_port,
+    )
     if men <= 0:
         raise HTTPException(400, "هیچ نیرویی گسیل نکرده‌ای")
     if not can_afford(p["resources"], {"gold": gold}):
@@ -261,7 +274,6 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     same_castle = target_castle == body.origin_castle
     if not same_castle:
-        terrain = await all_castle_terrain()
         if terrain.get(body.origin_castle, "land") == "sea":
             capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
             land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
@@ -278,7 +290,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         chosen = chosen or opts[0]
         travel, route_path = chosen["minutes"], chosen["path"]
     arrival_at = now() + timedelta(minutes=travel)
-    power = campaign_power(body.troops, _building_levels(p))
+    power = campaign_power(body.troops, _building_levels(p, body.origin_castle))
 
     pay(p["resources"], {"gold": gold, **weapons})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
@@ -288,7 +300,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     # از امتیازش)، و خودِ خاطی از همان پیمان اخراج می‌شود (پیمان باطل می‌شود)
     penalty_charged = 0
     if body.op_type in ATTACK_OP_TYPES and not same_castle:
-        target_player = await players.find_one({"castle": target_castle})
+        target_player = await owner_of_castle(target_castle)
         if target_player:
             pact = await has_non_aggression_pact(user["id"], target_player["tg_id"])
             if pact:
@@ -443,7 +455,7 @@ async def notify_arrivals():
                 c["tg_id"], c["player_name"],
                 f"لشکرت «{name}» از {origin} به {target} رسید.",
             )
-        target_owner = await players.find_one({"castle": target})
+        target_owner = await owner_of_castle(target)
         if target_owner and target_owner["tg_id"] != c["tg_id"]:
             await send_system_message(
                 target_owner["tg_id"], target_owner["name"],
@@ -454,7 +466,7 @@ async def notify_arrivals():
             attacker_summary = troops_summary(c.get("troops", {}))
             defense_troops = await defending_troops(target, target_owner["tg_id"])
             defender_summary = troops_summary(defense_troops)
-            defender_power = campaign_power(defense_troops, _building_levels(target_owner))
+            defender_power = campaign_power(defense_troops, _building_levels(target_owner, target))
             attacker_power = c.get("power", 0)
             stats_text = (
                 f"آمار نبرد «{name}» در {target}:\n"

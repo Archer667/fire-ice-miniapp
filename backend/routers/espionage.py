@@ -6,6 +6,7 @@ from db import players, spy_missions
 from game import now, can_afford, pay
 from game_data import spy_travel_minutes
 from config import SPY_GOLD_COST, SPY_MEN_COST
+from routers.war import owner_of_castle
 
 router = APIRouter(prefix="/api/espionage", tags=["espionage"])
 
@@ -25,7 +26,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
     if len(scenario) < SCENARIO_MIN_LEN:
         raise HTTPException(400, "سناریوی جاسوسی خیلی کوتاه است — نقشه‌ات را کمی بیشتر توضیح بده")
 
-    target = await players.find_one({"castle": body.target_castle})
+    target = await owner_of_castle(body.target_castle)
     if not target:
         raise HTTPException(404, "این قلعه صاحبی ندارد که جاسوسی‌اش کنی")
     if target["tg_id"] == user["id"]:
@@ -40,7 +41,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
     p["resources"]["men"] -= SPY_MEN_COST
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
 
-    travel = spy_travel_minutes(p["castle"], target["castle"])
+    travel = spy_travel_minutes(p["castle"], body.target_castle)
     arrival_at = now() + timedelta(minutes=travel)
 
     doc = {

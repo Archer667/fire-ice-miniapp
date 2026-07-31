@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Coin, Pick, Rock, Wood, Wheat, People, Wine, Hammer, Bastion, Market, Farm, Ranch, Winery, Warehouse, Barracks } from '../components/Icons.jsx';
-import { WEAPON_NAMES } from '../gamedata.js';
+import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
 
 const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat, men: People, wine: Wine };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا', men: 'نیروی انسانی', wine: 'شراب', ...WEAPON_NAMES };
@@ -34,28 +34,38 @@ function fmtRemaining(readyAt) {
 
 export default function Buildings() {
   const { me, setMe, toast } = useGame();
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null);
+  const [castle, setCastle] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [tab, setTab] = useState(GROUPS[0].key);
 
-  const load = () => api.buildings().then(setRows).catch(e => toast(e.message));
-  useEffect(() => { load(); }, []);
+  const load = (c) => api.buildings(c).then(d => { setData(d); setCastle(d.castle); }).catch(e => toast(e.message));
+  useEffect(() => { load(castle); }, []);
+
+  const switchCastle = (c) => {
+    if (c === castle) return;
+    haptic();
+    setData(null);
+    setCastle(c);
+    load(c);
+  };
 
   const act = async (row) => {
     setBusyId(row.id);
     try {
-      const res = row.level === 0 ? await api.buildBuilding(row.id) : await api.upgradeBuilding(row.id);
+      const res = row.level === 0 ? await api.buildBuilding(row.id, castle) : await api.upgradeBuilding(row.id, castle);
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, ...subtractCost(me.resources, res.cost) } });
       toast(row.level === 0
         ? `ساخت «${row.name}» شروع شد — سطح ۱`
         : `ارتقای «${row.name}» به سطح ${res.target_level.toLocaleString('fa-IR')} شروع شد`);
-      await load();
+      await load(castle);
     } catch (e) { toast(e.message); }
     setBusyId(null);
   };
 
-  if (!rows) return <div className="loading">نقشهٔ ساخت‌وساز باز می‌شود...</div>;
+  if (!data) return <div className="loading">نقشهٔ ساخت‌وساز باز می‌شود...</div>;
+  const rows = data.buildings;
 
   const availGroups = GROUPS.filter(g => rows.some(r => r.type === g.key));
   const activeGroup = availGroups.find(g => g.key === tab) || availGroups[0];
@@ -65,6 +75,16 @@ export default function Buildings() {
     <>
       <div className="page-title up">ساختمان‌های قلمرو</div>
       <div className="page-sub up">تا سطح {(30).toLocaleString('fa-IR')} می‌تونی بالا ببریشون — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
+
+      {data.castles.length > 1 && (
+        <div className="tabs up u1" role="tablist" aria-label="قلعه">
+          {data.castles.map(c => (
+            <button type="button" key={c} role="tab" aria-selected={data.castle === c}
+                 className={`rbtn tab ${data.castle === c ? 'on' : ''}`}
+                 onClick={() => switchCastle(c)}>{castleLabel(c)}</button>
+          ))}
+        </div>
+      )}
 
       <div className="tabs up u1" role="tablist">
         {availGroups.map(g => (
@@ -78,7 +98,7 @@ export default function Buildings() {
 
       <div className="card up u2">
         {items.map(row => (
-          <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={me.is_port} onAct={() => act(row)} />
+          <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={data.is_port} onAct={() => act(row)} />
         ))}
       </div>
     </>

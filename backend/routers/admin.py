@@ -10,10 +10,10 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 import game_data
-from game import now, normalize_building_state, add_resources
+from game import now, add_resources, all_building_levels
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus
 from config import ADMIN_IDS
-from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain
+from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -43,7 +43,7 @@ async def list_campaigns(user: dict = Depends(admin_user)):
         arrival_at = s.get("arrival_at")
         target_owner = None
         if s["target_castle"] != s["origin_castle"]:
-            target_owner = await players.find_one({"castle": s["target_castle"]}, {"tg_id": 1, "name": 1})
+            target_owner = await owner_of_castle(s["target_castle"])
         out.append({
             "id": str(s["_id"]), "player": s["player_name"], "tg_id": s["tg_id"],
             "from": s["origin_castle"], "to": s["target_castle"],
@@ -60,13 +60,7 @@ async def list_campaigns(user: dict = Depends(admin_user)):
         })
     return out
 
-def _building_levels(player: dict) -> dict:
-    out = {}
-    for bid, raw in player.get("buildings", {}).items():
-        lvl = normalize_building_state(raw)["level"]
-        if lvl > 0:
-            out[bid] = lvl
-    return out
+_building_levels = all_building_levels
 
 @router.get("/espionage")
 async def list_spy_pending(user: dict = Depends(admin_user)):
@@ -230,7 +224,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             campaign = None
         if campaign:
             recipient_tg_ids.add(campaign["tg_id"])
-            defender = await players.find_one({"castle": campaign["target_castle"]})
+            defender = await owner_of_castle(campaign["target_castle"])
             if defender:
                 recipient_tg_ids.add(defender["tg_id"])
 
@@ -301,6 +295,7 @@ async def list_roster(user: dict = Depends(admin_user)):
             "region": p["region"], "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
             "castle": p["castle"], "is_port": p.get("is_port", False),
             "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
+            "castles": list(p.get("castle_buildings", {}).keys()),
         })
     return out
 
@@ -320,7 +315,7 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
     region = REGIONS[body.region]
     if body.castle not in region["castles"] + region["ports"]:
         raise HTTPException(400, "این قلعه در این اقلیم نیست")
-    holder = await players.find_one({"castle": body.castle})
+    holder = await owner_of_castle(body.castle)
     if holder and holder["tg_id"] != tg_id:
         raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
 
@@ -350,11 +345,90 @@ async def admin_unassign_house(tg_id: int, user: dict = Depends(admin_user)):
         raise HTTPException(404, "بازیکن پیدا نشد")
     if not target.get("region") and not target.get("castle"):
         raise HTTPException(400, "این بازیکن اصلاً خاندانی ندارد")
-    await players.update_one({"tg_id": tg_id}, {"$set": {"region": None, "castle": None, "is_port": False, "house": None}})
+    await players.update_one({"tg_id": tg_id}, {"$set": {
+        "region": None, "castle": None, "is_port": False, "house": None, "castle_buildings": {},
+    }})
     await send_system_message(
         tg_id, target["name"],
-        "خاندان و قلعه‌ات از تو گرفته شد — منتظر بمان تا ادمین دوباره خاندانی برایت مشخص کند.",
+        "خاندان و قلعه‌ات (و هر قلعهٔ اضافه‌ای که داشتی) از تو گرفته شد — "
+        "منتظر بمان تا ادمین دوباره خاندانی برایت مشخص کند.",
     )
+    return {"ok": True}
+
+class AddCastleBody(BaseModel):
+    castle: str
+
+@router.post("/players/{tg_id}/castles")
+async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends(admin_user)):
+    """قلعهٔ اضافه (پایگاهِ دومِ کامل، با ساختمان‌های خودش) به این بازیکن می‌دهد —
+    مثلاً وقتی توی جنگ قلعهٔ یک بازیکنِ دیگر را گرفته. اگر آن قلعه الان دستِ کسِ
+    دیگری باشد (چه قلعهٔ اصلی‌اش چه یکی از قلعه‌های اضافه‌اش)، خودکار ازش گرفته
+    می‌شود و ساختمان‌هایش (غنیمتِ جنگ) هم با خودش می‌آیند — قلعه هیچ‌وقت هم‌زمان
+    مالِ دو بازیکن نمی‌ماند"""
+    target = await players.find_one({"tg_id": tg_id})
+    if not target:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    if not target.get("region") or not target.get("castle"):
+        raise HTTPException(400, "اول باید خاندان و قلعهٔ اصلی داشته باشد")
+    castle_region = await _castle_region_map()
+    if body.castle not in castle_region:
+        raise HTTPException(400, "این قلعه در بازی شناخته‌شده نیست")
+    if body.castle == target["castle"] or body.castle in target.get("castle_buildings", {}):
+        raise HTTPException(400, "این قلعه از قبل مالِ همین بازیکن است")
+
+    captured_buildings = {}
+    previous_owner = await players.find_one({"$or": [
+        {"castle": body.castle}, {f"castle_buildings.{body.castle}": {"$exists": True}},
+    ]})
+    if previous_owner and previous_owner["tg_id"] != tg_id:
+        if previous_owner["castle"] == body.castle:
+            captured_buildings = previous_owner.get("buildings", {})
+            extra = dict(previous_owner.get("castle_buildings", {}))
+            if extra:
+                new_home = next(iter(extra))
+                new_home_buildings = extra.pop(new_home)
+                terrain = await all_castle_terrain()
+                await players.update_one({"tg_id": previous_owner["tg_id"]}, {"$set": {
+                    "castle": new_home, "buildings": new_home_buildings, "castle_buildings": extra,
+                    "is_port": terrain.get(new_home, "land") in ("coastal", "sea"),
+                    "house": CASTLE_HOUSES.get(new_home),
+                }})
+                await send_system_message(
+                    previous_owner["tg_id"], previous_owner["name"],
+                    f"قلعهٔ اصلی‌ات «{body.castle}» به دستِ دشمن افتاد — حالا «{new_home}» قلعهٔ اصلی‌ات است.",
+                )
+            else:
+                await players.update_one({"tg_id": previous_owner["tg_id"]}, {"$set": {
+                    "region": None, "castle": None, "is_port": False, "house": None,
+                }})
+                await send_system_message(
+                    previous_owner["tg_id"], previous_owner["name"],
+                    f"قلعه‌ات «{body.castle}» به دستِ دشمن افتاد و دیگر خاندانی نداری — "
+                    "منتظر بمان تا ادمین دوباره برایت مشخص کند.",
+                )
+        else:
+            captured_buildings = previous_owner.get("castle_buildings", {}).get(body.castle, {})
+            await players.update_one({"tg_id": previous_owner["tg_id"]}, {"$unset": {f"castle_buildings.{body.castle}": ""}})
+            await send_system_message(
+                previous_owner["tg_id"], previous_owner["name"], f"قلعهٔ «{body.castle}» به دستِ دشمن افتاد.",
+            )
+
+    await players.update_one({"tg_id": tg_id}, {"$set": {f"castle_buildings.{body.castle}": captured_buildings}})
+    spoils_note = " (به‌همراهِ ساختمان‌هایی که رویش ساخته بودند — غنیمتِ جنگ)" if captured_buildings else ""
+    await send_system_message(tg_id, target["name"], f"قلعهٔ «{body.castle}»{spoils_note} به قلمروِ تو اضافه شد.")
+    return {"ok": True, "captured_from": previous_owner["name"] if previous_owner and previous_owner["tg_id"] != tg_id else None}
+
+@router.delete("/players/{tg_id}/castles/{castle}")
+async def admin_remove_castle(tg_id: int, castle: str, user: dict = Depends(admin_user)):
+    """یکی از قلعه‌های اضافهٔ این بازیکن را ازش می‌گیرد (قلعه دوباره آزاد می‌شود) —
+    برای گرفتنِ قلعهٔ اصلی از «حذف از خاندان» استفاده کن"""
+    target = await players.find_one({"tg_id": tg_id})
+    if not target:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    if castle not in target.get("castle_buildings", {}):
+        raise HTTPException(400, "این قلعه جزوِ قلعه‌های اضافهٔ این بازیکن نیست")
+    await players.update_one({"tg_id": tg_id}, {"$unset": {f"castle_buildings.{castle}": ""}})
+    await send_system_message(tg_id, target["name"], f"قلعهٔ «{castle}» از قلمروِ تو گرفته شد.")
     return {"ok": True}
 
 @router.delete("/players/{tg_id}/pending")

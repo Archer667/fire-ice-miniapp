@@ -22,9 +22,48 @@ def normalize_building_state(raw) -> dict:
 
 def resolve_building_upgrades(player: dict) -> dict:
     """ارتقاهای تمام‌شده را نهایی می‌کند و ساختار قدیمی‌تر (True/False به‌جای
-    دیکشنری سطح‌دار) را که از نسخه‌های پیش از سیستم سطح‌بندی مانده، اصلاح می‌کند"""
-    b = player.setdefault("buildings", {})
-    for bid, raw in list(b.items()):
+    دیکشنری سطح‌دار) را که از نسخه‌های پیش از سیستم سطح‌بندی مانده، اصلاح می‌کند —
+    هم برای قلعهٔ اصلی، هم برای هر قلعهٔ اضافه‌ای که این بازیکن (با فتح یا تصمیمِ
+    ادمین) صاحبش شده"""
+    resolve_building_upgrades_for(player.setdefault("buildings", {}))
+    for state in player.get("castle_buildings", {}).values():
+        resolve_building_upgrades_for(state)
+    return player
+
+def owned_castles(player: dict) -> list:
+    """همهٔ قلعه‌های این بازیکن — قلعهٔ اصلی (خانه) + قلعه‌های اضافه‌ای که به‌عنوانِ
+    غنیمتِ جنگ یا تصمیمِ ادمین گرفته (پایگاهِ دوم/سوم و...)"""
+    out = [player["castle"]] if player.get("castle") else []
+    out += [c for c in player.get("castle_buildings", {}) if c != player.get("castle")]
+    return out
+
+def castle_building_state(player: dict, castle: str) -> dict:
+    """دیکشنریِ ساختمان‌های یک قلعهٔ مشخصِ این بازیکن — قلعهٔ اصلی از buildings،
+    قلعه‌های اضافه از castle_buildings[castle]. اگر قلعه مالِ این بازیکن نباشه هم
+    دیکشنریِ خالی برمی‌گردونه (چک مالکیت وظیفهٔ فراخوان‌کننده‌ست)"""
+    if castle == player.get("castle"):
+        return player.setdefault("buildings", {})
+    return player.setdefault("castle_buildings", {}).setdefault(castle, {})
+
+def building_levels_for(player: dict, castle: str):
+    for bid, raw in castle_building_state(player, castle).items():
+        level = normalize_building_state(raw)["level"]
+        if level > 0 and bid in BUILDINGS:
+            yield bid, level
+
+def all_building_levels(player: dict) -> dict:
+    """سطحِ هر ساختمان جمع‌شده روی همهٔ قلعه‌های این بازیکن — برای تولید/سقفِ کلی و
+    امتیاز، چون خزانه و انبار یک کشورند نه هر قلعه جدا"""
+    total = {}
+    for castle in owned_castles(player):
+        for bid, level in building_levels_for(player, castle):
+            total[bid] = total.get(bid, 0) + level
+    return total
+
+def resolve_building_upgrades_for(state: dict) -> dict:
+    """نسخهٔ خامِ resolve_building_upgrades که فقط روی یک دیکشنریِ ساختمانِ تکی
+    (نه کلِ بازیکن) کار می‌کنه — برایِ همون قلعهٔ اصلی و هر قلعهٔ اضافه یکسان به کار می‌ره"""
+    for bid, raw in list(state.items()):
         st = normalize_building_state(raw)
         ready = st["ready_at"]
         if ready and st["upgrade_to"]:
@@ -34,18 +73,12 @@ def resolve_building_upgrades(player: dict) -> dict:
                 st["level"] = st["upgrade_to"]
                 st["upgrade_to"] = None
                 st["ready_at"] = None
-        b[bid] = st
-    return player
-
-def _building_levels(player: dict):
-    for bid, raw in player.get("buildings", {}).items():
-        level = normalize_building_state(raw)["level"]
-        if level > 0 and bid in BUILDINGS:
-            yield bid, level
+        state[bid] = st
+    return state
 
 def effective_caps(player: dict) -> dict:
     caps = dict(RESOURCE_CAPS)
-    for bid, level in _building_levels(player):
+    for bid, level in all_building_levels(player).items():
         for k, v in building_cap_bonus(bid).items():
             caps[k] = caps.get(k, 0) + v * level
     return caps
@@ -66,7 +99,7 @@ def daily_production(player: dict) -> dict:
     """تولید پایه + بونوس ساختمان‌ها (طبق مقادیرِ سراسریِ فعلی — پیش‌فرض یا بازنویسیِ
     ادمین) + مالیات (وابسته به جمعیت، نرخ و محبوبیت)"""
     prod = dict(DAILY_PRODUCTION)
-    for bid, level in _building_levels(player):
+    for bid, level in all_building_levels(player).items():
         for k, v in building_produces(bid).items():
             prod[k] = prod.get(k, 0) + v * level
 
