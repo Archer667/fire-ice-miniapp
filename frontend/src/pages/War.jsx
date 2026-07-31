@@ -117,13 +117,15 @@ export default function War() {
 
   const [routeOptions, setRouteOptions] = useState(null); // [{minutes, path}] | null
   const [routeChoice, setRouteChoice] = useState(0);
+  const [routeError, setRouteError] = useState('');
   useEffect(() => {
-    if (sameCastle || !targetName) { setRouteOptions(null); setRouteChoice(0); return; }
+    if (sameCastle || !targetName) { setRouteOptions(null); setRouteChoice(0); setRouteError(''); return; }
     let cancelled = false;
     setRouteOptions(null);
+    setRouteError('');
     api.warRoutes(origin, targetName).then(res => {
       if (!cancelled) { setRouteOptions(res.routes || []); setRouteChoice(0); }
-    }).catch(() => { if (!cancelled) setRouteOptions([]); });
+    }).catch(e => { if (!cancelled) { setRouteOptions([]); setRouteError(e.message || 'مسیری پیدا نشد'); } });
     return () => { cancelled = true; };
   }, [origin, targetName, sameCastle]);
 
@@ -342,7 +344,7 @@ export default function War() {
             {!sameCastle && targetName && (
               routeOptions === null ? (
                 <div className="page-sub" style={{ margin: '8px 4px 0' }}>در حال یافتن مسیر...</div>
-              ) : routeOptions.length > 0 && (
+              ) : routeOptions.length > 0 ? (
                 <div style={{ marginTop: 10 }}>
                   <label className="f" style={{ marginTop: 0 }}>
                     مسیر لشکرکشی{routeOptions.length > 1 ? ' — یکی رو انتخاب کن' : ''}
@@ -359,6 +361,8 @@ export default function War() {
                     </div>
                   ))}
                 </div>
+              ) : routeError && (
+                <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>{routeError}</div>
               )
             )}
 
