@@ -522,7 +522,8 @@ export default function Admin() {
   };
 
   const assignHouse = async (tgId) => {
-    const regionId = assignRegion[tgId] || Object.keys(REGIONS_STATIC)[0];
+    const current = roster?.find(p => p.tg_id === tgId) || pendingPlayers?.find(p => p.tg_id === tgId);
+    const regionId = assignRegion[tgId] || current?.region || Object.keys(REGIONS_STATIC)[0];
     const castle = assignCastle[tgId];
     if (!castle) { toast('یک قلعه انتخاب کن'); return; }
     setAssignBusyId(tgId);
