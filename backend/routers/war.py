@@ -8,6 +8,7 @@ from game import now, can_afford, pay, normalize_building_state, add_resources
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
+    _dijkstra_path,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -110,6 +111,27 @@ async def blocked_castles_for(tg_id: int) -> frozenset:
             blocked.add(other["castle"])
     return frozenset(blocked)
 
+async def blocked_route_message(origin_castle: str, target_castle: str, blocked: frozenset) -> str:
+    """وقتی مسیر پیدا نشود، به‌جای پیام کلی، دقیقاً می‌گوید مسیرِ طبیعی از کدام قلعه(ها)
+    می‌گذرد که دستِ بازیکنی‌ست که با او پیمان نداری — تا بداند باید با چه کسی پیمان ببندد"""
+    _min, natural_path = _dijkstra_path(origin_castle, target_castle, frozenset())
+    generic = "مسیری بین این دو قلعه پیدا نشد — یا مسیرها از قلمروِ لردی می‌گذرد که با او پیمان نداری"
+    if not natural_path:
+        return generic
+    blockers = [c for c in natural_path[1:-1] if c in blocked]
+    if not blockers:
+        return generic
+    owners = {}
+    async for pl in players.find({"castle": {"$in": blockers}}, {"castle": 1, "name": 1, "title": 1}):
+        owners[pl["castle"]] = pl
+    parts = []
+    for c in blockers:
+        o = owners.get(c)
+        who = f"{o['name']}{' · ' + o['title'] if o and o.get('title') else ''}" if o else "یکی دیگر"
+        parts.append(f"«{c}» (دستِ {who})")
+    return "این قلعه سرِ راهت است و باهاش پیمان نداری: " + "، ".join(parts) if len(parts) == 1 else \
+        "این قلعه‌ها سرِ راهت هستند و باهاشان پیمان نداری: " + "، ".join(parts)
+
 async def has_non_aggression_pact(a_id: int, b_id: int):
     """پیمانِ عدم‌تجاوزِ پذیرفته‌شده بین این دو نفر، اگر باشد (برای چک غرامتِ خیانت)"""
     return await alliances.find_one({
@@ -190,7 +212,7 @@ async def routes(origin_castle: str, target_castle: str, user: dict = Depends(ge
     blocked = await blocked_castles_for(user["id"])
     opts = travel_routes(origin_castle, target_castle, blocked)
     if not opts:
-        raise HTTPException(400, "مسیری بین این دو قلعه پیدا نشد — یا مسیرها از قلمروِ لردی می‌گذرد که با او پیمان نداری")
+        raise HTTPException(400, await blocked_route_message(origin_castle, target_castle, blocked))
     return {"routes": opts}
 
 @router.post("/submit")
@@ -251,7 +273,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     else:
         opts = travel_routes(body.origin_castle, target_castle, blocked)
         if not opts:
-            raise HTTPException(400, "مسیر این لشکرکشی از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری — یا پیمان ببند، یا هدف نزدیک‌تری انتخاب کن")
+            raise HTTPException(400, await blocked_route_message(body.origin_castle, target_castle, blocked))
         chosen = next((r for r in opts if r["path"] == body.via), None) if body.via else None
         chosen = chosen or opts[0]
         travel, route_path = chosen["minutes"], chosen["path"]
