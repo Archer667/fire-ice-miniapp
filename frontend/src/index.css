@@ -426,9 +426,10 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   background: rgba(10,10,10,0.85); border: 1.5px solid rgba(233,193,118,0.55);
   display: flex; align-items: center; justify-content: center; color: var(--az);
   box-shadow: 0 0 0 3px rgba(0,0,0,0.35);
+  opacity: 0.45; /* قلعه‌های خالی/بی‌صاحب کم‌رنگ‌تر تا قلعه‌های صاحب‌دار بیشتر توی چشم بیان */
 }
-.pin.owned .dot { border-color: var(--gold); color: var(--gold); }
-.pin.mine .dot { border-color: var(--az); background: rgba(233,193,118,0.3); color: #2a1c00; box-shadow: 0 0 0 4px rgba(233,193,118,0.22); }
+.pin.owned .dot { border-color: var(--gold); color: var(--gold); opacity: 1; }
+.pin.mine .dot { border-color: var(--az); background: rgba(233,193,118,0.3); color: #2a1c00; box-shadow: 0 0 0 4px rgba(233,193,118,0.22); opacity: 1; }
 .pin.active { z-index: 6; }
 .pin.active .dot { transform: scale(1.25); }
 .pin.port .dot { border-radius: 4px; }

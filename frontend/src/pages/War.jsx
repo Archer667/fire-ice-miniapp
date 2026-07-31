@@ -37,12 +37,11 @@ export default function War() {
     setMapError(false);
     api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); });
   };
-  const loadBuildings = () => api.buildings().then(setBuildings).catch(e => { toast(e.message); setBuildings([]); });
   const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
   const loadLegions = () => api.legions().then(setLegions).catch(e => { toast(e.message); setLegions([]); });
   const loadWarWindow = () => api.warWindow().then(setWarWindow).catch(() => setWarWindow({ open: true }));
 
-  useEffect(() => { loadMap(); loadBuildings(); loadMine(); loadLegions(); loadWarWindow(); }, []);
+  useEffect(() => { loadMap(); loadMine(); loadLegions(); loadWarWindow(); }, []);
   const windowClosed = warWindow ? !warWindow.open : false;
 
   // گزارش لشکرکشی تازه، ۳۰ دقیقه بعد از ارسال در تب «گزارش‌ها» ظاهر می‌شود
@@ -81,7 +80,7 @@ export default function War() {
     () => (mine || []).filter(c => c.active && c.op_type === 'garrison').map(c => c.target),
     [mine]
   );
-  const originOptions = [me.castle, ...stationedOrigins.filter(o => o !== me.castle)];
+  const originOptions = [...new Set([me.castle, ...(me.castles || []), ...stationedOrigins])];
 
   const [origin, setOrigin] = useState(me.castle);
   const [opType, setOpType] = useState(OP_TYPES[0].id);
@@ -91,6 +90,14 @@ export default function War() {
   const [busy, setBusy] = useState(false);
 
   const op = OP_TYPES.find(o => o.id === opType);
+
+  // بازدهی/توان حمله بر اساسِ ساختمان‌های همون قلعه‌ای‌ست که لشکر واقعاً ازش اعزام
+  // می‌شه — پس با عوض‌شدنِ مبدا، ساختمان‌های همون قلعه رو دوباره می‌خونیم
+  useEffect(() => {
+    let cancelled = false;
+    api.buildings(origin).then(d => { if (!cancelled) setBuildings(d.buildings); }).catch(() => { if (!cancelled) setBuildings([]); });
+    return () => { cancelled = true; };
+  }, [origin]);
 
   const isPortCastle = (name) => {
     if (!mapData) return name === me.castle && me.is_port;
