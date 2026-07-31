@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, alliances
-from game import now, apply_production, can_afford, pay
+from game import now, apply_production, can_afford, pay, add_resources
 from game_data import ALLIANCE_TYPES
 from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX, PRIVATE_ALLIANCE_MULTIPLIER
 from routers.ravens import send_system_message
@@ -131,7 +131,10 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را پذیرفت.")
     else:
         await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "rejected"}})
-        await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"resources.wine": a["wine_cost"]}})
+        proposer = await players.find_one({"tg_id": a["from_id"]})
+        if proposer:
+            add_resources(proposer, {"wine": a["wine_cost"]})
+            await players.update_one({"tg_id": a["from_id"]}, {"$set": {"resources": proposer["resources"]}})
         await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را رد کرد — شرابت برگشت.")
     return {"ok": True}
 

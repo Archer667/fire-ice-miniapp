@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin
 from db import players, hierarchy
-from game import now
+from game import now, add_resources
 from game_data import REGIONS, WARDEN_GROUPS, SMALL_COUNCIL_SEATS
 from ranks import get_hierarchy_doc, group_of_region, wardens_of, HIERARCHY_ID
 from config import SALARY_CYCLE_DAYS
@@ -221,7 +221,8 @@ async def pay_daily_salaries():
         if not p:
             return
         treasury -= amount
-        await players.update_one({"tg_id": tg_id}, {"$inc": {"resources.gold": amount}})
+        add_resources(p, {"gold": amount})
+        await players.update_one({"tg_id": tg_id}, {"$set": {"resources": p["resources"]}})
         updates[state_key] = {"holder": tg_id, "last_paid_at": n}
         await send_system_message(
             tg_id, p["name"],

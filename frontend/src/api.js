@@ -181,6 +181,28 @@ function mockResolve() {
 // چک اعمال می‌شه — آینه‌ی apply_production در backend/game.py. مقدارِ اعشاریِ دقیق تو
 // mockMe.resources می‌مونه (که تولیدِ کم‌مقدار بینِ چک‌های پیاپی گم نشه)، فقط موقعِ
 // برگردوندن به فرانت (تابعِ me()) رند می‌شه
+function mockEffectiveCaps() {
+  const caps = { ...RESOURCE_CAPS };
+  for (const [id, st] of Object.entries(mockBuildings)) {
+    if (!st.level) continue;
+    const { cap_bonus } = buildingYield(id, st.level);
+    for (const [k, v] of Object.entries(cap_bonus)) caps[k] = (caps[k] || 0) + v;
+  }
+  return caps;
+}
+
+// مقدارهای مثبت رو به resources بازیکن اضافه می‌کنه بدون رد شدن از سقفِ مؤثرش —
+// آینه‌ی add_resources در backend/game.py
+function mockAddResources(deltas) {
+  if (!mockMe.resources) return;
+  const caps = mockEffectiveCaps();
+  for (const [k, delta] of Object.entries(deltas)) {
+    if (!delta) continue;
+    const cap = caps[k] ?? 1e9;
+    mockMe.resources[k] = Math.min(cap, (mockMe.resources[k] || 0) + delta);
+  }
+}
+
 function mockApplyProduction() {
   if (!mockMe.resources) return;
   const last = new Date(mockMe.last_tick || Date.now()).getTime();
@@ -188,12 +210,11 @@ function mockApplyProduction() {
   if (elapsedDays <= 0) return;
 
   const prod = { ...DAILY_PRODUCTION };
-  const caps = { ...RESOURCE_CAPS };
+  const caps = mockEffectiveCaps();
   for (const [id, st] of Object.entries(mockBuildings)) {
     if (!st.level) continue;
-    const { produces, cap_bonus } = buildingYield(id, st.level);
+    const { produces } = buildingYield(id, st.level);
     for (const [k, v] of Object.entries(produces)) prod[k] = (prod[k] || 0) + v;
-    for (const [k, v] of Object.entries(cap_bonus)) caps[k] = (caps[k] || 0) + v;
   }
   const men = mockMe.resources.men || 0;
   const taxRate = Math.min(mockMe.tax_rate ?? TAX_RATE_DEFAULT, maxTaxRate(mockMe.popularity ?? POPULARITY_START));
@@ -523,17 +544,13 @@ const M = {
     if (!c) throw new Error('لشکر پیدا نشد');
     if (!c.active) throw new Error('این لشکر دیگر فعال نیست');
     c.active = false;
-    mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
-    mockMe.resources.gold = (mockMe.resources.gold ?? 0) + c.gold_cost;
     const weaponsRefund = {};
     for (const [tid, n] of Object.entries(c.troops || {})) {
       if (!n || n <= 0) continue;
       const weaponKey = TROOP_UNIT_BUILDINGS[tid]?.weapon;
-      if (weaponKey) {
-        weaponsRefund[weaponKey] = (weaponsRefund[weaponKey] || 0) + n * WEAPON_PER_SOLDIER;
-        mockMe.resources[weaponKey] = (mockMe.resources[weaponKey] ?? 0) + n * WEAPON_PER_SOLDIER;
-      }
+      if (weaponKey) weaponsRefund[weaponKey] = (weaponsRefund[weaponKey] || 0) + n * WEAPON_PER_SOLDIER;
     }
+    mockAddResources({ men: c.men_committed, gold: c.gold_cost, ...weaponsRefund });
     return { ok: true, men_refunded: c.men_committed, gold_refunded: c.gold_cost, weapons_refunded: weaponsRefund };
   },
   warWindow: () => ({ open: mockWarWindowOpen, updated_at: null }),
@@ -646,7 +663,7 @@ const M = {
     const cost = qty * m.price;
     if (!mockCanAfford({ gold: cost })) throw new Error('طلای کافی نداری');
     mockPay({ gold: cost });
-    mockMe.resources[resource] = (mockMe.resources[resource] ?? 0) + qty;
+    mockAddResources({ [resource]: qty });
     m.qty -= qty;
     m.price = Math.max(1, Math.round(Math.min(m.price * (1 + 0.015 * qty), m.base_price * 2)));
     return { ok: true, resource, qty, cost };
@@ -662,7 +679,7 @@ const M = {
     const cost = qty * m.price;
     if (!mockCanAfford({ gold: cost })) throw new Error('طلای کافی نداری');
     mockPay({ gold: cost });
-    mockMe.resources[m.resource] = (mockMe.resources[m.resource] ?? 0) + qty;
+    mockAddResources({ [m.resource]: qty });
     m.qty -= qty;
     return { ok: true, resource: m.resource, qty, cost };
   },
@@ -753,7 +770,7 @@ const M = {
     if (!c) throw new Error('این لشکرکشی پیدا نشد');
     if (!c.active) throw new Error('این لشکرکشی دیگر فعال نیست');
     c.active = false;
-    mockMe.resources.men = (mockMe.resources.men ?? 0) + c.men_committed;
+    mockAddResources({ men: c.men_committed });
     return { ok: true };
   },
   sendSpy: (targetCastle, scenario) => {
@@ -820,7 +837,7 @@ const M = {
         defense: [{ name: 'برج نگهبانی', level: 1 }],
         campaigns: [],
       };
-      mockMe.resources.men = (mockMe.resources.men ?? 0) + m.men_sent;
+      mockAddResources({ men: m.men_sent });
       mockSendSystemMessage(`جاسوس‌های تو با موفقیت به ${m.target} نفوذ کردند و گزارش کاملی به دست آوردند — نتیجه در بخش جاسوسی منتظر توست.`);
     } else {
       m.report = null;
@@ -919,7 +936,7 @@ const M = {
     if (claimedToday) throw new Error('امروز جایزه‌ات را گرفته‌ای — فردا دوباره سر بزن');
     const dayInCycle = dailyDayInCycle(streak);
     const reward = DAILY_REWARDS[dayInCycle - 1];
-    for (const [k, v] of Object.entries(reward)) mockMe.resources[k] = (mockMe.resources[k] ?? 0) + v;
+    mockAddResources(reward);
     mockDaily.streak = streak; mockDaily.lastClaimDate = dailyTodayStr();
     return { ok: true, streak, day_in_cycle: dayInCycle, reward, resources: mockMe.resources };
   },
@@ -1259,7 +1276,7 @@ const M = {
     if (!a) throw new Error('پیمان پیدا نشد');
     a.status = accept ? 'accepted' : 'rejected';
     if (accept) mockMe.alliance_count = (mockMe.alliance_count ?? 0) + 1;
-    else mockMe.resources.wine = (mockMe.resources.wine ?? 0) + (a.wine_cost || 0);
+    else mockAddResources({ wine: a.wine_cost || 0 });
     return { ok: true };
   },
   diplomacyLeave: (id) => {

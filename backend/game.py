@@ -50,6 +50,18 @@ def effective_caps(player: dict) -> dict:
             caps[k] = caps.get(k, 0) + v * level
     return caps
 
+def add_resources(player: dict, deltas: dict) -> dict:
+    """مقدارهای مثبت رو به resources بازیکن اضافه می‌کنه، ولی هیچ‌وقت از سقفِ مؤثرش
+    (بر پایهٔ ساختمان‌هاش) رد نمی‌شه — برخلافِ $inc خام تو مونگو که سقف رو کلاً نادیده
+    می‌گیره. resources خودِ player رو درجا آپدیت و برش می‌گردونه (برای $set به دیتابیس)."""
+    caps = effective_caps(player)
+    res = player.setdefault("resources", {})
+    for k, delta in deltas.items():
+        if not delta:
+            continue
+        res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + delta)
+    return res
+
 def daily_production(player: dict) -> dict:
     """تولید پایه + بونوس ساختمان‌ها (طبق مقادیرِ سراسریِ فعلی — پیش‌فرض یا بازنویسیِ
     ادمین) + مالیات (وابسته به جمعیت، نرخ و محبوبیت)"""

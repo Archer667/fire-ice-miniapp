@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, caravans, alliances
-from game import now, can_afford, pay
+from game import now, can_afford, pay, add_resources
 from game_data import TRADE_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
 from routers.war import blocked_castles_for
@@ -90,8 +90,8 @@ async def notify_caravan_arrivals():
     async for c in cur:
         target = await players.find_one({"tg_id": c["target_tg_id"]})
         if target:
-            inc = {f"resources.{k}": v for k, v in c["resources"].items()}
-            await players.update_one({"tg_id": c["target_tg_id"]}, {"$inc": inc})
+            add_resources(target, c["resources"])
+            await players.update_one({"tg_id": c["target_tg_id"]}, {"$set": {"resources": target["resources"]}})
         goods_text = " · ".join(f"{v} {TRADE_GOOD_NAMES.get(k, k)}" for k, v in c["resources"].items())
         await send_system_message(
             c["tg_id"], c["player_name"],

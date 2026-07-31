@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, map_castles, roleplays, game_settings, alliances
-from game import now, can_afford, pay, normalize_building_state
+from game import now, can_afford, pay, normalize_building_state, add_resources
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
@@ -324,10 +324,11 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
             weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
 
     await campaigns.update_one({"_id": c["_id"]}, {"$set": {"active": False, "status": "cancelled"}})
-    inc = {"resources.men": c["men_committed"], "resources.gold": c["gold_cost"]}
-    for wkey, n in weapons_refund.items():
-        inc[f"resources.{wkey}"] = n
-    await players.update_one({"tg_id": user["id"]}, {"$inc": inc})
+    p = await players.find_one({"tg_id": user["id"]})
+    if p:
+        deltas = {"men": c["men_committed"], "gold": c["gold_cost"], **weapons_refund}
+        add_resources(p, deltas)
+        await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
     return {
         "ok": True, "men_refunded": c["men_committed"], "gold_refunded": c["gold_cost"],
         "weapons_refunded": weapons_refund,

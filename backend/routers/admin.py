@@ -10,7 +10,7 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 import game_data
-from game import now, normalize_building_state
+from game import now, normalize_building_state, add_resources
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain
@@ -144,7 +144,8 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
 
     if spy_player:
         if success:
-            await players.update_one({"tg_id": spy_player["tg_id"]}, {"$inc": {"resources.men": m["men_sent"]}})
+            add_resources(spy_player, {"men": m["men_sent"]})
+            await players.update_one({"tg_id": spy_player["tg_id"]}, {"$set": {"resources": spy_player["resources"]}})
             await send_system_message(
                 spy_player["tg_id"], spy_player["name"],
                 f"جاسوس‌های تو با موفقیت به {m['target_castle']} نفوذ کردند و گزارش کاملی به دست آوردند — نتیجه در بخش جاسوسی منتظر توست.",
@@ -723,9 +724,10 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
     if not c.get("active"):
         raise HTTPException(400, "این لشکرکشی دیگر فعال نیست")
     await campaigns.update_one({"_id": oid}, {"$set": {"active": False, "status": "disbanded"}})
-    await players.update_one({"tg_id": c["tg_id"]}, {"$inc": {"resources.men": c["men_committed"]}})
     owner = await players.find_one({"tg_id": c["tg_id"]})
     if owner:
+        add_resources(owner, {"men": c["men_committed"]})
+        await players.update_one({"tg_id": c["tg_id"]}, {"$set": {"resources": owner["resources"]}})
         await send_system_message(
             owner["tg_id"], owner["name"],
             f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و نفراتش به خانه برگشتند.",

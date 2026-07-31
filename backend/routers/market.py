@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, market_listings, black_market_listings
-from game import now, can_afford, pay
+from game import now, can_afford, pay, add_resources
 from game_data import TRADE_GOOD_NAMES
 
 router = APIRouter(prefix="/api/market", tags=["market"])
@@ -42,7 +42,7 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
     pay(p["resources"], {"gold": cost})
-    p["resources"][body.resource] = p["resources"].get(body.resource, 0) + body.qty
+    add_resources(p, {body.resource: body.qty})
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
 
     # هر خرید، تقاضا را نشان می‌دهد — قیمت را کمی بالا می‌برد (سقف دو برابر قیمت پایه)
@@ -81,7 +81,7 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
     pay(p["resources"], {"gold": cost})
-    p["resources"][m["resource"]] = p["resources"].get(m["resource"], 0) + body.qty
+    add_resources(p, {m["resource"]: body.qty})
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
     await black_market_listings.update_one({"_id": m["_id"]}, {"$inc": {"qty": -body.qty}})
     return {"ok": True, "resource": m["resource"], "qty": body.qty, "cost": cost}

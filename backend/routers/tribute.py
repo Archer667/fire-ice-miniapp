@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, tributes, hierarchy
-from game import now, can_afford, pay
+from game import now, can_afford, pay, add_resources
 from ranks import my_tribute_role, HIERARCHY_ID
 from routers.ravens import send_system_message
 
@@ -112,7 +112,10 @@ async def pay_tribute(tribute_id: str, user: dict = Depends(get_user)):
     if t["from_role"] == "coin":
         await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$inc": {"treasury_gold": t["amount"]}}, upsert=True)
     else:
-        await players.update_one({"tg_id": t["from_id"]}, {"$inc": {"resources.gold": t["amount"]}})
+        recipient = await players.find_one({"tg_id": t["from_id"]})
+        if recipient:
+            add_resources(recipient, {"gold": t["amount"]})
+            await players.update_one({"tg_id": t["from_id"]}, {"$set": {"resources": recipient["resources"]}})
 
     await tributes.update_one({"_id": oid}, {"$set": {"status": "paid", "paid_at": now()}})
     await send_system_message(

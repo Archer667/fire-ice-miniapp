@@ -2,7 +2,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
 from db import players
-from game import now, effective_caps
+from game import now, add_resources
 from config import DAILY_REWARDS
 
 router = APIRouter(prefix="/api/daily", tags=["daily"])
@@ -53,10 +53,7 @@ async def daily_claim(user: dict = Depends(get_user)):
 
     day_in_cycle = _day_in_cycle(pending_streak)
     reward = DAILY_REWARDS[day_in_cycle - 1]
-    caps = effective_caps(p)
-    res = p["resources"]
-    for k, v in reward.items():
-        res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + v)
+    res = add_resources(p, reward)
 
     await players.update_one({"tg_id": user["id"]}, {"$set": {
         "resources": res, "daily_streak": pending_streak, "daily_last_claim_date": _today_str(),
