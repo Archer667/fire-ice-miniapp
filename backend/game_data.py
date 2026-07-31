@@ -468,7 +468,7 @@ CASTLE_EN_NAMES = {
     "هارنهال": "Harrenhal",
     "هاروست هال": "Harvest Hall",
     "هانی هولت": "Honeyholt",
-    "های استک هال": "High Stack Hall",
+    "های استک هال": "Haystack Hall",
     "های هرمیتیج": "High Hermitage",
     "هایگاردن": "Highgarden",
     "هل هولت": "Hellholt",
