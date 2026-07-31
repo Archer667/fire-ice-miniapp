@@ -26,6 +26,7 @@ async def get_map(user: dict = Depends(get_user)):
         owners_by_castle[p["castle"]] = {
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "points": r["score"], "overlord_name": overlord_name.get(p["region"]),
+            "region": p["region"],
         }
 
     # مختصات و نوع آیکنِ هرچه ادمین از پنلش روی نقشه گذاشته (چه اسم موجود چه کاملاً تازه)

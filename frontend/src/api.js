@@ -161,11 +161,11 @@ const mockPolls = [
     status: 'open', tally: [3, 1], total_votes: 4, eligible: true, my_vote: null },
 ];
 const MOCK_PLAYERS = [
-  { tg_id: 9001, name: 'دنریس تارگرین', castle: 'دراگون‌استون', region_name: 'کراون‌لندز', title: 'ملکه' },
-  { tg_id: 9002, name: 'تایوین لنیستر', castle: 'کسترلی راک', region_name: 'وسترلندز', title: 'لرد' },
-  { tg_id: 9003, name: 'مارگری تایرل', castle: 'های‌گاردن', region_name: 'ریچ', title: 'لیدی' },
-  { tg_id: 9004, name: 'یارا گریجوی', castle: 'پایک', region_name: 'جزایر آهن', title: 'لیدی' },
-  { tg_id: 9005, name: 'ادموری تالی', castle: 'ریورران', region_name: 'ریورلندز', title: 'لرد' },
+  { tg_id: 9001, name: 'دنریس تارگرین', castle: 'دراگون استون', region: 'crown', region_name: 'کراون‌لندز', title: 'ملکه' },
+  { tg_id: 9002, name: 'تایوین لنیستر', castle: 'کرگ', region: 'west', region_name: 'وسترلندز', title: 'لرد' },
+  { tg_id: 9003, name: 'مارگری تایرل', castle: 'هایگاردن', region: 'reach', region_name: 'ریچ', title: 'لیدی' },
+  { tg_id: 9004, name: 'یارا گریجوی', castle: 'پایک', region: 'iron', region_name: 'جزایر آهن', title: 'لیدی' },
+  { tg_id: 9005, name: 'ادموری تالی', castle: 'ریوران', region: 'river', region_name: 'ریورلندز', title: 'لرد' },
 ];
 
 function mockResolve() {
@@ -352,10 +352,10 @@ const M = {
     mockResolveCampaigns();
     const owners = {};
     for (const p of MOCK_PLAYERS) {
-      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null };
+      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null, region: p.region };
     }
     if (mockMe.registered) {
-      owners[mockMe.castle] = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null };
+      owners[mockMe.castle] = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockMe.region };
     }
     const nowMs = Date.now();
     return {

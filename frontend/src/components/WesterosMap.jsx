@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Build, Rock } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
-import { REGIONS_STATIC, castleLabel } from '../gamedata.js';
+import { REGIONS_STATIC, castleLabel, REGION_COLORS } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
 
 /** جای‌گذاری و ضدِمقیاسِ پاپ‌آپ اطلاعات — طوری که همیشه دقیقاً کنار پین بچسبد
@@ -46,6 +46,8 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
         const Icon = KIND_ICON[c.kind] || (c.port ? Ship : Keep);
         const active = pin === c.name;
         const popupStyle = popupPlacement(xy, zoom);
+        const ownerColor = c.owner?.region ? REGION_COLORS[c.owner.region] : null;
+        const dotStyle = ownerColor ? { borderColor: ownerColor, color: ownerColor } : undefined;
         return (
           <div key={c.name} role={onPinClick ? 'button' : undefined} tabIndex={onPinClick ? 0 : undefined}
                aria-label={onPinClick ? c.name : undefined}
@@ -59,14 +61,18 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
                  if (!onPinClick) return;
                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); haptic(); onPinClick(c); }
                }}>
-            <span className="dot"><Icon s={8} /></span>
+            <span className="dot" style={dotStyle}><Icon s={8} /></span>
             {active && onPinClick && (
               <div className="pin-popup" style={popupStyle} onClick={(e) => e.stopPropagation()}>
                 <div className="pi-name">{castleLabel(c.name)}{c.port ? ' ⚓' : ''}{c.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
                 <div className="pi-owner">اقلیم: {REGIONS_STATIC[c.region]?.name || '—'}</div>
                 {c.owner ? (
                   <div className="pi-owner-block">
-                    <div className="pi-owner">صاحب: {c.owner.name}{c.owner.title ? ` · ${c.owner.title}` : ''}</div>
+                    <div className="pi-owner">
+                      {ownerColor && <span className="pi-swatch" style={{ background: ownerColor }} />}
+                      صاحب: {c.owner.name}{c.owner.title ? ` · ${c.owner.title}` : ''}
+                      {c.owner.region && REGIONS_STATIC[c.owner.region] ? ` (${REGIONS_STATIC[c.owner.region].name})` : ''}
+                    </div>
                     <div className="pi-stats">
                       امتیاز: {(c.owner.points ?? 0).toLocaleString('fa-IR')}
                       {c.owner.overlord_name ? ` · بالادستی: ${c.owner.overlord_name}` : ''}
@@ -102,6 +108,8 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
 
   if (mapped.length === 0) return null;
 
+  const ownedRegions = [...new Set(mapped.filter(c => c.owner?.region).map(c => c.owner.region))];
+
   return (
     <div className="mapview">
       <ZoomPanMap onInteract={() => setPin(null)}>
@@ -109,6 +117,16 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
                   onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
                   onSelectTarget={onSelectTarget} pickLabel={pickLabel} />
       </ZoomPanMap>
+      {ownedRegions.length > 0 && (
+        <div className="map-legend">
+          {ownedRegions.map(rid => (
+            <span className="map-legend-item" key={rid}>
+              <span className="map-legend-dot" style={{ background: REGION_COLORS[rid] }} />
+              {REGIONS_STATIC[rid]?.name || rid}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -28,6 +28,21 @@ export const REGIONS_STATIC = {
     ports: ['دراگون استون','دریفت مارک','روکز رست','شارپ پوینت','کینگزلندینگ'] },
 };
 
+// رنگِ اختصاصیِ هر اقلیم — پینِ هر قلعه روی نقشه با همین رنگ نشون داده می‌شه، بر اساس
+// region فعلیِ لردِ صاحبش (نه لزوماً جغرافیای خودِ قلعه) — یعنی اگه یه لرد قلعه‌ای
+// خارج از اقلیمِ اصلیش رو بگیره، پینِ اون قلعه هم رنگِ اقلیمِ فعلیِ همون لرد می‌شه
+export const REGION_COLORS = {
+  north: '#7fa8c9',
+  iron: '#3fa796',
+  river: '#5b7fd4',
+  west: '#c9a83a',
+  reach: '#6fae52',
+  vale: '#b9a6e0',
+  storm: '#f2c94c',
+  dorne: '#e2703a',
+  crown: '#c0392b',
+};
+
 export const COMMON_TROOPS = [
   { id: 'heavy_cav', name: 'سواره‌نظام سنگین', cost: 3, power: 6 },
   { id: 'infantry',  name: 'پیاده‌نظام',       cost: 2, power: 4 },
