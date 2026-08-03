@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
-import { Ship, Keep, Realm, Rock } from './Icons.jsx';
+import { Ship, Keep, Coliseum } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
 import { REGIONS_STATIC, castleLabel, REGION_COLORS, PACT_COLORS, ALLIANCE_TYPES, SEA_EDGES, isSeaEdge } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
@@ -21,7 +21,7 @@ function popupPlacement(xy, zoom) {
   return style;
 }
 
-const KIND_ICON = { castle: Keep, city: Realm, ruin: Rock, port: Ship };
+const KIND_ICON = { castle: Keep, city: Keep, ruin: Coliseum, port: Ship };
 
 /** تصویر نقشه + پین‌های قلعه/شهرهای دارای مختصات — هم برای نمایش (کلیک روی پین،
  * با تب کوچک اطلاعات دقیقاً کنار همان پین) و هم برای حالت ادمین (کلیک روی خودِ
