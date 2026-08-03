@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, caravans, alliances
-from game import now, can_afford, pay, add_resources
+from game import now, can_afford, pay, add_resources, owned_castles
 from game_data import TRADE_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
 from routers.war import blocked_castles_for
@@ -21,6 +21,8 @@ async def has_trade_alliance(a_id: int, b_id: int) -> bool:
 class CaravanBody(BaseModel):
     target_tg_id: int
     resources: dict  # {resource: qty}
+    origin_castle: str | None = None   # پیش‌فرض: قلعهٔ خانگی‌ات — می‌تونه هرکدوم از قلعه‌های خودت باشه
+    target_castle: str | None = None   # پیش‌فرض: قلعهٔ خانگیِ گیرنده — می‌تونه هرکدوم از قلعه‌های او باشه
 
 @router.post("/caravan")
 async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
@@ -35,6 +37,13 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     if not await has_trade_alliance(user["id"], body.target_tg_id):
         raise HTTPException(403, "فقط با هم‌پیمان‌های تجاری (پیمان تجاری یا اتحاد کامل) می‌تونی کاروان رد و بدل کنی")
 
+    origin_castle = body.origin_castle or p["castle"]
+    if origin_castle not in owned_castles(p):
+        raise HTTPException(400, "این قلعه مالِ تو نیست")
+    target_castle = body.target_castle or target["castle"]
+    if target_castle not in owned_castles(target):
+        raise HTTPException(400, "این قلعه مالِ گیرنده نیست")
+
     cost = {}
     for good, qty in body.resources.items():
         if good not in TRADE_GOODS:
@@ -47,9 +56,9 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], cost):
         raise HTTPException(400, "این مقدار کالا رو نداری")
 
-    same_castle = p["castle"] == target["castle"]
+    same_castle = origin_castle == target_castle
     blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
-    travel = travel_minutes(same_castle, p["castle"], target["castle"], blocked)
+    travel = travel_minutes(same_castle, origin_castle, target_castle, blocked)
     if travel is None:
         raise HTTPException(400, "مسیر این کاروان از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری")
 
@@ -59,8 +68,8 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     arrival_at = now() + timedelta(minutes=travel)
 
     doc = {
-        "tg_id": user["id"], "player_name": p["name"], "origin_castle": p["castle"],
-        "target_tg_id": target["tg_id"], "target_name": target["name"], "target_castle": target["castle"],
+        "tg_id": user["id"], "player_name": p["name"], "origin_castle": origin_castle,
+        "target_tg_id": target["tg_id"], "target_name": target["name"], "target_castle": target_castle,
         "resources": cost, "travel_minutes": travel, "arrival_at": arrival_at,
         "active": True, "arrival_notified": False, "created_at": now(),
     }

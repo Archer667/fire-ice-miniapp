@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Coin, Wood, Rock, Pick, Wheat, Wine, Send } from '../components/Icons.jsx';
-import { TRADE_GOODS, TRADE_GOOD_NAMES } from '../gamedata.js';
+import { TRADE_GOODS, TRADE_GOOD_NAMES, castleLabel } from '../gamedata.js';
 
 const RES_ICON = { wood: Wood, stone: Rock, iron: Pick, food: Wheat, wine: Wine };
 
@@ -24,6 +24,24 @@ export default function Trade() {
   const [amounts, setAmounts] = useState(emptyAmounts());
   const [caravans, setCaravans] = useState(null);
   const [sendBusy, setSendBusy] = useState(false);
+
+  const myCastles = [me.castle, ...(me.castles || [])];
+  const [originCastle, setOriginCastle] = useState(me.castle);
+  const [targetCastles, setTargetCastles] = useState([]);
+  const [targetCastle, setTargetCastle] = useState('');
+
+  // با انتخابِ هم‌پیمان، قلعه‌های خودش رو می‌گیریم — چون ممکنه قلعهٔ دوم داشته باشه
+  // و کاروان بخواد جای دیگه‌ای غیر از خونه‌اش برسه
+  useEffect(() => {
+    if (!target) { setTargetCastles([]); setTargetCastle(''); return; }
+    let cancelled = false;
+    api.playerCastles(Number(target)).then(list => {
+      if (cancelled) return;
+      setTargetCastles(list);
+      setTargetCastle(list[0] || '');
+    }).catch(() => { if (!cancelled) { setTargetCastles([]); setTargetCastle(''); } });
+    return () => { cancelled = true; };
+  }, [target]);
 
   const [market, setMarket] = useState(null);
   const [buyQty, setBuyQty] = useState({});
@@ -50,11 +68,14 @@ export default function Trade() {
     if (!Object.keys(resources).length) { toast('حداقل یک کالا انتخاب کن'); return; }
     setSendBusy(true);
     try {
-      const res = await api.sendCaravan({ target_tg_id: Number(target), resources });
+      const res = await api.sendCaravan({
+        target_tg_id: Number(target), resources,
+        origin_castle: originCastle, target_castle: targetCastle || undefined,
+      });
       haptic('medium');
       api.me().then(setMe);
       toast(`کاروان فرستاده شد — حدود ${res.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`);
-      setAmounts(emptyAmounts()); setTarget('');
+      setAmounts(emptyAmounts()); setTarget(''); setOriginCastle(me.castle);
       loadCaravans();
     } catch (e) { toast(e.message); }
     setSendBusy(false);
@@ -114,6 +135,22 @@ export default function Trade() {
                   <option value="">— انتخاب کن —</option>
                   {partners.map(p => <option key={p.other_id} value={p.other_id}>{p.other_name} · {p.type_name}</option>)}
                 </select>
+                {myCastles.length > 1 && (
+                  <>
+                    <label className="f">از کدوم قلعه‌ات</label>
+                    <select value={originCastle} onChange={e => setOriginCastle(e.target.value)}>
+                      {myCastles.map(c => <option key={c} value={c}>{castleLabel(c)}{c === me.castle ? ' (خانه)' : ''}</option>)}
+                    </select>
+                  </>
+                )}
+                {target && targetCastles.length > 1 && (
+                  <>
+                    <label className="f">به کدوم قلعهٔ او</label>
+                    <select value={targetCastle} onChange={e => setTargetCastle(e.target.value)}>
+                      {targetCastles.map(c => <option key={c} value={c}>{castleLabel(c)}</option>)}
+                    </select>
+                  </>
+                )}
                 <label className="f">کالاها</label>
                 {TRADE_GOODS.map(g => {
                   const Icon = RES_ICON[g];

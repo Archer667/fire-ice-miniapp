@@ -79,6 +79,13 @@ const mockCastleBuildings = {}; // castle_name -> (building_id -> state) — ق�
 function mockOwnedCastles() {
   return mockMe.castle ? [mockMe.castle, ...Object.keys(mockCastleBuildings)] : [];
 }
+// همهٔ قلعه‌های یک بازیکنِ دلخواه (خودم یا یکی از NPCها) — NPCها تو mock فقط همون
+// یک قلعهٔ ثابتشون رو دارن (بدون قلعهٔ اضافه)، مگر اینکه از پنل ادمین قلعه‌شون گرفته شده باشه
+function mockPlayerCastles(tgId) {
+  if (tgId === 1) return mockOwnedCastles();
+  const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+  return p && p.castle ? [p.castle] : [];
+}
 function mockCastleBuildingState(castle) {
   if (castle === mockMe.castle) return mockBuildings;
   return (mockCastleBuildings[castle] ||= {});
@@ -693,12 +700,18 @@ const M = {
         created_at: c.created_at, arrival_at: c.arrival_at,
       }));
   },
+  playerCastles: (tgId) => mockPlayerCastles(tgId),
   sendCaravan: (body) => {
     const partner = mockAlliances.find(a => a.other_id === body.target_tg_id && a.status === 'accepted'
       && (a.type === 'trade' || a.type === 'full_alliance'));
     if (!partner) throw new Error('فقط با هم‌پیمان‌های تجاری (پیمان تجاری یا اتحاد کامل) می‌تونی کاروان رد و بدل کنی');
     const p = MOCK_PLAYERS.find(x => x.tg_id === body.target_tg_id);
     if (!p) throw new Error('گیرنده پیدا نشد');
+
+    const originCastle = body.origin_castle || mockMe.castle;
+    if (!mockOwnedCastles().includes(originCastle)) throw new Error('این قلعه مالِ تو نیست');
+    const targetCastle = body.target_castle || p.castle;
+    if (!mockPlayerCastles(p.tg_id).includes(targetCastle)) throw new Error('این قلعه مالِ گیرنده نیست');
 
     const cost = {};
     for (const [good, qty] of Object.entries(body.resources || {})) {
@@ -709,11 +722,11 @@ const M = {
     if (!mockCanAfford(cost)) throw new Error('این مقدار کالا رو نداری');
     mockPay(cost);
 
-    const travel = travelMinutes(mockMe.castle === p.castle, mockMe.castle, p.castle);
+    const travel = travelMinutes(originCastle === targetCastle, originCastle, targetCastle);
     const nowIso = new Date().toISOString();
     mockCaravans.push({
       id: String(mockCaravanSeq++), mine_sent: true,
-      from: mockMe.name, to: p.name, from_castle: mockMe.castle, to_castle: p.castle,
+      from: mockMe.name, to: p.name, from_castle: originCastle, to_castle: targetCastle,
       resources: cost, active: true, travel_minutes: travel,
       arrival_at: new Date(Date.now() + travel * 60000).toISOString(), created_at: nowIso,
     });
@@ -1498,6 +1511,7 @@ export const api = {
   adminEditMapCastle: (name, b) => MOCK ? Promise.resolve(M.adminEditMapCastle(name, b))
     : req(`/api/admin/map/castles/${encodeURIComponent(name)}`, { method: 'PATCH', body: JSON.stringify(b) }),
   sendCaravan: (b) => MOCK ? Promise.resolve(M.sendCaravan(b)) : req('/api/trade/caravan', { method: 'POST', body: JSON.stringify(b) }),
+  playerCastles: (tgId) => MOCK ? Promise.resolve(M.playerCastles(tgId)) : req(`/api/players/${tgId}/castles`),
   myCaravans: () => MOCK ? Promise.resolve(M.myCaravans()) : req('/api/trade/caravans/mine'),
   market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),
   marketBuy: (resource, qty) => MOCK ? Promise.resolve(M.marketBuy(resource, qty))

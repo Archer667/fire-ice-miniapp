@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns
-from game import now, apply_production, effective_caps
+from game import now, apply_production, effective_caps, owned_castles
 from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
@@ -122,6 +122,16 @@ async def me(user: dict = Depends(get_user)):
         "rank": rank, "total_players": total,
         "day": day, "season_length": SEASON_LENGTH_DAYS,
     }
+
+@router.get("/{tg_id}/castles")
+async def player_castles(tg_id: int, user: dict = Depends(get_user)):
+    """همهٔ قلعه‌های یک بازیکن (خانگی + هر قلعهٔ اضافه‌ای که فتح کرده) — برای انتخابِ
+    مبدا/مقصدِ کاروان وقتی طرفِ مقابل چند قلعه داره؛ مالکیتِ قلعه‌ها هرحال از رویِ
+    نقشه هم برای همه دیده می‌شه، پس افشای عمومی‌اش مشکلی نداره"""
+    p = await players.find_one({"tg_id": tg_id})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    return owned_castles(p)
 
 @router.get("/search")
 async def search(q: str = "", user: dict = Depends(get_user)):
