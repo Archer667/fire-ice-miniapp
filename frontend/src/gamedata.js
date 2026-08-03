@@ -606,11 +606,19 @@ const SEA_EDGES = new Set([
   ['دراگون استون', 'ایون فال هال'], ['استورمز اند', 'ایون فال هال'], ['گرین استون', 'ایون فال هال'],
   ['روکز رست', 'دراگون استون'], ['گالتاون', 'دراگون استون'],
   ['دراگون استون', 'دریفت مارک'], ['دریفت مارک', 'شارپ پوینت'], ['دریفت مارک', 'کینگزلندینگ'],
+  ['ویپینگ تاون', 'گرین استون'], ['گرین استون', 'سان اسپیر'],
 ].map(([a, b]) => [a, b].sort().join('|')));
 
-function isSeaEdge(a, b) { return SEA_EDGES.has([a, b].sort().join('|')); }
-export function pathUsesSea(path) {
-  for (let i = 0; i < path.length - 1; i++) if (isSeaEdge(path[i], path[i + 1])) return true;
+// قلعه‌هایی که پیش‌فرضشان کاملاً دریایی‌ست — آینه‌ی DEFAULT_SEA_CASTLES در backend
+export const DEFAULT_SEA_CASTLES = new Set(['گرین استون']);
+
+function isSeaEdge(a, b, terrain) {
+  if (SEA_EDGES.has([a, b].sort().join('|'))) return true;
+  if (terrain && (terrain(a) === 'sea' || terrain(b) === 'sea')) return true;
+  return false;
+}
+export function pathUsesSea(path, terrain) {
+  for (let i = 0; i < path.length - 1; i++) if (isSeaEdge(path[i], path[i + 1], terrain)) return true;
   return false;
 }
 
@@ -641,7 +649,7 @@ export function travelMinutes(sameCastle, originCastle, targetCastle) {
   return shortestMinutes(originCastle, targetCastle);
 }
 
-function dijkstraPath(originCastle, targetCastle, allowSea = true) {
+function dijkstraPath(originCastle, targetCastle, allowSea = true, terrain) {
   if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) return { minutes: null, path: null };
   const dist = { [originCastle]: 0 };
   const prev = {};
@@ -659,7 +667,7 @@ function dijkstraPath(originCastle, targetCastle, allowSea = true) {
       return { minutes: d, path };
     }
     for (const [nb, w] of Object.entries(TRAVEL_GRAPH[node] || {})) {
-      if (!allowSea && isSeaEdge(node, nb)) continue;
+      if (!allowSea && isSeaEdge(node, nb, terrain)) continue;
       const nd = d + w;
       if (nd < (dist[nb] ?? Infinity)) {
         dist[nb] = nd;
@@ -674,10 +682,10 @@ function dijkstraPath(originCastle, targetCastle, allowSea = true) {
 // یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — آینه‌ی travel_routes در
 // backend/game_data.py؛ اگه یالِ روی بهترین مسیر رو موقتاً حذف کنیم و دوباره
 // دایکسترا بزنیم، ممکنه یه مسیرِ واقعاً متفاوت (نه فقط دورتر روی همون یال‌ها) پیدا بشه
-export function travelRoutes(originCastle, targetCastle, maxRoutes = 2, allowSea = true) {
-  const best = dijkstraPath(originCastle, targetCastle, allowSea);
+export function travelRoutes(originCastle, targetCastle, maxRoutes = 2, allowSea = true, terrain) {
+  const best = dijkstraPath(originCastle, targetCastle, allowSea, terrain);
   if (!best.path) return [];
-  const routes = [{ minutes: best.minutes, path: best.path, via_sea: pathUsesSea(best.path) }];
+  const routes = [{ minutes: best.minutes, path: best.path, via_sea: pathUsesSea(best.path, terrain) }];
   if (maxRoutes <= 1 || best.path.length < 2) return routes;
 
   const seenPaths = new Set([best.path.join('→')]);
@@ -688,12 +696,12 @@ export function travelRoutes(originCastle, targetCastle, maxRoutes = 2, allowSea
     const wBA = TRAVEL_GRAPH[b]?.[a];
     if (wAB !== undefined) delete TRAVEL_GRAPH[a][b];
     if (wBA !== undefined) delete TRAVEL_GRAPH[b][a];
-    const alt = dijkstraPath(originCastle, targetCastle, allowSea);
+    const alt = dijkstraPath(originCastle, targetCastle, allowSea, terrain);
     if (wAB !== undefined) TRAVEL_GRAPH[a][b] = wAB;
     if (wBA !== undefined) TRAVEL_GRAPH[b][a] = wBA;
     if (alt.path && !seenPaths.has(alt.path.join('→'))) {
       seenPaths.add(alt.path.join('→'));
-      candidates.push({ minutes: alt.minutes, path: alt.path, via_sea: pathUsesSea(alt.path) });
+      candidates.push({ minutes: alt.minutes, path: alt.path, via_sea: pathUsesSea(alt.path, terrain) });
     }
   }
   if (candidates.length) {

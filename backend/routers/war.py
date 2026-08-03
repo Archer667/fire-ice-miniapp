@@ -8,7 +8,7 @@ from game import now, can_afford, pay, normalize_building_state, add_resources, 
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
-    _dijkstra_path,
+    _dijkstra_path, DEFAULT_SEA_CASTLES,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -67,14 +67,14 @@ async def all_castle_terrain() -> dict:
     """نگاشتِ اسمِ هر قلعه/شهرِ بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) به نوع
     زمینش: land | coastal | sea. منبعِ اصلی فیلدِ terrain روی map_castles است — همان‌جا
     که ادمین موقع گذاشتنِ پین از تب نقشه مشخصش می‌کند. برای قلعه‌هایی که هنوز پین
-    ندارند، پیش‌فرض روی دیتای استاتیکِ REGIONS است (castles→land, ports→coastal —
-    هیچ‌وقت خودکار sea فرض نمی‌شود، چون «راه‌نداشتن به خشکی» باید صریح علامت بخورد)"""
+    ندارند، پیش‌فرض روی دیتای استاتیکِ REGIONS است (castles→land, ports→coastal، مگر
+    آن‌هایی که در DEFAULT_SEA_CASTLES‌اند و اصلاً راهِ خشکی ندارند→sea)"""
     terrain = {}
     for r in REGIONS.values():
         for c in r["castles"]:
             terrain[c] = "land"
         for c in r["ports"]:
-            terrain[c] = "coastal"
+            terrain[c] = "sea" if c in DEFAULT_SEA_CASTLES else "coastal"
     async for m in map_castles.find({}):
         t = m.get("terrain")
         if t in MAP_TERRAINS:
@@ -215,11 +215,11 @@ async def routes(origin_castle: str, target_castle: str, user: dict = Depends(ge
     اینکه بازیکن ببینه از کجاها رد می‌شود و اگه چند مسیر بود انتخاب کند"""
     if origin_castle == target_castle:
         return {"routes": [{"minutes": 0, "path": [origin_castle]}]}
-    names, _ports = await all_castle_names_and_ports()
-    if origin_castle not in names or target_castle not in names:
+    terrain = await all_castle_terrain()
+    if origin_castle not in terrain or target_castle not in terrain:
         raise HTTPException(400, "قلعهٔ مبدا یا مقصد شناخته‌شده نیست")
     blocked = await blocked_castles_for(user["id"])
-    opts = travel_routes(origin_castle, target_castle, blocked)
+    opts = travel_routes(origin_castle, target_castle, blocked, terrain=terrain)
     if not opts:
         raise HTTPException(400, await blocked_route_message(origin_castle, target_castle, blocked))
     return {"routes": opts}
@@ -283,13 +283,13 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     if same_castle:
         travel, route_path = 0, [body.origin_castle]
     else:
-        opts = travel_routes(body.origin_castle, target_castle, blocked)
+        opts = travel_routes(body.origin_castle, target_castle, blocked, terrain=terrain)
         if not opts:
             raise HTTPException(400, await blocked_route_message(body.origin_castle, target_castle, blocked))
         chosen = next((r for r in opts if r["path"] == body.via), None) if body.via else None
         chosen = chosen or opts[0]
         if chosen["via_sea"] and land_men > naval_capacity:
-            land_opts = travel_routes(body.origin_castle, target_castle, blocked, allow_sea=False)
+            land_opts = travel_routes(body.origin_castle, target_castle, blocked, allow_sea=False, terrain=terrain)
             if land_opts:
                 raise HTTPException(400, "این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن")
             raise HTTPException(400, f"این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")

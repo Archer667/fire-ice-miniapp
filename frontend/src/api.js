@@ -25,7 +25,7 @@ import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS,
-  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea,
+  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea, DEFAULT_SEA_CASTLES,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
@@ -152,7 +152,7 @@ function mockCastleTerrain(name) {
   const custom = mockMapCastles.find(m => m.name === name);
   if (custom?.terrain) return custom.terrain;
   for (const r of Object.values(REGIONS_STATIC)) {
-    if (r.ports.includes(name)) return 'coastal';
+    if (r.ports.includes(name)) return DEFAULT_SEA_CASTLES.has(name) ? 'sea' : 'coastal';
     if (r.castles.includes(name)) return 'land';
   }
   if (custom) return custom.kind === 'port' ? 'coastal' : 'land';
@@ -570,10 +570,10 @@ const M = {
     if (sameCastle) {
       travel = 0; routePath = [body.origin_castle];
     } else {
-      const opts = travelRoutes(body.origin_castle, targetCastle);
-      const chosen = (body.via && opts.find(r => r.path.join('→') === body.via.join('→'))) || opts[0] || { minutes: travelMinutes(sameCastle, body.origin_castle, targetCastle), path: [body.origin_castle, targetCastle], via_sea: pathUsesSea([body.origin_castle, targetCastle]) };
+      const opts = travelRoutes(body.origin_castle, targetCastle, 2, true, mockCastleTerrain);
+      const chosen = (body.via && opts.find(r => r.path.join('→') === body.via.join('→'))) || opts[0] || { minutes: travelMinutes(sameCastle, body.origin_castle, targetCastle), path: [body.origin_castle, targetCastle], via_sea: pathUsesSea([body.origin_castle, targetCastle], mockCastleTerrain) };
       if (chosen.via_sea && landMen > navalCapacity) {
-        const landOpts = travelRoutes(body.origin_castle, targetCastle, 2, false);
+        const landOpts = travelRoutes(body.origin_castle, targetCastle, 2, false, mockCastleTerrain);
         if (landOpts.length) {
           throw new Error('این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن');
         }
@@ -597,7 +597,7 @@ const M = {
   },
   warRoutes: (origin, target) => {
     if (origin === target) return { routes: [{ minutes: 0, path: [origin] }] };
-    const opts = travelRoutes(origin, target);
+    const opts = travelRoutes(origin, target, 2, true, mockCastleTerrain);
     if (!opts.length) throw new Error('مسیری بین این دو قلعه پیدا نشد');
     return { routes: opts };
   },
