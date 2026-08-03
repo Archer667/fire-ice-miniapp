@@ -253,6 +253,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "غارت دریایی فقط علیه اهداف بندری ممکن است")
         if op["port_only"] and body.origin_castle not in ports:
             raise HTTPException(400, "غارت دریایی فقط از قلعه/شهرهای بندری ممکن است — لشکرکشی از راه آبی")
+        if op["port_only"] and not any(tid in NAVAL_TROOPS and n and n > 0 for tid, n in body.troops.items()):
+            raise HTTPException(400, "غارت دریایی باید با کشتی انجام شود — این فرمان هیچ کشتی‌ای همراه ندارد")
         target_castle = body.target_castle
     else:
         target_castle = body.origin_castle

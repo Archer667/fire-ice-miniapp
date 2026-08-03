@@ -505,6 +505,9 @@ const M = {
       if (op.portOnly) {
         if (!mockIsPortCastle(targetCastle)) throw new Error('غارت دریایی فقط علیه اهداف بندری ممکن است');
         if (!mockIsPortCastle(body.origin_castle)) throw new Error('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است — لشکرکشی از راه آبی');
+        if (!Object.entries(body.troops || {}).some(([tid, n]) => NAVAL_TROOP_IDS.includes(tid) && n > 0)) {
+          throw new Error('غارت دریایی باید با کشتی انجام شود — این فرمان هیچ کشتی‌ای همراه ندارد');
+        }
       }
     }
 
