@@ -1,6 +1,6 @@
-import { useContext, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
-import { Ship, Keep, Build, Rock } from './Icons.jsx';
+import { Ship, Keep, Realm, Rock } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
 import { REGIONS_STATIC, castleLabel, REGION_COLORS, PACT_COLORS, ALLIANCE_TYPES, SEA_EDGES, isSeaEdge } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
@@ -21,7 +21,7 @@ function popupPlacement(xy, zoom) {
   return style;
 }
 
-const KIND_ICON = { castle: Keep, city: Build, ruin: Rock, port: Ship };
+const KIND_ICON = { castle: Keep, city: Realm, ruin: Rock, port: Ship };
 
 /** تصویر نقشه + پین‌های قلعه/شهرهای دارای مختصات — هم برای نمایش (کلیک روی پین،
  * با تب کوچک اطلاعات دقیقاً کنار همان پین) و هم برای حالت ادمین (کلیک روی خودِ
@@ -38,7 +38,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
   };
 
   return (
-    <div className="mapview-frame" onClick={handleFrameClick} style={{ cursor: onFrameClick ? 'crosshair' : 'default' }}>
+    <div className="map-canvas" onClick={handleFrameClick} style={{ cursor: onFrameClick ? 'crosshair' : 'default' }}>
       <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
       {(seaLaneSegments?.length > 0 || routeSegments?.length > 0) && (
         <svg className="map-overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -194,6 +194,16 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
 
   const myPin = mapped.find(c => c.mine);
 
+  // با بازشدنِ صفحه، اگه خودت قلعه داشته باشی، نقشه مستقیم روی محدودهٔ اقلیمِ خودت باز می‌شه
+  // (نه یه گوشهٔ دلبخواهیِ نقشهٔ فشرده‌شده) — وگرنه با زوم-به-اندازه (fitZoom) کلِ نقشه دیده می‌شه
+  useEffect(() => {
+    if (myPin && regionBoxes[myPin.region]) {
+      mapRef.current?.flyToBox(regionBoxes[myPin.region]);
+      setActiveRegion(myPin.region);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const filteredCastles = useMemo(() => mapped.filter(c => {
     if (pinFilter === 'mine') return c.mine;
     if (pinFilter === 'owned') return !!c.owner;
@@ -252,7 +262,9 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
           ))}
         </div>
       )}
-      <div style={{ position: 'relative' }}>
+      <div className="mapview-frame">
+        <span className="map-frame-corner tl" /><span className="map-frame-corner tr" />
+        <span className="map-frame-corner bl" /><span className="map-frame-corner br" />
         <ZoomPanMap ref={mapRef} onInteract={() => setPin(null)} onViewChange={setView}>
           <MapFrame region={{ castles: filteredCastles }} coords={coords} pin={pin}
                     onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}

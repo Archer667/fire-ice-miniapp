@@ -1,6 +1,5 @@
 import { createContext, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
-const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const STEP = 0.6;
 const FLY_MS = 560; // باید با مدت transition کلاس .flying تو index.css یکی باشه
@@ -12,41 +11,69 @@ export const ZoomContext = createContext(1);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const dist = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 
+/** قابِ نقشه یه پنجرهٔ فشرده و ثابت‌اندازه‌ست، ولی خودِ تصویر (محتوا) به‌خاطر
+ * نسبت طول‌به‌عرضش می‌تونه خیلی بلندتر از این پنجره باشه — پس همه‌جا باید بینِ
+ * اندازهٔ «دیدگاه» (viewport = خودِ wrap) و اندازهٔ «محتوا» (content = zoommap-inner،
+ * که هیچ‌وقت توسط overflow:hidden برش نمی‌خوره) فرق گذاشت */
+function measure(wrapEl, contentEl) {
+  const vW = wrapEl?.clientWidth || 0, vH = wrapEl?.clientHeight || 0;
+  const cW = contentEl?.clientWidth || 0, cH = contentEl?.clientHeight || 0;
+  return { vW, vH, cW, cH };
+}
+
+// بازهٔ مجازِ pan روی یک محور: اگه محتوا (با این زوم) از دیدگاه بزرگ‌تره، pan طوری
+// محدود می‌شه که همیشه کاملاً دیدگاه رو بپوشونه؛ وگرنه (محتوا کوچیک‌تره) وسط‌چین می‌مونه
+function clampAxis(p, contentSize, viewSize, z) {
+  if (contentSize * z <= viewSize) return 0;
+  const minP = viewSize - (contentSize * (1 + z)) / 2;
+  const maxP = (contentSize * (z - 1)) / 2;
+  return clamp(p, minP, maxP);
+}
+
 /** ref imperative: flyTo({x,y,w,h}) یه محدوده (درصدِ عرض/ارتفاعِ کاملِ تصویر) رو
  * وسطِ دید می‌آره و تا حدِ امکان زوم می‌کنه که کاملاً جا بشه؛ flyToPoint(x,y,zoom)
  * فقط رویِ یه نقطهٔ مشخص با زومِ دلخواه سنتر می‌کنه (برای «قلعهٔ خودم»/مینی‌مپ) */
 const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', onInteract, onViewChange }, ref) {
   const wrapRef = useRef(null);
+  const contentRef = useRef(null);
+  const [minZoom, setMinZoom] = useState(1); // زومی که کلِ محتوا رو توی قابِ فشرده جا می‌ده (fit-all)
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [flying, setFlying] = useState(false);
   const gesture = useRef(null);
   const flyTimer = useRef(null);
 
+  // اولین بار که ابعادِ واقعی در دسترسه، زومِ fit-all رو حساب و به‌عنوانِ نمای پیش‌فرض تنظیم می‌کنه
+  useEffect(() => {
+    const { vW, vH, cW, cH } = measure(wrapRef.current, contentRef.current);
+    if (!vW || !vH || !cW || !cH) return;
+    const fz = clamp(Math.min(vW / cW, vH / cH), 0.1, 1);
+    setMinZoom(fz);
+    setZoom(fz);
+  }, []);
+
   // به والد اطلاع می‌ده الان دقیقاً کدوم محدودهٔ درصدیِ تصویر تو دیده — برای مینی‌مپ
   useEffect(() => {
     if (!onViewChange) return;
-    const el = wrapRef.current;
-    if (!el || !el.clientWidth || !el.clientHeight) return;
-    const wPct = 100 / zoom;
-    const hPct = 100 / zoom;
-    const cxPct = 50 - (pan.x / zoom / el.clientWidth) * 100;
-    const cyPct = 50 - (pan.y / zoom / el.clientHeight) * 100;
+    const { vW, vH, cW, cH } = measure(wrapRef.current, contentRef.current);
+    if (!vW || !vH || !cW || !cH) return;
+    const wPct = (vW / zoom / cW) * 100;
+    const hPct = (vH / zoom / cH) * 100;
+    const cxPct = 50 - (pan.x / zoom / cW) * 100;
+    const cyPct = 50 - (pan.y / zoom / cH) * 100;
     onViewChange({ x: cxPct - wPct / 2, y: cyPct - hPct / 2, w: wPct, h: hPct });
   }, [zoom, pan, onViewChange]);
 
   const clampPan = (z, p) => {
-    const el = wrapRef.current;
-    if (!el) return p;
-    const maxX = (el.clientWidth * (z - 1)) / 2;
-    const maxY = (el.clientHeight * (z - 1)) / 2;
-    return { x: clamp(p.x, -maxX, maxX), y: clamp(p.y, -maxY, maxY) };
+    const { vW, vH, cW, cH } = measure(wrapRef.current, contentRef.current);
+    if (!vW || !vH || !cW || !cH) return p;
+    return { x: clampAxis(p.x, cW, vW, z), y: clampAxis(p.y, cH, vH, z) };
   };
 
   // زوم/جابه‌جایی نقشه یعنی هر پاپ‌آپ بازی که کنار یک پین چسبیده دیگر معنی ندارد
   // (ممکن است پین از دید بیرون رفته باشد) — پس والد فرصت می‌گیرد آن را ببندد
   const applyZoom = (nextZoom) => {
-    const z = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+    const z = clamp(nextZoom, minZoom, MAX_ZOOM);
     setZoom(z);
     setPan(p => clampPan(z, p));
     onInteract?.();
@@ -54,7 +81,7 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
 
   const zoomIn = () => applyZoom(zoom + STEP);
   const zoomOut = () => applyZoom(zoom - STEP);
-  const reset = () => { setFlying(true); setZoom(1); setPan({ x: 0, y: 0 }); armFlyReset(); };
+  const reset = () => { setFlying(true); setZoom(minZoom); setPan({ x: 0, y: 0 }); armFlyReset(); };
 
   const armFlyReset = () => {
     if (flyTimer.current) clearTimeout(flyTimer.current);
@@ -62,13 +89,13 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
   };
 
   const flyToPoint = (xPct, yPct, targetZoom = 2.2) => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const cw = el.clientWidth, ch = el.clientHeight;
-    if (!cw || !ch) return;
-    const z = clamp(targetZoom, MIN_ZOOM, MAX_ZOOM);
+    const { vW, vH, cW, cH } = measure(wrapRef.current, contentRef.current);
+    if (!vW || !vH || !cW || !cH) return;
+    const z = clamp(targetZoom, minZoom, MAX_ZOOM);
     const fx = xPct / 100, fy = yPct / 100;
-    const p = clampPan(z, { x: -(fx - 0.5) * cw * z, y: -(fy - 0.5) * ch * z });
+    const rawX = (vW - cW) / 2 + z * cW * (0.5 - fx);
+    const rawY = (vH - cH) / 2 + z * cH * (0.5 - fy);
+    const p = clampPan(z, { x: rawX, y: rawY });
     setFlying(true);
     setZoom(z);
     setPan(p);
@@ -77,12 +104,10 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
   };
 
   const flyToBox = ({ x, y, w, h }, pad = 1.18) => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const cw = el.clientWidth, ch = el.clientHeight;
-    if (!cw || !ch) return;
+    const { vW, vH, cW, cH } = measure(wrapRef.current, contentRef.current);
+    if (!vW || !vH || !cW || !cH) return;
     const fw = Math.max(w / 100, 0.02), fh = Math.max(h / 100, 0.02);
-    const z = clamp(Math.min(1 / fw, 1 / fh) / pad, MIN_ZOOM, MAX_ZOOM);
+    const z = clamp(Math.min(vW / (fw * cW), vH / (fh * cH)) / pad, minZoom, MAX_ZOOM);
     flyToPoint(x + w / 2, y + h / 2, z);
   };
 
@@ -115,7 +140,7 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
       const dy = e.touches[0].clientY - g.startY;
       const justStartedMoving = !g.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4);
       if (Math.abs(dx) > 4 || Math.abs(dy) > 4) g.moved = true;
-      if (zoom > 1 && g.moved) {
+      if (zoom > minZoom && g.moved) {
         e.preventDefault();
         setPan(clampPan(zoom, { x: g.startPan.x + dx, y: g.startPan.y + dy }));
         if (justStartedMoving) onInteract?.();
@@ -127,7 +152,7 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
 
   const mouseDrag = useRef(null);
   const onMouseDown = (e) => {
-    if (zoom <= 1) return;
+    if (zoom <= minZoom) return;
     mouseDrag.current = { startX: e.clientX, startY: e.clientY, startPan: pan, moved: false };
   };
   const onMouseMove = (e) => {
@@ -144,14 +169,14 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
            onWheel={onWheel}
            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
            onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-        <div className={`zoommap-inner ${flying ? 'flying' : ''}`} style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+        <div ref={contentRef} className={`zoommap-inner ${flying ? 'flying' : ''}`} style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
           <ZoomContext.Provider value={zoom}>{children}</ZoomContext.Provider>
         </div>
       </div>
       <div className="zoommap-controls">
         <button type="button" onClick={zoomIn} aria-label="بزرگ‌نمایی">+</button>
         <button type="button" onClick={zoomOut} aria-label="کوچک‌نمایی">−</button>
-        {zoom > 1 && <button type="button" onClick={reset} aria-label="بازنشانی زوم">⟲</button>}
+        {zoom > minZoom + 0.01 && <button type="button" onClick={reset} aria-label="بازنشانی زوم">⟲</button>}
       </div>
     </div>
   );
