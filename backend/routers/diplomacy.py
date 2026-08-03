@@ -129,6 +129,14 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
         await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را پذیرفت.")
+        # پیمان‌های عمومی (غیرخصوصی) به همهٔ لردها اطلاع داده می‌شود — نه فقط دو طرفِ پیمان
+        if a.get("public", True):
+            type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", a["type"])
+            pact_name = f" («{a['name']}»)" if a.get("name") else ""
+            text = f"📜 {type_name}{pact_name} میان لرد {a['from_name']} و لرد {a['to_name']} بسته شد."
+            async for p in players.find({}, {"tg_id": 1, "name": 1}):
+                if p["tg_id"] not in (a["from_id"], a["to_id"]):
+                    await send_system_message(p["tg_id"], p["name"], text)
     else:
         await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "rejected"}})
         proposer = await players.find_one({"tg_id": a["from_id"]})

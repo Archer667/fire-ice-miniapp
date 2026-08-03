@@ -138,6 +138,17 @@ function BuildingRow({ row, busy, isPort, onAct }) {
           ))}
         </div>
       )}
+      {(Object.keys(row.produces_per_level || {}).length > 0 || Object.keys(row.cap_bonus_per_level || {}).length > 0) && (
+        <div className="bld-perlevel">
+          هر {row.level === 0 ? 'ساخت/' : ''}ارتقا:{' '}
+          {Object.entries(row.produces_per_level || {}).map(([k, v]) => (
+            <span key={k}>+{v.toLocaleString('fa-IR')} {RES_NAME[k] || k}/روز</span>
+          ))}
+          {Object.entries(row.cap_bonus_per_level || {}).map(([k, v]) => (
+            <span key={k}>+{v.toLocaleString('fa-IR')} ظرفیتِ {RES_NAME[k] || k}</span>
+          ))}
+        </div>
+      )}
 
       {locked ? (
         <div className="bld-status">فقط قلعه/شهرهای دریایی و بندری می‌تونن این رو بسازن</div>

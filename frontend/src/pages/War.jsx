@@ -7,7 +7,7 @@ import WesterosMap from '../components/WesterosMap.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
-  NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, REPORT_DELAY_MINUTES, WEAPON_NAMES, castleLabel,
+  NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, WEAPON_NAMES, castleLabel,
 } from '../gamedata.js';
 
 const TABS = [
@@ -43,11 +43,7 @@ export default function War() {
   useEffect(() => { loadMap(); loadMine(); loadLegions(); loadWarWindow(); }, []);
   const windowClosed = warWindow ? !warWindow.open : false;
 
-  // گزارش لشکرکشی تازه، ۳۰ دقیقه بعد از ارسال در تب «گزارش‌ها» ظاهر می‌شود
-  const visibleReports = useMemo(
-    () => (mine || []).filter(c => Date.now() - new Date(c.created_at).getTime() >= REPORT_DELAY_MINUTES * 60000),
-    [mine]
-  );
+  const visibleReports = mine || [];
 
   const newReportsCount = useMemo(
     () => visibleReports.filter(c => c.arrived && !seenIds.has(c.id)).length,
@@ -499,13 +495,8 @@ export default function War() {
 
       {tab === 'reports' && (
         <div className="up u2">
-          {mine.length === 0 && (
+          {visibleReports.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکری نفرستاده‌ای</div>
-          )}
-          {mine.length > 0 && visibleReports.length === 0 && (
-            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-              گزارش لشکرکشی تازه، تا نیم ساعت دیگر اینجا ظاهر می‌شود
-            </div>
           )}
           {visibleReports.map(c => (
             <div className="card" key={c.id} style={{ marginBottom: 10 }}>

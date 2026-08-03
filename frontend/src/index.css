@@ -304,6 +304,22 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .daily-btn:active { transform: scale(0.96); }
 .daily-btn:disabled { opacity: 0.6; }
 
+/* شعلهٔ پیاپیِ جایزهٔ روزانه — هفت روز، روزهای گرفته‌شده روشن و شعله‌ورن، روزِ بعدی
+   آهسته می‌زنه تا چشم رو بکشه سمتِ دکمهٔ دریافت */
+.streak-flames {
+  display: flex; justify-content: space-between; gap: 4px;
+  margin: -4px 0 12px; padding: 10px 6px;
+  background: var(--glass); border: 1px solid var(--iron); border-radius: 4px;
+}
+.streak-flame { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+.streak-flame .fl { font-size: 15px; filter: grayscale(1) opacity(0.35); transition: filter 0.2s; }
+.streak-flame.lit .fl { filter: none; }
+.streak-flame.next .fl { filter: none; opacity: 0.6; animation: streak-pulse 1.8s ease-in-out infinite; }
+.streak-flame .fd { font-size: 9.5px; color: var(--low); }
+.streak-flame.lit .fd { color: var(--gold); font-weight: 700; }
+@keyframes streak-pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .streak-flame.next .fl { animation: none; opacity: 0.85; } }
+
 .me-row { display: flex; align-items: center; gap: 14px; }
 .ava {
   width: 62px; height: 62px; border-radius: 4px; flex-shrink: 0;
@@ -608,6 +624,12 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   margin-top: 6px; font-size: 11px; font-weight: 700; color: #3ecf6b;
 }
+.bld-perlevel {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 6px; font-size: 10.5px; color: var(--gold);
+}
+.bld-perlevel span { font-weight: 700; }
+.bld-perlevel span:not(:last-child)::after { content: '·'; margin-inline-start: 8px; color: var(--low); font-weight: 400; }
 
 /* رای‌گیری */
 .poll { margin-bottom: 10px; }

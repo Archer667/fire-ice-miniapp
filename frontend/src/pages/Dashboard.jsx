@@ -87,6 +87,20 @@ export default function Dashboard({ goTo }) {
           )}
         </div>
       )}
+      {daily && (
+        <div className="streak-flames up">
+          {Array.from({ length: daily.cycle_length }, (_, i) => i + 1).map(day => {
+            const lit = daily.claimed_today ? day <= daily.day_in_cycle : day < daily.day_in_cycle;
+            const isNext = !daily.claimed_today && day === daily.day_in_cycle;
+            return (
+              <div key={day} className={`streak-flame ${lit ? 'lit' : ''} ${isNext ? 'next' : ''}`}>
+                <span className="fl">🔥</span>
+                <span className="fd">{day.toLocaleString('fa-IR')}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className={`season up ${season}`}>
         <SeasonIcon s={92} className="season-deco" />
