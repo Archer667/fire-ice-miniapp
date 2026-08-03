@@ -414,6 +414,8 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .mapview-frame {
   position: relative; width: 100%; border-radius: 4px; overflow: hidden;
   border: 1px solid var(--iron); background: #0a0a0a; line-height: 0;
+  outline: 1px solid rgba(233,193,118,0.15); outline-offset: 3px;
+  box-shadow: inset 0 0 46px 12px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(233,193,118,0.06), 0 10px 26px -14px rgba(0,0,0,0.65);
 }
 .mapview-frame img { width: 100%; display: block; user-select: none; -webkit-user-drag: none; filter: sepia(0.25) saturate(0.85) contrast(1.05); }
 .pin {
@@ -428,13 +430,42 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   box-shadow: 0 0 0 3px rgba(0,0,0,0.35);
   opacity: 0.45; /* قلعه‌های خالی/بی‌صاحب کم‌رنگ‌تر تا قلعه‌های صاحب‌دار بیشتر توی چشم بیان */
 }
-.pin.owned .dot { border-color: var(--gold); color: var(--gold); opacity: 1; }
-.pin.mine .dot { border-color: var(--az); background: rgba(233,193,118,0.3); color: #2a1c00; box-shadow: 0 0 0 4px rgba(233,193,118,0.22); opacity: 1; }
+/* قلعه‌های صاحب‌دار به‌جای دایرهٔ ساده، بیرقِ کوچیکِ خاندان — دو لایهٔ clip-path
+   روی‌هم (لایهٔ زیرین رنگِ حاشیه، لایهٔ رویی با ::before کمی توکشیده‌شده رنگِ زمینه)
+   چون border معمولی با clip-path هم‌خوانی نداره */
+.pin.owned .dot {
+  width: 19px; height: 24px; border-radius: 0; border: none;
+  background: var(--gold); color: var(--gold); opacity: 1;
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
+  align-items: flex-start; padding-top: 4px;
+  box-shadow: 0 3px 7px -3px rgba(0,0,0,0.55);
+  position: relative;
+}
+.pin.owned .dot::before {
+  content: ''; position: absolute; inset: 1.5px 1.5px 3.5px 1.5px;
+  background: rgba(11,10,7,0.92);
+  clip-path: polygon(0 0, 100% 0, 100% 68%, 50% 100%, 0 68%);
+}
+/* svg آیکن باید بالای ::before (که position:absolute داره) بشینه، وگرنه زیرش
+   قایم می‌شه — چون فرزندِ معمولی (بدون position) زودتر از فرزندِ positioned نقاشی می‌شه */
+.pin.owned .dot svg { position: relative; z-index: 1; }
+.pin.mine .dot {
+  background: var(--az); color: var(--az);
+  animation: pin-glow 2.4s ease-in-out infinite;
+}
+@keyframes pin-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(233,193,118,0.55)); }
+  50% { filter: drop-shadow(0 0 8px rgba(233,193,118,0.95)) drop-shadow(0 0 2px rgba(233,193,118,1)); }
+}
+@media (prefers-reduced-motion: reduce) { .pin.mine .dot { animation: none; } }
 .pin.active { z-index: 6; }
-.pin.active .dot { transform: scale(1.25); }
-.pin.port .dot { border-radius: 4px; }
+.pin.active .dot { transform: scale(1.2); }
+.pin.owned.port .dot { clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 92%, 50% 74%, 22% 92%, 0 78%); }
+.pin.owned.port .dot::before { clip-path: polygon(0 0, 100% 0, 100% 73%, 76% 87%, 50% 70%, 24% 87%, 0 73%); }
 .pin.sm { width: 13px; height: 13px; }
 .pin.sm .dot { width: 10px; height: 10px; border-width: 1px; box-shadow: 0 0 0 2px rgba(0,0,0,0.35); }
+.pin.sm.owned .dot { width: 13px; height: 17px; padding-top: 3px; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.55); }
+.pin.sm.owned .dot::before { inset: 1.2px 1.2px 2.6px 1.2px; }
 .pin-popup {
   /* left/top/bottom/right/transform/transform-origin تماماً inline تعیین می‌شوند —
      چون بسته به جای پین روی نقشه (کنار لبه‌ها) و زوم فعلی فرق می‌کنند */
@@ -464,7 +495,9 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   position: relative; width: 100%; border-radius: 4px; overflow: hidden;
   touch-action: pan-y; -webkit-user-select: none; user-select: none;
 }
-.zoommap-inner { transform-origin: center center; transition: transform 0.06s linear; }
+.zoommap-inner { transform-origin: center center; transition: transform 0.16s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.zoommap-inner.flying { transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) { .zoommap-inner, .zoommap-inner.flying { transition: none; } }
 .zoommap-controls {
   position: absolute; left: 10px; bottom: 10px; z-index: 2;
   display: flex; flex-direction: column; gap: 6px;
