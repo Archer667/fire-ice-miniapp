@@ -126,7 +126,7 @@ export default function Espionage() {
           <>
             <div className="sect up u2">نقشهٔ وستروس</div>
             <div className="up u2">
-              <WesterosMap data={mapData} meCastle={me.castle} pickLabel="انتخاب برای جاسوسی"
+              <WesterosMap data={mapData} meCastles={[me.castle, ...(me.castles || [])]} pickLabel="انتخاب برای جاسوسی"
                            onSelectTarget={(c) => { haptic(); setTarget(c); }} />
             </div>
 

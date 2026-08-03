@@ -143,7 +143,7 @@ const PIN_FILTERS = [
 ];
 const PACT_LEGEND_ORDER = ['full_alliance', 'non_aggression', 'trade', 'none'];
 
-export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد', routePath }) {
+export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد', routePath }) {
   const [pin, setPin] = useState(null);
   const [view, setView] = useState(null);
   const [activeRegion, setActiveRegion] = useState(null);
@@ -151,13 +151,20 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
   const [colorMode, setColorMode] = useState('region');
   const mapRef = useRef(null);
 
+  // meCastles همهٔ قلعه‌های خودت رو می‌گیره (خونه + هرچی با فتح/تصمیم ادمین گرفتی)؛
+  // meCastle (تکی) هم برای سازگاری با فراخوان‌های قدیمی‌تر هنوز پشتیبانی می‌شه
+  const myCastleSet = useMemo(
+    () => new Set(meCastles && meCastles.length ? meCastles : (meCastle ? [meCastle] : [])),
+    [meCastle, meCastles]
+  );
+
   const regionsMapped = useMemo(() => data.regions.map(r => {
     const rc = r.coords || {};
     const castles = r.castles
-      .map(c => ({ ...c, region: r.id, mine: c.name === meCastle, xy: rc[c.name] }))
+      .map(c => ({ ...c, region: r.id, mine: myCastleSet.has(c.name), xy: rc[c.name] }))
       .filter(c => c.xy);
     return { id: r.id, name: r.name, castles };
-  }).filter(r => r.castles.length > 0), [data, meCastle]);
+  }).filter(r => r.castles.length > 0), [data, myCastleSet]);
 
   const mapped = useMemo(() => regionsMapped.flatMap(r => r.castles), [regionsMapped]);
   const coords = useMemo(() => Object.fromEntries(mapped.map(c => [c.name, c.xy])), [mapped]);

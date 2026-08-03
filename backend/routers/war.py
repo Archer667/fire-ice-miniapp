@@ -92,6 +92,17 @@ async def all_castle_names_and_ports():
     ports = {n for n, t in terrain.items() if t in ("coastal", "sea")}
     return names, ports
 
+async def region_of_castle(castle: str) -> str | None:
+    """اقلیمی که این قلعه واقعاً توش قرار داره — نیروهای ویژه‌ای که از این قلعه
+    می‌شه ساخت باید بر همین اساس باشه، نه بر اساس اقلیمِ خانگیِ بازیکن (که ممکنه
+    قلعهٔ دومش در یک اقلیمِ دیگه باشه). برای قلعه‌های استاتیک از REGIONS، برای
+    قلعه/شهرهای سفارشیِ ادمین از فیلدِ region روی پینِ نقشه‌اش"""
+    for rid, r in REGIONS.items():
+        if castle in r["castles"] or castle in r["ports"]:
+            return rid
+    m = await map_castles.find_one({"name": castle})
+    return m["region"] if m else None
+
 PASSAGE_ALLIANCE_TYPES = ["non_aggression", "full_alliance"]  # پیمان تجاری فقط برای کاروان/مناسبات تجاریه، ربطی به عبورِ لشکر نداره
 
 async def allied_tg_ids(tg_id: int) -> set:
@@ -113,12 +124,16 @@ async def owner_of_castle(castle: str) -> dict | None:
 
 async def blocked_castles_for(tg_id: int) -> frozenset:
     """قلعه‌های دیگر بازیکن‌هایی که با tg_id پیمانی ندارند — لشکرِ tg_id نمی‌تواند
-    از این قلعه‌ها رد شود (فقط برای مقصد نهایی استثنا می‌شود، نه عبور میان‌راه)"""
+    از این قلعه‌ها رد شود (فقط برای مقصد نهایی استثنا می‌شود، نه عبور میان‌راه).
+    قلعهٔ اصلی و هر قلعهٔ اضافه‌ای (فتح‌شده) که آن بازیکن دارد، هر دو قلمروِ اشغالی
+    حساب می‌شوند"""
     allies = await allied_tg_ids(tg_id)
     blocked = set()
-    async for other in players.find({"tg_id": {"$ne": tg_id}}, {"tg_id": 1, "castle": 1}):
-        if other.get("castle") and other["tg_id"] not in allies:
-            blocked.add(other["castle"])
+    async for other in players.find({"tg_id": {"$ne": tg_id}}, {"tg_id": 1, "castle": 1, "castle_buildings": 1}):
+        if other["tg_id"] in allies:
+            continue
+        for c in owned_castles(other):
+            blocked.add(c)
     return frozenset(blocked)
 
 async def blocked_route_message(origin_castle: str, target_castle: str, blocked: frozenset) -> str:
@@ -132,8 +147,10 @@ async def blocked_route_message(origin_castle: str, target_castle: str, blocked:
     if not blockers:
         return generic
     owners = {}
-    async for pl in players.find({"castle": {"$in": blockers}}, {"castle": 1, "name": 1, "title": 1}):
-        owners[pl["castle"]] = pl
+    for c in blockers:
+        pl = await owner_of_castle(c)
+        if pl:
+            owners[c] = pl
     parts = []
     for c in blockers:
         o = owners.get(c)
@@ -264,8 +281,9 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     terrain = await all_castle_terrain()
     origin_is_port = terrain.get(body.origin_castle, "land") in ("coastal", "sea")
+    origin_region = await region_of_castle(body.origin_castle) or p["region"]
     gold, men, food_per_day, weapons = troop_food_and_gold(
-        p["region"], body.troops, _building_levels(p, body.origin_castle), origin_is_port,
+        origin_region, body.troops, _building_levels(p, body.origin_castle), origin_is_port,
     )
     if men <= 0:
         raise HTTPException(400, "هیچ نیرویی گسیل نکرده‌ای")
@@ -521,7 +539,7 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     cur2 = campaigns.find({
         "tg_id": {"$ne": user["id"]}, "op_type": {"$in": list(ATTACK_OP_TYPES)},
-        "target_castle": p["castle"],
+        "target_castle": {"$in": owned_castles(p)},
         "arrival_at": {"$lte": now(), "$gte": cutoff},
     })
     async for c in cur2:

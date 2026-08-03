@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns
-from game import now, apply_production
+from game import now, apply_production, effective_caps
 from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
@@ -112,6 +112,7 @@ async def me(user: dict = Depends(get_user)):
         "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
         "is_port": p["is_port"],
         "resources": display_resources,
+        "resource_caps": effective_caps(p),
         "active_campaigns": active_campaigns,
         "points": score,
         "alliance_count": p.get("alliance_count", 0),

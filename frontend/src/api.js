@@ -296,6 +296,7 @@ const M = {
       return {
         ...mockMe, castles: Object.keys(mockCastleBuildings),
         resources: Object.fromEntries(Object.entries(mockMe.resources).map(([k, v]) => [k, Math.round(v)])),
+        resource_caps: mockEffectiveCaps(),
       };
     }
     return mockMe;
@@ -522,7 +523,10 @@ const M = {
 
     const originBuildings = mockCastleBuildingState(body.origin_castle);
     const originIsPort = mockCastleTerrain(body.origin_castle) !== 'land';
-    const specials = REGIONS_STATIC[mockMe.region]?.special || [];
+    // نیروهای ویژهٔ قابل‌ساخت بر اساسِ اقلیمِ واقعیِ خودِ قلعهٔ مبدا — نه اقلیمِ خانگیِ
+    // بازیکن، چون قلعهٔ دوم می‌تونه در اقلیمِ دیگه‌ای باشه
+    const originRegion = mockResolveRegion(body.origin_castle) || mockMe.region;
+    const specials = REGIONS_STATIC[originRegion]?.special || [];
     let gold = 0, men = 0, food = 0;
     const weapons = {};
     for (const [tid, n] of Object.entries(body.troops || {})) {

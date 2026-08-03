@@ -112,7 +112,9 @@ export default function Dashboard({ goTo }) {
           <div className="ava">{me.name.charAt(0)}</div>
           <div>
             <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
-            <div className="hs">{castleLabel(me.castle)} · {me.region_name}{me.is_port ? ' · بندر' : ''}</div>
+            <div className="hs">
+              {castleLabel(me.castle)}{me.castles?.length ? ` + ${me.castles.length.toLocaleString('fa-IR')} قلعهٔ دیگر` : ''} · {me.region_name}{me.is_port ? ' · بندر' : ''}
+            </div>
             {me.rank != null ? (
               <div className="rk">
                 رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد
@@ -124,7 +126,7 @@ export default function Dashboard({ goTo }) {
         <div className="stats">
           <div className="st"><div className="v">{(me.active_campaigns ?? 0).toLocaleString('fa-IR')}</div><div className="k">لشکر در میدان</div></div>
           <div className="st"><div className="v">{me.points.toLocaleString('fa-IR')}</div><div className="k">امتیاز</div></div>
-          <div className="st"><div className="v">۱</div><div className="k">قلعه</div></div>
+          <div className="st"><div className="v">{(1 + (me.castles?.length ?? 0)).toLocaleString('fa-IR')}</div><div className="k">قلعه</div></div>
           <div className="st"><div className="v">{(me.alliance_count ?? 0).toLocaleString('fa-IR')}</div><div className="k">اتحاد</div></div>
         </div>
       </div>
@@ -133,13 +135,14 @@ export default function Dashboard({ goTo }) {
       <div className="card up u2">
         {Object.entries(RES_META).map(([k, m]) => {
           const v = me.resources[k] ?? 0;
-          const pct = Math.round((v / m.max) * 100);
+          const cap = me.resource_caps?.[k] ?? m.max;
+          const pct = Math.round((v / cap) * 100);
           return (
             <div className="res" key={k}>
               <div className="ic"><m.Icon s={18} /></div>
               <div className="n">{m.name}<small>{m.d}</small></div>
               <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: pct + '%' }} /></div>
-              <div className="val">{v.toLocaleString('fa-IR')}</div>
+              <div className="val">{v.toLocaleString('fa-IR')} / {cap.toLocaleString('fa-IR')}</div>
             </div>
           );
         })}
@@ -149,13 +152,14 @@ export default function Dashboard({ goTo }) {
       <div className="card up u2">
         {Object.entries(WEAPON_META).map(([k, m]) => {
           const v = me.resources[k] ?? 0;
-          const pct = Math.round((v / m.max) * 100);
+          const cap = me.resource_caps?.[k] ?? m.max;
+          const pct = Math.round((v / cap) * 100);
           return (
             <div className="res" key={k}>
               <div className="ic"><Swords s={18} /></div>
               <div className="n">{WEAPON_NAMES[k]}<small>{m.d}</small></div>
               <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: pct + '%' }} /></div>
-              <div className="val">{v.toLocaleString('fa-IR')}</div>
+              <div className="val">{v.toLocaleString('fa-IR')} / {cap.toLocaleString('fa-IR')}</div>
             </div>
           );
         })}

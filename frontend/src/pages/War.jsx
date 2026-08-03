@@ -22,7 +22,6 @@ export default function War() {
   const { me, setMe, toast } = useGame();
   const gold = me.resources.gold;
   const men = me.resources.men ?? 0;
-  const specials = REGIONS_STATIC[me.region]?.special || [];
 
   const [tab, setTab] = useState('command');
   const [mapData, setMapData] = useState(null);
@@ -70,24 +69,41 @@ export default function War() {
     return m;
   }, [buildings]);
 
-  const allTroops = [
-    ...COMMON_TROOPS.map(t => ({ ...t, special: false })),
-    ...specials.map(n => ({ id: n, name: n, cost: SPECIAL_COST, special: true })),
-    ...(me.is_port ? NAVAL_TROOPS.map(t => ({ ...t, special: false, naval: true })) : []),
-  ];
-
   const stationedOrigins = useMemo(
     () => (mine || []).filter(c => c.active && c.op_type === 'garrison').map(c => c.target),
     [mine]
   );
-  const originOptions = [...new Set([me.castle, ...(me.castles || []), ...stationedOrigins])];
+  const myCastles = [me.castle, ...(me.castles || [])];
+  const originOptions = [...new Set([...myCastles, ...stationedOrigins])];
 
   const [origin, setOrigin] = useState(me.castle);
   const [opType, setOpType] = useState(OP_TYPES[0].id);
   const [target, setTarget] = useState(null); // { name, region, ... } | null
   const [name, setName] = useState('');
-  const [counts, setCounts] = useState(Object.fromEntries(allTroops.map(t => [t.id, 0])));
   const [busy, setBusy] = useState(false);
+
+  // اطلاعاتِ هر قلعه (اقلیمِ واقعی، بندری‌بودن، نوعِ زمین) از خودِ دادهٔ نقشه —
+  // چون قلعهٔ دومِ یه لرد می‌تونه در اقلیمِ دیگه‌ای باشه یا بندری/غیربندری متفاوت
+  // از قلعهٔ اصلی‌اش، پس نباید بر اساسِ اقلیمِ خانگیِ بازیکن حدس زده بشه
+  const castleInfo = useMemo(() => {
+    const m = {};
+    for (const r of (mapData?.regions || [])) for (const c of r.castles) m[c.name] = { ...c, region: r.id };
+    return m;
+  }, [mapData]);
+  const isPortCastle = (name) => castleInfo[name] ? !!castleInfo[name].port : (name === me.castle && me.is_port);
+  const isSeaOnlyCastle = (name) => castleInfo[name]?.terrain === 'sea';
+
+  // نیروهای ویژه/دریایی قابل‌ساخت، بر اساسِ اقلیم و بندری‌بودنِ خودِ قلعهٔ مبدا
+  // (نه اقلیمِ خانگیِ بازیکن) — همینه که با عوض‌شدنِ مبدا فرق می‌کنه
+  const originRegion = castleInfo[origin]?.region || me.region;
+  const specials = REGIONS_STATIC[originRegion]?.special || [];
+  const allTroops = [
+    ...COMMON_TROOPS.map(t => ({ ...t, special: false })),
+    ...specials.map(n => ({ id: n, name: n, cost: SPECIAL_COST, special: true })),
+    ...(isPortCastle(origin) ? NAVAL_TROOPS.map(t => ({ ...t, special: false, naval: true })) : []),
+  ];
+
+  const [counts, setCounts] = useState(Object.fromEntries(allTroops.map(t => [t.id, 0])));
 
   const op = OP_TYPES.find(o => o.id === opType);
 
@@ -99,23 +115,12 @@ export default function War() {
     return () => { cancelled = true; };
   }, [origin]);
 
-  const isPortCastle = (name) => {
-    if (!mapData) return name === me.castle && me.is_port;
-    for (const r of mapData.regions) {
-      const c = r.castles.find(c => c.name === name);
-      if (c) return !!c.port;
-    }
-    return false;
-  };
-
-  const isSeaOnlyCastle = (name) => {
-    if (!mapData) return false;
-    for (const r of mapData.regions) {
-      const c = r.castles.find(c => c.name === name);
-      if (c) return c.terrain === 'sea';
-    }
-    return false;
-  };
+  // لیستِ نیروهای قابل‌ساخت با عوض‌شدنِ مبدا فرق می‌کنه (نیروی ویژه/کشتی) — شمارشِ
+  // قبلی که ممکنه دیگه معتبر نباشه رو پاک می‌کنیم تا فرمانِ بعدی نیرویِ نامعتبر نداشته باشه
+  useEffect(() => {
+    setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [origin]);
 
   const sameCastle = !op.needsTarget || (target && target.name === origin);
   const targetName = op.needsTarget && target ? target.name : origin;
@@ -303,7 +308,7 @@ export default function War() {
           )}
           <div className="sect up u2">نقشهٔ وستروس</div>
           <div className="up u2">
-            <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${castleLabel(c.name)} به‌عنوان مقصد انتخاب شد`); }}
+            <WesterosMap data={mapData} meCastles={[me.castle, ...(me.castles || [])]} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${castleLabel(c.name)} به‌عنوان مقصد انتخاب شد`); }}
                          routePath={!sameCastle ? chosenRoute?.path : null} />
           </div>
 
@@ -314,7 +319,7 @@ export default function War() {
 
             <label className="f">مبدا</label>
             <select value={origin} onChange={e => setOrigin(e.target.value)}>
-              {originOptions.map(o => <option key={o} value={o}>{castleLabel(o)}{o === me.castle ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
+              {originOptions.map(o => <option key={o} value={o}>{castleLabel(o)}{myCastles.includes(o) ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
             </select>
 
             <label className="f">نوع عملیات</label>

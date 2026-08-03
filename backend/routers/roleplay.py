@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, roleplays
-from game import now
+from game import now, owned_castles
 from game_data import ROLEPLAY_CATEGORIES
 from routers.war import ATTACK_OP_TYPES, ROLEPLAY_WINDOW_HOURS
 
@@ -40,7 +40,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         if not c or c["op_type"] not in ATTACK_OP_TYPES:
             raise HTTPException(404, "این نبرد پیدا نشد")
         is_attacker = c["tg_id"] == user["id"]
-        is_defender = c["target_castle"] == p["castle"] and c["tg_id"] != user["id"]
+        is_defender = c["target_castle"] in owned_castles(p) and c["tg_id"] != user["id"]
         if not (is_attacker or is_defender):
             raise HTTPException(403, "این نبرد به تو ربطی ندارد")
         arrival_at = c.get("arrival_at")
