@@ -411,12 +411,11 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .rc .empty { color: var(--low); }
 
 .mapview { margin: 0 2px 12px; }
-/* قابِ فشرده و ثابت‌اندازهٔ نقشه — یه پنجرهٔ کوچیک به‌جای نمایشِ کلِ تصویرِ بلندِ
-   وستروس؛ خودِ محتوا (.zoommap-inner/.map-canvas) هر قدر بخواد بلند می‌مونه، همینجا
-   برش می‌خوره. گوشه‌های طلاییِ تزئینی (.map-frame-corner) روحیهٔ نقشهٔ کهنه رو می‌دن */
+/* قابِ نقشه، به‌اندازهٔ خودِ تصویر (بدون محدودیتِ ارتفاع) — فقط قاب/گوشه‌های تزئینی
+   اضافه شده، سایزش همون حالتِ قبل از فشرده‌سازیه. گوشه‌های طلایی (.map-frame-corner)
+   روحیهٔ نقشهٔ کهنه رو می‌دن */
 .mapview-frame {
   position: relative; width: 100%; border-radius: 6px; overflow: hidden;
-  height: min(54vh, 430px); min-height: 260px;
   border: 1px solid rgba(233,193,118,0.42); background: #0a0a0a;
   box-shadow: inset 0 0 46px 12px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(233,193,118,0.08), 0 10px 26px -14px rgba(0,0,0,0.65);
 }
@@ -562,9 +561,9 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .pi-stats { font-size: 10.5px; color: var(--mid); margin-top: 2px; }
 .pi-pick { width: 100%; margin-top: 10px; padding: 9px; font-size: 12px; }
 
-.zoommap { position: relative; width: 100%; height: 100%; }
+.zoommap { position: relative; }
 .zoommap-wrap {
-  position: relative; width: 100%; height: 100%; overflow: hidden;
+  position: relative; width: 100%; overflow: hidden;
   touch-action: pan-y; -webkit-user-select: none; user-select: none;
 }
 .zoommap-inner { transform-origin: center center; transition: transform 0.16s cubic-bezier(0.22, 0.61, 0.36, 1); }
