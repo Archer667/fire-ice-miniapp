@@ -17,12 +17,13 @@ router = APIRouter(prefix="/api/war", tags=["war"])
 
 # needs_target=False یعنی مقصد لازم نیست (دفاعی — مقصد داخلی = مبدا)
 # port_only=True یعنی مقصد باید یک قلعه/شهر بندری باشد (غارت دریایی)
+# land_only=True یعنی مقصد نباید بندری باشد (محاصره — فقط علیه قلعه‌های خشکی معنا دارد)
 OP_TYPES = {
-    "attack":     {"name": "حملهٔ نظامی",                     "needs_target": True,  "port_only": False},
-    "siege":      {"name": "محاصرهٔ قلعه",                     "needs_target": True,  "port_only": False},
-    "naval_raid": {"name": "غارت دریایی (برای اهداف بندری)",  "needs_target": True,  "port_only": True},
-    "garrison":   {"name": "جای‌گیری",                         "needs_target": True,  "port_only": False},
-    "defense":    {"name": "دفاعی",                           "needs_target": False, "port_only": False},
+    "attack":     {"name": "حملهٔ نظامی",                     "needs_target": True,  "port_only": False, "land_only": False},
+    "siege":      {"name": "محاصرهٔ قلعه (فقط اهداف غیربندری)", "needs_target": True,  "port_only": False, "land_only": True},
+    "naval_raid": {"name": "غارت دریایی (برای اهداف بندری)",  "needs_target": True,  "port_only": True,  "land_only": False},
+    "garrison":   {"name": "جای‌گیری",                         "needs_target": True,  "port_only": False, "land_only": False},
+    "defense":    {"name": "دفاعی",                           "needs_target": False, "port_only": False, "land_only": False},
 }
 
 # نبردهای واقعی (نه جای‌گیری/دفاعی) — بعد از رسیدن، آمار دو طرف رد و بدل می‌شود و
@@ -255,6 +256,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "غارت دریایی فقط از قلعه/شهرهای بندری ممکن است — لشکرکشی از راه آبی")
         if op["port_only"] and not any(tid in NAVAL_TROOPS and n and n > 0 for tid, n in body.troops.items()):
             raise HTTPException(400, "غارت دریایی باید با کشتی انجام شود — این فرمان هیچ کشتی‌ای همراه ندارد")
+        if op.get("land_only") and body.target_castle in ports:
+            raise HTTPException(400, "محاصره فقط علیه قلعه‌های غیربندری معنا دارد — برای هدف‌های بندری از غارت دریایی استفاده کن")
         target_castle = body.target_castle
     else:
         target_castle = body.origin_castle

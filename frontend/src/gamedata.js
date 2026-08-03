@@ -723,11 +723,11 @@ export function spyTravelMinutes(originCastle, targetCastle) {
 
 // گزینه‌های عملیات لشکرکشی
 export const OP_TYPES = [
-  { id: 'attack',     name: 'حملهٔ نظامی',                    needsTarget: true,  portOnly: false },
-  { id: 'siege',      name: 'محاصرهٔ قلعه',                    needsTarget: true,  portOnly: false },
-  { id: 'naval_raid', name: 'غارت دریایی (برای اهداف بندری)', needsTarget: true,  portOnly: true },
-  { id: 'garrison',   name: 'جای‌گیری',                        needsTarget: true,  portOnly: false },
-  { id: 'defense',    name: 'دفاعی',                          needsTarget: false, portOnly: false },
+  { id: 'attack',     name: 'حملهٔ نظامی',                          needsTarget: true,  portOnly: false, landOnly: false },
+  { id: 'siege',      name: 'محاصرهٔ قلعه (فقط اهداف غیربندری)',    needsTarget: true,  portOnly: false, landOnly: true },
+  { id: 'naval_raid', name: 'غارت دریایی (برای اهداف بندری)',       needsTarget: true,  portOnly: true,  landOnly: false },
+  { id: 'garrison',   name: 'جای‌گیری',                              needsTarget: true,  portOnly: false, landOnly: false },
+  { id: 'defense',    name: 'دفاعی',                                needsTarget: false, portOnly: false, landOnly: false },
 ];
 
 // نبردهای واقعی — بعد از رسیدن، هر دو طرف تا ROLEPLAY_WINDOW_HOURS ساعت فرصت دارند

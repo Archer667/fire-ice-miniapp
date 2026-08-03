@@ -509,6 +509,9 @@ const M = {
           throw new Error('غارت دریایی باید با کشتی انجام شود — این فرمان هیچ کشتی‌ای همراه ندارد');
         }
       }
+      if (op.landOnly && mockIsPortCastle(targetCastle)) {
+        throw new Error('محاصره فقط علیه قلعه‌های غیربندری معنا دارد — برای هدف‌های بندری از غارت دریایی استفاده کن');
+      }
     }
 
     const originBuildings = mockCastleBuildingState(body.origin_castle);
