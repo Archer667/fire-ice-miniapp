@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Build, Rock } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
@@ -91,32 +91,112 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
   );
 }
 
-/** نقشهٔ یک‌پارچهٔ کل وستروس — بدون تب اقلیم‌ها، فقط خودِ نقشه با آیکن قلعه/شهرهایی
- * که مختصات دارند (بقیه تا وقتی ادمین جایشان را روی نقشه مشخص نکند دیده نمی‌شوند).
+/** نقشهٔ کوچکِ کناری — کلِ تصویر در ابعادِ ریز با یه نقطه به‌ازای هر قلعهٔ نمایش‌داده‌شده
+ * و یه مستطیلِ روشن که محدودهٔ الان‌دیده‌شده رو نشون می‌ده؛ زدن روی هرجاش نقشهٔ اصلی
+ * رو می‌بره همونجا */
+function MiniMap({ pins, view, onJump }) {
+  const handleClick = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    onJump(xPct, yPct);
+  };
+  const vx = Math.max(0, Math.min(100, view?.x ?? 0));
+  const vy = Math.max(0, Math.min(100, view?.y ?? 0));
+  const vw = Math.max(0, Math.min(100 - vx, view?.w ?? 100));
+  const vh = Math.max(0, Math.min(100 - vy, view?.h ?? 100));
+  return (
+    <div className="minimap" onClick={handleClick} role="button" aria-label="پرش رویِ نقشهٔ کوچک">
+      <img src={MAP_IMAGE} alt="" draggable={false} />
+      {pins.map(c => (
+        <span key={c.name} className={`minimap-dot ${c.mine ? 'mine' : c.owner ? 'owned' : ''}`}
+              style={{ left: c.xy[0] + '%', top: c.xy[1] + '%' }} />
+      ))}
+      <div className="minimap-viewport" style={{ left: vx + '%', top: vy + '%', width: vw + '%', height: vh + '%' }} />
+    </div>
+  );
+}
+
+/** نقشهٔ یک‌پارچهٔ کل وستروس — پین قلعه/شهرهایی که مختصات دارند، به‌همراه تب‌های
+ * میان‌بُرِ اقلیم، نقشهٔ کوچکِ کناری، و دکمهٔ پرش به قلعهٔ خودت.
  * data: { regions: [{ id, name, castles: [{name, owner, port, kind, coords?}], coords? }] }
  * هر castle می‌تواند owner را به‌صورت { name, points, title, overlord_name } داشته باشد */
 export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد' }) {
   const [pin, setPin] = useState(null);
+  const [view, setView] = useState(null);
+  const [activeRegion, setActiveRegion] = useState(null);
+  const mapRef = useRef(null);
 
-  const mapped = data.regions.flatMap(r => {
-    const coords = r.coords || {};
-    return r.castles
-      .map(c => ({ ...c, region: r.id, mine: c.name === meCastle, xy: coords[c.name] }))
+  const regionsMapped = useMemo(() => data.regions.map(r => {
+    const rc = r.coords || {};
+    const castles = r.castles
+      .map(c => ({ ...c, region: r.id, mine: c.name === meCastle, xy: rc[c.name] }))
       .filter(c => c.xy);
-  });
-  const coords = Object.fromEntries(mapped.map(c => [c.name, c.xy]));
+    return { id: r.id, name: r.name, castles };
+  }).filter(r => r.castles.length > 0), [data, meCastle]);
+
+  const mapped = useMemo(() => regionsMapped.flatMap(r => r.castles), [regionsMapped]);
+  const coords = useMemo(() => Object.fromEntries(mapped.map(c => [c.name, c.xy])), [mapped]);
+
+  // محدودهٔ واقعیِ پین‌های هر اقلیم — برای تب‌های میان‌بُر، از خودِ مختصاتِ ثبت‌شده
+  // حساب می‌شه (نه یه عدد ثابتِ حدسی)، پس با هر پینِ تازه‌ای که ادمین اضافه کنه خودکار درست می‌مونه
+  const regionBoxes = useMemo(() => Object.fromEntries(regionsMapped.map(r => {
+    const xs = r.castles.map(c => c.xy[0]), ys = r.castles.map(c => c.xy[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    return [r.id, { x: minX, y: minY, w: Math.max(maxX - minX, 5), h: Math.max(maxY - minY, 5) }];
+  })), [regionsMapped]);
+
+  const myPin = mapped.find(c => c.mine);
 
   if (mapped.length === 0) return null;
 
   const ownedRegions = [...new Set(mapped.filter(c => c.owner?.region).map(c => c.owner.region))];
 
+  const jumpToRegion = (rid) => {
+    haptic();
+    setActiveRegion(rid);
+    setPin(null);
+    mapRef.current?.flyToBox(regionBoxes[rid]);
+  };
+  const jumpToMine = () => {
+    if (!myPin) return;
+    haptic();
+    setActiveRegion(null);
+    setPin(myPin.name);
+    mapRef.current?.flyToPoint(myPin.xy[0], myPin.xy[1], 2.4);
+  };
+  const jumpFromMiniMap = (x, y) => {
+    haptic();
+    setActiveRegion(null);
+    mapRef.current?.flyToPoint(x, y, 2.2);
+  };
+
   return (
     <div className="mapview">
-      <ZoomPanMap onInteract={() => setPin(null)}>
-        <MapFrame region={{ castles: mapped }} coords={coords} pin={pin}
-                  onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
-                  onSelectTarget={onSelectTarget} pickLabel={pickLabel} />
-      </ZoomPanMap>
+      {regionsMapped.length > 1 && (
+        <div className="map-region-tabs">
+          {regionsMapped.map(r => (
+            <button type="button" key={r.id}
+                    className={`map-region-tab ${activeRegion === r.id ? 'on' : ''}`}
+                    onClick={() => jumpToRegion(r.id)}>
+              {REGIONS_STATIC[r.id]?.name || r.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{ position: 'relative' }}>
+        <ZoomPanMap ref={mapRef} onInteract={() => setPin(null)} onViewChange={setView}>
+          <MapFrame region={{ castles: mapped }} coords={coords} pin={pin}
+                    onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
+                    onSelectTarget={onSelectTarget} pickLabel={pickLabel} />
+        </ZoomPanMap>
+        {mapped.length > 6 && <MiniMap pins={mapped} view={view} onJump={jumpFromMiniMap} />}
+        {myPin && (
+          <button type="button" className="map-my-castle" onClick={jumpToMine} aria-label="پرش به قلعهٔ خودم">
+            <Keep s={14} />
+          </button>
+        )}
+      </div>
       {ownedRegions.length > 0 && (
         <div className="map-legend">
           {ownedRegions.map(rid => (

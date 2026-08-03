@@ -1,8 +1,9 @@
-import { createContext, useRef, useState } from 'react';
+import { createContext, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const STEP = 0.6;
+const FLY_MS = 560; // باید با مدت transition کلاس .flying تو index.css یکی باشه
 
 // زوم فعلی نقشه — تا عناصری مثل پاپ‌آپ اطلاعات بتوانند اندازهٔ خودشان را
 // برعکسِ این مقدار جبران کنند و با زوم نقشه بزرگ/کوچک نشوند
@@ -11,11 +12,28 @@ export const ZoomContext = createContext(1);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const dist = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
 
-export default function ZoomPanMap({ children, className = '', onInteract }) {
+/** ref imperative: flyTo({x,y,w,h}) یه محدوده (درصدِ عرض/ارتفاعِ کاملِ تصویر) رو
+ * وسطِ دید می‌آره و تا حدِ امکان زوم می‌کنه که کاملاً جا بشه؛ flyToPoint(x,y,zoom)
+ * فقط رویِ یه نقطهٔ مشخص با زومِ دلخواه سنتر می‌کنه (برای «قلعهٔ خودم»/مینی‌مپ) */
+const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', onInteract, onViewChange }, ref) {
   const wrapRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [flying, setFlying] = useState(false);
   const gesture = useRef(null);
+  const flyTimer = useRef(null);
+
+  // به والد اطلاع می‌ده الان دقیقاً کدوم محدودهٔ درصدیِ تصویر تو دیده — برای مینی‌مپ
+  useEffect(() => {
+    if (!onViewChange) return;
+    const el = wrapRef.current;
+    if (!el || !el.clientWidth || !el.clientHeight) return;
+    const wPct = 100 / zoom;
+    const hPct = 100 / zoom;
+    const cxPct = 50 - (pan.x / zoom / el.clientWidth) * 100;
+    const cyPct = 50 - (pan.y / zoom / el.clientHeight) * 100;
+    onViewChange({ x: cxPct - wPct / 2, y: cyPct - hPct / 2, w: wPct, h: hPct });
+  }, [zoom, pan, onViewChange]);
 
   const clampPan = (z, p) => {
     const el = wrapRef.current;
@@ -36,7 +54,39 @@ export default function ZoomPanMap({ children, className = '', onInteract }) {
 
   const zoomIn = () => applyZoom(zoom + STEP);
   const zoomOut = () => applyZoom(zoom - STEP);
-  const reset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+  const reset = () => { setFlying(true); setZoom(1); setPan({ x: 0, y: 0 }); armFlyReset(); };
+
+  const armFlyReset = () => {
+    if (flyTimer.current) clearTimeout(flyTimer.current);
+    flyTimer.current = setTimeout(() => setFlying(false), FLY_MS);
+  };
+
+  const flyToPoint = (xPct, yPct, targetZoom = 2.2) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const cw = el.clientWidth, ch = el.clientHeight;
+    if (!cw || !ch) return;
+    const z = clamp(targetZoom, MIN_ZOOM, MAX_ZOOM);
+    const fx = xPct / 100, fy = yPct / 100;
+    const p = clampPan(z, { x: -(fx - 0.5) * cw * z, y: -(fy - 0.5) * ch * z });
+    setFlying(true);
+    setZoom(z);
+    setPan(p);
+    onInteract?.();
+    armFlyReset();
+  };
+
+  const flyToBox = ({ x, y, w, h }, pad = 1.18) => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const cw = el.clientWidth, ch = el.clientHeight;
+    if (!cw || !ch) return;
+    const fw = Math.max(w / 100, 0.02), fh = Math.max(h / 100, 0.02);
+    const z = clamp(Math.min(1 / fw, 1 / fh) / pad, MIN_ZOOM, MAX_ZOOM);
+    flyToPoint(x + w / 2, y + h / 2, z);
+  };
+
+  useImperativeHandle(ref, () => ({ flyToPoint, flyToBox, reset, zoomIn, zoomOut }));
 
   const onWheel = (e) => {
     e.preventDefault();
@@ -94,7 +144,7 @@ export default function ZoomPanMap({ children, className = '', onInteract }) {
            onWheel={onWheel}
            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
            onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-        <div className="zoommap-inner" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+        <div className={`zoommap-inner ${flying ? 'flying' : ''}`} style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
           <ZoomContext.Provider value={zoom}>{children}</ZoomContext.Provider>
         </div>
       </div>
@@ -105,4 +155,6 @@ export default function ZoomPanMap({ children, className = '', onInteract }) {
       </div>
     </div>
   );
-}
+});
+
+export default ZoomPanMap;
