@@ -272,13 +272,13 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         if p["resources"].get(weapon_key, 0) < needed:
             raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
 
+    naval_capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
+    land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
+
     same_castle = target_castle == body.origin_castle
     if not same_castle:
-        if terrain.get(body.origin_castle, "land") == "sea":
-            capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
-            land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
-            if land_men > capacity:
-                raise HTTPException(400, f"این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط {capacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
+        if terrain.get(body.origin_castle, "land") == "sea" and land_men > naval_capacity:
+            raise HTTPException(400, f"این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
     blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
     if same_castle:
         travel, route_path = 0, [body.origin_castle]
@@ -288,6 +288,11 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, await blocked_route_message(body.origin_castle, target_castle, blocked))
         chosen = next((r for r in opts if r["path"] == body.via), None) if body.via else None
         chosen = chosen or opts[0]
+        if chosen["via_sea"] and land_men > naval_capacity:
+            land_opts = travel_routes(body.origin_castle, target_castle, blocked, allow_sea=False)
+            if land_opts:
+                raise HTTPException(400, "این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن")
+            raise HTTPException(400, f"این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
         travel, route_path = chosen["minutes"], chosen["path"]
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p, body.origin_castle))

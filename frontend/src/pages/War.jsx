@@ -183,6 +183,7 @@ export default function War() {
     [counts]
   );
   const overSeaCapacity = originIsSeaOnly && seaLandMen > seaCapacity;
+  const overSeaRoute = !!chosenRoute?.via_sea && seaLandMen > seaCapacity;
   const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
     : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
@@ -191,6 +192,7 @@ export default function War() {
     : badPortTarget ? 'مقصد باید بندر باشد'
     : badOriginForNaval ? 'مبدا باید بندر باشد'
     : overSeaCapacity ? `مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`
+    : overSeaRoute ? `این مسیر از آب می‌گذرد — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا مسیرِ دیگری انتخاب کن`
     : menCommitted <= 0 ? 'نیرویی گسیل نکرده‌ای'
     : null;
 
@@ -205,6 +207,7 @@ export default function War() {
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
     if (badOriginForNaval) { toast('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است'); return; }
     if (overSeaCapacity) { toast(`مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
+    if (overSeaRoute) { toast(`این مسیر از آب می‌گذرد — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
@@ -364,7 +367,10 @@ export default function War() {
                       <div className="n" style={{ fontSize: 11.5, lineHeight: 1.9 }}>
                         {r.path.map(castleLabel).join('  ←  ')}
                       </div>
-                      <div className="c">{r.minutes.toLocaleString('fa-IR')} دقیقه{routeOptions.length > 1 && i === 0 ? ' · کوتاه‌ترین' : ''}</div>
+                      <div className="c">
+                        {r.minutes.toLocaleString('fa-IR')} دقیقه{routeOptions.length > 1 && i === 0 ? ' · کوتاه‌ترین' : ''}
+                        {r.via_sea ? ' · ⚓ از آب می‌گذرد، نیازمند کشتی' : ''}
+                      </div>
                     </div>
                   ))}
                 </div>

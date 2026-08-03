@@ -25,7 +25,7 @@ import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS,
-  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes,
+  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
@@ -551,17 +551,16 @@ const M = {
       }
     }
 
+    const navalCapacity = Object.entries(body.troops || {})
+      .filter(([tid, n]) => NAVAL_TROOP_IDS.includes(tid) && n > 0)
+      .reduce((s, [tid, n]) => s + NAVAL_TROOPS.find(t => t.id === tid).capacity * n, 0);
+    const landMen = Object.entries(body.troops || {})
+      .filter(([tid, n]) => !NAVAL_TROOP_IDS.includes(tid) && n > 0)
+      .reduce((s, [, n]) => s + n, 0);
+
     const sameCastle = targetCastle === body.origin_castle;
-    if (!sameCastle && mockCastleTerrain(body.origin_castle) === 'sea') {
-      const capacity = Object.entries(body.troops || {})
-        .filter(([tid, n]) => NAVAL_TROOP_IDS.includes(tid) && n > 0)
-        .reduce((s, [tid, n]) => s + NAVAL_TROOPS.find(t => t.id === tid).capacity * n, 0);
-      const landMen = Object.entries(body.troops || {})
-        .filter(([tid, n]) => !NAVAL_TROOP_IDS.includes(tid) && n > 0)
-        .reduce((s, [, n]) => s + n, 0);
-      if (landMen > capacity) {
-        throw new Error(`این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط ${capacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست`);
-      }
+    if (!sameCastle && mockCastleTerrain(body.origin_castle) === 'sea' && landMen > navalCapacity) {
+      throw new Error(`این قلعه کاملاً دریایی است و راهی به خشکی ندارد — کشتی‌های این فرمان فقط ${navalCapacity} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا نیروی کمتری بفرست`);
     }
 
     mockPay({ gold, ...weapons });
@@ -572,7 +571,14 @@ const M = {
       travel = 0; routePath = [body.origin_castle];
     } else {
       const opts = travelRoutes(body.origin_castle, targetCastle);
-      const chosen = (body.via && opts.find(r => r.path.join('→') === body.via.join('→'))) || opts[0] || { minutes: travelMinutes(sameCastle, body.origin_castle, targetCastle), path: [body.origin_castle, targetCastle] };
+      const chosen = (body.via && opts.find(r => r.path.join('→') === body.via.join('→'))) || opts[0] || { minutes: travelMinutes(sameCastle, body.origin_castle, targetCastle), path: [body.origin_castle, targetCastle], via_sea: pathUsesSea([body.origin_castle, targetCastle]) };
+      if (chosen.via_sea && landMen > navalCapacity) {
+        const landOpts = travelRoutes(body.origin_castle, targetCastle, 2, false);
+        if (landOpts.length) {
+          throw new Error('این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن');
+        }
+        throw new Error(`این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط ${navalCapacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست`);
+      }
       travel = chosen.minutes; routePath = chosen.path;
     }
 

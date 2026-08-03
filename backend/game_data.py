@@ -697,6 +697,36 @@ def _build_travel_graph():
     return graph
 
 TRAVEL_GRAPH = _build_travel_graph()
+
+# یال‌هایی از نقشه که واقعاً از روی آبِ باز رد می‌شوند (نه جادهٔ ساحلی) — رفتنشان
+# بدون کشتی (ظرفیتِ کافی برای حمل نیروهای زمینی) ممکن نیست. بر پایهٔ جغرافیای
+# واقعیِ وستروس: جزایر آهن، اسکاگوس، بیر آیلند، درگون‌استون، دریفت‌مارک، آربور،
+# فیرکسل (Fair Isle)، لیتل سیستر، گاستون گری، تارث (ایون‌فال‌هال) همگی جزیره‌اند
+# و هیچ پلِ خشکی به بقیهٔ نقشه ندارند
+SEA_EDGES = {
+    frozenset(e) for e in [
+        ("ایست واچ", "اسکاگوس"), ("اسکاگوس", "ویدوز واچ"),
+        ("دیپ وود موت", "بیر آیلند"), ("بیر آیلند", "فلینتز فینگر"), ("بیر آیلند", "گریت ویک"),
+        ("وایت هاربر", "لیتل سیستر"), ("لیتل سیستر", "ویدوز واچ"), ("لیتل سیستر", "گالتاون"),
+        ("فلینتز فینگر", "گریت ویک"), ("سیگارد", "تن تاورز"),
+        ("گریت ویک", "اولد ویک"), ("گریت ویک", "پایک"), ("اولد ویک", "اورکمونت"),
+        ("اورکمونت", "بلک تاید"), ("اورکمونت", "تن تاورز"), ("پایک", "سالت کلیف"),
+        ("پایک", "بینفورت"), ("پایک", "تن تاورز"), ("پایک", "فیرکسل"),
+        ("لنیسپورت", "فیرکسل"), ("اولد اوک", "فیرکسل"),
+        ("لنیسپورت", "آربور"), ("سان اسپیر", "آربور"), ("سالت شور", "آربور"),
+        ("استارفال", "آربور"), ("آربور", "اولد تاون"), ("باندالون", "آربور"),
+        ("یرون وود", "گاستون گری"), ("گاستون گری", "استون هلم"), ("گاستون گری", "ویپینگ تاون"),
+        ("دراگون استون", "ایون فال هال"), ("استورمز اند", "ایون فال هال"), ("گرین استون", "ایون فال هال"),
+        ("روکز رست", "دراگون استون"), ("گالتاون", "دراگون استون"),
+        ("دراگون استون", "دریفت مارک"), ("دریفت مارک", "شارپ پوینت"), ("دریفت مارک", "کینگزلندینگ"),
+    ]
+}
+
+def is_sea_edge(a: str, b: str) -> bool:
+    return frozenset((a, b)) in SEA_EDGES
+
+def path_uses_sea(path: list) -> bool:
+    return any(is_sea_edge(path[i], path[i + 1]) for i in range(len(path) - 1))
 TRAVEL_CROSS_REGION_DEFAULT_MINUTES = 90  # اگر مسیری اصلاً پیدا نشد (گراف قطع بود یا قلعه ناشناخته)
 
 def _shortest_minutes(origin_castle: str, target_castle: str, blocked: frozenset = frozenset()):
@@ -736,9 +766,11 @@ def travel_minutes(same_castle: bool, origin_castle: str, target_castle: str, bl
         return 0
     return _shortest_minutes(origin_castle, target_castle, blocked)
 
-def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = frozenset()):
+def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = frozenset(), allow_sea: bool = True):
     """مثل _shortest_minutes، ولی علاوه بر زمان، خودِ مسیر (لیستِ قلعه‌ها از مبدا تا
-    مقصد، شاملِ خودِ مبدا و مقصد) رو هم برمی‌گردونه. اگر مسیری نبود، (None, None)."""
+    مقصد، شاملِ خودِ مبدا و مقصد) رو هم برمی‌گردونه. اگر allow_sea نادرست باشه،
+    یال‌های دریایی (SEA_EDGES) اصلاً روی گراف در نظر گرفته نمی‌شن — برای نیروهای
+    زمینیِ بدون ظرفیتِ کشتیِ کافی. اگر مسیری نبود، (None, None)."""
     import heapq
     if origin_castle not in TRAVEL_GRAPH or target_castle not in TRAVEL_GRAPH:
         return None, None
@@ -761,6 +793,8 @@ def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = 
         for nb, w in TRAVEL_GRAPH.get(node, {}).items():
             if nb in blocked:
                 continue
+            if not allow_sea and is_sea_edge(node, nb):
+                continue
             nd = d + w
             if nd < dist.get(nb, float("inf")):
                 dist[nb] = nd
@@ -768,16 +802,17 @@ def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = 
                 heapq.heappush(pq, (nd, nb))
     return None, None
 
-def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = frozenset(), max_routes: int = 2):
-    """یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — هرکدوم {"minutes", "path"}
-    (path شاملِ خودِ مبدا و مقصد است). گزینهٔ دوم فقط وقتی اضافه می‌شود که واقعاً
+def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = frozenset(), max_routes: int = 2, allow_sea: bool = True):
+    """یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — هرکدوم {"minutes", "path", "via_sea"}
+    (path شاملِ خودِ مبدا و مقصد است، via_sea یعنی این مسیر از یالِ دریایی رد می‌شود
+    و بدون کشتیِ کافی ممکن نیست). گزینهٔ دوم فقط وقتی اضافه می‌شود که واقعاً
     مسیرِ دیگری (نه همون توالیِ قلعه‌ها) پیدا بشه — با حذفِ موقتِ هر یالِ روی
     بهترین مسیر و دوباره دایکسترازدن (نسخهٔ سبکِ الگوریتم Yen). اگر origin/target
     قابل‌رسیدن نبودند، لیستِ خالی برمی‌گردد."""
-    best_min, best_path = _dijkstra_path(origin_castle, target_castle, blocked)
+    best_min, best_path = _dijkstra_path(origin_castle, target_castle, blocked, allow_sea)
     if best_path is None:
         return []
-    routes = [{"minutes": best_min, "path": best_path}]
+    routes = [{"minutes": best_min, "path": best_path, "via_sea": path_uses_sea(best_path)}]
     if max_routes <= 1 or len(best_path) < 2:
         return routes
 
@@ -788,7 +823,7 @@ def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = f
         w_ab = TRAVEL_GRAPH.get(a, {}).pop(b, None)
         w_ba = TRAVEL_GRAPH.get(b, {}).pop(a, None)
         try:
-            alt_min, alt_path = _dijkstra_path(origin_castle, target_castle, blocked)
+            alt_min, alt_path = _dijkstra_path(origin_castle, target_castle, blocked, allow_sea)
         finally:
             if w_ab is not None:
                 TRAVEL_GRAPH[a][b] = w_ab
@@ -796,7 +831,7 @@ def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = f
                 TRAVEL_GRAPH[b][a] = w_ba
         if alt_path and tuple(alt_path) not in seen_paths:
             seen_paths.add(tuple(alt_path))
-            candidates.append({"minutes": alt_min, "path": alt_path})
+            candidates.append({"minutes": alt_min, "path": alt_path, "via_sea": path_uses_sea(alt_path)})
     if candidates:
         candidates.sort(key=lambda r: r["minutes"])
         routes.append(candidates[0])

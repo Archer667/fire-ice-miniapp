@@ -590,6 +590,30 @@ function buildTravelGraph() {
 const TRAVEL_GRAPH = buildTravelGraph();
 const TRAVEL_CROSS_REGION_DEFAULT_MINUTES = 90;
 
+// یال‌های دریایی — آینه‌ی SEA_EDGES در backend/game_data.py (نگه‌داری‌شان یکسان لازم است)
+const SEA_EDGES = new Set([
+  ['ایست واچ', 'اسکاگوس'], ['اسکاگوس', 'ویدوز واچ'],
+  ['دیپ وود موت', 'بیر آیلند'], ['بیر آیلند', 'فلینتز فینگر'], ['بیر آیلند', 'گریت ویک'],
+  ['وایت هاربر', 'لیتل سیستر'], ['لیتل سیستر', 'ویدوز واچ'], ['لیتل سیستر', 'گالتاون'],
+  ['فلینتز فینگر', 'گریت ویک'], ['سیگارد', 'تن تاورز'],
+  ['گریت ویک', 'اولد ویک'], ['گریت ویک', 'پایک'], ['اولد ویک', 'اورکمونت'],
+  ['اورکمونت', 'بلک تاید'], ['اورکمونت', 'تن تاورز'], ['پایک', 'سالت کلیف'],
+  ['پایک', 'بینفورت'], ['پایک', 'تن تاورز'], ['پایک', 'فیرکسل'],
+  ['لنیسپورت', 'فیرکسل'], ['اولد اوک', 'فیرکسل'],
+  ['لنیسپورت', 'آربور'], ['سان اسپیر', 'آربور'], ['سالت شور', 'آربور'],
+  ['استارفال', 'آربور'], ['آربور', 'اولد تاون'], ['باندالون', 'آربور'],
+  ['یرون وود', 'گاستون گری'], ['گاستون گری', 'استون هلم'], ['گاستون گری', 'ویپینگ تاون'],
+  ['دراگون استون', 'ایون فال هال'], ['استورمز اند', 'ایون فال هال'], ['گرین استون', 'ایون فال هال'],
+  ['روکز رست', 'دراگون استون'], ['گالتاون', 'دراگون استون'],
+  ['دراگون استون', 'دریفت مارک'], ['دریفت مارک', 'شارپ پوینت'], ['دریفت مارک', 'کینگزلندینگ'],
+].map(([a, b]) => [a, b].sort().join('|')));
+
+function isSeaEdge(a, b) { return SEA_EDGES.has([a, b].sort().join('|')); }
+export function pathUsesSea(path) {
+  for (let i = 0; i < path.length - 1; i++) if (isSeaEdge(path[i], path[i + 1])) return true;
+  return false;
+}
+
 function shortestMinutes(originCastle, targetCastle) {
   if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) return TRAVEL_CROSS_REGION_DEFAULT_MINUTES;
   const dist = { [originCastle]: 0 };
@@ -617,7 +641,7 @@ export function travelMinutes(sameCastle, originCastle, targetCastle) {
   return shortestMinutes(originCastle, targetCastle);
 }
 
-function dijkstraPath(originCastle, targetCastle) {
+function dijkstraPath(originCastle, targetCastle, allowSea = true) {
   if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) return { minutes: null, path: null };
   const dist = { [originCastle]: 0 };
   const prev = {};
@@ -635,6 +659,7 @@ function dijkstraPath(originCastle, targetCastle) {
       return { minutes: d, path };
     }
     for (const [nb, w] of Object.entries(TRAVEL_GRAPH[node] || {})) {
+      if (!allowSea && isSeaEdge(node, nb)) continue;
       const nd = d + w;
       if (nd < (dist[nb] ?? Infinity)) {
         dist[nb] = nd;
@@ -649,10 +674,10 @@ function dijkstraPath(originCastle, targetCastle) {
 // یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — آینه‌ی travel_routes در
 // backend/game_data.py؛ اگه یالِ روی بهترین مسیر رو موقتاً حذف کنیم و دوباره
 // دایکسترا بزنیم، ممکنه یه مسیرِ واقعاً متفاوت (نه فقط دورتر روی همون یال‌ها) پیدا بشه
-export function travelRoutes(originCastle, targetCastle, maxRoutes = 2) {
-  const best = dijkstraPath(originCastle, targetCastle);
+export function travelRoutes(originCastle, targetCastle, maxRoutes = 2, allowSea = true) {
+  const best = dijkstraPath(originCastle, targetCastle, allowSea);
   if (!best.path) return [];
-  const routes = [{ minutes: best.minutes, path: best.path }];
+  const routes = [{ minutes: best.minutes, path: best.path, via_sea: pathUsesSea(best.path) }];
   if (maxRoutes <= 1 || best.path.length < 2) return routes;
 
   const seenPaths = new Set([best.path.join('→')]);
@@ -663,12 +688,12 @@ export function travelRoutes(originCastle, targetCastle, maxRoutes = 2) {
     const wBA = TRAVEL_GRAPH[b]?.[a];
     if (wAB !== undefined) delete TRAVEL_GRAPH[a][b];
     if (wBA !== undefined) delete TRAVEL_GRAPH[b][a];
-    const alt = dijkstraPath(originCastle, targetCastle);
+    const alt = dijkstraPath(originCastle, targetCastle, allowSea);
     if (wAB !== undefined) TRAVEL_GRAPH[a][b] = wAB;
     if (wBA !== undefined) TRAVEL_GRAPH[b][a] = wBA;
     if (alt.path && !seenPaths.has(alt.path.join('→'))) {
       seenPaths.add(alt.path.join('→'));
-      candidates.push({ minutes: alt.minutes, path: alt.path });
+      candidates.push({ minutes: alt.minutes, path: alt.path, via_sea: pathUsesSea(alt.path) });
     }
   }
   if (candidates.length) {
