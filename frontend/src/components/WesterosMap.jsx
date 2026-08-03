@@ -2,7 +2,7 @@ import { useContext, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Build, Rock } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
-import { REGIONS_STATIC, castleLabel, REGION_COLORS } from '../gamedata.js';
+import { REGIONS_STATIC, castleLabel, REGION_COLORS, PACT_COLORS, ALLIANCE_TYPES, SEA_EDGES, isSeaEdge } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
 
 /** جای‌گذاری و ضدِمقیاسِ پاپ‌آپ اطلاعات — طوری که همیشه دقیقاً کنار پین بچسبد
@@ -27,7 +27,7 @@ const KIND_ICON = { castle: Keep, city: Build, ruin: Rock, port: Ship };
  * با تب کوچک اطلاعات دقیقاً کنار همان پین) و هم برای حالت ادمین (کلیک روی خودِ
  * نقشه برای گرفتن مختصات یک نقطهٔ خالی) به کار می‌رود.
  * مختصات هر قلعه درصدی از عرض/ارتفاع کامل تصویر است (۰ تا ۱۰۰) */
-export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel }) {
+export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel, colorMode = 'region', routeSegments, seaLaneSegments }) {
   const zoom = useContext(ZoomContext);
   const handleFrameClick = (e) => {
     if (!onFrameClick) return;
@@ -40,13 +40,26 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
   return (
     <div className="mapview-frame" onClick={handleFrameClick} style={{ cursor: onFrameClick ? 'crosshair' : 'default' }}>
       <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
+      {(seaLaneSegments?.length > 0 || routeSegments?.length > 0) && (
+        <svg className="map-overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          {seaLaneSegments?.map(([[x1, y1], [x2, y2]], i) => (
+            <line key={`sl${i}`} className="sea-lane-line" x1={x1} y1={y1} x2={x2} y2={y2} />
+          ))}
+          {routeSegments?.map((s, i) => (
+            <line key={`rt${i}`} className={`route-line ${s.sea ? 'sea' : 'land'}`}
+                  x1={s.a[0]} y1={s.a[1]} x2={s.b[0]} y2={s.b[1]} />
+          ))}
+        </svg>
+      )}
       {region.castles.map(c => {
         const xy = coords[c.name];
         if (!xy) return null;
         const Icon = KIND_ICON[c.kind] || (c.port ? Ship : Keep);
         const active = pin === c.name;
         const popupStyle = popupPlacement(xy, zoom);
-        const ownerColor = c.owner?.region ? REGION_COLORS[c.owner.region] : null;
+        const ownerColor = c.owner
+          ? (colorMode === 'pact' ? PACT_COLORS[c.owner.pact || 'none'] : (c.owner.region ? REGION_COLORS[c.owner.region] : null))
+          : null;
         const dotStyle = ownerColor ? { borderColor: ownerColor, color: ownerColor } : undefined;
         return (
           <div key={c.name} role={onPinClick ? 'button' : undefined} tabIndex={onPinClick ? 0 : undefined}
@@ -121,10 +134,21 @@ function MiniMap({ pins, view, onJump }) {
  * میان‌بُرِ اقلیم، نقشهٔ کوچکِ کناری، و دکمهٔ پرش به قلعهٔ خودت.
  * data: { regions: [{ id, name, castles: [{name, owner, port, kind, coords?}], coords? }] }
  * هر castle می‌تواند owner را به‌صورت { name, points, title, overlord_name } داشته باشد */
-export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد' }) {
+const PIN_FILTERS = [
+  { key: 'all', label: 'همه' },
+  { key: 'mine', label: 'قلعهٔ من' },
+  { key: 'owned', label: 'صاحب‌دار' },
+  { key: 'empty', label: 'خالی' },
+  { key: 'port', label: 'بندر' },
+];
+const PACT_LEGEND_ORDER = ['full_alliance', 'non_aggression', 'trade', 'none'];
+
+export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد', routePath }) {
   const [pin, setPin] = useState(null);
   const [view, setView] = useState(null);
   const [activeRegion, setActiveRegion] = useState(null);
+  const [pinFilter, setPinFilter] = useState('all');
+  const [colorMode, setColorMode] = useState('region');
   const mapRef = useRef(null);
 
   const regionsMapped = useMemo(() => data.regions.map(r => {
@@ -137,6 +161,28 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
 
   const mapped = useMemo(() => regionsMapped.flatMap(r => r.castles), [regionsMapped]);
   const coords = useMemo(() => Object.fromEntries(mapped.map(c => [c.name, c.xy])), [mapped]);
+  const terrainOf = useMemo(() => Object.fromEntries(mapped.map(c => [c.name, c.terrain])), [mapped]);
+
+  // خطوطِ کم‌رنگِ یال‌های دریایی — همیشه از رویِ کل پین‌های نقشه‌شده رسم می‌شه (مستقل از فیلترِ پین‌ها)
+  const seaLaneSegments = useMemo(() => {
+    const segs = [];
+    for (const key of SEA_EDGES) {
+      const [a, b] = key.split('|');
+      if (coords[a] && coords[b]) segs.push([coords[a], coords[b]]);
+    }
+    return segs;
+  }, [coords]);
+
+  // مسیرِ لشکرکشیِ انتخاب‌شده (اگه پاس داده شده باشه) — بخشِ دریایی‌اش رنگ/الگویِ جدا داره
+  const routeSegments = useMemo(() => {
+    if (!routePath || routePath.length < 2) return [];
+    const segs = [];
+    for (let i = 0; i < routePath.length - 1; i++) {
+      const a = routePath[i], b = routePath[i + 1];
+      if (coords[a] && coords[b]) segs.push({ a: coords[a], b: coords[b], sea: isSeaEdge(a, b, (n) => terrainOf[n]) });
+    }
+    return segs;
+  }, [routePath, coords, terrainOf]);
 
   // محدودهٔ واقعیِ پین‌های هر اقلیم — برای تب‌های میان‌بُر، از خودِ مختصاتِ ثبت‌شده
   // حساب می‌شه (نه یه عدد ثابتِ حدسی)، پس با هر پینِ تازه‌ای که ادمین اضافه کنه خودکار درست می‌مونه
@@ -148,9 +194,20 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
 
   const myPin = mapped.find(c => c.mine);
 
+  const filteredCastles = useMemo(() => mapped.filter(c => {
+    if (pinFilter === 'mine') return c.mine;
+    if (pinFilter === 'owned') return !!c.owner;
+    if (pinFilter === 'empty') return !c.owner;
+    if (pinFilter === 'port') return !!c.port;
+    return true;
+  }), [mapped, pinFilter]);
+
   if (mapped.length === 0) return null;
 
   const ownedRegions = [...new Set(mapped.filter(c => c.owner?.region).map(c => c.owner.region))];
+  const pactTypesPresent = colorMode === 'pact'
+    ? PACT_LEGEND_ORDER.filter(t => mapped.some(c => c.owner && !c.mine && (c.owner.pact || 'none') === t))
+    : [];
 
   const jumpToRegion = (rid) => {
     haptic();
@@ -184,11 +241,23 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
           ))}
         </div>
       )}
+      {mapped.length > 3 && (
+        <div className="map-region-tabs map-pin-filter">
+          {PIN_FILTERS.map(f => (
+            <button type="button" key={f.key}
+                    className={`map-region-tab ${pinFilter === f.key ? 'on' : ''}`}
+                    onClick={() => { haptic(); setPinFilter(f.key); }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ position: 'relative' }}>
         <ZoomPanMap ref={mapRef} onInteract={() => setPin(null)} onViewChange={setView}>
-          <MapFrame region={{ castles: mapped }} coords={coords} pin={pin}
+          <MapFrame region={{ castles: filteredCastles }} coords={coords} pin={pin}
                     onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
-                    onSelectTarget={onSelectTarget} pickLabel={pickLabel} />
+                    onSelectTarget={onSelectTarget} pickLabel={pickLabel}
+                    colorMode={colorMode} routeSegments={routeSegments} seaLaneSegments={seaLaneSegments} />
         </ZoomPanMap>
         {mapped.length > 6 && <MiniMap pins={mapped} view={view} onJump={jumpFromMiniMap} />}
         {myPin && (
@@ -199,12 +268,21 @@ export default function WesterosMap({ data, meCastle, onSelectTarget, pickLabel 
       </div>
       {ownedRegions.length > 0 && (
         <div className="map-legend">
-          {ownedRegions.map(rid => (
+          {colorMode === 'region' ? ownedRegions.map(rid => (
             <span className="map-legend-item" key={rid}>
               <span className="map-legend-dot" style={{ background: REGION_COLORS[rid] }} />
               {REGIONS_STATIC[rid]?.name || rid}
             </span>
+          )) : pactTypesPresent.map(t => (
+            <span className="map-legend-item" key={t}>
+              <span className="map-legend-dot" style={{ background: PACT_COLORS[t] }} />
+              {t === 'none' ? 'بدون پیمان' : ALLIANCE_TYPES[t]?.name}
+            </span>
           ))}
+          <button type="button" className="map-legend-toggle"
+                  onClick={() => { haptic(); setColorMode(m => m === 'region' ? 'pact' : 'region'); }}>
+            رنگ‌بندی: {colorMode === 'region' ? 'اقلیم' : 'پیمان'}
+          </button>
         </div>
       )}
     </div>

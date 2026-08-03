@@ -1,7 +1,7 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends
 from auth import get_user
-from db import campaigns, map_castles
+from db import campaigns, map_castles, alliances
 from game import now
 from game_data import REGIONS, CASTLE_HOUSES
 from game import owned_castles
@@ -10,6 +10,9 @@ from ranks import scored_players, get_hierarchy_doc
 from routers.war import all_castle_terrain
 
 router = APIRouter(prefix="/api/map", tags=["map"])
+
+# اولویتِ نمایش وقتی با یک نفر چند پیمان هم‌زمان برقرار است — قوی‌ترین رابطه رنگ پین را تعیین می‌کند
+PACT_PRIORITY = ["full_alliance", "non_aggression", "trade"]
 
 @router.get("")
 async def get_map(user: dict = Depends(get_user)):
@@ -21,13 +24,22 @@ async def get_map(user: dict = Depends(get_user)):
         row = by_tgid.get(tg_id)
         overlord_name[rid] = row["player"]["name"] if row else None
 
+    # پیمان‌های برقرار من با بقیه — برای رنگ‌بندی پین‌ها بر اساس پیمان روی نقشه
+    pact_by_tgid = {}
+    cur = alliances.find({"status": "accepted", "$or": [{"from_id": user["id"]}, {"to_id": user["id"]}]})
+    async for a in cur:
+        other_id = a["to_id"] if a["from_id"] == user["id"] else a["from_id"]
+        prev = pact_by_tgid.get(other_id)
+        if prev is None or PACT_PRIORITY.index(a["type"]) < PACT_PRIORITY.index(prev):
+            pact_by_tgid[other_id] = a["type"]
+
     owners_by_castle = {}
     for r in rows:
         p = r["player"]
         owner_info = {
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "points": r["score"], "overlord_name": overlord_name.get(p["region"]),
-            "region": p["region"],
+            "region": p["region"], "pact": pact_by_tgid.get(p["tg_id"]),
         }
         for c in owned_castles(p):
             owners_by_castle[c] = owner_info

@@ -303,7 +303,8 @@ export default function War() {
           )}
           <div className="sect up u2">نقشهٔ وستروس</div>
           <div className="up u2">
-            <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${castleLabel(c.name)} به‌عنوان مقصد انتخاب شد`); }} />
+            <WesterosMap data={mapData} meCastle={me.castle} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${castleLabel(c.name)} به‌عنوان مقصد انتخاب شد`); }}
+                         routePath={!sameCastle ? chosenRoute?.path : null} />
           </div>
 
           <div className="sect up u3">ساخت لشکر</div>

@@ -591,7 +591,7 @@ const TRAVEL_GRAPH = buildTravelGraph();
 const TRAVEL_CROSS_REGION_DEFAULT_MINUTES = 90;
 
 // یال‌های دریایی — آینه‌ی SEA_EDGES در backend/game_data.py (نگه‌داری‌شان یکسان لازم است)
-const SEA_EDGES = new Set([
+export const SEA_EDGES = new Set([
   ['ایست واچ', 'اسکاگوس'], ['اسکاگوس', 'ویدوز واچ'],
   ['دیپ وود موت', 'بیر آیلند'], ['بیر آیلند', 'فلینتز فینگر'], ['بیر آیلند', 'گریت ویک'],
   ['وایت هاربر', 'لیتل سیستر'], ['لیتل سیستر', 'ویدوز واچ'], ['لیتل سیستر', 'گالتاون'],
@@ -612,7 +612,7 @@ const SEA_EDGES = new Set([
 // قلعه‌هایی که پیش‌فرضشان کاملاً دریایی‌ست — آینه‌ی DEFAULT_SEA_CASTLES در backend
 export const DEFAULT_SEA_CASTLES = new Set(['گرین استون']);
 
-function isSeaEdge(a, b, terrain) {
+export function isSeaEdge(a, b, terrain) {
   if (SEA_EDGES.has([a, b].sort().join('|'))) return true;
   if (terrain && (terrain(a) === 'sea' || terrain(b) === 'sea')) return true;
   return false;
@@ -850,8 +850,17 @@ export const ALLIANCE_TYPES = {
   trade:          { name: 'پیمان تجاری',      wine_cost: 30 },
   full_alliance:  { name: 'اتحاد کامل',       wine_cost: 60 },
 };
+// رنگِ پین روی نقشه در حالتِ «رنگ‌بندی بر اساسِ پیمان»
+export const PACT_COLORS = {
+  full_alliance:  '#57b872',
+  non_aggression: '#4da3ff',
+  trade:          '#b06cf0',
+  none:           '#8a93a3',
+};
 // پیمان خصوصی (توی تب عمومیِ «اتحادها» نشان داده نمی‌شود) دو برابر شرابِ معمولی هزینه دارد
 export const PRIVATE_ALLIANCE_MULTIPLIER = 2;
+// اولویتِ نمایش وقتی با یک نفر چند پیمان هم‌زمان برقرار است — قوی‌ترین رابطه رنگ پین را روی نقشه تعیین می‌کند
+export const PACT_PRIORITY = ['full_alliance', 'non_aggression', 'trade'];
 
 export const DEFAULT_TITLE = { lord: 'لرد جوان', lady: 'لیدی جوان' };
 export const POPULARITY_START = 50;

@@ -24,7 +24,7 @@ async function req(path, opts = {}) {
 import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
-  FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS,
+  FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, PACT_PRIORITY, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea, DEFAULT_SEA_CASTLES,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
@@ -402,13 +402,19 @@ const M = {
   },
   map: () => {
     mockResolveCampaigns();
+    const pactByTgid = {};
+    for (const a of mockAlliances) {
+      if (a.status !== 'accepted') continue;
+      const prev = pactByTgid[a.other_id];
+      if (!prev || PACT_PRIORITY.indexOf(a.type) < PACT_PRIORITY.indexOf(prev)) pactByTgid[a.other_id] = a.type;
+    }
     const owners = {};
     for (const p of MOCK_PLAYERS) {
       if (!p.castle) continue;
-      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null, region: p.region };
+      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null, region: p.region, pact: pactByTgid[p.tg_id] || null };
     }
     if (mockMe.registered && !mockMe.pending) {
-      const mine = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockMe.region };
+      const mine = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockMe.region, pact: null };
       for (const c of mockOwnedCastles()) owners[c] = mine;
     }
     const nowMs = Date.now();
