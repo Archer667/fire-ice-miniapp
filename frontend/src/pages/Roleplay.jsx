@@ -103,7 +103,10 @@ export default function Roleplay() {
 
       {tab === 'results' && (
         <div className="up u2">
-          {(!rows || rows.length === 0) && (
+          {rows === null && (
+            <div className="loading">در حال بارگذاری...</div>
+          )}
+          {rows && rows.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز رولی نفرستاده‌ای</div>
           )}
           {rows && rows.map(r => (

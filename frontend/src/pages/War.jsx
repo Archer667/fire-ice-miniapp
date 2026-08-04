@@ -77,6 +77,7 @@ export default function War() {
   const [target, setTarget] = useState(null); // { name, region, ... } | null
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [cancelBusyId, setCancelBusyId] = useState(null);
 
   // اطلاعاتِ هر قلعه (اقلیمِ واقعی، بندری‌بودن، نوعِ زمین) از خودِ دادهٔ نقشه —
   // چون قلعهٔ دومِ یه لرد می‌تونه در اقلیمِ دیگه‌ای باشه یا بندری/غیربندری متفاوت
@@ -238,6 +239,8 @@ export default function War() {
   };
 
   const cancelCampaign = async (c) => {
+    if (cancelBusyId) return;
+    setCancelBusyId(c.id);
     try {
       const res = await api.cancelCampaign(c.id);
       haptic('medium');
@@ -257,6 +260,7 @@ export default function War() {
       toast('لشکر لغو شد و طلا، نفرات و تسلیحاتش به خانه برگشت');
       loadMine(); loadMap(); loadLegions();
     } catch (e) { toast(e.message); }
+    setCancelBusyId(null);
   };
 
   const relaunchFrom = (c) => {
@@ -486,7 +490,9 @@ export default function War() {
                 {c.can_relaunch && (
                   <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => relaunchFrom(c)}>حرکت بده</button>
                 )}
-                <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => cancelCampaign(c)}>لغو لشکر</button>
+                <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} disabled={cancelBusyId === c.id} onClick={() => cancelCampaign(c)}>
+                  {cancelBusyId === c.id ? '...' : 'لغو لشکر'}
+                </button>
               </div>
             </div>
           ))}
@@ -522,7 +528,9 @@ export default function War() {
                   : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
               </div>
               {c.active && (
-                <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => cancelCampaign(c)}>لغو لشکر</button>
+                <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} disabled={cancelBusyId === c.id} onClick={() => cancelCampaign(c)}>
+                  {cancelBusyId === c.id ? '...' : 'لغو لشکر'}
+                </button>
               )}
             </div>
           ))}

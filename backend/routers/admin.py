@@ -11,7 +11,7 @@ from db import (
 )
 import game_data
 from game import now, add_resources, building_levels_for
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
@@ -933,12 +933,19 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
     admin_ids = await _current_admin_ids()
 
     # ادمین‌هایی که نگه داشته می‌شن ممکنه لشکرکشیِ فعال داشته باشن — قبل از پاک‌کردنِ
-    # کاملِ campaigns، نفراتشون رو برمی‌گردونیم (دقیقاً مثلِ منحل‌کردنِ دستی)، وگرنه
-    # ادعای «پیشرفتِ ادمین دست‌نخورده می‌ماند» درست نبود
+    # کاملِ campaigns، نفرات/طلا/تسلیحاتشون رو برمی‌گردونیم (دقیقاً مثلِ منحل‌کردنِ دستی
+    # در /war/{id}/cancel)، وگرنه ادعای «پیشرفتِ ادمین دست‌نخورده می‌ماند» درست نبود
     async for c in campaigns.find({"tg_id": {"$in": list(admin_ids)}, "active": True}):
         owner = await players.find_one({"tg_id": c["tg_id"]})
         if owner:
-            add_resources(owner, {"men": c["men_committed"]})
+            weapons_refund = {}
+            for tid, n in c.get("troops", {}).items():
+                if not n or n <= 0:
+                    continue
+                weapon_key = TROOP_WEAPON_KEY.get(tid)
+                if weapon_key:
+                    weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
+            add_resources(owner, {"men": c["men_committed"], "gold": c["gold_cost"], **weapons_refund})
             await players.update_one({"tg_id": c["tg_id"]}, {"$set": {"resources": owner["resources"]}})
 
     deleted = await players.delete_many({"tg_id": {"$nin": list(admin_ids)}})

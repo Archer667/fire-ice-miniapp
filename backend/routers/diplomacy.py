@@ -124,8 +124,16 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
     if a["status"] != "pending":
         raise HTTPException(400, "این پیمان قبلاً پاسخ داده شده")
 
+    # اتمیک و مشروط به status=pending — وگرنه دو کلیکِ هم‌زمانِ پذیرفتن/ردکردن هردو از
+    # رویِ همون خواندنِ قدیمی رد می‌شن و alliance_count دوبار می‌خوره یا شرابِ رد دوبار برمی‌گرده
+    new_status = "accepted" if body.accept else "rejected"
+    guard = await alliances.update_one(
+        {"_id": a["_id"], "status": "pending"}, {"$set": {"status": new_status}},
+    )
+    if guard.matched_count == 0:
+        raise HTTPException(400, "این پیمان قبلاً پاسخ داده شده")
+
     if body.accept:
-        await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "accepted"}})
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
         await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را پذیرفت.")
@@ -138,7 +146,6 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
                 if p["tg_id"] not in (a["from_id"], a["to_id"]):
                     await send_system_message(p["tg_id"], p["name"], text)
     else:
-        await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "rejected"}})
         proposer = await players.find_one({"tg_id": a["from_id"]})
         if proposer:
             add_resources(proposer, {"wine": a["wine_cost"]})
@@ -160,7 +167,11 @@ async def leave(alliance_id: str, user: dict = Depends(get_user)):
     if a["status"] != "accepted":
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
 
-    await alliances.update_one({"_id": a["_id"]}, {"$set": {"status": "left", "left_by": user["id"]}})
+    guard = await alliances.update_one(
+        {"_id": a["_id"], "status": "accepted"}, {"$set": {"status": "left", "left_by": user["id"]}},
+    )
+    if guard.matched_count == 0:
+        raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
     await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
     await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
     other_id = a["to_id"] if a["from_id"] == user["id"] else a["from_id"]

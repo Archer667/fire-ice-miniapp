@@ -381,6 +381,14 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
 
+    # اتمیک و مشروط به active=True — وگرنه دو کلیکِ هم‌زمانِ لغو هردو از رویِ همون
+    # خواندنِ قدیمی رد می‌شن و منابع/تسلیحات دوبار برمی‌گردن
+    result = await campaigns.update_one(
+        {"_id": c["_id"], "active": True}, {"$set": {"active": False, "status": "cancelled"}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(400, "این لشکر دیگر فعال نیست")
+
     weapons_refund = {}
     for tid, n in c.get("troops", {}).items():
         if not n or n <= 0:
@@ -389,7 +397,6 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         if weapon_key:
             weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
 
-    await campaigns.update_one({"_id": c["_id"]}, {"$set": {"active": False, "status": "cancelled"}})
     p = await players.find_one({"tg_id": user["id"]})
     if p:
         deltas = {"men": c["men_committed"], "gold": c["gold_cost"], **weapons_refund}

@@ -33,6 +33,7 @@ export default function Diplomacy() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [penaltyGold, setPenaltyGold] = useState(500);
   const [busy, setBusy] = useState(false);
+  const [respondBusyId, setRespondBusyId] = useState(null);
   const [feastBusy, setFeastBusy] = useState(false);
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
   const [councilTarget, setCouncilTarget] = useState([]);
@@ -116,21 +117,27 @@ export default function Diplomacy() {
   };
 
   const respond = async (id, accept) => {
+    if (respondBusyId) return;
+    setRespondBusyId(id);
     try {
       await api.diplomacyRespond(id, accept);
       haptic('medium');
       toast(accept ? 'پیمان پذیرفته شد' : 'پیمان رد شد');
       load();
     } catch (e) { toast(e.message); }
+    setRespondBusyId(null);
   };
 
   const leaveAlliance = async (id) => {
+    if (respondBusyId) return;
+    setRespondBusyId(id);
     try {
       await api.diplomacyLeave(id);
       haptic('medium');
       toast('از پیمان تجاری خارج شدی');
       load();
     } catch (e) { toast(e.message); }
+    setRespondBusyId(null);
   };
 
   const assignCouncil = async () => {
@@ -293,12 +300,12 @@ export default function Diplomacy() {
             </div>
             {!a.mine_proposed && a.status === 'pending' && (
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => respond(a.id, true)}>پذیرفتن</button>
-                <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => respond(a.id, false)}>رد</button>
+                <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => respond(a.id, true)}>پذیرفتن</button>
+                <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => respond(a.id, false)}>رد</button>
               </div>
             )}
             {a.type === 'trade' && a.status === 'accepted' && (
-              <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} onClick={() => leaveAlliance(a.id)}>ترک پیمان</button>
+              <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => leaveAlliance(a.id)}>ترک پیمان</button>
             )}
           </div>
         ))}
