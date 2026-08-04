@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, caravans, alliances
-from game import now, can_afford, pay, add_resources, owned_castles
+from game import now, can_afford, pay, add_resources, owned_castles, apply_production
 from game_data import TRADE_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
 from routers.war import blocked_castles_for
@@ -37,6 +37,9 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     if not await has_trade_alliance(user["id"], body.target_tg_id):
         raise HTTPException(403, "فقط با هم‌پیمان‌های تجاری (پیمان تجاری یا اتحاد کامل) می‌تونی کاروان رد و بدل کنی")
 
+    # تولیدِ فاصلهٔ زمانیِ سپری‌شده رو قبل از چک‌کردنِ موجودی حساب می‌کنیم — وگرنه بازیکنی
+    # که مدتی سر نزده، با موجودیِ قدیمی (کمتر از واقعی) رد می‌شه
+    p = apply_production(p)
     origin_castle = body.origin_castle or p["castle"]
     if origin_castle not in owned_castles(p):
         raise HTTPException(400, "این قلعه مالِ تو نیست")
@@ -63,7 +66,7 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
         raise HTTPException(400, "مسیر این کاروان از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری")
 
     pay(p["resources"], cost)
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
 
     arrival_at = now() + timedelta(minutes=travel)
 

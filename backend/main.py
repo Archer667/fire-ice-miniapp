@@ -14,7 +14,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 # بی‌سروصدا فقط لاگ می‌شد و هیچ‌وقت هیچ ایندکس یکتایی واقعاً ساخته نمی‌شد)
 from db import (
     players as players_col, map_castles, admin_roles, game_settings,
-    campaigns, caravans, spy_missions, messages, alliances, roleplays,
+    campaigns, caravans, spy_missions, messages, alliances, roleplays, tributes,
 )
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
@@ -128,6 +128,12 @@ async def _ensure_indexes():
         )
         await map_castles.create_index("name", unique=True)
         await admin_roles.create_index("tg_id", unique=True)
+        # فقط یه خراجِ پرداخت‌نشده هم‌زمان بینِ همون دو نفر مجازه — بدونِ این ایندکس،
+        # دو درخواستِ هم‌زمانِ /tribute/demand می‌تونستن هردو از چکِ pending رد بشن
+        await tributes.create_index(
+            [("from_id", 1), ("to_id", 1)], unique=True,
+            partialFilterExpression={"status": "pending"},
+        )
     except Exception:
         logger.exception("ensuring unique indexes failed — احتمالاً دادهٔ تکراری از قبل در دیتابیس هست")
 

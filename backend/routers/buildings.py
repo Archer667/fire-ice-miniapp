@@ -74,8 +74,10 @@ async def _start_upgrade(building_id: str, castle: str | None, user: dict, requi
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    p = apply_production(p)
+    # اول ارتقاهای تمام‌شده نهایی می‌شن، بعد تولید حساب می‌شه — وگرنه تولیدِ فاصلهٔ
+    # زمانیِ سپری‌شده با سطحِ قدیمی (پیش‌از-ارتقا) حساب می‌شه، نه سطحِ واقعیِ الان
     p = _resolve(p)
+    p = apply_production(p)
 
     target_castle = _resolve_castle(p, castle)
     terrain = await all_castle_terrain()

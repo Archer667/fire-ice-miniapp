@@ -47,7 +47,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
     doc = {
         "tg_id": user["id"], "player_name": p["name"],
         "origin_castle": p["castle"], "target_castle": body.target_castle, "target_tg_id": target["tg_id"],
-        "scenario": scenario,
+        "scenario": scenario[:4000],
         "gold_cost": SPY_GOLD_COST, "men_sent": SPY_MEN_COST,
         "travel_minutes": travel, "arrival_at": arrival_at,
         "admin_score": None, "resolved": False, "success": None, "report": None,

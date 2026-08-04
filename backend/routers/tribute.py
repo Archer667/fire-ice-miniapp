@@ -2,6 +2,7 @@ from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 from auth import get_user
 from db import players, tributes, hierarchy
 from game import now, can_afford, pay, add_resources
@@ -79,7 +80,12 @@ async def demand_tribute(body: DemandBody, user: dict = Depends(get_user)):
         "created_at": created_at, "due_at": created_at + timedelta(hours=TRIBUTE_WINDOW_HOURS),
         "paid_at": None,
     }
-    res = await tributes.insert_one(doc)
+    try:
+        res = await tributes.insert_one(doc)
+    except DuplicateKeyError:
+        # دو درخواستِ هم‌زمان از همون فرستنده به همون گیرنده — ایندکسِ یکتای
+        # partial (from_id+to_id+status=pending) دومی رو رد کرد
+        raise HTTPException(409, "همین الان یک خراجِ پرداخت‌نشده از این نفر خواسته‌ای — صبر کن جواب بده")
     await send_system_message(
         body.to_tg_id, target["name"],
         f"{ROLE_LABEL_FA[role]} {me['name']} خراجی به مبلغ {body.amount:,} سکه از تو خواسته — "

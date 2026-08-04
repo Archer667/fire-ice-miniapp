@@ -268,8 +268,15 @@ function mockResolveCampaigns() {
   }
 }
 
+function mockTroopName(tid) {
+  return COMMON_TROOPS.find(t => t.id === tid)?.name || NAVAL_TROOPS.find(t => t.id === tid)?.name || tid;
+}
+
 function mockStationedOrigins() {
-  return mockCampaigns.filter(c => c.active && c.op_type === 'garrison').map(c => c.target_castle);
+  const nowMs = Date.now();
+  return mockCampaigns
+    .filter(c => c.active && c.op_type === 'garrison' && new Date(c.arrival_at).getTime() <= nowMs)
+    .map(c => c.target_castle);
 }
 
 function mockBuiltLevels(castle) {
@@ -298,6 +305,9 @@ const M = {
   me: () => {
     if (mockMe.registered && !mockMe.pending) {
       mockResolveCampaigns();
+      // اول ارتقاهای تمام‌شده نهایی می‌شن، بعد تولید — وگرنه تولیدِ فاصلهٔ زمانیِ
+      // سپری‌شده با سطحِ قدیمی (پیش‌از-ارتقا) حساب می‌شه
+      mockResolve();
       mockApplyProduction();
       mockMe.active_campaigns = mockCampaigns.filter(c => c.active).length;
       return {
@@ -416,14 +426,17 @@ const M = {
       const prev = pactByTgid[a.other_id];
       if (!prev || PACT_PRIORITY.indexOf(a.type) < PACT_PRIORITY.indexOf(prev)) pactByTgid[a.other_id] = a.type;
     }
+    // اقلیمِ نمایش‌داده‌شده برای هر پین، از رویِ خودِ اقلیمِ همون قلعه‌ست (نه اقلیمِ
+    // خانگیِ صاحبش) — یه لرد می‌تونه قلعهٔ دومی در اقلیمِ دیگه‌ای داشته باشه
     const owners = {};
     for (const p of MOCK_PLAYERS) {
       if (!p.castle) continue;
-      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null, region: p.region, pact: pactByTgid[p.tg_id] || null };
+      owners[p.castle] = { tg_id: p.tg_id, name: p.name, title: p.title, points: 500 + p.tg_id % 500, overlord_name: null, region: mockResolveRegion(p.castle) || p.region, pact: pactByTgid[p.tg_id] || null };
     }
     if (mockMe.registered && !mockMe.pending) {
-      const mine = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockMe.region, pact: null };
-      for (const c of mockOwnedCastles()) owners[c] = mine;
+      for (const c of mockOwnedCastles()) {
+        owners[c] = { tg_id: 1, name: mockMe.name, title: mockMe.title, points: mockMe.points, overlord_name: null, region: mockResolveRegion(c) || mockMe.region, pact: null };
+      }
     }
     const nowMs = Date.now();
     return {
@@ -668,7 +681,7 @@ const M = {
         name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
         origin: c.origin_castle, target: c.target_castle,
         troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
-          name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+          name: mockTroopName(tid), count: n,
         })),
         men_committed: c.men_committed, power: c.power || 0,
         travel_minutes: c.travel_minutes, route_path: c.route_path,
@@ -719,6 +732,7 @@ const M = {
       if (qty > 0) cost[good] = qty;
     }
     if (!Object.keys(cost).length) throw new Error('هیچ کالایی برای فرستادن انتخاب نکردی');
+    mockApplyProduction();
     if (!mockCanAfford(cost)) throw new Error('این مقدار کالا رو نداری');
     mockPay(cost);
 
@@ -751,6 +765,7 @@ const M = {
     if (!m || m.qty <= 0) throw new Error('این کالا در بازار وستروس موجود نیست');
     if (qty <= 0) throw new Error('مقدار نامعتبر');
     if (qty > m.qty) throw new Error(`فقط ${m.qty} واحد از این کالا در بازار مانده`);
+    mockApplyProduction();
     const cost = qty * m.price;
     if (!mockCanAfford({ gold: cost })) throw new Error('طلای کافی نداری');
     mockPay({ gold: cost });
@@ -767,6 +782,7 @@ const M = {
     const m = mockBlackMarket.find(x => x.id === listingId);
     if (!m || m.qty <= 0 || m.expires_at <= Date.now()) throw new Error('این کالای بازار سیاه دیگر موجود نیست');
     if (qty <= 0 || qty > m.qty) throw new Error('مقدار نامعتبر یا بیشتر از موجودی');
+    mockApplyProduction();
     const cost = qty * m.price;
     if (!mockCanAfford({ gold: cost })) throw new Error('طلای کافی نداری');
     mockPay({ gold: cost });
@@ -834,7 +850,7 @@ const M = {
         op_type: c.op_type, op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
         name: c.name || OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
         troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
-          name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+          name: mockTroopName(tid), count: n,
         })),
         gold_cost: c.gold_cost, men_committed: c.men_committed, food_per_day: c.food_per_day,
         travel_minutes: c.travel_minutes, arrived: nowMs >= new Date(c.arrival_at).getTime(),
@@ -850,7 +866,7 @@ const M = {
       op_name: OP_TYPES.find(o => o.id === c.op_type)?.name || c.op_type,
       from: c.origin_castle, to: c.target_castle,
       troops: Object.entries(c.troops || {}).filter(([, n]) => n > 0).map(([tid, n]) => ({
-        name: COMMON_TROOPS.find(t => t.id === tid)?.name || tid, count: n,
+        name: mockTroopName(tid), count: n,
       })),
       power: c.power || 0, men_committed: c.men_committed,
       active: c.active, arrived: Date.now() >= new Date(c.arrival_at).getTime(),
@@ -1049,11 +1065,11 @@ const M = {
     }
     return Object.values(convos).sort((a, b) => new Date(b.last_at) - new Date(a.last_at));
   },
-  thread: (name) => {
+  thread: (otherTgId) => {
     const relevant = mockMessages.filter(m =>
-      (m.from_id === 1 && m.to_name === name) || (m.to_id === 1 && m.from_name === name)
+      (m.from_id === 1 && m.to_id === otherTgId) || (m.to_id === 1 && m.from_id === otherTgId)
     );
-    relevant.forEach(m => { if (m.to_id === 1 && m.from_name === name) m.read = true; });
+    relevant.forEach(m => { if (m.to_id === 1 && m.from_id === otherTgId) m.read = true; });
     return relevant.slice()
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map(m => ({ mine: m.from_id === 1, text: m.text }));
@@ -1085,6 +1101,7 @@ const M = {
   },
   buildAction: (id, requireBuilt, castle) => {
     mockResolve();
+    mockApplyProduction();
     const targetCastle = castle && mockOwnedCastles().includes(castle) ? castle : mockMe.castle;
     const state = mockCastleBuildingState(targetCastle);
     const isPort = mockCastleTerrain(targetCastle) !== 'land';
@@ -1537,7 +1554,7 @@ export const api = {
   dailyClaim: () => MOCK ? Promise.resolve(M.dailyClaim()) : req('/api/daily/claim', { method: 'POST' }),
   ravensUnread: () => MOCK ? Promise.resolve(M.ravensUnread()) : req('/api/ravens/unread'),
   inbox:     () => MOCK ? Promise.resolve(M.inbox()) : req('/api/ravens/inbox'),
-  thread:    (name) => MOCK ? Promise.resolve(M.thread(name)) : req('/api/ravens/thread/' + encodeURIComponent(name)),
+  thread:    (otherTgId) => MOCK ? Promise.resolve(M.thread(otherTgId)) : req('/api/ravens/thread/' + otherTgId),
   sendRaven: (toTgIds, text) => MOCK ? Promise.resolve(M.sendRaven(toTgIds, text))
     : req('/api/ravens/send', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, text }) }),
   buildings: (castle) => MOCK ? Promise.resolve(M.buildings(castle)) : req('/api/buildings' + (castle ? '?castle=' + encodeURIComponent(castle) : '')),

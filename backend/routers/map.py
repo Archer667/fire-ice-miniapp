@@ -33,16 +33,14 @@ async def get_map(user: dict = Depends(get_user)):
         if prev is None or PACT_PRIORITY.index(a["type"]) < PACT_PRIORITY.index(prev):
             pact_by_tgid[other_id] = a["type"]
 
-    owners_by_castle = {}
-    for r in rows:
-        p = r["player"]
-        owner_info = {
-            "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
-            "points": r["score"], "overlord_name": overlord_name.get(p["region"]),
-            "region": p["region"], "pact": pact_by_tgid.get(p["tg_id"]),
-        }
-        for c in owned_castles(p):
-            owners_by_castle[c] = owner_info
+    # اقلیمِ واقعیِ هر قلعه — از رویِ خودِ پینِ نقشه‌اش (نه اقلیمِ خانگیِ صاحبش)؛ قلعه‌های
+    # استاتیکِ بدون پینِ اختصاصی هم از دیتای ثابت پیش‌فرض می‌گیرن. لازمه چون یه لرد
+    # می‌تونه قلعهٔ دومی در اقلیمِ دیگه‌ای داشته باشه — بالادستیِ اون پین باید بالادستیِ
+    # همون اقلیم باشه، نه اقلیمِ خانگیِ لرد
+    castle_region = {}
+    for rid, r in REGIONS.items():
+        for c in r["castles"] + r["ports"]:
+            castle_region[c] = rid
 
     # مختصات و نوع آیکنِ هرچه ادمین از پنلش روی نقشه گذاشته (چه اسم موجود چه کاملاً تازه)
     coords_by_region = {}
@@ -51,8 +49,20 @@ async def get_map(user: dict = Depends(get_user)):
     async for m in map_castles.find({}):
         coords_by_region.setdefault(m["region"], {})[m["name"]] = [m["x"], m["y"]]
         kind_by_name[m["name"]] = m.get("kind", "port" if m.get("port") else "castle")
+        castle_region[m["name"]] = m["region"]
         if m.get("custom"):
             custom_by_region.setdefault(m["region"], []).append({"name": m["name"], "kind": kind_by_name[m["name"]]})
+
+    owners_by_castle = {}
+    for r in rows:
+        p = r["player"]
+        for c in owned_castles(p):
+            rid = castle_region.get(c, p["region"])
+            owners_by_castle[c] = {
+                "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
+                "points": r["score"], "overlord_name": overlord_name.get(rid),
+                "region": rid, "pact": pact_by_tgid.get(p["tg_id"]),
+            }
 
     # terrain: land | coastal | sea — همان چیزی که ادمین از تب نقشه روی هر پین مشخص کرده
     # (یا پیش‌فرضِ استاتیک برای قلعه‌هایی که هنوز پین نگرفته‌اند)؛ «port» از همین مشتق می‌شود

@@ -382,7 +382,10 @@ export default function Admin() {
       toast(`بازی ری‌استارت شد — ${(res.players_deleted ?? 0).toLocaleString('fa-IR')} بازیکن حذف شد`);
       setResetConfirmText('');
       loadResetPreview();
-      loadPendingPlayers(); loadRoster(); loadCampaigns();
+      // ری‌استارت این‌ها رو کامل خالی می‌کنه (لشکرکشی، جاسوسی، رول، اتحاد، رای‌گیری) —
+      // بدونِ رفرشِ همه‌شون، پنل ادمین تا رفرشِ دستیِ صفحه دادهٔ حذف‌شده نشون می‌ده
+      loadPendingPlayers(); loadRoster(); loadCampaigns(); loadMapData();
+      loadSpyPending(); loadSpyResolved(); loadRoleplayPending(); loadAlliances(); loadPolls();
     } catch (e) { toast(e.message); }
     setResetBusy(false);
   };
@@ -538,7 +541,7 @@ export default function Admin() {
       toast(res.moved ? 'خاندان و قلعه جابه‌جا شد — کلاغی برایش رفت' : 'خاندان و قلعه تعیین شد — کلاغی برایش رفت');
       setAssignCastle(prev => { const n = { ...prev }; delete n[tgId]; return n; });
       setReassignOpenId(null);
-      loadPendingPlayers(); loadRoster();
+      loadPendingPlayers(); loadRoster(); loadMapData();
     } catch (e) { toast(e.message); }
     setAssignBusyId(null);
   };
@@ -549,7 +552,7 @@ export default function Admin() {
       await api.adminUnassignHouse(tgId);
       haptic('medium');
       toast('خاندان و قلعه از این بازیکن گرفته شد');
-      loadPendingPlayers(); loadRoster();
+      loadPendingPlayers(); loadRoster(); loadMapData();
     } catch (e) { toast(e.message); }
     setUnassignBusyId(null);
   };
@@ -564,7 +567,9 @@ export default function Admin() {
       toast(res.captured_from ? `قلعه از «${res.captured_from}» گرفته شد و به این بازیکن اضافه شد` : 'قلعهٔ اضافه به این بازیکن داده شد');
       setAddCastleValue([]);
       setAddCastleOpenId(null);
-      loadRoster();
+      // فتحِ قلعه ممکنه صاحبِ قبلی رو بی‌خاندان کنه (اگه تنها قلعه‌اش بوده) — پس باید
+      // لیستِ در-انتظار هم دوباره لود بشه، نه فقط roster
+      loadRoster(); loadPendingPlayers(); loadMapData();
     } catch (e) { toast(e.message); }
     setAddCastleBusyId(null);
   };
@@ -575,7 +580,7 @@ export default function Admin() {
       await api.adminRemoveCastle(tgId, castle);
       haptic('medium');
       toast(`قلعهٔ «${castle}» از این بازیکن گرفته شد`);
-      loadRoster();
+      loadRoster(); loadMapData();
     } catch (e) { toast(e.message); }
     setRemoveCastleBusyKey(null);
   };

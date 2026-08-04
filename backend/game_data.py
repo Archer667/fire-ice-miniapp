@@ -786,7 +786,11 @@ def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = 
     کشتیِ کافی. اگر مسیری نبود، (None, None)."""
     import heapq
     if origin_castle not in TRAVEL_GRAPH or target_castle not in TRAVEL_GRAPH:
-        return None, None
+        # قلعه‌ای که ادمین تازه به نقشه اضافه کرده و هنوز به گراف سفرِ ثابت وصل نشده —
+        # مثلِ _shortest_minutes یه مسیرِ مستقیمِ پیش‌فرض می‌دیم، وگرنه لشکرکشی/کاروان
+        # بهش کاملاً و برای همیشه غیرممکن می‌موند (برخلافِ جاسوسی/کاروان که این افتادِ
+        # پیش‌فرض رو از قبل داشتن)
+        return TRAVEL_CROSS_REGION_DEFAULT_MINUTES, [origin_castle, target_castle]
     blocked = blocked - {origin_castle, target_castle}
     dist = {origin_castle: 0}
     prev = {}

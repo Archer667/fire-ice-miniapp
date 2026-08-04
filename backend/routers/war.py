@@ -206,10 +206,14 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
     return gold, men, food, weapons
 
 async def stationed_origins(tg_id: int) -> set:
-    """قلعه‌هایی که لشکر فعلی این بازیکن با عملیات «جای‌گیری» در آن‌ها مستقر است"""
+    """قلعه‌هایی که لشکر فعلی این بازیکن با عملیات «جای‌گیری» در آن‌ها مستقر است —
+    فقط جای‌گیری‌هایی که واقعاً رسیده‌اند، وگرنه لشکری که هنوز در راهِ جای‌گیری است
+    می‌توانست همون لحظه مبدای یک فرمانِ کاملاً جدا و مستقل باشد"""
     origins = set()
     async for c in campaigns.find({"tg_id": tg_id, "active": True, "op_type": "garrison"}):
-        origins.add(c["target_castle"])
+        arrival_at = c.get("arrival_at")
+        if arrival_at and now() >= arrival_at:
+            origins.add(c["target_castle"])
     return origins
 
 async def apply_campaign_upkeep(tg_id: int, resources: dict) -> dict:
@@ -407,7 +411,7 @@ async def legions(user: dict = Depends(get_user)):
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
         troops = [
-            {"name": COMMON_TROOPS[t]["name"] if t in COMMON_TROOPS else t, "count": n}
+            {"name": troop_name(t), "count": n}
             for t, n in c.get("troops", {}).items() if n and n > 0
         ]
         out.append({
@@ -452,8 +456,17 @@ async def mine(user: dict = Depends(get_user)):
         out = out[:30]
     return out
 
+def troop_name(tid: str) -> str:
+    """اسمِ فارسیِ یک نیرو، چه عمومی/ویژه باشه چه دریایی — نیروهای ویژه کلیدشون خودِ
+    اسمِ فارسیه (خودش fallback درسته)"""
+    if tid in COMMON_TROOPS:
+        return COMMON_TROOPS[tid]["name"]
+    if tid in NAVAL_TROOPS:
+        return NAVAL_TROOPS[tid]["name"]
+    return tid
+
 def troops_summary(troops: dict) -> str:
-    parts = [f"{COMMON_TROOPS.get(tid, {}).get('name', tid)}×{n}" for tid, n in troops.items() if n]
+    parts = [f"{troop_name(tid)}×{n}" for tid, n in troops.items() if n]
     return "، ".join(parts) if parts else "بدون نیرو"
 
 async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:

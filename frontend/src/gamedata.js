@@ -650,7 +650,12 @@ export function travelMinutes(sameCastle, originCastle, targetCastle) {
 }
 
 function dijkstraPath(originCastle, targetCastle, allowSea = true, terrain) {
-  if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) return { minutes: null, path: null };
+  // قلعه‌ای که ادمین تازه به نقشه اضافه کرده و هنوز به گراف سفرِ ثابت وصل نشده —
+  // مثلِ shortestMinutes یه مسیرِ مستقیمِ پیش‌فرض می‌دیم، وگرنه لشکرکشی/کاروان بهش
+  // کاملاً و برای همیشه غیرممکن می‌موند
+  if (!TRAVEL_GRAPH[originCastle] || !TRAVEL_GRAPH[targetCastle]) {
+    return { minutes: TRAVEL_CROSS_REGION_DEFAULT_MINUTES, path: [originCastle, targetCastle] };
+  }
   const dist = { [originCastle]: 0 };
   const prev = {};
   const seen = new Set();

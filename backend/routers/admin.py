@@ -10,7 +10,7 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 import game_data
-from game import now, add_resources, all_building_levels
+from game import now, add_resources, building_levels_for
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
@@ -59,8 +59,6 @@ async def list_campaigns(user: dict = Depends(admin_user)):
             "created_at": s["created_at"].isoformat(),
         })
     return out
-
-_building_levels = all_building_levels
 
 @router.get("/espionage")
 async def list_spy_pending(user: dict = Depends(admin_user)):
@@ -116,13 +114,18 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
 
     report = None
     if success and target:
-        levels = _building_levels(target)
+        # فقط ساختمان‌های همون قلعه‌ای که جاسوس واقعاً بهش نفوذ کرده — نه کلِ
+        # امپراتوریِ هدف؛ منابع (که سراسری/مشترکه، نه قلعه‌ای) استثناست
+        levels = dict(building_levels_for(target, m["target_castle"]))
         military = [{"name": BUILDINGS[bid]["name"], "level": lvl}
                     for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") in ("barracks", "armory")]
         defense = [{"name": BUILDINGS[bid]["name"], "level": lvl}
                    for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") == "defense"]
         camps = []
-        async for c in campaigns.find({"tg_id": target["tg_id"], "active": True}):
+        async for c in campaigns.find({
+            "tg_id": target["tg_id"], "active": True,
+            "$or": [{"origin_castle": m["target_castle"]}, {"target_castle": m["target_castle"]}],
+        }):
             camps.append({
                 "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
                 "origin": c["origin_castle"], "target": c["target_castle"],
@@ -633,7 +636,11 @@ async def admin_black_market_create(body: BlackMarketBody, user: dict = Depends(
 
 @router.delete("/market/black/{listing_id}")
 async def admin_black_market_delete(listing_id: str, user: dict = Depends(full_admin_user)):
-    res = await black_market_listings.delete_one({"_id": ObjectId(listing_id)})
+    try:
+        oid = ObjectId(listing_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ نامعتبر")
+    res = await black_market_listings.delete_one({"_id": oid})
     if res.deleted_count == 0:
         raise HTTPException(404, "این نشانی بازار سیاه پیدا نشد")
     return {"ok": True}
@@ -924,6 +931,16 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
         raise HTTPException(400, "برای تایید، دقیقاً عبارت RESET را تایپ کن")
 
     admin_ids = await _current_admin_ids()
+
+    # ادمین‌هایی که نگه داشته می‌شن ممکنه لشکرکشیِ فعال داشته باشن — قبل از پاک‌کردنِ
+    # کاملِ campaigns، نفراتشون رو برمی‌گردونیم (دقیقاً مثلِ منحل‌کردنِ دستی)، وگرنه
+    # ادعای «پیشرفتِ ادمین دست‌نخورده می‌ماند» درست نبود
+    async for c in campaigns.find({"tg_id": {"$in": list(admin_ids)}, "active": True}):
+        owner = await players.find_one({"tg_id": c["tg_id"]})
+        if owner:
+            add_resources(owner, {"men": c["men_committed"]})
+            await players.update_one({"tg_id": c["tg_id"]}, {"$set": {"resources": owner["resources"]}})
+
     deleted = await players.delete_many({"tg_id": {"$nin": list(admin_ids)}})
 
     await campaigns.delete_many({})

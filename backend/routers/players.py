@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns
-from game import now, apply_production, effective_caps, owned_castles
+from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
 from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
@@ -72,10 +72,16 @@ async def me(user: dict = Depends(get_user)):
             "admin_role": await get_admin_role(user),
             "is_owner": user["id"] == OWNER_ID,
         }
+    # ارتقاهایی که مهلتشون تمام شده رو اول نهایی می‌کنیم — وگرنه بازیکنی که فقط سر
+    # می‌زنه بدون رفتن به تبِ ساختمان‌ها، تولید/سقفش رو با سطح قدیمی (پیش‌از-ارتقا)
+    # می‌بینه، شاید تا خیلی بعد
+    p = resolve_building_upgrades(p)
     p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
-    await players.update_one({"tg_id": user["id"]},
-        {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": {
+        "resources": p["resources"], "last_tick": p["last_tick"],
+        "buildings": p["buildings"], "castle_buildings": p.get("castle_buildings", {}),
+    }})
     day = min(SEASON_LENGTH_DAYS, ( (now() - p["created_at"]).days % SEASON_LENGTH_DAYS ) + 1)
     # موجودیِ واقعی تو دیتابیس اعشاریه (تا تولیدِ کم‌مقدار بینِ چک‌ها گم نشه) — برای
     # نمایش به بازیکن رند می‌شود

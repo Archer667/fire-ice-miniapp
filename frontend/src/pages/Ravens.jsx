@@ -45,7 +45,7 @@ export default function Ravens() {
     haptic();
     setOpenWith({ tg_id: m.with_tg_id, name: m.with_name });
     try {
-      setThread(await api.thread(m.with_name));
+      setThread(await api.thread(m.with_tg_id));
       refreshUnread();
     } catch (e) { toast(e.message); }
   };

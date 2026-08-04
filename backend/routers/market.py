@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, market_listings, black_market_listings
-from game import now, can_afford, pay, add_resources
+from game import now, can_afford, pay, add_resources, apply_production
 from game_data import TRADE_GOOD_NAMES
 
 router = APIRouter(prefix="/api/market", tags=["market"])
@@ -38,17 +38,24 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
     if body.qty > listing["qty"]:
         raise HTTPException(400, f"فقط {listing['qty']} واحد از این کالا در بازار مانده")
 
+    p = apply_production(p)
     cost = body.qty * listing["price"]
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
+
+    # به‌روزرسانیِ اتمیک و مشروط به موجودیِ واقعی — وگرنه دو خریدِ هم‌زمان می‌تونن
+    # هردو رویِ همون خواندنِ قدیمیِ qty رد بشن و بازار رو منفی/بیش‌ازموجودی بفروشن
+    bumped = min(listing["price"] * (1 + 0.015 * body.qty), listing.get("base_price", listing["price"]) * 2)
+    result = await market_listings.update_one(
+        {"_id": listing["_id"], "qty": {"$gte": body.qty}},
+        {"$set": {"price": max(1, round(bumped))}, "$inc": {"qty": -body.qty}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(409, "موجودیِ بازار همین الان تغییر کرد — دوباره امتحان کن")
+
     pay(p["resources"], {"gold": cost})
     add_resources(p, {body.resource: body.qty})
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
-
-    # هر خرید، تقاضا را نشان می‌دهد — قیمت را کمی بالا می‌برد (سقف دو برابر قیمت پایه)
-    bumped = min(listing["price"] * (1 + 0.015 * body.qty), listing.get("base_price", listing["price"]) * 2)
-    await market_listings.update_one({"_id": listing["_id"]},
-        {"$set": {"qty": listing["qty"] - body.qty, "price": max(1, round(bumped))}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
     return {"ok": True, "resource": body.resource, "qty": body.qty, "cost": cost}
 
 @router.get("/black")
@@ -71,19 +78,33 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    m = await black_market_listings.find_one({"_id": ObjectId(body.listing_id)})
+    try:
+        oid = ObjectId(body.listing_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ نامعتبر")
+    m = await black_market_listings.find_one({"_id": oid})
     if not m or m["qty"] <= 0 or m["expires_at"] <= now():
         raise HTTPException(404, "این کالای بازار سیاه دیگر موجود نیست")
     if body.qty <= 0 or body.qty > m["qty"]:
         raise HTTPException(400, "مقدار نامعتبر یا بیشتر از موجودی")
 
+    p = apply_production(p)
     cost = body.qty * m["price"]
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
+
+    # همون اتمیک‌سازیِ بازارِ وستروس، اینجا هم — تا دو خریدِ هم‌زمان بیشتر از
+    # موجودیِ واقعیِ کالای محدود برنداره
+    result = await black_market_listings.update_one(
+        {"_id": oid, "qty": {"$gte": body.qty}, "expires_at": {"$gt": now()}},
+        {"$inc": {"qty": -body.qty}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(409, "این کالای بازار سیاه همین الان تمام شد — دوباره امتحان کن")
+
     pay(p["resources"], {"gold": cost})
     add_resources(p, {m["resource"]: body.qty})
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
-    await black_market_listings.update_one({"_id": m["_id"]}, {"$inc": {"qty": -body.qty}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
     return {"ok": True, "resource": m["resource"], "qty": body.qty, "cost": cost}
 
 async def drift_market_prices():

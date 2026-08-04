@@ -71,15 +71,14 @@ async def inbox(user: dict = Depends(get_user)):
             convos[other]["unread"] += 1
     return list(convos.values())
 
-@router.get("/thread/{other_name}")
-async def thread(other_name: str, user: dict = Depends(get_user)):
-    if other_name == SYSTEM_SENDER_NAME:
-        other_tg_id = SYSTEM_SENDER_ID
-    else:
-        other = await players.find_one({"name": other_name})
+@router.get("/thread/{other_tg_id}")
+async def thread(other_tg_id: int, user: dict = Depends(get_user)):
+    """با شناسهٔ عددی کاربر، نه اسمِ نمایشی — اسم‌ها یکتا نیستند و ممکن است دو بازیکن
+    اسمِ یکسان داشته باشند (یا حتی اسمِ رزروشدهٔ «رخدادها» را انتخاب کنند)"""
+    if other_tg_id != SYSTEM_SENDER_ID:
+        other = await players.find_one({"tg_id": other_tg_id})
         if not other:
             raise HTTPException(404, "لرد پیدا نشد")
-        other_tg_id = other["tg_id"]
     q = {"$or": [
         {"from_id": user["id"], "to_id": other_tg_id},
         {"from_id": other_tg_id, "to_id": user["id"]},

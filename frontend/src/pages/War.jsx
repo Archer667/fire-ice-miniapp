@@ -66,7 +66,7 @@ export default function War() {
   }, [buildings]);
 
   const stationedOrigins = useMemo(
-    () => (mine || []).filter(c => c.active && c.op_type === 'garrison').map(c => c.target),
+    () => (mine || []).filter(c => c.active && c.op_type === 'garrison' && c.arrived).map(c => c.target),
     [mine]
   );
   const myCastles = [me.castle, ...(me.castles || [])];
