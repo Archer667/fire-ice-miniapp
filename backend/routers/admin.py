@@ -10,6 +10,7 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 import game_data
+import telegram_bot
 from game import now, add_resources, building_levels_for
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
 from config import ADMIN_IDS
@@ -841,6 +842,35 @@ async def announce_event(body: AnnounceEventBody, user: dict = Depends(admin_use
     async for p in players.find({}, {"tg_id": 1, "name": 1}):
         await send_system_message(p["tg_id"], p["name"], text)
     return {"ok": True}
+
+class SendBotMessageBody(BaseModel):
+    text: str
+    send_to_all: bool = False
+    to_tg_ids: list[int] | None = None
+
+@router.post("/send-bot-message")
+async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_user)):
+    """ارسال پیام مستقیم از طرف بات تلگرام، بدون ثبت در صندوق کلاغ‌های داخل اپ."""
+    text = body.text.strip()[:4000]
+    if not text:
+        raise HTTPException(400, "متن پیام نمی‌تواند خالی باشد")
+
+    if body.send_to_all:
+        targets = await players.find({}, {"tg_id": 1, "name": 1}).to_list(None)
+    else:
+        to_ids = list(dict.fromkeys(body.to_tg_ids or []))
+        if not to_ids:
+            raise HTTPException(400, "حداقل یک بازیکن را انتخاب کن")
+        targets = await players.find(
+            {"tg_id": {"$in": to_ids}}, {"tg_id": 1, "name": 1},
+        ).to_list(len(to_ids))
+
+    if not targets:
+        raise HTTPException(404, "هیچ بازیکنی برای ارسال پیدا نشد")
+
+    for target in targets:
+        telegram_bot.push(target["tg_id"], text)
+    return {"ok": True, "sent_to": len(targets)}
 
 class WarWindowBody(BaseModel):
     open: bool
