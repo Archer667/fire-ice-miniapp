@@ -151,7 +151,7 @@ export default function Dashboard({ goTo }) {
           <div key={m.key} style={{ padding: 12, borderRadius: 14, textAlign: 'center', background: m.tier === 'gold' ? 'rgba(245,190,55,.16)' : m.tier === 'silver' ? 'rgba(190,205,220,.13)' : 'rgba(190,115,55,.13)', border: '1px solid rgba(255,255,255,.09)' }}>
             <div style={{ fontSize: 28 }}>{m.icon}</div>
             <div style={{ fontWeight: 800 }}>{m.name}</div>
-            <small>{m.title} · {m.tier === 'gold' ? 'طلا' : m.tier === 'silver' ? 'نقره' : 'برنز'}</small>
+            <small>{m.title ? `${m.title} · ` : ''}{m.tier === 'gold' ? 'طلا' : m.tier === 'silver' ? 'نقره' : 'برنز'}</small>
           </div>
         )) : <div style={{ opacity: .65, padding: 8 }}>هنوز مدالی کسب نکرده‌ای.</div>}
       </div>
