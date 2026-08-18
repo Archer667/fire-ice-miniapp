@@ -35,7 +35,12 @@ const TAB_GROUPS = [
       { key: 'alliances', label: 'اتحادها' },
       { key: 'titles',    label: 'مقام‌ها' },
       { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
-      { key: 'events',       label: 'ایونت' },
+      { key: 'events', label: 'ایونت' },
+    ],
+  },
+  {
+    label: 'ابزارهای ادمین',
+    tabs: [
       { key: 'medals',       label: 'مدال‌ها' },
       { key: 'bot_messages', label: 'پیام بات' },
     ],
@@ -99,9 +104,13 @@ export default function Admin() {
   const [medalTier, setMedalTier] = useState('bronze');
   const [medalReason, setMedalReason] = useState('');
   const [medalBusy, setMedalBusy] = useState(false);
-  const [combatWinner, setCombatWinner] = useState([]);
-  const [combatKind, setCombatKind] = useState('attack');
-  const [combatBusy, setCombatBusy] = useState(false);
+  const [specialMedalTarget, setSpecialMedalTarget] = useState([]);
+  const [specialMedalName, setSpecialMedalName] = useState('');
+  const [specialMedalTitle, setSpecialMedalTitle] = useState('');
+  const [specialMedalIcon, setSpecialMedalIcon] = useState('🏅');
+  const [specialMedalTier, setSpecialMedalTier] = useState('gold');
+  const [specialMedalReason, setSpecialMedalReason] = useState('');
+  const [specialMedalBusy, setSpecialMedalBusy] = useState(false);
   const [alliancesList, setAlliancesList] = useState(null);
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
   const [spyResolved, setSpyResolved] = useState(null);
@@ -161,6 +170,7 @@ export default function Admin() {
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
+  const [roleplayWinners, setRoleplayWinners] = useState({}); // roleplayId -> winner tg_id
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
   const [itemsList, setItemsList] = useState(null);
@@ -415,16 +425,21 @@ export default function Admin() {
     setMedalBusy(false);
   };
 
-  const recordCombatResult = async () => {
-    if (!combatWinner.length) { toast('بازیکن برنده را انتخاب کن'); return; }
-    const id = combatWinner[0].tg_id;
-    setCombatBusy(true);
+  const awardSpecialMedal = async () => {
+    if (!specialMedalTarget.length) { toast('بازیکن دریافت‌کننده را انتخاب کن'); return; }
+    if (!specialMedalName.trim() || !specialMedalTitle.trim()) { toast('نام و عنوان مدال را بنویس'); return; }
+    setSpecialMedalBusy(true);
     try {
-      await api.adminRecordCombatResult(id, combatKind === 'defense' ? id : 0);
-      haptic('medium'); toast(combatKind === 'defense' ? 'دفاع موفق ثبت شد' : 'پیروزی مهاجم ثبت شد');
-      setCombatWinner([]);
+      await api.adminAwardSpecialMedal(specialMedalTarget[0].tg_id, {
+        name: specialMedalName.trim(), title: specialMedalTitle.trim(),
+        icon: specialMedalIcon.trim() || '🏅', tier: specialMedalTier,
+        reason: specialMedalReason.trim(),
+      });
+      haptic('medium'); toast('مدال ویژهٔ ادمین اعطا شد');
+      setSpecialMedalTarget([]); setSpecialMedalName(''); setSpecialMedalTitle('');
+      setSpecialMedalReason('');
     } catch (e) { toast(e.message); }
-    setCombatBusy(false);
+    setSpecialMedalBusy(false);
   };
 
   const resetGame = async () => {
@@ -491,14 +506,18 @@ export default function Admin() {
     if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
     const visibility = roleplayVisibility[roleplayId] || 'participants';
     const otherLords = (roleplayOtherLords[roleplayId] || []).map(p => p.tg_id);
+    const roleplay = roleplayPending?.find(r => r.id === roleplayId);
+    const winnerTgId = roleplayWinners[roleplayId] || null;
+    if (roleplay?.category === 'war' && !winnerTgId) { toast('برندهٔ نبرد را مشخص کن'); return; }
     setRoleplayBusyId(roleplayId);
     try {
-      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords);
+      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId);
       haptic('medium');
       toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
       setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayVisibility(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayOtherLords(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayWinners(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
@@ -1096,7 +1115,27 @@ export default function Admin() {
                     <div style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--low)' }}>طرف مقابل هنوز سناریویش را نفرستاده — نتیجه برای هر دو طرف فرستاده می‌شود</div>
                   )
                 )}
-                <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
+                {r.category === 'war' && r.war && (
+                  <>
+                    <label className="f" style={{ marginTop: 0 }}>برندهٔ نبرد</label>
+                    <div className="grid2" role="radiogroup" aria-label="برندهٔ نبرد">
+                      <button type="button" role="radio" aria-checked={roleplayWinners[r.id] === r.war.attacker_tg_id}
+                              className={`rbtn pick ${roleplayWinners[r.id] === r.war.attacker_tg_id ? 'sel' : ''}`}
+                              onClick={() => setRoleplayWinners(prev => ({ ...prev, [r.id]: r.war.attacker_tg_id }))}>
+                        <div className="n">{r.war.attacker_name}</div>
+                        <div className="c">مهاجم — پیروزی در حمله</div>
+                      </button>
+                      <button type="button" role="radio" disabled={!r.war.defender_tg_id}
+                              aria-checked={roleplayWinners[r.id] === r.war.defender_tg_id}
+                              className={`rbtn pick ${roleplayWinners[r.id] === r.war.defender_tg_id ? 'sel' : ''}`}
+                              onClick={() => r.war.defender_tg_id && setRoleplayWinners(prev => ({ ...prev, [r.id]: r.war.defender_tg_id }))}>
+                        <div className="n">{r.war.defender_name}</div>
+                        <div className="c">مدافع — دفاع موفق از {castleLabel(r.war.target_castle)}</div>
+                      </button>
+                    </div>
+                  </>
+                )}
+                <label className="f" style={{ marginTop: r.category === 'war' ? 12 : 0 }}>نتیجه</label>
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
                           placeholder="نتیجهٔ این رول چه شد..." />
@@ -1709,14 +1748,24 @@ export default function Admin() {
             </button>
           </div>
           <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>ثبت نتیجهٔ ساختاریافتهٔ جنگ</label>
-            <PlayerPicker value={combatWinner} onChange={setCombatWinner} single placeholder="بازیکن پیروز را انتخاب کن..." />
-            <select value={combatKind} onChange={e => setCombatKind(e.target.value)} style={{ marginTop: 10 }}>
-              <option value="attack">پیروزی در حمله</option>
-              <option value="defense">دفاع موفق</option>
-            </select>
-            <button className="btn" style={{ marginTop: 12 }} disabled={combatBusy} onClick={recordCombatResult}>
-              {combatBusy ? 'در حال ثبت...' : 'ثبت نتیجه'}
+            <label className="f" style={{ marginTop: 0 }}>اعطای مدال ویژهٔ ادمین</label>
+            <PlayerPicker value={specialMedalTarget} onChange={setSpecialMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
+            <div className="grid2" style={{ marginTop: 10 }}>
+              <input value={specialMedalName} onChange={e => setSpecialMedalName(e.target.value)} maxLength={60} placeholder="نام مدال" />
+              <input value={specialMedalTitle} onChange={e => setSpecialMedalTitle(e.target.value)} maxLength={80} placeholder="تایتل بازیکن" />
+            </div>
+            <div className="grid2" style={{ marginTop: 10 }}>
+              <input value={specialMedalIcon} onChange={e => setSpecialMedalIcon(e.target.value)} maxLength={8} placeholder="نشان، مثلاً 👑" />
+              <select value={specialMedalTier} onChange={e => setSpecialMedalTier(e.target.value)}>
+                <option value="bronze">برنز</option>
+                <option value="silver">نقره</option>
+                <option value="gold">طلا</option>
+              </select>
+            </div>
+            <input value={specialMedalReason} onChange={e => setSpecialMedalReason(e.target.value)} maxLength={300}
+                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
+            <button className="btn" style={{ marginTop: 12 }} disabled={specialMedalBusy} onClick={awardSpecialMedal}>
+              {specialMedalBusy ? 'در حال ثبت...' : 'اعطای مدال ویژه'}
             </button>
           </div>
         </>
