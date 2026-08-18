@@ -100,15 +100,21 @@ def medal_rows(player):
     rows = []
     for key, value in medals.items():
         definition = MEDALS.get(key)
-        if not definition:
-            continue
         tier = value.get("tier") if isinstance(value, dict) else value
         if tier not in TIER_ORDER:
             continue
-        rows.append({
-            "key": key, "name": definition["name"], "icon": definition["icon"],
-            "tier": tier, "title": definition["titles"][tier],
-        })
+        if definition:
+            rows.append({
+                "key": key, "name": definition["name"], "icon": definition["icon"],
+                "tier": tier, "title": definition["titles"][tier],
+            })
+        elif key.startswith("special_") and isinstance(value, dict):
+            rows.append({
+                "key": key, "name": value.get("name", "مدال ویژه"),
+                "icon": value.get("icon", "🏅"), "tier": tier,
+                "title": value.get("title", "افتخار ویژه"),
+                "reason": value.get("reason", ""),
+            })
     return sorted(rows, key=lambda row: (-TIER_ORDER[row["tier"]], row["name"]))
 
 
