@@ -29,8 +29,8 @@ export default function Onboarding() {
     <div className="view view-noheader">
       <div className="hero up">
         <div className="mark"><Keep s={40} /></div>
-        <h1>نغمه آتش و یخ</h1>
-        <p>وقتی بازیِ تاج‌وتخت می‌کنی، یا می‌بری یا می‌میری</p>
+        <h1>والریا : سیزن اول</h1>
+        <p>هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</p>
       </div>
       <div className="up u1">
         <label className="f">نام کاراکتر</label>
