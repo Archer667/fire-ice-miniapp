@@ -74,6 +74,24 @@ async def me(user: dict = Depends(get_user)):
             "admin_role": await get_admin_role(user),
             "is_owner": user["id"] == OWNER_ID,
         }
+    # پیمان‌ها در هر بازدید دوباره محاسبه می‌شوند تا رسیدن به روز هفتم/دهم
+    # بدون نیاز به عملیات تازه، مدال را خودکار ارتقا دهد.
+    stats = normalize_stats(p)
+    seven_days = ten_days = accepted_count = 0
+    async for pact in alliances.find({"$or": [{"from_id": user["id"]}, {"to_id": user["id"]}]}):
+        started = pact.get("accepted_at")
+        if not started and pact.get("status") == "accepted":
+            started = pact.get("created_at")
+        if not started:
+            continue
+        accepted_count += 1
+        ended = pact.get("ended_at") or now()
+        duration_days = max(0, (ended - started).total_seconds() / 86400)
+        seven_days += int(duration_days >= 7)
+        ten_days += int(duration_days >= 10)
+    stats["alliances_accepted"] = max(stats.get("alliances_accepted", 0), accepted_count)
+    stats["alliances_7_days"] = seven_days
+    stats["alliances_10_days"] = ten_days
     # ارتقاهایی که مهلتشون تمام شده رو اول نهایی می‌کنیم — وگرنه بازیکنی که فقط سر
     # می‌زنه بدون رفتن به تبِ ساختمان‌ها، تولید/سقفش رو با سطح قدیمی (پیش‌از-ارتقا)
     # می‌بینه، شاید تا خیلی بعد
