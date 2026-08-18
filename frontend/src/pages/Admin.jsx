@@ -11,6 +11,14 @@ import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPE
 
 const NEW_CASTLE = '__new__';
 
+const SPECIAL_MEDAL_PRESETS = [
+  { key: 'season_champion', name: 'قهرمان فصل', icon: '🏆' },
+  { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🛡️' },
+  { key: 'immortal', name: 'نامیرا', icon: '♾️' },
+  { key: 'golden_quill', name: 'صاحب قلم زرین', icon: '✒️' },
+  { key: 'crown_enemy', name: 'دشمن تاج', icon: '⚔️' },
+];
+
 const MAP_KINDS = [
   { key: 'castle', label: 'قلعه' },
   { key: 'city',   label: 'شهر' },
@@ -105,9 +113,9 @@ export default function Admin() {
   const [medalReason, setMedalReason] = useState('');
   const [medalBusy, setMedalBusy] = useState(false);
   const [specialMedalTarget, setSpecialMedalTarget] = useState([]);
+  const [specialMedalPreset, setSpecialMedalPreset] = useState('season_champion');
   const [specialMedalName, setSpecialMedalName] = useState('');
-  const [specialMedalTitle, setSpecialMedalTitle] = useState('');
-  const [specialMedalIcon, setSpecialMedalIcon] = useState('🏅');
+  const [specialMedalIcon, setSpecialMedalIcon] = useState('');
   const [specialMedalTier, setSpecialMedalTier] = useState('gold');
   const [specialMedalReason, setSpecialMedalReason] = useState('');
   const [specialMedalBusy, setSpecialMedalBusy] = useState(false);
@@ -427,16 +435,18 @@ export default function Admin() {
 
   const awardSpecialMedal = async () => {
     if (!specialMedalTarget.length) { toast('بازیکن دریافت‌کننده را انتخاب کن'); return; }
-    if (!specialMedalName.trim() || !specialMedalTitle.trim()) { toast('نام و عنوان مدال را بنویس'); return; }
+    const preset = SPECIAL_MEDAL_PRESETS.find(m => m.key === specialMedalPreset);
+    const medalName = specialMedalPreset === 'custom' ? specialMedalName.trim() : preset?.name;
+    const medalIcon = specialMedalIcon.trim() || preset?.icon || '🏅';
+    if (!medalName) { toast('نام مدال را بنویس'); return; }
     setSpecialMedalBusy(true);
     try {
       await api.adminAwardSpecialMedal(specialMedalTarget[0].tg_id, {
-        name: specialMedalName.trim(), title: specialMedalTitle.trim(),
-        icon: specialMedalIcon.trim() || '🏅', tier: specialMedalTier,
+        name: medalName, icon: medalIcon, tier: specialMedalTier,
         reason: specialMedalReason.trim(),
       });
       haptic('medium'); toast('مدال ویژهٔ ادمین اعطا شد');
-      setSpecialMedalTarget([]); setSpecialMedalName(''); setSpecialMedalTitle('');
+      setSpecialMedalTarget([]); setSpecialMedalName(''); setSpecialMedalIcon('');
       setSpecialMedalReason('');
     } catch (e) { toast(e.message); }
     setSpecialMedalBusy(false);
@@ -1750,12 +1760,18 @@ export default function Admin() {
           <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>اعطای مدال ویژهٔ ادمین</label>
             <PlayerPicker value={specialMedalTarget} onChange={setSpecialMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
+            <label className="f">انتخاب مدال</label>
+            <select value={specialMedalPreset} onChange={e => { setSpecialMedalPreset(e.target.value); setSpecialMedalIcon(''); }}>
+              {SPECIAL_MEDAL_PRESETS.map(m => <option key={m.key} value={m.key}>{m.icon} {m.name}</option>)}
+              <option value="custom">مدال با نام دلخواه</option>
+            </select>
+            {specialMedalPreset === 'custom' && (
+              <input value={specialMedalName} onChange={e => setSpecialMedalName(e.target.value)}
+                     maxLength={60} placeholder="نام دلخواه مدال" style={{ marginTop: 10 }} />
+            )}
             <div className="grid2" style={{ marginTop: 10 }}>
-              <input value={specialMedalName} onChange={e => setSpecialMedalName(e.target.value)} maxLength={60} placeholder="نام مدال" />
-              <input value={specialMedalTitle} onChange={e => setSpecialMedalTitle(e.target.value)} maxLength={80} placeholder="تایتل بازیکن" />
-            </div>
-            <div className="grid2" style={{ marginTop: 10 }}>
-              <input value={specialMedalIcon} onChange={e => setSpecialMedalIcon(e.target.value)} maxLength={8} placeholder="نشان، مثلاً 👑" />
+              <input value={specialMedalIcon} onChange={e => setSpecialMedalIcon(e.target.value)} maxLength={8}
+                     placeholder={SPECIAL_MEDAL_PRESETS.find(m => m.key === specialMedalPreset)?.icon || 'نشان، مثلاً 👑'} />
               <select value={specialMedalTier} onChange={e => setSpecialMedalTier(e.target.value)}>
                 <option value="bronze">برنز</option>
                 <option value="silver">نقره</option>
