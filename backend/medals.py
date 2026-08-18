@@ -112,7 +112,7 @@ def medal_rows(player):
             rows.append({
                 "key": key, "name": value.get("name", "مدال ویژه"),
                 "icon": value.get("icon", "🏅"), "tier": tier,
-                "title": value.get("title", "افتخار ویژه"),
+                "title": "",
                 "reason": value.get("reason", ""),
             })
     return sorted(rows, key=lambda row: (-TIER_ORDER[row["tier"]], row["name"]))
