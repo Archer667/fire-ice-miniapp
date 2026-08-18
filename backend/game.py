@@ -124,8 +124,13 @@ def apply_production(player: dict) -> dict:
     res = player["resources"]
     caps = effective_caps(player)
     prod = daily_production(player)
+    gold_before = res.get("gold", 0)
     for k, per_day in prod.items():
         res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + per_day * elapsed_days)
+    gold_added = max(0, res.get("gold", 0) - gold_before)
+    if gold_added:
+        stats = player.setdefault("stats", {})
+        stats["gold_produced"] = stats.get("gold_produced", 0) + gold_added
     player["last_tick"] = now()
     return player
 
