@@ -45,7 +45,6 @@ export default function Leaderboard() {
   const [regionRows, setRegionRows] = useState(null);
   const [lordRows, setLordRows] = useState(null);
   const [weeklyRows, setWeeklyRows] = useState(null);
-  const [guideOpen, setGuideOpen] = useState(false);
   const [selectedMedal, setSelectedMedal] = useState(null);
 
   useEffect(() => {
@@ -66,21 +65,6 @@ export default function Leaderboard() {
                onClick={() => { haptic(); setTab(t.id); }}>{t.label}</button>
         ))}
       </div>
-      <button type="button" className="btn ghost up u1" style={{ margin: '8px 0 12px' }} onClick={() => setGuideOpen(v => !v)}>
-        {guideOpen ? 'بستن راهنمای مدال‌ها' : '🏅 راهنمای مدال‌ها'}
-      </button>
-      {guideOpen && (
-        <div className="card up u2" style={{ display: 'grid', gap: 8 }}>
-          {MEDAL_GUIDE.map(m => (
-            <button type="button" className="rbtn" key={m.key} onClick={() => setSelectedMedal(m)}
-                    style={{ textAlign: 'right', padding: 10, borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 24 }}>{m.icon}</span>
-              <span><b>{m.name}</b><small style={{ display: 'block', marginTop: 3 }}>{m.rule}</small></span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {tab === 'regions' && (
         !regionRows ? <div className="loading">شمارش اقلیم‌ها...</div> : (
           <div className="up u2">
