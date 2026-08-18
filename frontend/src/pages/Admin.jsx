@@ -35,7 +35,9 @@ const TAB_GROUPS = [
       { key: 'alliances', label: 'اتحادها' },
       { key: 'titles',    label: 'مقام‌ها' },
       { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
-      { key: 'events',    label: 'ایونت' },
+      { key: 'events',       label: 'ایونت' },
+      { key: 'medals',       label: 'مدال‌ها' },
+      { key: 'bot_messages', label: 'پیام بات' },
     ],
   },
   {
@@ -1670,8 +1672,7 @@ export default function Admin() {
         <>
           <div className="sect up u2">اعلام رویداد به همهٔ بازیکنان</div>
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            توضیحِ یک اتفاق در طولِ بازی (مثلاً شروعِ یک چالش، تغییرِ قانون، جشنِ فصلی، ...) —
-            برای همهٔ بازیکنان با کلاغ می‌رود و توی تبِ «اطلاعیه‌ها»ی صفحهٔ کلاغ‌ها می‌بینندش
+            توضیح یک اتفاق در طول بازی؛ این متن با کلاغ برای همه فرستاده می‌شود و در اطلاعیه‌ها می‌ماند.
           </div>
           <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>عنوان رویداد</label>
@@ -1679,14 +1680,21 @@ export default function Admin() {
                    placeholder="مثلاً: جشن پیروزی زمستان" />
             <label className="f">توضیحات</label>
             <textarea value={eventDescription} onChange={e => setEventDescription(e.target.value)} maxLength={1500}
-                      rows={5} placeholder="این رویداد چیه، چه‌کاری باید انجام بدن، تا کِی ادامه داره..." />
+                      rows={5} placeholder="شرح رویداد، قوانین و زمان آن..." />
             <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
               {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
             </button>
           </div>
+        </>
+      )}
 
-          <div className="sect up u3">ثبت افتخار و نتیجهٔ نبرد</div>
-          <div className="card up u3">
+      {tab === 'medals' && (
+        <>
+          <div className="sect up u2">مدال‌ها و نتایج نبرد</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            مدال «راوی قلمرو» را دستی اعطا کن یا نتیجهٔ جنگ را برای محاسبهٔ مدال‌های رزمی ثبت کن.
+          </div>
+          <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>اعطای دستی مدال «راوی قلمرو»</label>
             <PlayerPicker value={medalTarget} onChange={setMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
             <select value={medalTier} onChange={e => setMedalTier(e.target.value)} style={{ marginTop: 10 }}>
@@ -1700,7 +1708,7 @@ export default function Admin() {
               {medalBusy ? 'در حال ثبت...' : 'اعطای مدال'}
             </button>
           </div>
-          <div className="card up u3">
+          <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>ثبت نتیجهٔ ساختاریافتهٔ جنگ</label>
             <PlayerPicker value={combatWinner} onChange={setCombatWinner} single placeholder="بازیکن پیروز را انتخاب کن..." />
             <select value={combatKind} onChange={e => setCombatKind(e.target.value)} style={{ marginTop: 10 }}>
@@ -1711,12 +1719,16 @@ export default function Admin() {
               {combatBusy ? 'در حال ثبت...' : 'ثبت نتیجه'}
             </button>
           </div>
+        </>
+      )}
 
-          <div className="sect up u3">ارسال پیام مستقیم از طرف بات تلگرام</div>
-          <div className="page-sub up u3" style={{ marginTop: -10 }}>
-            این پیام فقط در چت خصوصی تلگرام فرستاده می‌شود و داخل صندوق کلاغ‌های بازی ذخیره نمی‌شود.
+      {tab === 'bot_messages' && (
+        <>
+          <div className="sect up u2">ارسال پیام مستقیم از طرف بات تلگرام</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            پیام فقط در چت خصوصی تلگرام فرستاده می‌شود و داخل صندوق کلاغ‌های بازی ذخیره نمی‌شود.
           </div>
-          <div className="card up u3">
+          <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>گیرندگان</label>
             <select value={botAudience} onChange={e => { setBotAudience(e.target.value); setBotTargets([]); }}>
               <option value="all">همهٔ بازیکنان</option>
