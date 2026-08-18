@@ -32,7 +32,7 @@ import telegram_bot
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="نغمه آتش و یخ — API", version="1.0")
+app = FastAPI(title="والریا : سیزن اول — API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
