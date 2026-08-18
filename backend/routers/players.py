@@ -2,7 +2,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
-from db import players, campaigns
+from db import players, campaigns, alliances
 from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
 from medals import medal_rows, normalize_stats, sync_medals
 from game_data import REGIONS, CASTLE_HOUSES
