@@ -93,6 +93,13 @@ export default function Admin() {
   const [botAudience, setBotAudience] = useState('all');
   const [botTargets, setBotTargets] = useState([]);
   const [botMessageBusy, setBotMessageBusy] = useState(false);
+  const [medalTarget, setMedalTarget] = useState([]);
+  const [medalTier, setMedalTier] = useState('bronze');
+  const [medalReason, setMedalReason] = useState('');
+  const [medalBusy, setMedalBusy] = useState(false);
+  const [combatWinner, setCombatWinner] = useState([]);
+  const [combatKind, setCombatKind] = useState('attack');
+  const [combatBusy, setCombatBusy] = useState(false);
   const [alliancesList, setAlliancesList] = useState(null);
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
   const [spyResolved, setSpyResolved] = useState(null);
@@ -393,6 +400,29 @@ export default function Admin() {
       setBotTargets([]);
     } catch (e) { toast(e.message); }
     setBotMessageBusy(false);
+  };
+
+  const awardStoryteller = async () => {
+    if (!medalTarget.length) { toast('یک بازیکن انتخاب کن'); return; }
+    setMedalBusy(true);
+    try {
+      await api.adminAwardStoryteller(medalTarget[0].tg_id, medalTier, medalReason.trim());
+      haptic('medium'); toast('مدال راوی قلمرو اعطا شد');
+      setMedalTarget([]); setMedalReason('');
+    } catch (e) { toast(e.message); }
+    setMedalBusy(false);
+  };
+
+  const recordCombatResult = async () => {
+    if (!combatWinner.length) { toast('بازیکن برنده را انتخاب کن'); return; }
+    const id = combatWinner[0].tg_id;
+    setCombatBusy(true);
+    try {
+      await api.adminRecordCombatResult(id, combatKind === 'defense' ? id : 0);
+      haptic('medium'); toast(combatKind === 'defense' ? 'دفاع موفق ثبت شد' : 'پیروزی مهاجم ثبت شد');
+      setCombatWinner([]);
+    } catch (e) { toast(e.message); }
+    setCombatBusy(false);
   };
 
   const resetGame = async () => {
@@ -1652,6 +1682,33 @@ export default function Admin() {
                       rows={5} placeholder="این رویداد چیه، چه‌کاری باید انجام بدن، تا کِی ادامه داره..." />
             <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
               {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
+            </button>
+          </div>
+
+          <div className="sect up u3">ثبت افتخار و نتیجهٔ نبرد</div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>اعطای دستی مدال «راوی قلمرو»</label>
+            <PlayerPicker value={medalTarget} onChange={setMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
+            <select value={medalTier} onChange={e => setMedalTier(e.target.value)} style={{ marginTop: 10 }}>
+              <option value="bronze">برنز — قصه‌گو</option>
+              <option value="silver">نقره — وقایع‌نگار</option>
+              <option value="gold">طلا — زبان تاریخ</option>
+            </select>
+            <input value={medalReason} onChange={e => setMedalReason(e.target.value)} maxLength={200}
+                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
+            <button className="btn" style={{ marginTop: 12 }} disabled={medalBusy} onClick={awardStoryteller}>
+              {medalBusy ? 'در حال ثبت...' : 'اعطای مدال'}
+            </button>
+          </div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>ثبت نتیجهٔ ساختاریافتهٔ جنگ</label>
+            <PlayerPicker value={combatWinner} onChange={setCombatWinner} single placeholder="بازیکن پیروز را انتخاب کن..." />
+            <select value={combatKind} onChange={e => setCombatKind(e.target.value)} style={{ marginTop: 10 }}>
+              <option value="attack">پیروزی در حمله</option>
+              <option value="defense">دفاع موفق</option>
+            </select>
+            <button className="btn" style={{ marginTop: 12 }} disabled={combatBusy} onClick={recordCombatResult}>
+              {combatBusy ? 'در حال ثبت...' : 'ثبت نتیجه'}
             </button>
           </div>
 
