@@ -174,19 +174,35 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
             "id": str(r["_id"]), "player": r["player_name"], "tg_id": r["tg_id"], "castle": r["castle"],
             "category": r["category"], "category_name": ROLEPLAY_CATEGORIES.get(r["category"], r["category"]),
             "text": r["text"], "campaign_id": r.get("campaign_id"), "sibling": None,
-            "created_at": r["created_at"].isoformat(),
+            "created_at": r["created_at"].isoformat(), "war": None,
         }
         if r["category"] == "war" and r.get("campaign_id"):
             sib = await roleplays.find_one({"category": "war", "campaign_id": r["campaign_id"], "tg_id": {"$ne": r["tg_id"]}})
             if sib:
-                row["sibling"] = {"player": sib["player_name"], "text": sib["text"], "resolved": sib.get("resolved", False)}
+                row["sibling"] = {"player": sib["player_name"], "tg_id": sib["tg_id"], "text": sib["text"], "resolved": sib.get("resolved", False)}
+            try:
+                campaign = await campaigns.find_one({"_id": ObjectId(r["campaign_id"])})
+            except Exception:
+                campaign = None
+            if campaign:
+                attacker = await players.find_one({"tg_id": campaign["tg_id"]})
+                defender = await owner_of_castle(campaign["target_castle"])
+                row["war"] = {
+                    "campaign_id": r["campaign_id"],
+                    "attacker_tg_id": campaign["tg_id"],
+                    "attacker_name": attacker["name"] if attacker else campaign.get("player_name", "مهاجم"),
+                    "defender_tg_id": defender["tg_id"] if defender else None,
+                    "defender_name": defender["name"] if defender else "مدافع نامشخص",
+                    "target_castle": campaign["target_castle"],
+                }
         out.append(row)
     return out
 
 class RoleplayResultBody(BaseModel):
     result: str
     visibility: str = "participants"   # "participants" | "all" — چه کسی نتیجه را کلاغ می‌گیرد
-    other_lords: list[int] = []        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
+    other_lords: list[int] = []
+    winner_tg_id: int | None = None        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
 
@@ -215,6 +231,9 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
     ids_to_resolve = [r["_id"]]
     recipient_tg_ids = {r["tg_id"]}
+    campaign = None
+    defender = None
+    combat_outcome = None
 
     if r["category"] == "war" and r.get("campaign_id"):
         sibling = await roleplays.find_one({
@@ -233,6 +252,12 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             defender = await owner_of_castle(campaign["target_castle"])
             if defender:
                 recipient_tg_ids.add(defender["tg_id"])
+            valid_winners = {campaign["tg_id"]}
+            if defender:
+                valid_winners.add(defender["tg_id"])
+            if body.winner_tg_id not in valid_winners:
+                raise HTTPException(400, "برندهٔ نبرد را از بین مهاجم و مدافع انتخاب کن")
+            combat_outcome = "attacker" if body.winner_tg_id == campaign["tg_id"] else "defender"
 
     other_lord_names = []
     for tg_id in body.other_lords:
@@ -241,8 +266,24 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             recipient_tg_ids.add(tg_id)
             other_lord_names.append(lord["name"])
 
+    # قفل نتیجه روی خود لشکرکشی مانع دوباره‌شماری پیروزی با کلیک/درخواست تکراری می‌شود.
+    if campaign and combat_outcome:
+        outcome_guard = await campaigns.update_one(
+            {"_id": campaign["_id"], "medal_outcome_recorded": {"$ne": True}},
+            {"$set": {
+                "medal_outcome_recorded": True, "combat_outcome": combat_outcome,
+                "winner_tg_id": body.winner_tg_id, "combat_resolved_at": now(),
+            }},
+        )
+        if outcome_guard.modified_count:
+            await bump_player_stat(
+                body.winner_tg_id,
+                "attack_wins" if combat_outcome == "attacker" else "defense_wins",
+            )
+
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
+        **({"winner_tg_id": body.winner_tg_id, "combat_outcome": combat_outcome} if combat_outcome else {}),
     }})
 
     if body.visibility == "all":
@@ -1093,20 +1134,34 @@ async def award_realm_storyteller(tg_id: int, body: MedalAwardBody, user: dict =
     return {"ok": True, "medals": medal_rows(player)}
 
 
-class CombatResultBody(BaseModel):
-    winner_tg_id: int
-    defender_tg_id: int
+class SpecialMedalBody(BaseModel):
+    name: str
+    title: str
+    icon: str = "🏅"
+    tier: str = "gold"
+    reason: str = ""
 
 
-@router.post("/medals/combat-result")
-async def record_combat_result(body: CombatResultBody, user: dict = Depends(admin_user)):
-    """ثبت یک نتیجه ساختاریافته: برد مهاجم یا دفاع موفق مدافع."""
-    if body.winner_tg_id == body.defender_tg_id:
-        stat = "defense_wins"
-    else:
-        stat = "attack_wins"
-    player = await players.find_one({"tg_id": body.winner_tg_id})
+@router.post("/players/{tg_id}/medals/special")
+async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = Depends(admin_user)):
+    """مدال ویژه و کاملاً سفارشی ادمین؛ چند مدال ویژه می‌تواند به یک بازیکن داده شود."""
+    name = body.name.strip()[:60]
+    title = body.title.strip()[:80]
+    icon = body.icon.strip()[:8] or "🏅"
+    if not name or not title:
+        raise HTTPException(400, "نام و عنوان مدال الزامی است")
+    if body.tier not in TIER_ORDER:
+        raise HTTPException(400, "سطح مدال نامعتبر است")
+    player = await players.find_one({"tg_id": tg_id})
     if not player:
-        raise HTTPException(404, "بازیکن برنده پیدا نشد")
-    await bump_player_stat(body.winner_tg_id, stat)
-    return {"ok": True, "stat": stat}
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    medals = dict(player.get("medals") or {})
+    key = f"special_{ObjectId()}"
+    medals[key] = {
+        "tier": body.tier, "name": name, "title": title, "icon": icon,
+        "reason": body.reason.strip()[:300], "manual": True,
+        "awarded_at": now(), "awarded_by": user["id"],
+    }
+    await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
+    player["medals"] = medals
+    return {"ok": True, "medals": medal_rows(player)}
