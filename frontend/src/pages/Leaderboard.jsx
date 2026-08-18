@@ -64,7 +64,7 @@ export default function Leaderboard() {
                   <small style={{ display: 'block', marginTop: 4 }}>
                     ⚔️ {(r.stats?.attack_wins || 0).toLocaleString('fa-IR')} پیروزی · 🛡️ {(r.stats?.defense_wins || 0).toLocaleString('fa-IR')} دفاع موفق · 🏰 {(r.stats?.castles_captured || 0).toLocaleString('fa-IR')} فتح
                   </small>
-                  {!!r.medals?.length && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>{r.medals.map(m => <span key={m.key} title={m.title} style={{ fontSize: 15 }}>{m.icon}</span>)}</div>}
+                  {!!r.medals?.length && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>{r.medals.map(m => <span key={m.key} title={m.title || m.name} style={{ fontSize: 15 }}>{m.icon}</span>)}</div>}
                 </div>
                 <div className="p">{r.points.toLocaleString('fa-IR')}</div>
               </div>
@@ -88,7 +88,7 @@ export default function Leaderboard() {
                   <small style={{ display: 'block', marginTop: 4 }}>
                     ⚔️ {(r.stats?.attack_wins || 0).toLocaleString('fa-IR')} پیروزی · 🛡️ {(r.stats?.defense_wins || 0).toLocaleString('fa-IR')} دفاع موفق · 🏰 {(r.stats?.castles_captured || 0).toLocaleString('fa-IR')} فتح
                   </small>
-                  {!!r.medals?.length && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>{r.medals.map(m => <span key={m.key} title={m.title} style={{ fontSize: 15 }}>{m.icon}</span>)}</div>}
+                  {!!r.medals?.length && <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>{r.medals.map(m => <span key={m.key} title={m.title || m.name} style={{ fontSize: 15 }}>{m.icon}</span>)}</div>}
                   </div>
                   <div className="p">{r.points.toLocaleString('fa-IR')}</div>
                 </div>
