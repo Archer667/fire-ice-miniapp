@@ -10,7 +10,9 @@ from db import (
     caravans, messages, rumors, hierarchy, polls,
 )
 import game_data
+import telegram_bot
 from game import now, add_resources, building_levels_for
+from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
@@ -141,6 +143,7 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
 
     if spy_player:
         if success:
+            await bump_player_stat(spy_player["tg_id"], "successful_spies")
             add_resources(spy_player, {"men": m["men_sent"]})
             await players.update_one({"tg_id": spy_player["tg_id"]}, {"$set": {"resources": spy_player["resources"]}})
             await send_system_message(
@@ -417,6 +420,8 @@ async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends
             )
 
     await players.update_one({"tg_id": tg_id}, {"$set": {f"castle_buildings.{body.castle}": captured_buildings}})
+    if previous_owner and previous_owner["tg_id"] != tg_id:
+        await bump_player_stat(tg_id, "castles_captured")
     spoils_note = " (به‌همراهِ ساختمان‌هایی که رویش ساخته بودند — غنیمتِ جنگ)" if captured_buildings else ""
     await send_system_message(tg_id, target["name"], f"قلعهٔ «{body.castle}»{spoils_note} به قلمروِ تو اضافه شد.")
     return {"ok": True, "captured_from": previous_owner["name"] if previous_owner and previous_owner["tg_id"] != tg_id else None}
@@ -842,6 +847,35 @@ async def announce_event(body: AnnounceEventBody, user: dict = Depends(admin_use
         await send_system_message(p["tg_id"], p["name"], text)
     return {"ok": True}
 
+class SendBotMessageBody(BaseModel):
+    text: str
+    send_to_all: bool = False
+    to_tg_ids: list[int] | None = None
+
+@router.post("/send-bot-message")
+async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_user)):
+    """ارسال پیام مستقیم از طرف بات تلگرام، بدون ثبت در صندوق کلاغ‌های داخل اپ."""
+    text = body.text.strip()[:4000]
+    if not text:
+        raise HTTPException(400, "متن پیام نمی‌تواند خالی باشد")
+
+    if body.send_to_all:
+        targets = await players.find({}, {"tg_id": 1, "name": 1}).to_list(None)
+    else:
+        to_ids = list(dict.fromkeys(body.to_tg_ids or []))
+        if not to_ids:
+            raise HTTPException(400, "حداقل یک بازیکن را انتخاب کن")
+        targets = await players.find(
+            {"tg_id": {"$in": to_ids}}, {"tg_id": 1, "name": 1},
+        ).to_list(len(to_ids))
+
+    if not targets:
+        raise HTTPException(404, "هیچ بازیکنی برای ارسال پیدا نشد")
+
+    for target in targets:
+        telegram_bot.push(target["tg_id"], text)
+    return {"ok": True, "sent_to": len(targets)}
+
 class WarWindowBody(BaseModel):
     open: bool
 
@@ -1030,3 +1064,49 @@ async def reset_building_balance(building_id: str, user: dict = Depends(full_adm
         {"_id": BUILDING_OVERRIDES_DOC_ID}, {"$unset": {f"overrides.{building_id}": ""}}, upsert=True,
     )
     return {"ok": True}
+
+
+class MedalAwardBody(BaseModel):
+    tier: str
+    reason: str = ""
+
+
+@router.post("/players/{tg_id}/medals/realm-storyteller")
+async def award_realm_storyteller(tg_id: int, body: MedalAwardBody, user: dict = Depends(admin_user)):
+    """اعطای دستی مدال راوی قلمرو؛ سطح پایین‌تر مدال قبلی را تنزل نمی‌دهد."""
+    if body.tier not in TIER_ORDER:
+        raise HTTPException(400, "سطح مدال نامعتبر است")
+    player = await players.find_one({"tg_id": tg_id})
+    if not player:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    medals = dict(player.get("medals") or {})
+    current = medals.get("realm_storyteller")
+    current_tier = current.get("tier") if isinstance(current, dict) else current
+    if TIER_ORDER[body.tier] < TIER_ORDER.get(current_tier, 0):
+        raise HTTPException(400, "مدال بازیکن را نمی‌توان به سطح پایین‌تر تنزل داد")
+    medals["realm_storyteller"] = {
+        "tier": body.tier, "reason": body.reason.strip(), "awarded_at": now(),
+        "awarded_by": user["id"],
+    }
+    await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
+    player["medals"] = medals
+    return {"ok": True, "medals": medal_rows(player)}
+
+
+class CombatResultBody(BaseModel):
+    winner_tg_id: int
+    defender_tg_id: int
+
+
+@router.post("/medals/combat-result")
+async def record_combat_result(body: CombatResultBody, user: dict = Depends(admin_user)):
+    """ثبت یک نتیجه ساختاریافته: برد مهاجم یا دفاع موفق مدافع."""
+    if body.winner_tg_id == body.defender_tg_id:
+        stat = "defense_wins"
+    else:
+        stat = "attack_wins"
+    player = await players.find_one({"tg_id": body.winner_tg_id})
+    if not player:
+        raise HTTPException(404, "بازیکن برنده پیدا نشد")
+    await bump_player_stat(body.winner_tg_id, stat)
+    return {"ok": True, "stat": stat}

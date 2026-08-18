@@ -2,8 +2,9 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
-from db import players, campaigns
+from db import players, campaigns, alliances
 from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
+from medals import medal_rows, normalize_stats, sync_medals
 from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
@@ -55,6 +56,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "last_feast": None,
         "created_at": now(),
         "last_tick": now(),
+        "stats": normalize_stats({}), "medals": {},
     }
     await players.insert_one(doc)
     return {"ok": True}
@@ -72,6 +74,24 @@ async def me(user: dict = Depends(get_user)):
             "admin_role": await get_admin_role(user),
             "is_owner": user["id"] == OWNER_ID,
         }
+    # پیمان‌ها در هر بازدید دوباره محاسبه می‌شوند تا رسیدن به روز هفتم/دهم
+    # بدون نیاز به عملیات تازه، مدال را خودکار ارتقا دهد.
+    stats = normalize_stats(p)
+    seven_days = ten_days = accepted_count = 0
+    async for pact in alliances.find({"$or": [{"from_id": user["id"]}, {"to_id": user["id"]}]}):
+        started = pact.get("accepted_at")
+        if not started and pact.get("status") == "accepted":
+            started = pact.get("created_at")
+        if not started:
+            continue
+        accepted_count += 1
+        ended = pact.get("ended_at") or now()
+        duration_days = max(0, (ended - started).total_seconds() / 86400)
+        seven_days += int(duration_days >= 7)
+        ten_days += int(duration_days >= 10)
+    stats["alliances_accepted"] = max(stats.get("alliances_accepted", 0), accepted_count)
+    stats["alliances_7_days"] = seven_days
+    stats["alliances_10_days"] = ten_days
     # ارتقاهایی که مهلتشون تمام شده رو اول نهایی می‌کنیم — وگرنه بازیکنی که فقط سر
     # می‌زنه بدون رفتن به تبِ ساختمان‌ها، تولید/سقفش رو با سطح قدیمی (پیش‌از-ارتقا)
     # می‌بینه، شاید تا خیلی بعد
@@ -173,5 +193,6 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
     if not (0 <= body.rate <= cap):
         raise HTTPException(400, f"نرخ مالیات باید بین ۰ تا {cap} درصد باشد")
     await players.update_one({"tg_id": user["id"]},
-        {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"]}})
+        {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"],
+                  "stats": normalize_stats(p), "medals": sync_medals(p)}})
     return {"ok": True, "tax_rate": body.rate}

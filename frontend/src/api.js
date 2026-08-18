@@ -670,6 +670,15 @@ const M = {
     mockSendSystemMessage(`🎉 رویداد: ${t}\n\n${d}`);
     return { ok: true };
   },
+  adminAwardStoryteller: (tgId, tier, reason = '') => ({ ok: true, medals: [{ key: 'realm_storyteller', name: 'راوی قلمرو', icon: '📜', tier, title: tier === 'gold' ? 'زبان تاریخ' : tier === 'silver' ? 'وقایع‌نگار' : 'قصه‌گو' }] }),
+  adminRecordCombatResult: (winnerTgId, defenderTgId) => ({ ok: true, stat: winnerTgId === defenderTgId ? 'defense_wins' : 'attack_wins' }),
+  adminSendBotMessage: (text, sendToAll, toTgIds = []) => {
+    const message = (text || '').trim().slice(0, 4000);
+    if (!message) throw new Error('متن پیام نمی‌تواند خالی باشد');
+    const ids = [...new Set(toTgIds)];
+    if (!sendToAll && ids.length === 0) throw new Error('حداقل یک بازیکن را انتخاب کن');
+    return { ok: true, sent_to: sendToAll ? MOCK_PLAYERS.length + 1 : ids.length };
+  },
   legions: () => {
     mockResolveCampaigns();
     const nowMs = Date.now();
@@ -1517,6 +1526,12 @@ export const api = {
   adminSetWarWindow: (open) => MOCK ? Promise.resolve(M.adminSetWarWindow(open)) : req('/api/admin/war-window', { method: 'POST', body: JSON.stringify({ open }) }),
   adminAnnounceEvent: (title, description) => MOCK ? Promise.resolve(M.adminAnnounceEvent(title, description))
     : req('/api/admin/announce-event', { method: 'POST', body: JSON.stringify({ title, description }) }),
+  adminAwardStoryteller: (tgId, tier, reason = '') => MOCK ? Promise.resolve(M.adminAwardStoryteller(tgId, tier, reason))
+    : req(`/api/admin/players/${tgId}/medals/realm-storyteller`, { method: 'POST', body: JSON.stringify({ tier, reason }) }),
+  adminRecordCombatResult: (winnerTgId, defenderTgId) => MOCK ? Promise.resolve(M.adminRecordCombatResult(winnerTgId, defenderTgId))
+    : req('/api/admin/medals/combat-result', { method: 'POST', body: JSON.stringify({ winner_tg_id: winnerTgId, defender_tg_id: defenderTgId }) }),
+  adminSendBotMessage: (text, sendToAll, toTgIds = []) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
+    : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
   warRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
     : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),

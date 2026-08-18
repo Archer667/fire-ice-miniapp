@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from auth import get_user
 from db import admin_roles
+from medals import medal_rows, normalize_stats
 from game_data import REGIONS
 from config import ADMIN_IDS
 from ranks import scored_players, weekly_scored_players

@@ -145,6 +145,17 @@ export default function Dashboard({ goTo }) {
         </div>
       </div>
 
+      <div className="sect up u2">مدال‌ها و افتخارات</div>
+      <div className="card up u2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 10 }}>
+        {(me.medals || []).length ? me.medals.map(m => (
+          <div key={m.key} style={{ padding: 12, borderRadius: 14, textAlign: 'center', background: m.tier === 'gold' ? 'rgba(245,190,55,.16)' : m.tier === 'silver' ? 'rgba(190,205,220,.13)' : 'rgba(190,115,55,.13)', border: '1px solid rgba(255,255,255,.09)' }}>
+            <div style={{ fontSize: 28 }}>{m.icon}</div>
+            <div style={{ fontWeight: 800 }}>{m.name}</div>
+            <small>{m.title} · {m.tier === 'gold' ? 'طلا' : m.tier === 'silver' ? 'نقره' : 'برنز'}</small>
+          </div>
+        )) : <div style={{ opacity: .65, padding: 8 }}>هنوز مدالی کسب نکرده‌ای.</div>}
+      </div>
+
       <div className="sect up u2">خزانه و انبار</div>
       <div className="card up u2">
         {Object.entries(RES_META).map(([k, m]) => {

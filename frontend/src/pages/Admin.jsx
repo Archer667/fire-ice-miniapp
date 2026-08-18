@@ -89,6 +89,17 @@ export default function Admin() {
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventBusy, setEventBusy] = useState(false);
+  const [botMessage, setBotMessage] = useState('');
+  const [botAudience, setBotAudience] = useState('all');
+  const [botTargets, setBotTargets] = useState([]);
+  const [botMessageBusy, setBotMessageBusy] = useState(false);
+  const [medalTarget, setMedalTarget] = useState([]);
+  const [medalTier, setMedalTier] = useState('bronze');
+  const [medalReason, setMedalReason] = useState('');
+  const [medalBusy, setMedalBusy] = useState(false);
+  const [combatWinner, setCombatWinner] = useState([]);
+  const [combatKind, setCombatKind] = useState('attack');
+  const [combatBusy, setCombatBusy] = useState(false);
   const [alliancesList, setAlliancesList] = useState(null);
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
   const [spyResolved, setSpyResolved] = useState(null);
@@ -370,6 +381,48 @@ export default function Admin() {
       setEventTitle(''); setEventDescription('');
     } catch (e) { toast(e.message); }
     setEventBusy(false);
+  };
+
+  const sendBotMessage = async () => {
+    const text = botMessage.trim();
+    if (!text) { toast('متن پیام را بنویس'); return; }
+    if (botAudience === 'selected' && botTargets.length === 0) { toast('حداقل یک بازیکن را انتخاب کن'); return; }
+    setBotMessageBusy(true);
+    try {
+      const res = await api.adminSendBotMessage(
+        text,
+        botAudience === 'all',
+        botTargets.map(p => p.tg_id),
+      );
+      haptic('medium');
+      toast(`پیام بات برای ${(res.sent_to ?? 0).toLocaleString('fa-IR')} بازیکن ارسال شد`);
+      setBotMessage('');
+      setBotTargets([]);
+    } catch (e) { toast(e.message); }
+    setBotMessageBusy(false);
+  };
+
+  const awardStoryteller = async () => {
+    if (!medalTarget.length) { toast('یک بازیکن انتخاب کن'); return; }
+    setMedalBusy(true);
+    try {
+      await api.adminAwardStoryteller(medalTarget[0].tg_id, medalTier, medalReason.trim());
+      haptic('medium'); toast('مدال راوی قلمرو اعطا شد');
+      setMedalTarget([]); setMedalReason('');
+    } catch (e) { toast(e.message); }
+    setMedalBusy(false);
+  };
+
+  const recordCombatResult = async () => {
+    if (!combatWinner.length) { toast('بازیکن برنده را انتخاب کن'); return; }
+    const id = combatWinner[0].tg_id;
+    setCombatBusy(true);
+    try {
+      await api.adminRecordCombatResult(id, combatKind === 'defense' ? id : 0);
+      haptic('medium'); toast(combatKind === 'defense' ? 'دفاع موفق ثبت شد' : 'پیروزی مهاجم ثبت شد');
+      setCombatWinner([]);
+    } catch (e) { toast(e.message); }
+    setCombatBusy(false);
   };
 
   const resetGame = async () => {
@@ -1629,6 +1682,60 @@ export default function Admin() {
                       rows={5} placeholder="این رویداد چیه، چه‌کاری باید انجام بدن، تا کِی ادامه داره..." />
             <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
               {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
+            </button>
+          </div>
+
+          <div className="sect up u3">ثبت افتخار و نتیجهٔ نبرد</div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>اعطای دستی مدال «راوی قلمرو»</label>
+            <PlayerPicker value={medalTarget} onChange={setMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
+            <select value={medalTier} onChange={e => setMedalTier(e.target.value)} style={{ marginTop: 10 }}>
+              <option value="bronze">برنز — قصه‌گو</option>
+              <option value="silver">نقره — وقایع‌نگار</option>
+              <option value="gold">طلا — زبان تاریخ</option>
+            </select>
+            <input value={medalReason} onChange={e => setMedalReason(e.target.value)} maxLength={200}
+                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
+            <button className="btn" style={{ marginTop: 12 }} disabled={medalBusy} onClick={awardStoryteller}>
+              {medalBusy ? 'در حال ثبت...' : 'اعطای مدال'}
+            </button>
+          </div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>ثبت نتیجهٔ ساختاریافتهٔ جنگ</label>
+            <PlayerPicker value={combatWinner} onChange={setCombatWinner} single placeholder="بازیکن پیروز را انتخاب کن..." />
+            <select value={combatKind} onChange={e => setCombatKind(e.target.value)} style={{ marginTop: 10 }}>
+              <option value="attack">پیروزی در حمله</option>
+              <option value="defense">دفاع موفق</option>
+            </select>
+            <button className="btn" style={{ marginTop: 12 }} disabled={combatBusy} onClick={recordCombatResult}>
+              {combatBusy ? 'در حال ثبت...' : 'ثبت نتیجه'}
+            </button>
+          </div>
+
+          <div className="sect up u3">ارسال پیام مستقیم از طرف بات تلگرام</div>
+          <div className="page-sub up u3" style={{ marginTop: -10 }}>
+            این پیام فقط در چت خصوصی تلگرام فرستاده می‌شود و داخل صندوق کلاغ‌های بازی ذخیره نمی‌شود.
+          </div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>گیرندگان</label>
+            <select value={botAudience} onChange={e => { setBotAudience(e.target.value); setBotTargets([]); }}>
+              <option value="all">همهٔ بازیکنان</option>
+              <option value="selected">بازیکنان مشخص</option>
+            </select>
+            {botAudience === 'selected' && (
+              <div style={{ marginTop: 12 }}>
+                <PlayerPicker value={botTargets} onChange={setBotTargets} placeholder="نام لرد یا قلعه را جست‌وجو کن..." />
+              </div>
+            )}
+            <label className="f">متن پیام بات</label>
+            <textarea value={botMessage} onChange={e => setBotMessage(e.target.value)} maxLength={4000}
+                      rows={6} placeholder="پیامی که بات مستقیماً برای بازیکن می‌فرستد..." />
+            <button className="btn" style={{ marginTop: 14 }} disabled={botMessageBusy} onClick={sendBotMessage}>
+              {botMessageBusy
+                ? 'در حال ارسال...'
+                : botAudience === 'all'
+                  ? 'ارسال پیام بات به همهٔ بازیکنان'
+                  : `ارسال پیام بات به ${botTargets.length.toLocaleString('fa-IR')} بازیکن`}
             </button>
           </div>
         </>

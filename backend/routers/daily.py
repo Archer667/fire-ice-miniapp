@@ -4,6 +4,7 @@ from auth import get_user
 from db import players
 from game import now, add_resources
 from config import DAILY_REWARDS
+from medals import normalize_stats, sync_medals
 
 router = APIRouter(prefix="/api/daily", tags=["daily"])
 
@@ -55,7 +56,11 @@ async def daily_claim(user: dict = Depends(get_user)):
     reward = DAILY_REWARDS[day_in_cycle - 1]
     res = add_resources(p, reward)
 
+    stats = normalize_stats(p)
+    stats["best_daily_streak"] = max(stats.get("best_daily_streak", 0), pending_streak)
+    medals = sync_medals(p)
     await players.update_one({"tg_id": user["id"]}, {"$set": {
         "resources": res, "daily_streak": pending_streak, "daily_last_claim_date": _today_str(),
+        "stats": stats, "medals": medals,
     }})
     return {"ok": True, "streak": pending_streak, "day_in_cycle": day_in_cycle, "reward": reward, "resources": res}
