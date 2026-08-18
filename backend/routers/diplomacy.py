@@ -128,13 +128,14 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
     # رویِ همون خواندنِ قدیمی رد می‌شن و alliance_count دوبار می‌خوره یا شرابِ رد دوبار برمی‌گرده
     new_status = "accepted" if body.accept else "rejected"
     guard = await alliances.update_one(
-        {"_id": a["_id"], "status": "pending"}, {"$set": {"status": new_status}},
+        {"_id": a["_id"], "status": "pending"}, {"$set": {"status": new_status, **({"accepted_at": now()} if body.accept else {})}},
     )
     if guard.matched_count == 0:
         raise HTTPException(400, "این پیمان قبلاً پاسخ داده شده")
 
     if body.accept:
-        await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1}})
+        await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1, "stats.alliances_accepted": 1}})
+        await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
         await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را پذیرفت.")
         # پیمان‌های عمومی (غیرخصوصی) به همهٔ لردها اطلاع داده می‌شود — نه فقط دو طرفِ پیمان
@@ -168,7 +169,7 @@ async def leave(alliance_id: str, user: dict = Depends(get_user)):
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
 
     guard = await alliances.update_one(
-        {"_id": a["_id"], "status": "accepted"}, {"$set": {"status": "left", "left_by": user["id"]}},
+        {"_id": a["_id"], "status": "accepted"}, {"$set": {"status": "left", "left_by": user["id"], "ended_at": now()}},
     )
     if guard.matched_count == 0:
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
