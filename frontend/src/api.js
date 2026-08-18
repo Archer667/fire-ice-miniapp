@@ -671,7 +671,7 @@ const M = {
     return { ok: true };
   },
   adminAwardStoryteller: (tgId, tier, reason = '') => ({ ok: true, medals: [{ key: 'realm_storyteller', name: 'راوی قلمرو', icon: '📜', tier, title: tier === 'gold' ? 'زبان تاریخ' : tier === 'silver' ? 'وقایع‌نگار' : 'قصه‌گو' }] }),
-  adminRecordCombatResult: (winnerTgId, defenderTgId) => ({ ok: true, stat: winnerTgId === defenderTgId ? 'defense_wins' : 'attack_wins' }),
+  adminAwardSpecialMedal: (tgId, medal) => ({ ok: true, medals: [{ key: 'special_mock', ...medal }] }),
   adminSendBotMessage: (text, sendToAll, toTgIds = []) => {
     const message = (text || '').trim().slice(0, 4000);
     if (!message) throw new Error('متن پیام نمی‌تواند خالی باشد');
@@ -1011,7 +1011,7 @@ const M = {
     category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
     text: r.text, campaign_id: r.campaign_id, sibling: null, created_at: r.created_at,
   })),
-  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = []) => {
+  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null) => {
     const r = mockRoleplays.find(x => x.id === roleplayId);
     if (!r) throw new Error('این رول پیدا نشد');
     if (r.resolved) throw new Error('این رول قبلاً پاسخ داده شده');
@@ -1528,8 +1528,8 @@ export const api = {
     : req('/api/admin/announce-event', { method: 'POST', body: JSON.stringify({ title, description }) }),
   adminAwardStoryteller: (tgId, tier, reason = '') => MOCK ? Promise.resolve(M.adminAwardStoryteller(tgId, tier, reason))
     : req(`/api/admin/players/${tgId}/medals/realm-storyteller`, { method: 'POST', body: JSON.stringify({ tier, reason }) }),
-  adminRecordCombatResult: (winnerTgId, defenderTgId) => MOCK ? Promise.resolve(M.adminRecordCombatResult(winnerTgId, defenderTgId))
-    : req('/api/admin/medals/combat-result', { method: 'POST', body: JSON.stringify({ winner_tg_id: winnerTgId, defender_tg_id: defenderTgId }) }),
+  adminAwardSpecialMedal: (tgId, medal) => MOCK ? Promise.resolve(M.adminAwardSpecialMedal(tgId, medal))
+    : req(`/api/admin/players/${tgId}/medals/special`, { method: 'POST', body: JSON.stringify(medal) }),
   adminSendBotMessage: (text, sendToAll, toTgIds = []) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
     : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
@@ -1652,8 +1652,8 @@ export const api = {
     : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
-  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = []) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords))
-    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords }) }),
+  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
+    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords, winner_tg_id: winnerTgId }) }),
   warRoleplayEligible: () => MOCK ? Promise.resolve(M.warRoleplayEligible()) : req('/api/war/roleplay-eligible'),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
