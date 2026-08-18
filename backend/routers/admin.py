@@ -1136,7 +1136,6 @@ async def award_realm_storyteller(tg_id: int, body: MedalAwardBody, user: dict =
 
 class SpecialMedalBody(BaseModel):
     name: str
-    title: str
     icon: str = "🏅"
     tier: str = "gold"
     reason: str = ""
@@ -1146,10 +1145,9 @@ class SpecialMedalBody(BaseModel):
 async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = Depends(admin_user)):
     """مدال ویژه و کاملاً سفارشی ادمین؛ چند مدال ویژه می‌تواند به یک بازیکن داده شود."""
     name = body.name.strip()[:60]
-    title = body.title.strip()[:80]
     icon = body.icon.strip()[:8] or "🏅"
-    if not name or not title:
-        raise HTTPException(400, "نام و عنوان مدال الزامی است")
+    if not name:
+        raise HTTPException(400, "نام مدال الزامی است")
     if body.tier not in TIER_ORDER:
         raise HTTPException(400, "سطح مدال نامعتبر است")
     player = await players.find_one({"tg_id": tg_id})
@@ -1158,7 +1156,7 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     medals = dict(player.get("medals") or {})
     key = f"special_{ObjectId()}"
     medals[key] = {
-        "tier": body.tier, "name": name, "title": title, "icon": icon,
+        "tier": body.tier, "name": name, "icon": icon,
         "reason": body.reason.strip()[:300], "manual": True,
         "awarded_at": now(), "awarded_by": user["id"],
     }
