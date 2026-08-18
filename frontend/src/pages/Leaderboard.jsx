@@ -55,8 +55,8 @@ export default function Leaderboard() {
 
   return (
     <>
-      <div className="page-title up">بازی تاج‌وتخت</div>
-      <div className="page-sub up">یا اقلیمت رو ببر بالا، یا خودت بدرخش — هرکی به روش خودش</div>
+      <div className="page-title up">والریا : سیزن اول</div>
+      <div className="page-sub up">هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</div>
 
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
