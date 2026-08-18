@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns
 from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
+from medals import medal_rows, normalize_stats, sync_medals
 from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
@@ -55,6 +56,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "last_feast": None,
         "created_at": now(),
         "last_tick": now(),
+        "stats": normalize_stats({}), "medals": {},
     }
     await players.insert_one(doc)
     return {"ok": True}
@@ -173,5 +175,6 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
     if not (0 <= body.rate <= cap):
         raise HTTPException(400, f"نرخ مالیات باید بین ۰ تا {cap} درصد باشد")
     await players.update_one({"tg_id": user["id"]},
-        {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"]}})
+        {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"],
+                  "stats": normalize_stats(p), "medals": sync_medals(p)}})
     return {"ok": True, "tax_rate": body.rate}
