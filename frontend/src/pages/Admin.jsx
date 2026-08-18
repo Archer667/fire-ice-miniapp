@@ -13,10 +13,10 @@ const NEW_CASTLE = '__new__';
 
 const SPECIAL_MEDAL_PRESETS = [
   { key: 'season_champion', name: 'قهرمان فصل', icon: '🏆' },
-  { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🛡️' },
+  { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🪽' },
   { key: 'immortal', name: 'نامیرا', icon: '♾️' },
   { key: 'golden_quill', name: 'صاحب قلم زرین', icon: '✒️' },
-  { key: 'crown_enemy', name: 'دشمن تاج', icon: '⚔️' },
+  { key: 'crown_enemy', name: 'دشمن تاج', icon: '🗡️' },
 ];
 
 const MAP_KINDS = [
