@@ -39,6 +39,9 @@ DEFAULT_SETTINGS = {
     "chance_high_start": 40,
     "chance_high_step": 5,
     "starvation_popularity": -3,
+    "feast_food_cost": 80,
+    "feast_wine_cost": 40,
+    "feast_popularity_gain": 8,
     "war_popularity": {
         "attack_win": 3, "defense_win": 5, "attack_loss": -2,
         "defense_loss": -5, "castle_captured": 3, "castle_lost": -5,
