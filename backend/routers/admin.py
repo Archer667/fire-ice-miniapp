@@ -17,6 +17,7 @@ from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_C
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
+from routers.rebellions import get_settings as get_rebellion_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -280,6 +281,17 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 body.winner_tg_id,
                 "attack_wins" if combat_outcome == "attacker" else "defense_wins",
             )
+            rebellion_settings = await get_rebellion_settings()
+            war_pop = rebellion_settings["war_popularity"]
+            attacker = await players.find_one({"tg_id": campaign["tg_id"]})
+            if attacker:
+                attacker_delta = war_pop["attack_win"] if combat_outcome == "attacker" else war_pop["attack_loss"]
+                attacker_pop = max(0, min(100, int(attacker.get("popularity", 50)) + int(attacker_delta)))
+                await players.update_one({"tg_id": attacker["tg_id"]}, {"$set": {"popularity": attacker_pop}})
+            if defender:
+                defender_delta = war_pop["defense_win"] if combat_outcome == "defender" else war_pop["defense_loss"]
+                defender_pop = max(0, min(100, int(defender.get("popularity", 50)) + int(defender_delta)))
+                await players.update_one({"tg_id": defender["tg_id"]}, {"$set": {"popularity": defender_pop}})
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
