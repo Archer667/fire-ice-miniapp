@@ -7,7 +7,7 @@ from auth import get_user, get_admin, get_full_admin, get_owner
 from db import (
     campaigns, players, admin_roles, map_castles, market_listings, black_market_listings,
     spy_missions, roleplays, items, item_grants, alliances, game_settings,
-    caravans, messages, rumors, hierarchy, polls,
+    caravans, messages, rumors, hierarchy, polls, rebellions, rebellion_checks,
 )
 import game_data
 import telegram_bot
@@ -1041,6 +1041,8 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
     await spy_missions.delete_many({})
     await messages.delete_many({})
     await roleplays.delete_many({})
+    await rebellions.delete_many({})
+    await rebellion_checks.delete_many({})
     await rumors.delete_many({})
     await alliances.delete_many({})
     await polls.delete_many({})
