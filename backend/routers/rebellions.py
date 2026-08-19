@@ -17,6 +17,7 @@ ACTIVE_STATUSES = ["awaiting_roleplay", "roleplay_submitted", "expired"]
 DEFAULT_SETTINGS = {
     "enabled": True,
     "safe_popularity": 50,
+    "high_risk_popularity": 40,
     "guaranteed_popularity": 30,
     "roleplay_hours": 24,
     "cooldown_hours": 48,
@@ -65,13 +66,14 @@ async def get_settings() -> dict:
 def rebellion_chance(popularity: int, settings: dict) -> int:
     safe = int(settings["safe_popularity"])
     guaranteed = int(settings["guaranteed_popularity"])
+    high_risk = int(settings["high_risk_popularity"])
     if popularity >= safe:
         return 0
     if popularity < guaranteed:
         return 100
-    if popularity >= 40:
+    if popularity >= high_risk:
         return min(100, int(settings["chance_low_start"]) + (safe - 1 - popularity) * int(settings["chance_low_step"]))
-    return min(100, int(settings["chance_high_start"]) + (39 - popularity) * int(settings["chance_high_step"]))
+    return min(100, int(settings["chance_high_start"]) + (high_risk - 1 - popularity) * int(settings["chance_high_step"]))
 
 def _tax_delta(rate: int, settings: dict) -> int:
     for band in settings["tax_bands"]:
@@ -165,6 +167,12 @@ async def evaluate_rebellions():
     async for player in players.find({"region": {"$ne": None}, "castle": {"$ne": None}}):
         await evaluate_player(player, settings, day_key)
 
+async def admin_user(user: dict = Depends(get_user)):
+    return await get_admin(user)
+
+async def full_admin_user(user: dict = Depends(get_user)):
+    return await get_full_admin(user)
+
 class RationBody(BaseModel):
     level: str
 
@@ -229,21 +237,21 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
     return {"ok": True}
 
 @router.get("/admin/settings")
-async def admin_settings(user: dict = Depends(get_full_admin)):
+async def admin_settings(user: dict = Depends(full_admin_user)):
     return await get_settings()
 
 @router.post("/admin/settings")
 async def update_settings(body: SettingsBody, user: dict = Depends(get_full_admin)):
     merged = _merge_settings(body.settings)
-    if not (0 <= int(merged["guaranteed_popularity"]) < int(merged["safe_popularity"]) <= 100):
-        raise HTTPException(400, "حد قطعی باید کمتر از حد امن و هر دو بین صفر تا صد باشند")
+    if not (0 <= int(merged["guaranteed_popularity"]) < int(merged["high_risk_popularity"]) < int(merged["safe_popularity"]) <= 100):
+        raise HTTPException(400, "ترتیب حدها باید قطعی < خطر زیاد < امن و بین صفر تا صد باشد")
     if int(merged["roleplay_hours"]) < 1:
         raise HTTPException(400, "مهلت رول باید حداقل یک ساعت باشد")
     await game_settings.update_one({"_id": SETTINGS_ID}, {"$set": {"settings": merged, "updated_at": now()}}, upsert=True)
     return merged
 
 @router.get("/admin/list")
-async def admin_list(user: dict = Depends(get_admin)):
+async def admin_list(user: dict = Depends(admin_user)):
     out = []
     async for r in rebellions.find({}).sort("created_at", -1).limit(100):
         out.append({
