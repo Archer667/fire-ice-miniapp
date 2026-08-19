@@ -26,45 +26,51 @@ const MAP_KINDS = [
   { key: 'port',   label: 'بندر ⚓' },
 ];
 
-// دسته‌های تب‌ها فقط برای نمایشِ گروه‌بندی‌شده‌ترِ نوار تب‌هاست
+// هر تب توضیح کوتاه و سطح دسترسی خودش را دارد تا ادمین تازه‌کار هم مسیر را گم نکند
 const TAB_GROUPS = [
   {
-    label: 'بازیکن‌ها',
+    label: 'شروع و بازیکن‌ها',
+    description: 'ورود بازیکن، منابع و مدیریت دسترسی‌ها',
     tabs: [
-      { key: 'onboarding', label: 'خاندان‌ها' },
-      { key: 'resources',  label: 'منابع و لشکرها', fullOnly: true },
-      { key: 'admins',     label: 'ادمین‌ها', fullOnly: true },
+      { key: 'overview',   label: 'راهنمای پنل', description: 'کارهای روزانه و مسیر پیشنهادی' },
+      { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن و مدیریت قلعه‌ها' },
+      { key: 'resources',  label: 'منابع و لشکرها', description: 'ویرایش منابع و توقف لشکر', fullOnly: true },
+      { key: 'admins',     label: 'ادمین‌ها', description: 'افزودن یا حذف ادمین محدود', fullOnly: true },
     ],
   },
   {
-    label: 'رویدادها',
+    label: 'داوری و ارتباط',
+    description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
     tabs: [
-      { key: 'war',       label: 'جنگ و رول‌ها' },
-      { key: 'rebellions', label: 'شورش‌ها' },
-      { key: 'alliances', label: 'اتحادها' },
-      { key: 'titles',    label: 'مقام‌ها' },
-      { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
-      { key: 'events', label: 'ایونت' },
+      { key: 'war',         label: 'جنگ و رول‌ها', description: 'داوری جاسوسی، جنگ و سناریوها' },
+      { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
+      { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
+      { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
+      { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
     ],
   },
   {
-    label: 'ابزارهای ادمین',
+    label: 'سیاست و جهان',
+    description: 'اتحادها، مقام‌ها، رأی‌گیری و نقشه',
     tabs: [
-      { key: 'medals',       label: 'مدال‌ها' },
-      { key: 'bot_messages', label: 'پیام بات' },
+      { key: 'alliances', label: 'اتحادها', description: 'مرور پیمان‌های بازیکنان' },
+      { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا' },
+      { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
+      { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین' },
     ],
   },
   {
-    label: 'دنیای بازی',
+    label: 'اقتصاد و تنظیمات',
+    description: 'ابزارهای حساس و سراسری بازی',
     tabs: [
-      { key: 'map',     label: 'نقشه' },
-      { key: 'market',  label: 'بازار', fullOnly: true },
-      { key: 'items',   label: 'آیتم‌ها', fullOnly: true },
-      { key: 'balance', label: 'تعادل بازی', fullOnly: true },
+      { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
+      { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
+      { key: 'balance', label: 'تعادل بازی', description: 'تغییر تولید و سقف ساختمان‌ها', fullOnly: true },
     ],
   },
 ];
 const TABS = TAB_GROUPS.flatMap(g => g.tabs);
+const TAB_BY_KEY = Object.fromEntries(TABS.map(t => [t.key, t]));
 
 const PLAYER_RES = [
   { key: 'gold',  label: 'طلا',  Icon: Coin },
@@ -81,8 +87,8 @@ const RES_LABEL = Object.fromEntries(PLAYER_RES.map(r => [r.key, r.label]));
 export default function Admin() {
   const { me, toast } = useGame();
   const isFull = me.admin_role === 'full';
-  const availGroups = TAB_GROUPS.map(g => ({ ...g, tabs: g.tabs.filter(t => !t.fullOnly || isFull) })).filter(g => g.tabs.length);
-  const [tab, setTab] = useState('onboarding');
+  const availGroups = TAB_GROUPS;
+  const [tab, setTab] = useState('overview');
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -819,6 +825,24 @@ export default function Admin() {
     setBalanceBusyId(null);
   };
 
+  const openTab = (key) => {
+    const target = TAB_BY_KEY[key];
+    if (target?.fullOnly && !isFull) {
+      toast('این بخش فقط برای ادمین کامل باز است');
+      return;
+    }
+    haptic();
+    setTab(key);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const tabBadge = (key) => {
+    if (key === 'onboarding') return pendingPlayers?.length || 0;
+    if (key === 'war') return (spyPending?.length || 0) + (roleplayPending?.length || 0);
+    if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
+    return 0;
+  };
+
   if (!me.admin_role) {
     return (
       <>
@@ -831,20 +855,91 @@ export default function Admin() {
   return (
     <>
       <div className="page-title up">پنل ادمین</div>
-      <div className="page-sub up">{isFull ? 'ادمین کامل' : 'ادمین محدود — فقط لشکرکشی‌ها، رول‌ها، جاسوسی و مقام‌ها'}</div>
-
-      {availGroups.map((g, gi) => (
-        <div key={g.label} className={gi > 0 ? 'tabs-group' : ''}>
-          <div className="tabs-group-label up u1">{g.label}</div>
-          <div className="tabs up u1" role="tablist" aria-label={g.label}>
-            {g.tabs.map(t => (
-              <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
-                   className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
-                   onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
-            ))}
-          </div>
+      <div className="admin-role-card up">
+        <div>
+          <strong>{isFull ? 'ادمین کامل' : 'ادمین محدود'}</strong>
+          <small>{isFull
+            ? 'به تنظیمات سراسری و ابزارهای حساس دسترسی داری.'
+            : 'به داوری‌ها، بازیکن‌ها، نقشه، مدال و پیام‌رسانی دسترسی داری؛ تنظیمات حساس قفل‌اند.'}</small>
         </div>
-      ))}
+        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
+      </div>
+
+      <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
+        {availGroups.map((g, gi) => (
+          <section key={g.label} className={gi > 0 ? 'tabs-group' : ''}>
+            <div className="tabs-group-heading up u1">
+              <div className="tabs-group-label">{g.label}</div>
+              <div className="tabs-group-description">{g.description}</div>
+            </div>
+            <div className="tabs admin-tabs up u1" role="tablist" aria-label={g.label}>
+              {g.tabs.map(t => {
+                const locked = t.fullOnly && !isFull;
+                const count = tabBadge(t.key);
+                return (
+                  <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
+                       aria-disabled={locked}
+                       className={`rbtn tab admin-tab ${tab === t.key ? 'on' : ''} ${locked ? 'locked' : ''}`}
+                       onClick={() => openTab(t.key)}>
+                    <span>{t.label}{locked ? ' 🔒' : ''}</span>
+                    <small>{locked ? 'فقط ادمین کامل' : t.description}</small>
+                    {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </nav>
+
+      {tab !== 'overview' && TAB_BY_KEY[tab] && (
+        <div className="admin-current-guide up u2">
+          <strong>{TAB_BY_KEY[tab].label}</strong>
+          <span>{TAB_BY_KEY[tab].description}</span>
+          <button type="button" className="rbtn" onClick={() => openTab('overview')}>راهنمای پنل</button>
+        </div>
+      )}
+
+      {tab === 'overview' && (
+        <>
+          <div className="sect up u2">از کجا شروع کنم؟</div>
+          <div className="admin-help-card card up u2">
+            <p>اگه تازه وارد این پنلی، کارها رو به همین ترتیب جلو ببر. عددِ روی هر تب یعنی چند مورد منتظر رسیدگیه.</p>
+            <div className="admin-workflow">
+              <button type="button" className="rbtn" onClick={() => openTab('onboarding')}>
+                <b>۱. بازیکن‌های تازه</b><span>خاندان و قلعه‌شون رو مشخص کن</span>
+              </button>
+              <button type="button" className="rbtn" onClick={() => openTab('war')}>
+                <b>۲. داوری‌ها</b><span>جاسوسی و رول‌های منتظر رو جواب بده</span>
+              </button>
+              <button type="button" className="rbtn" onClick={() => openTab('rebellions')}>
+                <b>۳. شورش‌ها</b><span>مهلت‌ها و رول‌های شورش رو بررسی کن</span>
+              </button>
+              <button type="button" className="rbtn" onClick={() => openTab('bot_messages')}>
+                <b>۴. اطلاع‌رسانی</b><span>در صورت نیاز پیام مستقیم بفرست</span>
+              </button>
+            </div>
+          </div>
+          <div className="admin-help-grid up u3">
+            <div className="card">
+              <strong>کارهای روزمره</strong>
+              <p>خاندان‌ها، جنگ و رول‌ها، شورش‌ها و پیام بات. بازیکن در این بخش‌ها منتظر ادمینه.</p>
+            </div>
+            <div className="card">
+              <strong>کارهای حساس</strong>
+              <p>منابع، بازار، آیتم‌ها، تعادل و مدیریت ادمین فقط برای ادمین کامل بازه و روی کل بازی اثر می‌ذاره.</p>
+            </div>
+            <div className="card">
+              <strong>پیام بات یا رویداد؟</strong>
+              <p>«پیام بات» فقط به چت تلگرام می‌ره؛ «رویداد همگانی» داخل صندوق کلاغ‌های بازی هم ثبت می‌شه.</p>
+            </div>
+            <div className="card">
+              <strong>قبل از تغییر بزرگ</strong>
+              <p>اسم بازیکن، قلعه و اثر عملیات رو دوباره بخون. انتقال قلعه و ری‌استارت می‌تونه بازگشت‌ناپذیر باشه.</p>
+            </div>
+          </div>
+        </>
+      )}
 
       {tab === 'onboarding' && (
         <>
@@ -1976,7 +2071,7 @@ export default function Admin() {
         <>
           <div className="sect up u2">مدیریت ادمین‌ها</div>
           <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (فقط لشکرکشی‌ها، رول‌ها، جاسوسی و مقام‌ها)</label>
+            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (داوری، بازیکن‌ها، نقشه، مدال و پیام‌رسانی)</label>
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>افزودن ادمین</button>
           </div>
@@ -2002,7 +2097,7 @@ export default function Admin() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>ری‌استارت کامل بازی</div>
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
                   همهٔ بازیکن‌های غیرادمین حذف می‌شوند و باید از نو ثبت‌نام کنند؛ تاریخچهٔ لشکرکشی‌ها، جاسوسی‌ها،
-                  پیام‌ها، رول‌ها، شایعات، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
+                  پیام‌ها، رول‌ها، شورش‌ها و تاس‌های شورش، شایعات، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
                   <br />
                   دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه، آیتم‌ها و بازارهایی که خودت ساخته‌ای، و حساب/پیشرفت خودِ ادمین‌ها.
                   <br />این کار بازگشت‌ناپذیر است.
