@@ -13,6 +13,7 @@ import telegram_bot
 router = APIRouter(prefix="/api/rebellions", tags=["rebellions"])
 SETTINGS_ID = "rebellion_settings"
 ACTIVE_STATUSES = ["awaiting_roleplay", "roleplay_submitted", "expired"]
+_last_evaluation_hour = None
 
 DEFAULT_SETTINGS = {
     "enabled": True,
@@ -156,6 +157,11 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
         await _trigger_rebellion(player, popularity, chance, roll, settings)
 
 async def evaluate_rebellions():
+    global _last_evaluation_hour
+    hour_key = now().strftime("%Y-%m-%d-%H")
+    if _last_evaluation_hour == hour_key:
+        return
+    _last_evaluation_hour = hour_key
     settings = await get_settings()
     if not settings.get("enabled", True):
         return
@@ -204,6 +210,7 @@ async def status(user: dict = Depends(get_user)):
         "chance": rebellion_chance(int(p.get("popularity", POPULARITY_START)), settings),
         "safe_popularity": settings["safe_popularity"],
         "guaranteed_popularity": settings["guaranteed_popularity"],
+        "high_risk_popularity": settings["high_risk_popularity"],
         "active": None if not active else {
             "id": str(active["_id"]), "status": active["status"], "deadline": active["deadline"].isoformat(),
             "roleplay_text": active.get("roleplay_text"), "result": active.get("result"),
