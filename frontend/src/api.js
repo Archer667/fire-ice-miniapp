@@ -1633,6 +1633,29 @@ export const api = {
   vote:  (id, option) => MOCK ? Promise.resolve(M.vote(id, option)) : req(`/api/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option }) }),
   searchPlayers: (q) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q)),
 
+  /* ---------- شورش و محبوبیت ---------- */
+  rebellionStatus: () => MOCK ? Promise.resolve({
+    popularity: mockMe.popularity ?? 50, ration: mockMe.food_ration || 'normal', chance: 0,
+    safe_popularity: 50, guaranteed_popularity: 30,
+    ration_levels: {
+      very_low: { label: 'جیره ناچیز', multiplier: .5, popularity: -3 },
+      low: { label: 'جیره کم', multiplier: .75, popularity: -1 },
+      normal: { label: 'جیره معمولی', multiplier: 1, popularity: 0 },
+      good: { label: 'جیره خوب', multiplier: 1.25, popularity: 1 },
+      abundant: { label: 'جیره فراوان', multiplier: 1.5, popularity: 2 },
+    }, active: null,
+  }) : req('/api/rebellions/status'),
+  setFoodRation: (level) => MOCK ? Promise.resolve((mockMe.food_ration = level, { ok: true, ration: level }))
+    : req('/api/rebellions/ration', { method: 'POST', body: JSON.stringify({ level }) }),
+  submitRebellionRoleplay: (id, text) => MOCK ? Promise.resolve({ ok: true })
+    : req(`/api/rebellions/${id}/roleplay`, { method: 'POST', body: JSON.stringify({ text }) }),
+  adminRebellionSettings: () => MOCK ? Promise.resolve(null) : req('/api/rebellions/admin/settings'),
+  adminSaveRebellionSettings: (settings) => MOCK ? Promise.resolve(settings)
+    : req('/api/rebellions/admin/settings', { method: 'POST', body: JSON.stringify({ settings }) }),
+  adminRebellions: () => MOCK ? Promise.resolve([]) : req('/api/rebellions/admin/list'),
+  adminResolveRebellion: (id, body) => MOCK ? Promise.resolve({ ok: true })
+    : req(`/api/rebellions/admin/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) }),
+
   /* ---------- پنل ادمین ---------- */
   adminCampaigns: () => MOCK ? Promise.resolve(M.adminCampaigns()) : req('/api/admin/campaigns'),
   adminPlayerCampaigns: (tgId) => MOCK ? Promise.resolve(M.adminPlayerCampaigns(tgId)) : req(`/api/admin/players/${tgId}/campaigns`),
