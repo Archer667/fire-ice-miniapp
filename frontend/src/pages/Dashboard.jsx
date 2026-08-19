@@ -39,7 +39,14 @@ export default function Dashboard({ goTo }) {
 
   const [daily, setDaily] = useState(null);
   const [dailyBusy, setDailyBusy] = useState(false);
-  useEffect(() => { api.dailyStatus().then(setDaily).catch(() => {}); }, []);
+  const [rebellion, setRebellion] = useState(null);
+  const [rationBusy, setRationBusy] = useState(false);
+  const [rebellionText, setRebellionText] = useState('');
+  const [rebellionBusy, setRebellionBusy] = useState(false);
+  useEffect(() => {
+    api.dailyStatus().then(setDaily).catch(() => {});
+    api.rebellionStatus().then(setRebellion).catch(() => {});
+  }, []);
 
   const claimDaily = async () => {
     setDailyBusy(true);
@@ -51,6 +58,29 @@ export default function Dashboard({ goTo }) {
       toast(`روز ${res.day_in_cycle.toLocaleString('fa-IR')} از ۷ — جایزه گرفته شد`);
     } catch (e) { toast(e.message); }
     setDailyBusy(false);
+  };
+
+  const changeRation = async (level) => {
+    setRationBusy(true);
+    try {
+      await api.setFoodRation(level);
+      haptic();
+      setRebellion(prev => ({ ...prev, ration: level }));
+      toast('سهم غله مردم ثبت شد؛ اثرش در محاسبه روزانه اعمال می‌شود');
+    } catch (e) { toast(e.message); }
+    setRationBusy(false);
+  };
+
+  const submitRebellion = async () => {
+    if (rebellionText.trim().length < 10) { toast('رول شورش خیلی کوتاه است'); return; }
+    setRebellionBusy(true);
+    try {
+      await api.submitRebellionRoleplay(rebellion.active.id, rebellionText.trim());
+      haptic('medium');
+      setRebellion(prev => ({ ...prev, active: { ...prev.active, status: 'roleplay_submitted', roleplay_text: rebellionText.trim() } }));
+      toast('رول مقابله با شورش برای ادمین‌ها فرستاده شد');
+    } catch (e) { toast(e.message); }
+    setRebellionBusy(false);
   };
 
   const changeTax = async (delta) => {
@@ -206,6 +236,42 @@ export default function Dashboard({ goTo }) {
             <button type="button" aria-label="افزایش نرخ مالیات" disabled={taxBusy || me.tax_rate >= me.max_tax_rate} onClick={() => changeTax(1)}>+</button>
           </div>
         </div>
+        {rebellion && (
+          <>
+            <div style={{ marginTop: 14 }}>
+              <label className="f">سهم غله مردم</label>
+              <select value={rebellion.ration} disabled={rationBusy} onChange={e => changeRation(e.target.value)}>
+                {Object.entries(rebellion.ration_levels || {}).map(([key, level]) => (
+                  <option key={key} value={key}>
+                    {level.label} — {Math.round(level.multiplier * 100).toLocaleString('fa-IR')}٪ مصرف · {level.popularity >= 0 ? '+' : ''}{level.popularity.toLocaleString('fa-IR')} محبوبیت
+                  </option>
+                ))}
+              </select>
+              <div className="page-sub" style={{ marginTop: 6 }}>
+                احتمال شورش در بررسی روزانه: {rebellion.chance.toLocaleString('fa-IR')}٪ · حد امن {rebellion.safe_popularity.toLocaleString('fa-IR')} · شورش قطعی زیر {rebellion.guaranteed_popularity.toLocaleString('fa-IR')}
+              </div>
+            </div>
+            {rebellion.active && (
+              <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(180,35,35,.14)', border: '1px solid rgba(255,90,90,.35)' }}>
+                <div style={{ fontWeight: 900, color: 'var(--danger)' }}>🔥 شورش در قلمرو</div>
+                <div className="page-sub" style={{ marginTop: 6 }}>
+                  مهلت ارسال رول: {new Date(rebellion.active.deadline).toLocaleString('fa-IR')}
+                </div>
+                {rebellion.active.status === 'awaiting_roleplay' ? (
+                  <>
+                    <textarea rows={5} value={rebellionText} onChange={e => setRebellionText(e.target.value)}
+                              placeholder="سناریوی برخورد، مذاکره یا سرکوب شورش را بنویس..." />
+                    <button className="btn" style={{ marginTop: 10 }} disabled={rebellionBusy} onClick={submitRebellion}>
+                      {rebellionBusy ? 'در حال ارسال...' : 'ارسال رول شورش'}
+                    </button>
+                  </>
+                ) : (
+                  <div style={{ marginTop: 8 }}>رول تو ثبت شده و منتظر نتیجه ادمین است.</div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="sect up u3">فرمان‌ها</div>
