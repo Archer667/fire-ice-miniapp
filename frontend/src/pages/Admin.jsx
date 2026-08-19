@@ -40,6 +40,7 @@ const TAB_GROUPS = [
     label: 'رویدادها',
     tabs: [
       { key: 'war',       label: 'جنگ و رول‌ها' },
+      { key: 'rebellions', label: 'شورش‌ها' },
       { key: 'alliances', label: 'اتحادها' },
       { key: 'titles',    label: 'مقام‌ها' },
       { key: 'polls',     label: 'رای‌گیری', fullOnly: true },
@@ -196,6 +197,11 @@ export default function Admin() {
   const [balanceList, setBalanceList] = useState(null);
   const [balanceDrafts, setBalanceDrafts] = useState({}); // buildingId -> { resourceKey: stringValue }
   const [balanceBusyId, setBalanceBusyId] = useState(null);
+  const [rebellionSettings, setRebellionSettings] = useState(null);
+  const [rebellionsList, setRebellionsList] = useState(null);
+  const [rebellionSettingsBusy, setRebellionSettingsBusy] = useState(false);
+  const [rebellionDrafts, setRebellionDrafts] = useState({});
+  const [rebellionBusyId, setRebellionBusyId] = useState(null);
 
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
@@ -228,6 +234,40 @@ export default function Admin() {
     });
   }).catch(e => toast(e.message));
 
+  const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
+  const loadRebellionSettings = () => {
+    if (!isFull) return;
+    api.adminRebellionSettings().then(setRebellionSettings).catch(e => toast(e.message));
+  };
+  const setRebellionNumber = (key, value) => setRebellionSettings(prev => ({ ...prev, [key]: Number(value) }));
+  const saveRebellionSettings = async () => {
+    setRebellionSettingsBusy(true);
+    try {
+      const saved = await api.adminSaveRebellionSettings(rebellionSettings);
+      setRebellionSettings(saved);
+      toast('تنظیمات شورش ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setRebellionSettingsBusy(false);
+  };
+  const resolveRebellion = async (row) => {
+    const draft = rebellionDrafts[row.id] || {};
+    if (!(draft.result || '').trim()) { toast('متن نتیجه شورش را بنویس'); return; }
+    setRebellionBusyId(row.id);
+    try {
+      await api.adminResolveRebellion(row.id, {
+        result: draft.result.trim(),
+        popularity_delta: Number(draft.popularity_delta || 0),
+        gold_delta: Number(draft.gold_delta || 0),
+        food_delta: Number(draft.food_delta || 0),
+        men_delta: Number(draft.men_delta || 0),
+        outcome: draft.outcome || 'resolved',
+      });
+      toast('نتیجه شورش ثبت و برای بازیکن ارسال شد');
+      loadRebellions();
+    } catch (e) { toast(e.message); }
+    setRebellionBusyId(null);
+  };
+
   useEffect(() => {
     loadPendingPlayers();
     loadRoster();
@@ -237,6 +277,8 @@ export default function Admin() {
     loadSpyResolved();
     loadRoleplayPending();
     loadAlliances();
+    loadRebellions();
+    loadRebellionSettings();
     loadMapData();
     if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); }
     if (me.is_owner) loadResetPreview();
@@ -1714,6 +1756,100 @@ export default function Admin() {
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {tab === 'rebellions' && (
+        <>
+          <div className="sect up u2">شورش‌های بازیکنان</div>
+          {!rebellionsList && <div className="loading">در حال بارگذاری...</div>}
+          {rebellionsList && rebellionsList.length === 0 && <div className="empty">هنوز شورشی ثبت نشده است.</div>}
+          {rebellionsList && rebellionsList.map(row => {
+            const d = rebellionDrafts[row.id] || {};
+            const active = ['awaiting_roleplay', 'roleplay_submitted', 'expired'].includes(row.status);
+            return (
+              <div className="card up u2" key={row.id} style={{ marginBottom: 10 }}>
+                <div style={{ fontWeight: 900 }}>🔥 {row.player_name} — {row.castle || 'بدون قلعه'}</div>
+                <div className="page-sub" style={{ marginTop: 5 }}>
+                  محبوبیت {row.popularity.toLocaleString('fa-IR')} · شانس {row.chance.toLocaleString('fa-IR')}٪ · تاس {row.roll.toLocaleString('fa-IR')} · وضعیت {row.status}
+                </div>
+                <div className="page-sub">مهلت: {new Date(row.deadline).toLocaleString('fa-IR')}</div>
+                {row.roleplay_text && (
+                  <div style={{ marginTop: 10, padding: 10, background: 'rgba(255,255,255,.05)', borderRadius: 10 }}>
+                    <b>رول بازیکن:</b><div style={{ whiteSpace: 'pre-wrap', marginTop: 5 }}>{row.roleplay_text}</div>
+                  </div>
+                )}
+                {row.result && <div style={{ marginTop: 8 }}>نتیجه: {row.result}</div>}
+                {active && (
+                  <>
+                    <label className="f">نتیجه شورش</label>
+                    <textarea rows={4} value={d.result || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, result: e.target.value } }))}
+                              placeholder="نتیجه داوری و اتفاقی که در قلمرو افتاد..." />
+                    <div className="grid2">
+                      <div><label className="f">تغییر محبوبیت</label><input type="number" value={d.popularity_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, popularity_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر طلا</label><input type="number" value={d.gold_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, gold_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر غله</label><input type="number" value={d.food_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, food_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر نفرات</label><input type="number" value={d.men_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, men_delta: e.target.value } }))} /></div>
+                    </div>
+                    <label className="f">وضعیت نهایی</label>
+                    <select value={d.outcome || 'resolved'} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, outcome: e.target.value } }))}>
+                      <option value="resolved">شورش پایان یافت</option>
+                      <option value="suppressed">شورش سرکوب شد</option>
+                      <option value="negotiated">با مذاکره پایان یافت</option>
+                      <option value="rebels_won">شورشیان پیروز شدند</option>
+                    </select>
+                    <button className="btn" style={{ marginTop: 12 }} disabled={rebellionBusyId === row.id} onClick={() => resolveRebellion(row)}>
+                      {rebellionBusyId === row.id ? 'در حال ثبت...' : 'ثبت نتیجه و ارسال به بازیکن'}
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+          {isFull && rebellionSettings && (
+            <>
+              <div className="sect up u2">تنظیمات سراسری شورش</div>
+              <div className="card up u2">
+                <div className="grid2">
+                  <div><label className="f">حد امن محبوبیت</label><input type="number" value={rebellionSettings.safe_popularity} onChange={e => setRebellionNumber('safe_popularity', e.target.value)} /></div>
+                  <div><label className="f">شورش قطعی زیر</label><input type="number" value={rebellionSettings.guaranteed_popularity} onChange={e => setRebellionNumber('guaranteed_popularity', e.target.value)} /></div>
+                  <div><label className="f">مهلت رول (ساعت)</label><input type="number" value={rebellionSettings.roleplay_hours} onChange={e => setRebellionNumber('roleplay_hours', e.target.value)} /></div>
+                  <div><label className="f">دوره آرامش (ساعت)</label><input type="number" value={rebellionSettings.cooldown_hours} onChange={e => setRebellionNumber('cooldown_hours', e.target.value)} /></div>
+                  <div><label className="f">مصرف استاندارد غله برای هر ۱۰۰ نفر</label><input type="number" value={rebellionSettings.base_food_per_100_men} onChange={e => setRebellionNumber('base_food_per_100_men', e.target.value)} /></div>
+                  <div><label className="f">جریمه نبود غله</label><input type="number" value={rebellionSettings.starvation_popularity} onChange={e => setRebellionNumber('starvation_popularity', e.target.value)} /></div>
+                  <div><label className="f">شانس شروع بازه ۴۰–۵۰</label><input type="number" value={rebellionSettings.chance_low_start} onChange={e => setRebellionNumber('chance_low_start', e.target.value)} /></div>
+                  <div><label className="f">افزایش شانس هر پله</label><input type="number" value={rebellionSettings.chance_low_step} onChange={e => setRebellionNumber('chance_low_step', e.target.value)} /></div>
+                  <div><label className="f">شانس شروع بازه ۳۰–۴۰</label><input type="number" value={rebellionSettings.chance_high_start} onChange={e => setRebellionNumber('chance_high_start', e.target.value)} /></div>
+                  <div><label className="f">افزایش شانس شدید</label><input type="number" value={rebellionSettings.chance_high_step} onChange={e => setRebellionNumber('chance_high_step', e.target.value)} /></div>
+                  <div><label className="f">هزینه غذای ضیافت</label><input type="number" value={rebellionSettings.feast_food_cost} onChange={e => setRebellionNumber('feast_food_cost', e.target.value)} /></div>
+                  <div><label className="f">هزینه شراب ضیافت</label><input type="number" value={rebellionSettings.feast_wine_cost} onChange={e => setRebellionNumber('feast_wine_cost', e.target.value)} /></div>
+                  <div><label className="f">محبوبیت ضیافت</label><input type="number" value={rebellionSettings.feast_popularity_gain} onChange={e => setRebellionNumber('feast_popularity_gain', e.target.value)} /></div>
+                </div>
+
+                <div className="sect" style={{ marginTop: 16 }}>سطح‌های سهم غله</div>
+                {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => (
+                  <div className="grid2" key={key} style={{ marginBottom: 8 }}>
+                    <div><label className="f">{level.label} — ضریب مصرف</label><input type="number" step="0.05" value={level.multiplier}
+                      onChange={e => setRebellionSettings(p => ({ ...p, ration_levels: { ...p.ration_levels, [key]: { ...level, multiplier: Number(e.target.value) } } }))} /></div>
+                    <div><label className="f">اثر محبوبیت</label><input type="number" value={level.popularity}
+                      onChange={e => setRebellionSettings(p => ({ ...p, ration_levels: { ...p.ration_levels, [key]: { ...level, popularity: Number(e.target.value) } } }))} /></div>
+                  </div>
+                ))}
+
+                <div className="sect" style={{ marginTop: 16 }}>اثر نتیجه جنگ</div>
+                <div className="grid2">
+                  {Object.entries(rebellionSettings.war_popularity || {}).map(([key, value]) => (
+                    <div key={key}><label className="f">{key}</label><input type="number" value={value}
+                      onChange={e => setRebellionSettings(p => ({ ...p, war_popularity: { ...p.war_popularity, [key]: Number(e.target.value) } }))} /></div>
+                  ))}
+                </div>
+                <button className="btn" style={{ marginTop: 16 }} disabled={rebellionSettingsBusy} onClick={saveRebellionSettings}>
+                  {rebellionSettingsBusy ? 'در حال ذخیره...' : 'ذخیره تنظیمات شورش'}
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
 
