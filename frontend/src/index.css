@@ -391,6 +391,78 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .tabs-group { margin-top: 6px; }
 .tabs-group-label { font-size: 11px; color: var(--az); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin: 8px 4px 2px; }
 
+/* پنل ادمین: ناوبری چندردیفه و راهنمای قابل‌فهم روی موبایل */
+.admin-role-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; margin: 8px 0 14px; border: 1px solid var(--iron);
+  border-radius: 5px; background: var(--glass);
+}
+.admin-role-card strong { display: block; color: var(--hi); font-size: 13px; }
+.admin-role-card small { display: block; color: var(--mid); font-size: 10.5px; line-height: 1.8; margin-top: 2px; }
+.admin-role-badge {
+  flex: none; padding: 5px 9px; border-radius: 999px; font-size: 10px; font-weight: 800;
+  border: 1px solid rgba(160,195,255,0.2);
+}
+.admin-role-badge.full { color: var(--gold); background: rgba(201,162,39,0.1); }
+.admin-role-badge.limited { color: var(--az2); background: rgba(106,151,205,0.1); }
+
+.admin-nav { margin-bottom: 14px; }
+.tabs-group-heading { margin: 10px 4px 4px; }
+.tabs-group-heading .tabs-group-label { margin: 0; }
+.tabs-group-description { color: var(--low); font-size: 10px; line-height: 1.7; margin-top: 2px; }
+.admin-tabs {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch;
+  gap: 6px; padding: 6px;
+}
+.admin-tab {
+  min-width: 0; min-height: 58px; padding: 8px 7px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px; line-height: 1.35;
+}
+.admin-tab > span { font-size: 11.5px; font-weight: 800; }
+.admin-tab > small {
+  display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  color: var(--low); font-size: 8.8px; font-weight: 500; white-space: nowrap;
+}
+.admin-tab.on > small { color: rgba(42,28,0,0.7); }
+.admin-tab.locked { opacity: 0.55; cursor: not-allowed; filter: saturate(0.5); }
+.admin-tab-count {
+  position: absolute; top: 4px; inset-inline-end: 5px; min-width: 17px; height: 17px;
+  display: grid; place-items: center; padding: 0 4px; border-radius: 999px;
+  background: var(--danger); color: white; font-size: 9px;
+}
+.admin-current-guide {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px;
+  padding: 10px 12px; margin: 12px 0 18px; border-inline-start: 3px solid var(--az);
+  border-radius: 4px; background: rgba(106,151,205,0.07);
+}
+.admin-current-guide strong { color: var(--hi); font-size: 12px; }
+.admin-current-guide span { color: var(--mid); font-size: 10.5px; }
+.admin-current-guide button { width: auto; color: var(--az2); font-size: 10px; text-decoration: underline; }
+
+.admin-help-card p, .admin-help-grid p {
+  color: var(--mid); font-size: 11px; line-height: 1.9; margin: 0;
+}
+.admin-workflow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.admin-workflow button {
+  padding: 11px; text-align: start; border: 1px solid var(--iron); border-radius: 4px;
+  background: rgba(160,195,255,0.035);
+}
+.admin-workflow b { display: block; color: var(--az2); font-size: 11.5px; }
+.admin-workflow span { display: block; color: var(--low); font-size: 9.5px; margin-top: 4px; line-height: 1.65; }
+.admin-help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin-help-grid .card { margin: 0; padding: 13px; }
+.admin-help-grid strong { display: block; color: var(--hi); font-size: 11.5px; margin-bottom: 5px; }
+
+@media (min-width: 680px) {
+  .admin-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 380px) {
+  .admin-role-card { align-items: flex-start; flex-direction: column; }
+  .admin-current-guide { grid-template-columns: 1fr auto; }
+  .admin-current-guide span { grid-column: 1 / -1; grid-row: 2; }
+  .admin-help-grid, .admin-workflow { grid-template-columns: 1fr; }
+}
+
 .qgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .q {
   display: flex; align-items: center; gap: 12px;
