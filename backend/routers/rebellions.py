@@ -248,7 +248,7 @@ async def admin_settings(user: dict = Depends(full_admin_user)):
     return await get_settings()
 
 @router.post("/admin/settings")
-async def update_settings(body: SettingsBody, user: dict = Depends(get_full_admin)):
+async def update_settings(body: SettingsBody, user: dict = Depends(full_admin_user)):
     merged = _merge_settings(body.settings)
     if not (0 <= int(merged["guaranteed_popularity"]) < int(merged["high_risk_popularity"]) < int(merged["safe_popularity"]) <= 100):
         raise HTTPException(400, "ترتیب حدها باید قطعی < خطر زیاد < امن و بین صفر تا صد باشد")
@@ -270,7 +270,7 @@ async def admin_list(user: dict = Depends(admin_user)):
     return out
 
 @router.post("/admin/{rebellion_id}/resolve")
-async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(get_admin)):
+async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(admin_user)):
     try:
         oid = ObjectId(rebellion_id)
     except Exception:
