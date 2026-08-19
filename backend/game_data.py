@@ -49,6 +49,7 @@ ROLEPLAY_CATEGORIES = {
     "war":         "جنگ",
     "diplomacy":   "دیپلماسی",
     "economy":     "اقتصاد",
+    "rebellion":   "شورش",
     "other":       "آزاد",
 }
 
