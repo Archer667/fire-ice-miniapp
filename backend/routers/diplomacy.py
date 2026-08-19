@@ -183,6 +183,10 @@ async def leave(alliance_id: str, user: dict = Depends(get_user)):
 
 @router.post("/feast")
 async def feast(user: dict = Depends(get_user)):
+    from routers.rebellions import get_settings as get_rebellion_settings
+    rebellion_settings = await get_rebellion_settings()
+    feast_cost = {"food": int(rebellion_settings["feast_food_cost"]), "wine": int(rebellion_settings["feast_wine_cost"])}
+    feast_gain = int(rebellion_settings["feast_popularity_gain"])
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -195,10 +199,10 @@ async def feast(user: dict = Depends(get_user)):
         if now() - last_feast < timedelta(hours=FEAST_COOLDOWN_HOURS):
             raise HTTPException(400, "ضیافت را همین امروز برگزار کرده‌ای — فردا دوباره امتحان کن")
 
-    if not can_afford(p["resources"], FEAST_COST):
+    if not can_afford(p["resources"], feast_cost):
         raise HTTPException(400, "شراب یا غذای کافی برای ضیافت نداری")
-    pay(p["resources"], FEAST_COST)
-    popularity = min(POPULARITY_MAX, p.get("popularity", 0) + FEAST_POPULARITY_GAIN)
+    pay(p["resources"], feast_cost)
+    popularity = min(POPULARITY_MAX, p.get("popularity", 0) + feast_gain)
 
     await players.update_one({"tg_id": user["id"]}, {"$set": {
         "resources": p["resources"], "last_tick": p["last_tick"],
