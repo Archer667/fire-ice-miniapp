@@ -15,6 +15,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 from db import (
     players as players_col, map_castles, admin_roles, game_settings,
     campaigns, caravans, spy_missions, messages, alliances, roleplays, tributes,
+    rebellion_checks, rebellions,
 )
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
@@ -158,6 +159,9 @@ async def _ensure_indexes():
         await alliances.create_index("status")
         await roleplays.create_index("resolved")
         await roleplays.create_index("tg_id")
+        await rebellion_checks.create_index([("tg_id", 1), ("day", 1)], unique=True)
+        await rebellions.create_index([("status", 1), ("deadline", 1)])
+        await rebellions.create_index("tg_id")
     except Exception:
         logger.exception("ensuring secondary indexes failed")
 
