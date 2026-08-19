@@ -1811,8 +1811,13 @@ export default function Admin() {
             <>
               <div className="sect up u2">تنظیمات سراسری شورش</div>
               <div className="card up u2">
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <input type="checkbox" checked={rebellionSettings.enabled} onChange={e => setRebellionSettings(p => ({ ...p, enabled: e.target.checked }))} />
+                  سیستم شورش فعال باشد
+                </label>
                 <div className="grid2">
                   <div><label className="f">حد امن محبوبیت</label><input type="number" value={rebellionSettings.safe_popularity} onChange={e => setRebellionNumber('safe_popularity', e.target.value)} /></div>
+                  <div><label className="f">شروع خطر زیاد</label><input type="number" value={rebellionSettings.high_risk_popularity} onChange={e => setRebellionNumber('high_risk_popularity', e.target.value)} /></div>
                   <div><label className="f">شورش قطعی زیر</label><input type="number" value={rebellionSettings.guaranteed_popularity} onChange={e => setRebellionNumber('guaranteed_popularity', e.target.value)} /></div>
                   <div><label className="f">مهلت رول (ساعت)</label><input type="number" value={rebellionSettings.roleplay_hours} onChange={e => setRebellionNumber('roleplay_hours', e.target.value)} /></div>
                   <div><label className="f">دوره آرامش (ساعت)</label><input type="number" value={rebellionSettings.cooldown_hours} onChange={e => setRebellionNumber('cooldown_hours', e.target.value)} /></div>
@@ -1827,6 +1832,19 @@ export default function Admin() {
                   <div><label className="f">محبوبیت ضیافت</label><input type="number" value={rebellionSettings.feast_popularity_gain} onChange={e => setRebellionNumber('feast_popularity_gain', e.target.value)} /></div>
                 </div>
 
+                <label className="f">جیره استاندارد بازیکنان</label>
+                <select value={rebellionSettings.default_ration} onChange={e => setRebellionSettings(p => ({ ...p, default_ration: e.target.value }))}>
+                  {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => <option key={key} value={key}>{level.label}</option>)}
+                </select>
+                <div className="sect" style={{ marginTop: 16 }}>اثر نرخ مالیات</div>
+                {(rebellionSettings.tax_bands || []).map((band, index) => (
+                  <div className="grid2" key={index} style={{ marginBottom: 8 }}>
+                    <div><label className="f">تا نرخ مالیات</label><input type="number" value={band.max}
+                      onChange={e => setRebellionSettings(p => ({ ...p, tax_bands: p.tax_bands.map((b, i) => i === index ? { ...b, max: Number(e.target.value) } : b) }))} /></div>
+                    <div><label className="f">تغییر محبوبیت روزانه</label><input type="number" value={band.popularity}
+                      onChange={e => setRebellionSettings(p => ({ ...p, tax_bands: p.tax_bands.map((b, i) => i === index ? { ...b, popularity: Number(e.target.value) } : b) }))} /></div>
+                  </div>
+                ))}
                 <div className="sect" style={{ marginTop: 16 }}>سطح‌های سهم غله</div>
                 {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => (
                   <div className="grid2" key={key} style={{ marginBottom: 8 }}>
