@@ -5,6 +5,7 @@ from auth import get_user, get_admin_role
 from db import players, campaigns, alliances
 from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
 from medals import medal_rows, normalize_stats, sync_medals
+from admin_notifications import notify_admins
 from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
 from ranks import scored_players
@@ -59,6 +60,17 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "stats": normalize_stats({}), "medals": {},
     }
     await players.insert_one(doc)
+    requested_text = "، ".join(requested) if requested else "بدون اولویت قلعه"
+    await notify_admins(
+        "new_player",
+        "👤 بازیکن تازه منتظر تخصیص است",
+        f"{doc['name']} ثبت‌نام کرد. انتخاب‌های قلعه: {requested_text}",
+        dedupe_key=f"new-player:{user['id']}",
+        priority="normal",
+        player_name=doc["name"],
+        player_tg_id=user["id"],
+        action="از پنل ادمین ← خاندان‌ها، اقلیم و قلعه را مشخص کن.",
+    )
     return {"ok": True}
 
 @router.get("/me")
