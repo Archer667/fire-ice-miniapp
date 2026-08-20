@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, messages
+from db import players, messages, rumors
 from game import now
 from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
 import telegram_bot
@@ -49,8 +49,23 @@ async def send(body: SendBody, user: dict = Depends(get_user)):
 
 @router.get("/unread")
 async def unread(user: dict = Depends(get_user)):
-    count = await messages.count_documents({"to_id": user["id"], "read": False})
-    return {"count": count}
+    system_filter = {"to_id": user["id"], "from_id": SYSTEM_SENDER_ID, "read": False}
+    personal_filter = {"to_id": user["id"], "from_id": {"$ne": SYSTEM_SENDER_ID}, "read": False}
+    announcements = await messages.count_documents(system_filter)
+    personal = await messages.count_documents(personal_filter)
+
+    player = await players.find_one({"tg_id": user["id"]}, {"rumors_last_seen_at": 1})
+    rumor_filter = {"author_tg_id": {"$ne": user["id"]}}
+    if player and player.get("rumors_last_seen_at"):
+        rumor_filter["created_at"] = {"$gt": player["rumors_last_seen_at"]}
+    rumor_count = await rumors.count_documents(rumor_filter)
+
+    return {
+        "count": announcements + personal + rumor_count,
+        "announcements": announcements,
+        "messages": personal,
+        "rumors": rumor_count,
+    }
 
 @router.get("/inbox")
 async def inbox(user: dict = Depends(get_user)):
