@@ -2018,10 +2018,10 @@ export default function Admin() {
                     <textarea rows={4} value={d.result || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, result: e.target.value } }))}
                               placeholder="نتیجه داوری و اتفاقی که در قلمرو افتاد..." />
                     <div className="grid2">
-                      <div><label className="f">تغییر محبوبیت</label><input type="number" value={d.popularity_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, popularity_delta: e.target.value } }))} /></div>
-                      <div><label className="f">تغییر طلا</label><input type="number" value={d.gold_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, gold_delta: e.target.value } }))} /></div>
-                      <div><label className="f">تغییر غله</label><input type="number" value={d.food_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, food_delta: e.target.value } }))} /></div>
-                      <div><label className="f">تغییر نفرات</label><input type="number" value={d.men_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, men_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر محبوبیت (+ پاداش / − جریمه)</label><input type="number" value={d.popularity_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, popularity_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر سکهٔ خزانه</label><input type="number" value={d.gold_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, gold_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر غلهٔ انبار</label><input type="number" value={d.food_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, food_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر جمعیت قلمرو</label><input type="number" value={d.men_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, men_delta: e.target.value } }))} /></div>
                     </div>
                     <label className="f">وضعیت نهایی</label>
                     <select value={d.outcome || 'resolved'} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, outcome: e.target.value } }))}>
