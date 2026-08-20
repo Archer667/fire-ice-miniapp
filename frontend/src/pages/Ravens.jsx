@@ -7,6 +7,36 @@ import PlayerPicker from '../components/PlayerPicker.jsx';
 
 const SYSTEM_TG_ID = 0;
 
+const NOTICE_META = {
+  war:       { icon: '⚔️', label: 'جنگ و لشکرکشی' },
+  trade:     { icon: '🛒', label: 'کاروان و تجارت' },
+  building:  { icon: '🏗️', label: 'ساخت‌وساز' },
+  daily:     { icon: '🎁', label: 'جایزهٔ روزانه' },
+  diplomacy: { icon: '🤝', label: 'پیمان و اتحاد' },
+  rebellion: { icon: '🔥', label: 'شورش' },
+  espionage: { icon: '👁️', label: 'جاسوسی' },
+  roleplay:  { icon: '📜', label: 'رول و نتیجه' },
+  reward:    { icon: '🏅', label: 'پاداش و مدال' },
+  event:     { icon: '📣', label: 'رویداد' },
+  general:   { icon: '🔔', label: 'اطلاعیهٔ بازی' },
+};
+
+function noticeMeta(message) {
+  if (message?.kind && message.kind !== 'general' && NOTICE_META[message.kind]) return NOTICE_META[message.kind];
+  const text = message?.text || message?.last_text || '';
+  if (/شورش/.test(text)) return NOTICE_META.rebellion;
+  if (/لشکر|نبرد|حمله|محاصره|غارت/.test(text)) return NOTICE_META.war;
+  if (/کاروان|تجارت|بازار/.test(text)) return NOTICE_META.trade;
+  if (/ساختمان|ساخت‌وساز|ارتقا/.test(text)) return NOTICE_META.building;
+  if (/جایزه.{0,3}روزانه/.test(text)) return NOTICE_META.daily;
+  if (/پیمان|اتحاد|هم‌پیمان/.test(text)) return NOTICE_META.diplomacy;
+  if (/جاسوس/.test(text)) return NOTICE_META.espionage;
+  if (/رول|سناریو|نتیجه/.test(text)) return NOTICE_META.roleplay;
+  if (/مدال|آیتم|پاداش/.test(text)) return NOTICE_META.reward;
+  if (/رویداد|ایونت/.test(text)) return NOTICE_META.event;
+  return NOTICE_META.general;
+}
+
 function timeAgo(iso) {
   const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
   if (min < 60) return `${min.toLocaleString('fa-IR')} دقیقه پیش`;
@@ -85,12 +115,21 @@ export default function Ravens() {
           </div>
         </>
       ) : (
-        <div className="page-title up">{openWith.name}</div>
+        <div className="page-title up">{openWith.tg_id === SYSTEM_TG_ID ? "اطلاعیه‌های بازی" : openWith.name}</div>
       )}
       <div className="thread up u1" style={{ marginTop: 12 }}>
-        {thread.map((m, i) => (
-          <div key={i} className={`tmsg ${m.mine ? 'mine' : 'theirs'}`}>{m.text}</div>
-        ))}
+        {thread.map((m, i) => {
+          if (openWith?.tg_id === SYSTEM_TG_ID) {
+            const meta = noticeMeta(m);
+            return (
+              <article key={i} className="notice-message">
+                <header><span>{meta.icon}</span><strong>{meta.label}</strong>{m.at && <time>{timeAgo(m.at)}</time>}</header>
+                <div>{m.text}</div>
+              </article>
+            );
+          }
+          return <div key={i} className={`tmsg ${m.mine ? 'mine' : 'theirs'}`}>{m.text}</div>;
+        })}
       </div>
       <div className="composer up u2">
         <input value={text} onChange={e => setText(e.target.value)}
@@ -127,6 +166,13 @@ export default function Ravens() {
         </button>
       </div>
 
+      {tab === 'announcements' && (
+        <div className="notice-guide up u2">
+          <strong>اینجا سابقهٔ اتفاق‌های مهم بازی می‌مونه</strong>
+          <span>⚔️ جنگ · 🔥 شورش · 🏗️ ساخت · 🛒 کاروان · 🤝 پیمان · 🎁 جایزه</span>
+        </div>
+      )}
+
       {tab !== 'rumors' && (
         <div className="up u2">
           {rows.length === 0 && (
@@ -136,9 +182,9 @@ export default function Ravens() {
           )}
           {rows.map((m, i) => (
             <button type="button" key={i} className="rbtn mailrow" onClick={() => openThread(m)}>
-              <div className="mava">{m.with_name.charAt(0)}</div>
+              <div className="mava">{m.with_tg_id === SYSTEM_TG_ID ? noticeMeta(m).icon : m.with_name.charAt(0)}</div>
               <div className="mt">
-                <div className="mn">{m.with_name}{m.unread > 0 && <span className="dot" />}</div>
+                <div className="mn">{m.with_tg_id === SYSTEM_TG_ID ? "اطلاعیه‌های بازی" : m.with_name}{m.unread > 0 && <span className="dot" />}</div>
                 <div className="ms">{m.last_text}</div>
               </div>
             </button>
