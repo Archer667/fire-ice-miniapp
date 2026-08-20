@@ -71,6 +71,88 @@ async def read_admin_notification(notification_id: str, user: dict = Depends(adm
     return {"ok": True}
 
 
+@router.get("/rumors")
+async def admin_list_rumors(user: dict = Depends(admin_user)):
+    out = []
+    async for row in rumors.find({}).sort("created_at", -1).limit(200):
+        reactions = row.get("reactions", {})
+        out.append({
+            "id": str(row["_id"]),
+            "author_tg_id": row.get("author_tg_id"),
+            "author_name": row.get("author_name", "نامشخص"),
+            "target_tg_id": row.get("target_tg_id"),
+            "target_name": row.get("target_name", "نامشخص"),
+            "text": row.get("text", ""),
+            "likes": sum(1 for value in reactions.values() if value == "like"),
+            "dislikes": sum(1 for value in reactions.values() if value == "dislike"),
+            "created_at": row["created_at"].isoformat(),
+        })
+    return out
+
+
+@router.delete("/rumors/{rumor_id}")
+async def admin_delete_rumor(rumor_id: str, user: dict = Depends(admin_user)):
+    try:
+        oid = ObjectId(rumor_id)
+    except Exception:
+        raise HTTPException(400, "شناسه شایعه نامعتبر است")
+    result = await rumors.delete_one({"_id": oid})
+    if not result.deleted_count:
+        raise HTTPException(404, "شایعه پیدا نشد")
+    return {"ok": True}
+
+
+@router.get("/cleanup/preview")
+async def cleanup_preview(user: dict = Depends(full_admin_user)):
+    return {
+        "messages": await messages.count_documents({}),
+        "rumors": await rumors.count_documents({}),
+        "campaigns": await campaigns.count_documents({"active": {"$ne": True}}),
+        "reports": (
+            await spy_missions.count_documents({"resolved": True})
+            + await roleplays.count_documents({"resolved": True})
+        ),
+        "protected": {
+            "active_campaigns": await campaigns.count_documents({"active": True}),
+            "pending_spy": await spy_missions.count_documents({"resolved": {"$ne": True}}),
+            "pending_roleplays": await roleplays.count_documents({"resolved": {"$ne": True}}),
+        },
+    }
+
+
+class CleanupBody(BaseModel):
+    category: str
+    confirm: str
+
+
+@router.post("/cleanup")
+async def cleanup_data(body: CleanupBody, user: dict = Depends(full_admin_user)):
+    labels = {
+        "messages": ("MESSAGES", "پیام"),
+        "rumors": ("RUMORS", "شایعه"),
+        "campaigns": ("CAMPAIGNS", "لشکرکشی بسته"),
+        "reports": ("REPORTS", "گزارش حل‌شده"),
+    }
+    if body.category not in labels:
+        raise HTTPException(400, "نوع پاک‌سازی نامعتبر است")
+    expected, label = labels[body.category]
+    if body.confirm.strip() != expected:
+        raise HTTPException(400, f"برای تایید باید دقیقاً {expected} را وارد کنی")
+
+    if body.category == "messages":
+        deleted = (await messages.delete_many({})).deleted_count
+    elif body.category == "rumors":
+        deleted = (await rumors.delete_many({})).deleted_count
+    elif body.category == "campaigns":
+        deleted = (await campaigns.delete_many({"active": {"$ne": True}})).deleted_count
+    else:
+        spy_deleted = (await spy_missions.delete_many({"resolved": True})).deleted_count
+        roleplay_deleted = (await roleplays.delete_many({"resolved": True})).deleted_count
+        deleted = spy_deleted + roleplay_deleted
+
+    return {"ok": True, "deleted": deleted, "label": label}
+
+
 @router.get("/campaigns")
 async def list_campaigns(user: dict = Depends(admin_user)):
     """اطلاعات کامل لشکرکشی‌ها برای ادمین — فقط نمایشی، بدون تایید/رد"""
