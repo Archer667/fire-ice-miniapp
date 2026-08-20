@@ -107,6 +107,7 @@ def medal_rows(player):
             rows.append({
                 "key": key, "name": definition["name"], "icon": definition["icon"],
                 "tier": tier, "title": definition["titles"][tier],
+                "reason": value.get("reason", "") if isinstance(value, dict) else "",
             })
         elif key.startswith("special_") and isinstance(value, dict):
             rows.append({
