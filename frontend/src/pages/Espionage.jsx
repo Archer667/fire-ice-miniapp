@@ -4,8 +4,7 @@ import { api } from '../api.js';
 import { haptic } from '../telegram.js';
 import { Eye, Swords, Bastion, Coin, Wheat, People, Wood, Rock, Pick, Wine } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
-import PlayerPicker from '../components/PlayerPicker.jsx';
-import { SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, castleLabel } from '../gamedata.js';
+import { SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, castleLabel } from '../gamedata.js';
 
 const RES_ICONS = [
   { key: 'gold', Icon: Coin, name: 'طلا' },
@@ -20,7 +19,6 @@ const RES_ICONS = [
 const TABS = [
   { key: 'spy',     label: 'جاسوسی' },
   { key: 'results', label: 'نتیجه' },
-  { key: 'rumors',  label: 'شایعه' },
 ];
 
 export default function Espionage() {
@@ -36,10 +34,6 @@ export default function Espionage() {
   const [scenario, setScenario] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const [rumorTarget, setRumorTarget] = useState([]);
-  const [rumorText, setRumorText] = useState('');
-  const [rumorBusy, setRumorBusy] = useState(false);
-
   const loadMap = () => {
     setMapError(false);
     api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); });
@@ -47,24 +41,6 @@ export default function Espionage() {
   const loadMissions = () => api.spyMine().then(setMissions).catch(e => { toast(e.message); setMissions([]); });
 
   useEffect(() => { loadMap(); loadMissions(); }, []);
-
-  const rumorTextTooShort = rumorText.trim().length < 10;
-  const overRumorGold = gold < RUMOR_GOLD_COST;
-
-  const sendRumor = async () => {
-    if (!rumorTarget.length) { toast('یک لرد را هدف بگیر'); return; }
-    if (rumorTextTooShort) { toast('شایعه را کمی بیشتر توضیح بده'); return; }
-    if (overRumorGold) { toast('طلای کافی برای پخش این شایعه نداری'); return; }
-    setRumorBusy(true);
-    try {
-      await api.sendRumor(rumorTarget[0].tg_id, rumorText.trim());
-      haptic('medium');
-      setMe({ ...me, resources: { ...me.resources, gold: gold - RUMOR_GOLD_COST } });
-      toast(`شایعه علیه «${rumorTarget[0].name}» پخش شد`);
-      setRumorTarget([]); setRumorText('');
-    } catch (e) { toast(e.message); }
-    setRumorBusy(false);
-  };
 
   const eta = useMemo(
     () => (target ? spyTravelMinutes(me.castle, target.name) : null),
@@ -247,25 +223,6 @@ export default function Espionage() {
         )
       )}
 
-      {tab === 'rumors' && (
-        <div className="card up u2">
-          <label className="f" style={{ marginTop: 0 }}>هدف</label>
-          <PlayerPicker value={rumorTarget} onChange={setRumorTarget} single />
-          <label className="f">متن شایعه</label>
-          <textarea value={rumorText} onChange={e => setRumorText(e.target.value)}
-                    placeholder="چه شایعه‌ای دربارهٔ این لرد پخش می‌کنی..." />
-          <div className="page-sub" style={{ margin: '10px 4px 0' }}>
-            هزینه: <b style={{ color: 'var(--az2)' }}>{RUMOR_GOLD_COST.toLocaleString('fa-IR')} طلا</b> ·
-            {' '}اثر: <b style={{ color: 'var(--danger)' }}>−{RUMOR_POPULARITY_DAMAGE.toLocaleString('fa-IR')} محبوبیت هدف</b>
-          </div>
-          <button className="btn" style={{ marginTop: 14 }} disabled={rumorBusy} onClick={sendRumor}>
-            {rumorBusy ? 'در حال پخش...' : 'پخش شایعه'}
-          </button>
-          <div className="page-sub" style={{ margin: '10px 4px 0' }}>
-            همهٔ شایعات پخش‌شده را می‌توانی در تب «شایعات» بخش کلاغ‌ها ببینی
-          </div>
-        </div>
-      )}
     </>
   );
 }
