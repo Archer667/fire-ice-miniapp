@@ -5,8 +5,14 @@ from db import players
 from game import now, add_resources
 from config import DAILY_REWARDS
 from medals import normalize_stats, sync_medals
+from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/daily", tags=["daily"])
+
+RESOURCE_NAMES = {
+    "gold": "طلا", "wood": "چوب", "stone": "سنگ", "iron": "آهن",
+    "food": "غله", "wine": "شراب", "men": "نیروی انسانی",
+}
 
 def _today_str() -> str:
     return now().strftime("%Y-%m-%d")
@@ -64,3 +70,43 @@ async def daily_claim(user: dict = Depends(get_user)):
         "stats": stats, "medals": medals,
     }})
     return {"ok": True, "streak": pending_streak, "day_in_cycle": day_in_cycle, "reward": reward, "resources": res}
+
+async def notify_daily_rewards():
+    """روزی یک‌بار به بازیکنی که هنوز جایزه را نگرفته خبر می‌دهد.
+
+    فیلد daily_reward_notified_date نقش قفل روزانه را دارد و جلوی اعلان تکراری در چند watcher
+    یا بعد از ری‌استارت سرور را می‌گیرد.
+    """
+    today = _today_str()
+    cur = players.find({
+        "castle": {"$ne": None},
+        "daily_last_claim_date": {"$ne": today},
+        "daily_reward_notified_date": {"$ne": today},
+    })
+    async for p in cur:
+        claimed = await players.update_one(
+            {
+                "_id": p["_id"],
+                "daily_last_claim_date": {"$ne": today},
+                "daily_reward_notified_date": {"$ne": today},
+            },
+            {"$set": {"daily_reward_notified_date": today}},
+        )
+        if not claimed.modified_count:
+            continue
+        pending_streak, _ = _pending_streak(p)
+        day_in_cycle = _day_in_cycle(pending_streak)
+        reward = DAILY_REWARDS[day_in_cycle - 1]
+        reward_text = " · ".join(
+            f"{amount:,} {RESOURCE_NAMES.get(key, key)}"
+            for key, amount in reward.items()
+            if amount
+        )
+        await send_system_message(
+            p["tg_id"],
+            p["name"],
+            f"🎁 جایزهٔ روزانهٔ روز {day_in_cycle} آماده‌ست: {reward_text}\n"
+            "برای گرفتنش وارد بازی شو و روی جایزهٔ روزانه بزن.",
+            kind="daily",
+        )
+
