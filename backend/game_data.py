@@ -863,6 +863,7 @@ def spy_travel_minutes(origin_castle: str, target_castle: str) -> int:
         return 0
     return max(1, round(_shortest_minutes(origin_castle, target_castle) * SPY_SPEED_FACTOR))
 
-# --- بازار: کالاهایی که می‌شود کاروان فرستاد یا از بازار وستروس خرید (طلا خودش پول است، نه کالا) ---
+# --- بازار و کاروان: سکه محمولهٔ کاروان است، اما کالای قابل‌خرید بازار نیست ---
 TRADE_GOODS = ["wood", "stone", "iron", "food", "wine"]
-TRADE_GOOD_NAMES = {"wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب"}
+CARAVAN_GOODS = ["gold", *TRADE_GOODS]
+TRADE_GOOD_NAMES = {"gold": "سکه", "wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب"}
