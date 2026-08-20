@@ -1256,16 +1256,16 @@ const M = {
     return { ok: true };
   },
   sendRumor: (targetTgId, text) => {
-    if (targetTgId === 1) throw new Error('نمی‌توانی علیه خودت شایعه بسازی');
+    if (targetTgId === 1) throw new Error('نمی‌توانی علیه خودت توییت بسازی');
     const t = text.trim();
-    if (t.length < 10) throw new Error('متن شایعه خیلی کوتاه است');
+    if (t.length < 10) throw new Error('متن توییت خیلی کوتاه است');
     const target = MOCK_PLAYERS.find(p => p.tg_id === targetTgId);
     if (!target) throw new Error('این لرد پیدا نشد');
     const nowMs = Date.now();
     const recent = mockRumors.find(r => r.author_tg_id === 1 && r.target_tg_id === targetTgId
       && nowMs - new Date(r.created_at).getTime() < RUMOR_COOLDOWN_HOURS * 3600000);
-    if (recent) throw new Error(`همین الان علیه این لرد شایعه ساختی — ${RUMOR_COOLDOWN_HOURS} ساعت دیگر دوباره امتحان کن`);
-    if (!mockCanAfford({ gold: RUMOR_GOLD_COST })) throw new Error('طلای کافی برای پخش این شایعه نداری');
+    if (recent) throw new Error(`همین الان علیه این لرد توییت ساختی — ${RUMOR_COOLDOWN_HOURS} ساعت دیگر دوباره امتحان کن`);
+    if (!mockCanAfford({ gold: RUMOR_GOLD_COST })) throw new Error('طلای کافی برای پخش این توییت نداری');
     mockPay({ gold: RUMOR_GOLD_COST });
     target.popularity = Math.max(0, (target.popularity ?? 50) - RUMOR_POPULARITY_DAMAGE);
     mockRumors.unshift({
@@ -1279,8 +1279,8 @@ const M = {
   markRumorsSeen: () => { mockRumorsSeenAt = Date.now(); return { ok: true }; },
   reactRumor: (rumorId, reaction) => {
     const r = mockRumors.find(x => x.id === rumorId);
-    if (!r) throw new Error('این شایعه پیدا نشد');
-    if (r.author_tg_id === 1) throw new Error('نمی‌توانی به شایعهٔ خودت واکنش نشان بدهی');
+    if (!r) throw new Error('این توییت پیدا نشد');
+    if (r.author_tg_id === 1) throw new Error('نمی‌توانی به توییتٔ خودت واکنش نشان بدهی');
     if (!['like', 'dislike', null].includes(reaction)) throw new Error('واکنش نامعتبر');
     if (reaction === null) delete r.reactions[1];
     else r.reactions[1] = reaction;
