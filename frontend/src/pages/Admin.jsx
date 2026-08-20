@@ -174,6 +174,7 @@ export default function Admin() {
 
   const [resTarget, setResTarget] = useState([]);
   const [resValues, setResValues] = useState(null);
+  const [resCaps, setResCaps] = useState(null);
   const [resBusy, setResBusy] = useState(false);
   const [resCampaigns, setResCampaigns] = useState(null);
 
@@ -297,10 +298,13 @@ export default function Admin() {
   }, [mapRegion]);
 
   useEffect(() => {
-    if (!resTarget.length) { setResValues(null); setResCampaigns(null); return; }
-    setResValues(null); setResCampaigns(null);
+    if (!resTarget.length) { setResValues(null); setResCaps(null); setResCampaigns(null); return; }
+    setResValues(null); setResCaps(null); setResCampaigns(null);
     api.adminGetPlayerResources(resTarget[0].tg_id)
-      .then(r => setResValues(r.resources))
+      .then(r => {
+        setResValues(r.resources);
+        setResCaps(r.resource_caps || {});
+      })
       .catch(e => { toast(e.message); setResTarget([]); });
     api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message));
   }, [resTarget]);
@@ -1747,13 +1751,29 @@ export default function Admin() {
             )}
             {resValues && (
               <>
-                {PLAYER_RES.map(({ key, label, Icon }) => (
-                  <div className="troop" key={key}>
-                    <div className="tn"><Icon s={14} /> {label}</div>
-                    <input type="number" min="0" value={resValues[key] ?? 0}
-                           onChange={e => setResValues({ ...resValues, [key]: Math.max(0, +e.target.value || 0) })} />
-                  </div>
-                ))}
+                <div className="page-sub" style={{ margin: '4px 4px 12px', lineHeight: 1.9 }}>
+                  عددِ سمت راست موجودی فعلیه و زیرش سقف واقعی بازیکن نوشته شده؛ این سقف از ساختمان‌های همهٔ قلعه‌هاش حساب می‌شه.
+                </div>
+                {PLAYER_RES.map(({ key, label, Icon }) => {
+                  const value = Number(resValues[key] ?? 0);
+                  const cap = Number(resCaps?.[key] ?? 0);
+                  const overCap = cap > 0 && value > cap;
+                  return (
+                    <div className="troop" key={key} style={{ alignItems: 'center' }}>
+                      <div className="tn"><Icon s={14} /> {label}</div>
+                      <div style={{ width: 130, maxWidth: '48%' }}>
+                        <input type="number" min="0" value={value}
+                               aria-label={`${label}؛ سقف ${cap.toLocaleString('fa-IR')}`}
+                               style={{ margin: 0, borderColor: overCap ? 'var(--danger)' : undefined }}
+                               onChange={e => setResValues({ ...resValues, [key]: Math.max(0, +e.target.value || 0) })} />
+                        <div style={{ marginTop: 4, textAlign: 'center', fontSize: 9.5, color: overCap ? 'var(--danger)' : 'var(--low)' }}>
+                          {value.toLocaleString('fa-IR')} از {cap.toLocaleString('fa-IR')}
+                          {overCap ? ' · بیشتر از سقف' : ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
                 <button className="btn" style={{ marginTop: 14 }} disabled={resBusy} onClick={saveResources}>
                   {resBusy ? 'در حال ثبت...' : 'ثبت منابع تازه'}
                 </button>
