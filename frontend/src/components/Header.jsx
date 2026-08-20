@@ -20,7 +20,7 @@ export default function Header({ onOpenMenu, onOpenRavens }) {
     previousUnread.current = unread;
     if (!shouldAnimate) return;
     setRavenAttention(true);
-    const timer = setTimeout(() => setRavenAttention(false), 4200);
+    const timer = setTimeout(() => setRavenAttention(false), 2600);
     return () => clearTimeout(timer);
   }, [unread]);
   return (
