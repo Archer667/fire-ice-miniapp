@@ -4,11 +4,11 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from config import ADMIN_IDS, POPULARITY_START
-from db import players, rebellions, rebellion_checks, game_settings, admin_roles
+from config import POPULARITY_START
+from db import players, rebellions, rebellion_checks, game_settings
 from game import now
 from routers.ravens import send_system_message
-import telegram_bot
+from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/rebellions", tags=["rebellions"])
 SETTINGS_ID = "rebellion_settings"
@@ -82,13 +82,6 @@ def _tax_delta(rate: int, settings: dict) -> int:
             return int(band["popularity"])
     return 0
 
-async def _notify_admins(text: str):
-    ids = set(ADMIN_IDS)
-    async for a in admin_roles.find({}, {"tg_id": 1}):
-        ids.add(a["tg_id"])
-    for tg_id in ids:
-        telegram_bot.push(tg_id, text)
-
 async def _trigger_rebellion(player: dict, popularity: int, chance: int, roll: int, settings: dict):
     if await rebellions.find_one({"tg_id": player["tg_id"], "status": {"$in": ACTIVE_STATUSES}}):
         return None
@@ -110,10 +103,19 @@ async def _trigger_rebellion(player: dict, popularity: int, chance: int, roll: i
         f"تا {settings['roleplay_hours']} ساعت فرصت داری سناریوی مقابله با شورش را از صفحه قلمرو بفرستی."
     )
     await send_system_message(player["tg_id"], player["name"], text)
-    await _notify_admins(
-        f"🚨 شورش جدید برای {player['name']} در {player.get('castle') or 'قلعه نامشخص'}\n"
-        f"محبوبیت: {popularity} | شانس: {chance}٪ | تاس: {roll}\n"
-        f"مهلت رول: {settings['roleplay_hours']} ساعت"
+    await notify_admins(
+        "rebellion",
+        "🚨 شورش تازه شروع شد",
+        f"{player['name']} در {player.get('castle') or 'قلعه نامشخص'} شورش دارد. "
+        f"محبوبیت {popularity}، شانس {chance}٪ و تاس {roll} بوده؛ مهلت رول {settings['roleplay_hours']} ساعت است.",
+        dedupe_key=f"rebellion-start:{res.inserted_id}",
+        priority="urgent",
+        player_name=player["name"],
+        player_tg_id=player["tg_id"],
+        castle=player.get("castle"),
+        action="پرونده را در پنل ادمین ← شورش‌ها زیر نظر بگیر.",
+        source_id=str(res.inserted_id),
+        deadline=deadline,
     )
     return str(res.inserted_id)
 
@@ -240,7 +242,20 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
     )
     if not result.modified_count:
         raise HTTPException(400, "شورش فعال نیست یا مهلت رول گذشته است")
-    await _notify_admins("✍️ بازیکن رول مقابله با شورش را فرستاد؛ نتیجه را در پنل ادمین ثبت کنید.")
+    row = await rebellions.find_one({"_id": oid})
+    await notify_admins(
+        "rebellion_roleplay",
+        "✍️ رول شورش آمادهٔ داوری است",
+        f"{row.get('player_name', 'بازیکن')} رول مقابله با شورش {row.get('castle') or 'قلعه نامشخص'} را فرستاد.",
+        dedupe_key=f"rebellion-roleplay:{oid}",
+        priority="high",
+        player_name=row.get("player_name"),
+        player_tg_id=row.get("tg_id"),
+        castle=row.get("castle"),
+        action="از پنل ادمین ← شورش‌ها، متن رول را بخوان و نتیجه را ثبت کن.",
+        source_id=str(oid),
+        deadline=row.get("deadline"),
+    )
     return {"ok": True}
 
 @router.get("/admin/settings")
