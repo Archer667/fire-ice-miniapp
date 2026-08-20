@@ -1580,6 +1580,9 @@ export const api = {
   listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
   reactRumor: (rumorId, reaction) => MOCK ? Promise.resolve(M.reactRumor(rumorId, reaction))
     : req(`/api/rumors/${rumorId}/react`, { method: 'POST', body: JSON.stringify({ reaction }) }),
+  adminNotifications: () => MOCK ? Promise.resolve([]) : req('/api/admin/notifications'),
+  adminReadNotification: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/notifications/${id}/read`, { method: 'POST' }),
+  adminReadAllNotifications: () => MOCK ? Promise.resolve({ ok: true }) : req('/api/admin/notifications/read-all', { method: 'POST' }),
   adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
   adminListRoster: () => MOCK ? Promise.resolve(M.adminListRoster()) : req('/api/admin/players/roster'),
   adminUnassignHouse: (tgId) => MOCK ? Promise.resolve(M.adminUnassignHouse(tgId)) : req(`/api/admin/players/${tgId}/unassign`, { method: 'POST' }),
