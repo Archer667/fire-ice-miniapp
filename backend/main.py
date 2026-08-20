@@ -30,6 +30,8 @@ from routers.market import drift_market_prices
 from routers.tribute import expire_unpaid_tributes
 from routers.titles import pay_daily_salaries
 from routers.rebellions import evaluate_rebellions
+from routers.buildings import notify_building_completions
+from routers.daily import notify_daily_rewards
 import telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -89,13 +91,15 @@ app.include_router(tribute_router.router)
 app.include_router(rebellions_router.router)
 
 async def _arrival_watcher():
-    """هر ۳۰ ثانیه لشکرها و کاروان‌هایی که تازه رسیده‌اند را چک می‌کند و کلاغ می‌فرستد،
+    """هر ۳۰ ثانیه رسیدن لشکر و کاروان، پایان ساخت و آماده‌شدن جایزهٔ روزانه را چک می‌کند،
     خراج‌هایی که ۲۴ ساعت مهلت‌شان گذشته و پرداخت نشده را منقضی می‌کند، و حقوقِ روزانهٔ
     پادشاه/شورای کوچک را (اگر یک روز گذشته و خزانهٔ رد کیپ کافی بود) واریز می‌کند"""
     while True:
         try:
             await notify_arrivals()
             await notify_caravan_arrivals()
+            await notify_building_completions()
+            await notify_daily_rewards()
             await expire_unpaid_tributes()
             await pay_daily_salaries()
             await evaluate_rebellions()
