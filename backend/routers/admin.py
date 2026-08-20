@@ -13,7 +13,7 @@ import game_data
 import telegram_bot
 from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
 from config import ADMIN_IDS
 from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
@@ -1184,66 +1184,80 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
 
     return {"ok": True, "players_deleted": deleted.deleted_count}
 
-# ---- تعادل بازی — بازدهی/سقفِ سراسریِ ساختمان‌ها؛ روی همهٔ بازیکن‌ها یکسان اثر می‌کند
+# ---- تعادل بازی — هزینه، رشد ارتقا، بازدهی و سقفِ سراسریِ ساختمان‌ها
 BUILDING_OVERRIDES_DOC_ID = "building_overrides"
 
 @router.get("/building-balance")
 async def get_building_balance(user: dict = Depends(full_admin_user)):
     out = []
     for bid, meta in BUILDINGS.items():
+        base_cost = meta.get("cost", {})
         base_produces = meta.get("produces", {})
         base_cap_bonus = meta.get("cap_bonus", {})
-        if not base_produces and not base_cap_bonus:
-            continue  # ساختمان‌هایی مثل پادگان/دیوار که اصلاً بازدهی یا سقفی ندارند
         override = game_data.BUILDING_OVERRIDES.get(bid, {})
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
+            "base_cost": base_cost, "cost": building_base_cost(bid),
+            "base_cost_step_percent": round(game_data.LEVEL_COST_STEP * 100, 2),
+            "cost_step_percent": round(building_cost_step(bid) * 100, 2),
             "base_produces": base_produces, "base_cap_bonus": base_cap_bonus,
             "overridden": bool(override),
             "produces": building_produces(bid), "cap_bonus": building_cap_bonus(bid),
+            "cost_preview": {
+                "level_1": building_cost(bid, 1),
+                "level_2": building_cost(bid, 2),
+                "level_10": building_cost(bid, 10),
+            },
         })
     return out
 
 class BuildingBalanceBody(BaseModel):
     building_id: str
+    cost: dict[str, int] = {}
+    cost_step_percent: float = 15
     produces: dict[str, int] = {}
     cap_bonus: dict[str, int] = {}
 
 @router.post("/building-balance")
 async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(full_admin_user)):
-    """بازدهی/سقفِ یک ساختمان رو سراسری بازنویسی می‌کند — فقط برای کلیدهایی که خودِ
-    ساختمان از قبل تولید/سقف می‌داده معنی دارد (کلید تازه اضافه نمی‌کند)"""
+    """تنظیم سراسری هزینهٔ پایه، رشد هزینهٔ ارتقا، تولید و افزایش سقف هر ساختمان."""
     meta = BUILDINGS.get(body.building_id)
     if not meta:
         raise HTTPException(400, "ساختمان نامعتبر")
+    allowed_cost = set(meta.get("cost", {}).keys())
     allowed_produces = set(meta.get("produces", {}).keys())
     allowed_cap = set(meta.get("cap_bonus", {}).keys())
+    if not set(body.cost).issubset(allowed_cost):
+        raise HTTPException(400, "این ساختمان چنین منبعی در هزینهٔ ساخت ندارد")
     if not set(body.produces).issubset(allowed_produces) or not set(body.cap_bonus).issubset(allowed_cap):
         raise HTTPException(400, "این ساختمان چنین منبعی تولید/ذخیره نمی‌کند")
-    if any(v < 0 for v in list(body.produces.values()) + list(body.cap_bonus.values())):
+    values = list(body.cost.values()) + list(body.produces.values()) + list(body.cap_bonus.values())
+    if any(v < 0 for v in values):
         raise HTTPException(400, "مقدار نمی‌تواند منفی باشد")
+    if not 0 <= float(body.cost_step_percent) <= 500:
+        raise HTTPException(400, "درصد رشد هزینه باید بین صفر تا ۵۰۰ باشد")
 
-    override = {}
+    override = {
+        "cost": body.cost,
+        "cost_step": float(body.cost_step_percent) / 100,
+    }
     if body.produces:
         override["produces"] = body.produces
     if body.cap_bonus:
         override["cap_bonus"] = body.cap_bonus
 
-    if override:
-        game_data.BUILDING_OVERRIDES[body.building_id] = override
-    else:
-        game_data.BUILDING_OVERRIDES.pop(body.building_id, None)
-
+    game_data.BUILDING_OVERRIDES[body.building_id] = override
     await game_settings.update_one(
         {"_id": BUILDING_OVERRIDES_DOC_ID},
-        {"$set": {f"overrides.{body.building_id}": override}} if override
-        else {"$unset": {f"overrides.{body.building_id}": ""}},
+        {"$set": {f"overrides.{body.building_id}": override}},
         upsert=True,
     )
     return {"ok": True}
 
 @router.post("/building-balance/{building_id}/reset")
 async def reset_building_balance(building_id: str, user: dict = Depends(full_admin_user)):
+    if building_id not in BUILDINGS:
+        raise HTTPException(400, "ساختمان نامعتبر")
     game_data.BUILDING_OVERRIDES.pop(building_id, None)
     await game_settings.update_one(
         {"_id": BUILDING_OVERRIDES_DOC_ID}, {"$unset": {f"overrides.{building_id}": ""}}, upsert=True,
