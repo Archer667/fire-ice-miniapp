@@ -46,7 +46,7 @@ function timeAgo(iso) {
 }
 
 export default function Ravens() {
-  const { toast, refreshUnread } = useGame();
+  const { toast, refreshUnread, unreadBreakdown } = useGame();
   const [inbox, setInbox] = useState(null);
   const [tab, setTab] = useState('announcements');
   const [openWith, setOpenWith] = useState(null);   // {tg_id, name}
@@ -59,7 +59,11 @@ export default function Ravens() {
   const loadInbox = () => api.inbox().then(setInbox).catch(e => { toast(e.message); setInbox([]); });
   const loadRumors = () => api.listRumors().then(setRumors).catch(e => { toast(e.message); setRumors([]); });
   useEffect(() => { loadInbox(); }, []);
-  useEffect(() => { if (tab === 'rumors' && rumors === null) loadRumors(); }, [tab]);
+  useEffect(() => {
+    if (tab !== 'rumors') return;
+    if (rumors === null) loadRumors();
+    api.markRumorsSeen().then(refreshUnread).catch(() => {});
+  }, [tab]);
 
   const reactRumor = async (rumorId, reaction) => {
     const r = rumors.find(x => x.id === rumorId);
@@ -154,15 +158,18 @@ export default function Ravens() {
       <div className="tabs up u1" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'announcements'}
                 className={`rbtn tab ${tab === 'announcements' ? 'on' : ''}`} onClick={() => { haptic(); setTab('announcements'); }}>
-          اطلاعیه‌ها{announcements.some(m => m.unread > 0) ? ' •' : ''}
+          اطلاعیه‌ها
+          {unreadBreakdown.announcements > 0 && <span className="raven-tab-count">{unreadBreakdown.announcements.toLocaleString('fa-IR')}</span>}
         </button>
         <button type="button" role="tab" aria-selected={tab === 'messages'}
                 className={`rbtn tab ${tab === 'messages' ? 'on' : ''}`} onClick={() => { haptic(); setTab('messages'); }}>
-          پیام‌ها{personal.some(m => m.unread > 0) ? ' •' : ''}
+          پیام‌ها
+          {unreadBreakdown.messages > 0 && <span className="raven-tab-count">{unreadBreakdown.messages.toLocaleString('fa-IR')}</span>}
         </button>
         <button type="button" role="tab" aria-selected={tab === 'rumors'}
                 className={`rbtn tab ${tab === 'rumors' ? 'on' : ''}`} onClick={() => { haptic(); setTab('rumors'); }}>
           شایعات
+          {unreadBreakdown.rumors > 0 && <span className="raven-tab-count">{unreadBreakdown.rumors.toLocaleString('fa-IR')}</span>}
         </button>
       </div>
 
