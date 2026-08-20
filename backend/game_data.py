@@ -150,6 +150,18 @@ def building_cap_bonus(building_id: str) -> dict:
         return override["cap_bonus"]
     return BUILDINGS.get(building_id, {}).get("cap_bonus", {})
 
+def building_base_cost(building_id: str) -> dict:
+    """هزینهٔ سطح یک؛ در صورت تنظیم ادمین از override خوانده می‌شود."""
+    override = BUILDING_OVERRIDES.get(building_id, {})
+    if "cost" in override:
+        return override["cost"]
+    return BUILDINGS.get(building_id, {}).get("cost", {})
+
+def building_cost_step(building_id: str) -> float:
+    """درصد رشد هزینه به‌ازای هر سطح، به شکل اعشاری (۱۵٪ = 0.15)."""
+    override = BUILDING_OVERRIDES.get(building_id, {})
+    return float(override.get("cost_step", LEVEL_COST_STEP))
+
 # ---- قراردادهای سیاسی — شراب نقشی در بستن هر پیمان دارد ----
 ALLIANCE_TYPES = {
     "non_aggression": {"name": "پیمان عدم‌تجاوز", "wine_cost": 20},
@@ -169,9 +181,9 @@ LEVEL_COST_STEP = 0.15   # هر سطح ~۱۵٪ هزینهٔ پایه اضافه 
 LEVEL_HOURS_STEP = 0.06  # هر سطح ~۶٪ زمان پایه اضافه می‌شود
 
 def building_cost(building_id: str, level: int) -> dict:
-    """هزینهٔ ساخت/ارتقا به «level» (سطح ۱ = ساخت اولیه، هزینه = هزینهٔ پایه)"""
-    base = BUILDINGS[building_id]["cost"]
-    mult = 1 + (level - 1) * LEVEL_COST_STEP
+    """هزینهٔ ساخت/ارتقا به «level» (سطح ۱ = ساخت اولیه، هزینه = هزینهٔ پایه)."""
+    base = building_base_cost(building_id)
+    mult = 1 + (level - 1) * building_cost_step(building_id)
     return {k: max(1, round(v * mult)) for k, v in base.items() if v}
 
 def building_hours(building_id: str, level: int) -> float:
