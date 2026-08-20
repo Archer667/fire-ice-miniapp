@@ -1051,3 +1051,31 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   .admin-notification-toolbar > .btn { width: 100%; }
 }
 
+/* مدال‌های صفحهٔ قلمرو */
+.medal-showcase {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+}
+.player-medal {
+  position: relative; min-width: 0; padding: 13px 10px; border-radius: 6px; text-align: center;
+  border: 1px solid rgba(255,255,255,0.09); overflow: hidden;
+}
+.player-medal.tier-bronze { background: linear-gradient(150deg, rgba(190,115,55,.18), rgba(70,35,14,.08)); }
+.player-medal.tier-silver { background: linear-gradient(150deg, rgba(190,205,220,.16), rgba(80,95,110,.06)); }
+.player-medal.tier-gold { background: linear-gradient(150deg, rgba(245,190,55,.19), rgba(112,72,0,.07)); border-color: rgba(245,190,55,.2); }
+.player-medal.special::after {
+  content: 'ویژه'; position: absolute; top: 6px; inset-inline-end: 6px;
+  padding: 2px 5px; border-radius: 999px; background: rgba(201,162,39,.16);
+  color: var(--gold); font-size: 7.5px; font-weight: 900;
+}
+.player-medal-icon { font-size: 30px; line-height: 1.25; filter: drop-shadow(0 3px 7px rgba(0,0,0,.35)); }
+.player-medal-name { margin-top: 5px; color: var(--hi); font-size: 11.5px; font-weight: 900; line-height: 1.55; }
+.player-medal-tier { margin-top: 3px; color: var(--gold); font-size: 9px; font-weight: 800; }
+.player-medal-title { margin-top: 5px; color: var(--mid); font-size: 9.5px; line-height: 1.6; }
+.player-medal-reason {
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.07);
+  color: var(--mid); font-size: 9px; line-height: 1.7;
+}
+@media (min-width: 680px) {
+  .medal-showcase { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
