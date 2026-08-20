@@ -15,7 +15,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 from db import (
     players as players_col, map_castles, admin_roles, game_settings,
     campaigns, caravans, spy_missions, messages, alliances, roleplays, tributes,
-    rebellion_checks, rebellions,
+    rebellion_checks, rebellions, admin_notifications,
 )
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
@@ -32,6 +32,7 @@ from routers.titles import pay_daily_salaries
 from routers.rebellions import evaluate_rebellions
 from routers.buildings import notify_building_completions
 from routers.daily import notify_daily_rewards
+from admin_notifications import notify_admin_deadlines
 import telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ async def _arrival_watcher():
             await notify_caravan_arrivals()
             await notify_building_completions()
             await notify_daily_rewards()
+            await notify_admin_deadlines()
             await expire_unpaid_tributes()
             await pay_daily_salaries()
             await evaluate_rebellions()
@@ -161,6 +163,8 @@ async def _ensure_indexes():
         await alliances.create_index("from_id")
         await alliances.create_index("to_id")
         await alliances.create_index("status")
+        await admin_notifications.create_index("dedupe_key", unique=True)
+        await admin_notifications.create_index([("created_at", -1)])
         await roleplays.create_index("resolved")
         await roleplays.create_index("tg_id")
         await rebellion_checks.create_index([("tg_id", 1), ("day", 1)], unique=True)
