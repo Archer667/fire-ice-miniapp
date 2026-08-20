@@ -42,6 +42,7 @@ const TAB_GROUPS = [
     label: 'داوری و ارتباط',
     description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
     tabs: [
+      { key: 'notifications', label: 'اعلان‌های ادمین', description: 'کارهای تازه و مهلت‌های نزدیک' },
       { key: 'war',         label: 'جنگ و رول‌ها', description: 'داوری جاسوسی، جنگ و سناریوها' },
       { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
       { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
@@ -209,6 +210,8 @@ export default function Admin() {
   const [rebellionSettingsBusy, setRebellionSettingsBusy] = useState(false);
   const [rebellionDrafts, setRebellionDrafts] = useState({});
   const [rebellionBusyId, setRebellionBusyId] = useState(null);
+  const [adminNotifications, setAdminNotifications] = useState(null);
+  const [notificationFilter, setNotificationFilter] = useState('unread');
 
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
@@ -241,6 +244,7 @@ export default function Admin() {
     });
   }).catch(e => toast(e.message));
 
+  const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
   const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
   const loadRebellionSettings = () => {
     if (!isFull) return;
@@ -276,6 +280,7 @@ export default function Admin() {
   };
 
   useEffect(() => {
+    loadAdminNotifications();
     loadPendingPlayers();
     loadRoster();
     loadCampaigns();
@@ -829,6 +834,21 @@ export default function Admin() {
     setBalanceBusyId(null);
   };
 
+  const markNotificationRead = async (id) => {
+    try {
+      await api.adminReadNotification(id);
+      setAdminNotifications(prev => prev?.map(x => x.id === id ? { ...x, read: true } : x));
+    } catch (e) { toast(e.message); }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await api.adminReadAllNotifications();
+      setAdminNotifications(prev => prev?.map(x => ({ ...x, read: true })));
+      toast('همهٔ اعلان‌ها خوانده شدند');
+    } catch (e) { toast(e.message); }
+  };
+
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
     if (target?.fullOnly && !isFull) {
@@ -841,6 +861,7 @@ export default function Admin() {
   };
 
   const tabBadge = (key) => {
+    if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
     if (key === 'onboarding') return pendingPlayers?.length || 0;
     if (key === 'war') return (spyPending?.length || 0) + (roleplayPending?.length || 0);
     if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
@@ -902,6 +923,64 @@ export default function Admin() {
           <span>{TAB_BY_KEY[tab].description}</span>
           <button type="button" className="rbtn" onClick={() => openTab('overview')}>راهنمای پنل</button>
         </div>
+      )}
+
+      {tab === 'notifications' && (
+        <>
+          <div className="sect up u2">صندوق اعلان‌های مدیریتی</div>
+          <div className="admin-notification-toolbar up u2">
+            <div className="tabs" role="tablist" aria-label="فیلتر اعلان‌ها">
+              <button type="button" className={`rbtn tab ${notificationFilter === 'unread' ? 'on' : ''}`}
+                      onClick={() => setNotificationFilter('unread')}>
+                خوانده‌نشده ({(adminNotifications?.filter(x => !x.read).length || 0).toLocaleString('fa-IR')})
+              </button>
+              <button type="button" className={`rbtn tab ${notificationFilter === 'all' ? 'on' : ''}`}
+                      onClick={() => setNotificationFilter('all')}>همه</button>
+            </div>
+            <button type="button" className="btn ghost" disabled={!adminNotifications?.some(x => !x.read)}
+                    onClick={markAllNotificationsRead}>همه را خواندم</button>
+          </div>
+          <div className="page-sub up u2" style={{ margin: '0 4px 12px', lineHeight: 1.9 }}>
+            تلگرام فقط هشدار کوتاه می‌فرسته؛ جزئیات، مهلت و کار پیشنهادی هر پرونده این‌جا می‌مونه.
+          </div>
+          <div className="admin-notification-list up u3">
+            {adminNotifications === null && <div className="loading">در حال گرفتن اعلان‌ها...</div>}
+            {adminNotifications && adminNotifications.filter(x => notificationFilter === 'all' || !x.read).length === 0 && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>
+                {notificationFilter === 'unread' ? 'اعلان خوانده‌نشده‌ای نداری' : 'هنوز اعلان مدیریتی ثبت نشده'}
+              </div>
+            )}
+            {adminNotifications && adminNotifications
+              .filter(x => notificationFilter === 'all' || !x.read)
+              .map(n => {
+                const deadline = n.deadline ? new Date(n.deadline) : null;
+                const remainingMinutes = deadline ? Math.floor((deadline.getTime() - Date.now()) / 60000) : null;
+                return (
+                  <article key={n.id} className={`admin-notification-card ${n.read ? 'read' : ''} priority-${n.priority || 'normal'}`}>
+                    <header>
+                      <div><strong>{n.title}</strong><small>{new Date(n.created_at).toLocaleString('fa-IR')}</small></div>
+                      <span>{({ urgent: 'فوری', high: 'مهم', normal: 'عادی' })[n.priority] || 'عادی'}</span>
+                    </header>
+                    <p>{n.detail}</p>
+                    {(n.player_name || n.castle) && (
+                      <div className="admin-notification-meta">
+                        {n.player_name && <span>بازیکن: {n.player_name}</span>}
+                        {n.castle && <span>قلعه: {castleLabel(n.castle)}</span>}
+                      </div>
+                    )}
+                    {deadline && (
+                      <div className={`admin-notification-deadline ${remainingMinutes !== null && remainingMinutes <= 120 ? 'near' : ''}`}>
+                        مهلت: {deadline.toLocaleString('fa-IR')}
+                        {remainingMinutes !== null && remainingMinutes > 0 ? ` · ${Math.ceil(remainingMinutes / 60).toLocaleString('fa-IR')} ساعت مانده` : ' · مهلت تمام شده'}
+                      </div>
+                    )}
+                    {n.action && <div className="admin-notification-action"><b>کاری که باید بکنی:</b> {n.action}</div>}
+                    {!n.read && <button type="button" className="btn ghost" onClick={() => markNotificationRead(n.id)}>دیدم؛ خوانده شد</button>}
+                  </article>
+                );
+              })}
+          </div>
+        </>
       )}
 
       {tab === 'overview' && (
