@@ -1079,3 +1079,41 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   .medal-showcase { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
+/* مدیریت شایعات و پاک‌سازی پنل ادمین */
+.admin-rumor-list { display: flex; flex-direction: column; gap: 10px; }
+.admin-rumor-card { margin: 0; }
+.admin-rumor-card header, .admin-rumor-card footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.admin-rumor-card header b { display: block; color: var(--hi); font-size: 11.5px; }
+.admin-rumor-card header small { display: block; color: var(--low); font-size: 9px; margin-top: 3px; }
+.admin-rumor-card header time { color: var(--low); font-size: 9px; }
+.admin-rumor-target {
+  width: fit-content; margin-top: 9px; padding: 4px 7px; border-radius: 3px;
+  color: var(--az2); background: rgba(106,151,205,.08); font-size: 9.5px;
+}
+.admin-rumor-card p { color: var(--mid); font-size: 11.5px; line-height: 1.9; margin: 10px 0; }
+.admin-rumor-card footer { padding-top: 9px; border-top: 1px solid rgba(160,195,255,.07); }
+.admin-rumor-card footer span { color: var(--mid); font-size: 10px; }
+.admin-rumor-card footer .btn { width: auto; padding: 7px 10px; color: #ff8a75; font-size: 9.5px; }
+
+.admin-cleanup-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+.admin-cleanup-card { margin: 0; padding: 13px; }
+.admin-cleanup-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-cleanup-card header b { color: var(--hi); font-size: 11px; }
+.admin-cleanup-card header span {
+  padding: 3px 6px; border-radius: 999px; color: var(--gold); background: rgba(201,162,39,.1); font-size: 8.5px;
+}
+.admin-cleanup-card p { min-height: 42px; color: var(--mid); font-size: 9.5px; line-height: 1.7; }
+.admin-cleanup-card code { color: #ff9c87; font-family: monospace; direction: ltr; }
+.admin-cleanup-card input { text-align: center; font-family: monospace; }
+.admin-cleanup-card .btn { margin-top: 9px; padding: 8px; color: #ff8a75; font-size: 9.5px; }
+.admin-cleanup-protected {
+  margin-top: 9px; padding: 9px 11px; border-radius: 4px; border: 1px solid rgba(106,151,205,.16);
+  color: var(--az2); background: rgba(106,151,205,.055); font-size: 9.5px; line-height: 1.8;
+}
+@media (max-width: 430px) {
+  .admin-cleanup-grid { grid-template-columns: 1fr; }
+  .admin-cleanup-card p { min-height: 0; }
+}
+
