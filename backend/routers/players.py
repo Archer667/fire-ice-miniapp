@@ -155,6 +155,8 @@ async def me(user: dict = Depends(get_user)):
         "points": score,
         "alliance_count": p.get("alliance_count", 0),
         "popularity": popularity,
+        "medals": medal_rows(p),
+        "stats": normalize_stats(p),
         "tax_rate": p.get("tax_rate", TAX_RATE_DEFAULT),
         "max_tax_rate": max_tax_rate(popularity),
         "rank": rank, "total_players": total,
