@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Send, Plus, Back, Eye, ThumbsUp, ThumbsDown } from '../components/Icons.jsx';
+import { RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE } from '../gamedata.js';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 
 const SYSTEM_TG_ID = 0;
@@ -46,7 +47,7 @@ function timeAgo(iso) {
 }
 
 export default function Ravens() {
-  const { toast, refreshUnread, unreadBreakdown } = useGame();
+  const { me, setMe, toast, refreshUnread, unreadBreakdown } = useGame();
   const [inbox, setInbox] = useState(null);
   const [tab, setTab] = useState('announcements');
   const [openWith, setOpenWith] = useState(null);   // {tg_id, name}
@@ -55,6 +56,10 @@ export default function Ravens() {
   const [composeTargets, setComposeTargets] = useState([]);
   const [composing, setComposing] = useState(false);
   const [rumors, setRumors] = useState(null);
+  const [composingTweet, setComposingTweet] = useState(false);
+  const [tweetTarget, setTweetTarget] = useState([]);
+  const [tweetText, setTweetText] = useState('');
+  const [tweetBusy, setTweetBusy] = useState(false);
 
   const loadInbox = () => api.inbox().then(setInbox).catch(e => { toast(e.message); setInbox([]); });
   const loadRumors = () => api.listRumors().then(setRumors).catch(e => { toast(e.message); setRumors([]); });
@@ -64,6 +69,23 @@ export default function Ravens() {
     if (rumors === null) loadRumors();
     api.markRumorsSeen().then(refreshUnread).catch(() => {});
   }, [tab]);
+
+  const sendTweet = async () => {
+    const text = tweetText.trim();
+    if (!tweetTarget.length) { toast('یک لرد را هدف بگیر'); return; }
+    if (text.length < 10) { toast('متن توییت را کمی بیشتر بنویس'); return; }
+    if ((me.resources?.gold || 0) < RUMOR_GOLD_COST) { toast('طلای کافی برای انتشار این توییت نداری'); return; }
+    setTweetBusy(true);
+    try {
+      await api.sendRumor(tweetTarget[0].tg_id, text);
+      haptic('medium');
+      setMe({ ...me, resources: { ...me.resources, gold: me.resources.gold - RUMOR_GOLD_COST } });
+      toast(`توییت علیه «${tweetTarget[0].name}» منتشر شد`);
+      setTweetTarget([]); setTweetText(''); setComposingTweet(false);
+      setRumors(null); loadRumors();
+    } catch (e) { toast(e.message); }
+    setTweetBusy(false);
+  };
 
   const reactRumor = async (rumorId, reaction) => {
     const r = rumors.find(x => x.id === rumorId);
@@ -168,7 +190,7 @@ export default function Ravens() {
         </button>
         <button type="button" role="tab" aria-selected={tab === 'rumors'}
                 className={`rbtn tab ${tab === 'rumors' ? 'on' : ''}`} onClick={() => { haptic(); setTab('rumors'); }}>
-          شایعات
+          توییت‌ها
           {unreadBreakdown.rumors > 0 && <span className="raven-tab-count">{unreadBreakdown.rumors.toLocaleString('fa-IR')}</span>}
         </button>
       </div>
@@ -201,9 +223,29 @@ export default function Ravens() {
 
       {tab === 'rumors' && (
         <div className="up u2">
+          {composingTweet && (
+            <div className="card tweet-composer">
+              <div className="sect" style={{ marginTop: 0 }}>توییت تازه</div>
+              <label className="f">هدف توییت</label>
+              <PlayerPicker value={tweetTarget} onChange={setTweetTarget} single />
+              <label className="f">متن توییت</label>
+              <textarea value={tweetText} onChange={e => setTweetText(e.target.value)} maxLength={400}
+                        placeholder="دربارهٔ این لرد چه توییتی منتشر می‌کنی؟" />
+              <div className="page-sub" style={{ margin: '9px 4px 0', lineHeight: 1.8 }}>
+                هزینه: <b style={{ color: 'var(--az2)' }}>{RUMOR_GOLD_COST.toLocaleString('fa-IR')} طلا</b> ·
+                {' '}اثر: <b style={{ color: 'var(--danger)' }}>−{RUMOR_POPULARITY_DAMAGE.toLocaleString('fa-IR')} محبوبیت هدف</b>
+              </div>
+              <div className="tweet-composer-actions">
+                <button type="button" className="btn" disabled={tweetBusy} onClick={sendTweet}>
+                  {tweetBusy ? 'در حال انتشار...' : 'انتشار توییت'}
+                </button>
+                <button type="button" className="btn ghost" onClick={() => { setComposingTweet(false); setTweetTarget([]); setTweetText(''); }}>انصراف</button>
+              </div>
+            </div>
+          )}
           {rumors === null && <div className="loading">در حال بارگذاری...</div>}
           {rumors && rumors.length === 0 && (
-            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز شایعه‌ای پخش نشده</div>
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز توییت‌ای پخش نشده</div>
           )}
           {rumors && rumors.map(r => (
             <div className="card" key={r.id} style={{ marginBottom: 10 }}>
@@ -211,7 +253,7 @@ export default function Ravens() {
                 <div className="ic"><Eye s={16} /></div>
                 <div className="n">
                   علیه {r.target}
-                  <small>{r.mine ? 'از طرف تو' : 'شایعه‌سازش ناشناس مانده'} · {timeAgo(r.created_at)}</small>
+                  <small>{r.mine ? 'از طرف تو' : 'توییت‌سازش ناشناس مانده'} · {timeAgo(r.created_at)}</small>
                 </div>
               </div>
               <div style={{ fontSize: 12.5, lineHeight: 1.8, color: 'var(--hi)', marginTop: 8 }}>{r.text}</div>
@@ -239,6 +281,11 @@ export default function Ravens() {
 
       {tab === 'messages' && (
         <button type="button" className="fab" aria-label="کلاغ تازه" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
+          <Plus s={22} />
+        </button>
+      )}
+      {tab === 'rumors' && !composingTweet && (
+        <button type="button" className="fab" aria-label="توییت تازه" onClick={() => { haptic(); setComposingTweet(true); }}>
           <Plus s={22} />
         </button>
       )}
