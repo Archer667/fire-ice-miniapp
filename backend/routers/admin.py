@@ -11,7 +11,7 @@ from db import (
 )
 import game_data
 import telegram_bot
-from game import now, add_resources, building_levels_for
+from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
 from config import ADMIN_IDS
@@ -801,8 +801,18 @@ async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin
     p = await players.find_one({"tg_id": tg_id})
     if not p:
         raise HTTPException(404, "بازیکن پیدا نشد")
+    # سقف دقیق همین بازیکن: پایه + بونوس ساختمان‌های قلعهٔ اصلی و همهٔ قلعه‌های اضافه.
+    # ارتقاهای تمام‌شده را اول resolve می‌کنیم تا عددی که ادمین می‌بیند با تولید واقعی یکی باشد.
+    resolve_building_upgrades(p)
     res = {k: round(p.get("resources", {}).get(k, 0)) for k in PLAYER_RESOURCE_KEYS}
-    return {"name": p["name"], "castle": p["castle"], "resources": res}
+    caps = effective_caps(p)
+    resource_caps = {k: round(caps.get(k, 0)) for k in PLAYER_RESOURCE_KEYS}
+    return {
+        "name": p["name"],
+        "castle": p["castle"],
+        "resources": res,
+        "resource_caps": resource_caps,
+    }
 
 class SetPlayerResourcesBody(BaseModel):
     resources: dict
