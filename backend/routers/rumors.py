@@ -73,6 +73,17 @@ def _rumor_brief(r: dict, user_id: int) -> dict:
         "my_reaction": reactions.get(str(user_id)),
     }
 
+@router.post("/seen")
+async def mark_rumors_seen(user: dict = Depends(get_user)):
+    result = await players.update_one(
+        {"tg_id": user["id"]},
+        {"$set": {"rumors_last_seen_at": now()}},
+    )
+    if not result.matched_count:
+        raise HTTPException(403, "اول ثبت‌نام کن")
+    return {"ok": True}
+
+
 @router.get("")
 async def list_rumors(user: dict = Depends(get_user)):
     """فید عمومی شایعات — همهٔ بازیکنان همه‌چیز را می‌بینند، ولی نویسنده فاش نمی‌شود"""
