@@ -1580,6 +1580,10 @@ export const api = {
   listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
   reactRumor: (rumorId, reaction) => MOCK ? Promise.resolve(M.reactRumor(rumorId, reaction))
     : req(`/api/rumors/${rumorId}/react`, { method: 'POST', body: JSON.stringify({ reaction }) }),
+  adminRumors: () => MOCK ? Promise.resolve([]) : req('/api/admin/rumors'),
+  adminDeleteRumor: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/rumors/${id}`, { method: 'DELETE' }),
+  adminCleanupPreview: () => MOCK ? Promise.resolve({ messages: 0, rumors: 0, campaigns: 0, reports: 0, protected: { active_campaigns: 0, pending_spy: 0, pending_roleplays: 0 } }) : req('/api/admin/cleanup/preview'),
+  adminCleanup: (category, confirm) => MOCK ? Promise.resolve({ ok: true, deleted: 0 }) : req('/api/admin/cleanup', { method: 'POST', body: JSON.stringify({ category, confirm }) }),
   adminNotifications: () => MOCK ? Promise.resolve([]) : req('/api/admin/notifications'),
   adminReadNotification: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/notifications/${id}/read`, { method: 'POST' }),
   adminReadAllNotifications: () => MOCK ? Promise.resolve({ ok: true }) : req('/api/admin/notifications/read-all', { method: 'POST' }),
