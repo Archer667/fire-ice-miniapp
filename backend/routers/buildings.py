@@ -9,6 +9,7 @@ from game import (
 )
 from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours, building_produces, building_cap_bonus
 from routers.war import all_castle_terrain
+from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/buildings", tags=["buildings"])
 
@@ -120,3 +121,58 @@ async def build(body: ActionBody, user: dict = Depends(get_user)):
 @router.post("/upgrade")
 async def upgrade(body: ActionBody, user: dict = Depends(get_user)):
     return await _start_upgrade(body.building_id, body.castle, user, require_built=True)
+
+async def notify_building_completions():
+    """ساختمان‌های آماده را حتی وقتی بازیکن داخل اپ نیست نهایی و یک‌بار اطلاع‌رسانی می‌کند.
+
+    هر ساختمان با یک آپدیت شرطی claim می‌شود تا اگر چند worker هم‌زمان watcher را اجرا کردند،
+    پیام تکراری برای بازیکن نرود.
+    """
+    cur = players.find(
+        {"castle": {"$ne": None}},
+        {"tg_id": 1, "name": 1, "castle": 1, "buildings": 1, "castle_buildings": 1},
+    )
+    async for p in cur:
+        completed = []
+        scopes = [(p.get("castle"), "buildings", p.get("buildings", {}))]
+        for castle, state in p.get("castle_buildings", {}).items():
+            scopes.append((castle, f"castle_buildings.{castle}", state))
+
+        for castle, prefix, state in scopes:
+            if not castle:
+                continue
+            for bid, raw in list(state.items()):
+                st = normalize_building_state(raw)
+                ready = st.get("ready_at")
+                target = st.get("upgrade_to")
+                if isinstance(ready, str):
+                    ready = datetime.fromisoformat(ready)
+                if not target or not ready or ready > now():
+                    continue
+
+                field = f"{prefix}.{bid}"
+                raw_ready = raw.get("ready_at") if isinstance(raw, dict) else ready
+                claimed = await players.update_one(
+                    {
+                        "_id": p["_id"],
+                        f"{field}.upgrade_to": target,
+                        f"{field}.ready_at": raw_ready,
+                    },
+                    {"$set": {
+                        f"{field}.level": target,
+                        f"{field}.upgrade_to": None,
+                        f"{field}.ready_at": None,
+                    }},
+                )
+                if claimed.modified_count:
+                    building_name = BUILDINGS.get(bid, {}).get("name", bid)
+                    completed.append(f"🏗️ {building_name} در {castle} به سطح {target} رسید")
+
+        if completed:
+            await send_system_message(
+                p["tg_id"],
+                p["name"],
+                "ساخت‌وساز تمام شد:\n" + "\n".join(completed) + "\nبرای دیدن اثرش وارد صفحهٔ ساختمان‌ها شو.",
+                kind="building",
+            )
+
