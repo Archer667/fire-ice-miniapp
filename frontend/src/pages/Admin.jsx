@@ -47,7 +47,7 @@ const TAB_GROUPS = [
       { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
       { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
       { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
-      { key: 'rumor_admin', label: 'مدیریت شایعات', description: 'دیدن نویسنده و حذف شایعه' },
+      { key: 'rumor_admin', label: 'مدیریت توییت‌ها', description: 'دیدن نویسنده و حذف توییت' },
       { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
     ],
   },
@@ -845,12 +845,12 @@ export default function Admin() {
   };
 
   const deleteAdminRumor = async (row) => {
-    if (!window.confirm(`شایعهٔ «${row.text.slice(0, 60)}» حذف شود؟ محبوبیت کم‌شده برنمی‌گردد.`)) return;
+    if (!window.confirm(`توییتٔ «${row.text.slice(0, 60)}» حذف شود؟ محبوبیت کم‌شده برنمی‌گردد.`)) return;
     setRumorDeleteBusy(row.id);
     try {
       await api.adminDeleteRumor(row.id);
       setAdminRumors(prev => prev?.filter(x => x.id !== row.id));
-      toast('شایعه حذف شد');
+      toast('توییت حذف شد');
     } catch (e) { toast(e.message); }
     setRumorDeleteBusy(null);
   };
@@ -2175,13 +2175,13 @@ export default function Admin() {
 
       {tab === 'rumor_admin' && (
         <>
-          <div className="sect up u2">مدیریت شایعات</div>
+          <div className="sect up u2">مدیریت توییت‌ها</div>
           <div className="page-sub up u2" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
-            شایعه برای بازیکن‌ها ناشناسه، ولی ادمین برای رسیدگی به تخلف نویسندهٔ واقعی رو می‌بینه. حذف شایعه، محبوبیتی که قبلاً کم شده رو برنمی‌گردونه.
+            توییت برای بازیکن‌ها ناشناسه، ولی ادمین برای رسیدگی به تخلف نویسندهٔ واقعی رو می‌بینه. حذف توییت، محبوبیتی که قبلاً کم شده رو برنمی‌گردونه.
           </div>
           <div className="admin-rumor-list up u3">
-            {adminRumors === null && <div className="loading">در حال گرفتن شایعات...</div>}
-            {adminRumors && adminRumors.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>شایعه‌ای وجود نداره</div>}
+            {adminRumors === null && <div className="loading">در حال گرفتن توییت‌ها...</div>}
+            {adminRumors && adminRumors.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>توییت‌ای وجود نداره</div>}
             {adminRumors && adminRumors.map(row => (
               <article className="admin-rumor-card card" key={row.id}>
                 <header>
@@ -2193,7 +2193,7 @@ export default function Admin() {
                 <footer>
                   <span>👍 {row.likes.toLocaleString('fa-IR')} · 👎 {row.dislikes.toLocaleString('fa-IR')}</span>
                   <button type="button" className="btn ghost" disabled={rumorDeleteBusy === row.id} onClick={() => deleteAdminRumor(row)}>
-                    {rumorDeleteBusy === row.id ? 'در حال حذف...' : 'حذف شایعه'}
+                    {rumorDeleteBusy === row.id ? 'در حال حذف...' : 'حذف توییت'}
                   </button>
                 </footer>
               </article>
@@ -2263,7 +2263,7 @@ export default function Admin() {
           <div className="admin-cleanup-grid up u3">
             {[
               { key: 'messages', token: 'MESSAGES', label: 'پیام‌ها و اطلاعیه‌ها', note: 'تمام نامه‌های خصوصی و اطلاعیه‌های داخل کلاغ‌ها' },
-              { key: 'rumors', token: 'RUMORS', label: 'شایعات', note: 'تمام شایعات و واکنش‌های آن‌ها' },
+              { key: 'rumors', token: 'RUMORS', label: 'توییت‌ها', note: 'تمام توییت‌ها و واکنش‌های آن‌ها' },
               { key: 'campaigns', token: 'CAMPAIGNS', label: 'لشکرکشی‌های بسته', note: 'فقط تاریخچه؛ لشکر فعال حذف نمی‌شه' },
               { key: 'reports', token: 'REPORTS', label: 'گزارش‌های حل‌شده', note: 'جاسوسی و رول داوری‌شده؛ پروندهٔ باز محفوظ می‌مونه' },
             ].map(item => (
@@ -2293,7 +2293,7 @@ export default function Admin() {
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>ری‌استارت کامل بازی</div>
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
                   همهٔ بازیکن‌های غیرادمین حذف می‌شوند و باید از نو ثبت‌نام کنند؛ تاریخچهٔ لشکرکشی‌ها، جاسوسی‌ها،
-                  پیام‌ها، رول‌ها، شورش‌ها و تاس‌های شورش، شایعات، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
+                  پیام‌ها، رول‌ها، شورش‌ها و تاس‌های شورش، توییت‌ها، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
                   <br />
                   دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه، آیتم‌ها و بازارهایی که خودت ساخته‌ای، و حساب/پیشرفت خودِ ادمین‌ها.
                   <br />این کار بازگشت‌ناپذیر است.
