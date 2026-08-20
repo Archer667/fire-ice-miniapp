@@ -7,7 +7,7 @@ from auth import get_user, get_admin, get_full_admin, get_owner
 from db import (
     campaigns, players, admin_roles, map_castles, market_listings, black_market_listings,
     spy_missions, roleplays, items, item_grants, alliances, game_settings,
-    caravans, messages, rumors, hierarchy, polls, rebellions, rebellion_checks,
+    caravans, messages, rumors, hierarchy, polls, rebellions, rebellion_checks, admin_notifications,
 )
 import game_data
 import telegram_bot
@@ -32,6 +32,44 @@ async def full_admin_user(user: dict = Depends(get_user)):
 async def owner_user(user: dict = Depends(get_user)):
     """فقط صاحبِ بازی — برای ری‌استارت کامل"""
     return await get_owner(user)
+
+@router.get("/notifications")
+async def list_admin_notifications(user: dict = Depends(admin_user)):
+    out = []
+    async for row in admin_notifications.find({}).sort("created_at", -1).limit(100):
+        out.append({
+            "id": str(row["_id"]), "kind": row.get("kind", "general"),
+            "title": row.get("title", "اعلان مدیریتی"), "detail": row.get("detail", ""),
+            "priority": row.get("priority", "normal"), "player_name": row.get("player_name"),
+            "player_tg_id": row.get("player_tg_id"), "castle": row.get("castle"),
+            "action": row.get("action"), "source_id": row.get("source_id"),
+            "deadline": row["deadline"].isoformat() if row.get("deadline") else None,
+            "created_at": row["created_at"].isoformat(),
+            "read": user["id"] in row.get("read_by", []),
+        })
+    return out
+
+
+@router.post("/notifications/read-all")
+async def read_all_admin_notifications(user: dict = Depends(admin_user)):
+    await admin_notifications.update_many(
+        {"read_by": {"$ne": user["id"]}},
+        {"$addToSet": {"read_by": user["id"]}},
+    )
+    return {"ok": True}
+
+
+@router.post("/notifications/{notification_id}/read")
+async def read_admin_notification(notification_id: str, user: dict = Depends(admin_user)):
+    try:
+        oid = ObjectId(notification_id)
+    except Exception:
+        raise HTTPException(400, "شناسه اعلان نامعتبر است")
+    result = await admin_notifications.update_one({"_id": oid}, {"$addToSet": {"read_by": user["id"]}})
+    if not result.matched_count:
+        raise HTTPException(404, "اعلان پیدا نشد")
+    return {"ok": True}
+
 
 @router.get("/campaigns")
 async def list_campaigns(user: dict = Depends(admin_user)):
