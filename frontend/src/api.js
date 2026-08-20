@@ -144,6 +144,7 @@ let mockItemSeq = 1;
 const mockItemGrants = []; // {id, item_id, tg_id, color, granted_at, expires_at}
 let mockItemGrantSeq = 1;
 const mockRumors = []; // {id, author_tg_id, author_name, target_tg_id, target_name, text, created_at}
+let mockRumorsSeenAt = 0;
 let mockRumorSeq = 1;
 
 function mockResolveRegion(name) {
@@ -1056,7 +1057,12 @@ const M = {
     mockDaily.streak = streak; mockDaily.lastClaimDate = dailyTodayStr();
     return { ok: true, streak, day_in_cycle: dayInCycle, reward, resources: mockMe.resources };
   },
-  ravensUnread: () => ({ count: mockMessages.filter(m => m.to_id === 1 && !m.read).length }),
+  ravensUnread: () => {
+    const announcements = mockMessages.filter(m => m.to_id === 1 && m.from_id === 0 && !m.read).length;
+    const personal = mockMessages.filter(m => m.to_id === 1 && m.from_id !== 0 && !m.read).length;
+    const rumorCount = mockRumors.filter(r => r.author_tg_id !== 1 && new Date(r.created_at).getTime() > mockRumorsSeenAt).length;
+    return { count: announcements + personal + rumorCount, announcements, messages: personal, rumors: rumorCount };
+  },
   inbox: () => {
     const convos = {};
     for (const m of mockMessages) {
@@ -1270,6 +1276,7 @@ const M = {
     return { ok: true };
   },
   listRumors: () => mockRumors.map(r => rumorBrief(r)),
+  markRumorsSeen: () => { mockRumorsSeenAt = Date.now(); return { ok: true }; },
   reactRumor: (rumorId, reaction) => {
     const r = mockRumors.find(x => x.id === rumorId);
     if (!r) throw new Error('این شایعه پیدا نشد');
@@ -1578,6 +1585,7 @@ export const api = {
   sendRumor: (targetTgId, text) => MOCK ? Promise.resolve(M.sendRumor(targetTgId, text))
     : req('/api/rumors/send', { method: 'POST', body: JSON.stringify({ target_tg_id: targetTgId, text }) }),
   listRumors: () => MOCK ? Promise.resolve(M.listRumors()) : req('/api/rumors'),
+  markRumorsSeen: () => MOCK ? Promise.resolve(M.markRumorsSeen()) : req('/api/rumors/seen', { method: 'POST' }),
   reactRumor: (rumorId, reaction) => MOCK ? Promise.resolve(M.reactRumor(rumorId, reaction))
     : req(`/api/rumors/${rumorId}/react`, { method: 'POST', body: JSON.stringify({ reaction }) }),
   adminRumors: () => MOCK ? Promise.resolve([]) : req('/api/admin/rumors'),
