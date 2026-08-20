@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players, caravans, alliances
 from game import now, can_afford, pay, add_resources, owned_castles, apply_production
-from game_data import TRADE_GOODS, TRADE_GOOD_NAMES, travel_minutes
+from game_data import CARAVAN_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
 from routers.war import blocked_castles_for
 
@@ -49,7 +49,7 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
 
     cost = {}
     for good, qty in body.resources.items():
-        if good not in TRADE_GOODS:
+        if good not in CARAVAN_GOODS:
             raise HTTPException(400, f"کالای نامعتبر: {good}")
         qty = int(qty)
         if qty > 0:
