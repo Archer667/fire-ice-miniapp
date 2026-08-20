@@ -904,6 +904,7 @@ export function taxYieldMultiplier(popularity) {
   return 0.5 + popularity / (2 * POPULARITY_MAX);
 }
 
-// کالاهایی که می‌شود کاروان فرستاد یا از بازار وستروس خرید — طلا خودش پول است، نه کالا
+// کالاهای بازار و محموله‌های مجاز کاروان — سکه فقط با کاروان جابه‌جا می‌شود و کالای بازار نیست
 export const TRADE_GOODS = ['wood', 'stone', 'iron', 'food', 'wine'];
-export const TRADE_GOOD_NAMES = { wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
+export const CARAVAN_GOODS = ['gold', ...TRADE_GOODS];
+export const TRADE_GOOD_NAMES = { gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
