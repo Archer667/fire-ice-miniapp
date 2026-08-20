@@ -3,9 +3,9 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Coin, Wood, Rock, Pick, Wheat, Wine, Send } from '../components/Icons.jsx';
-import { TRADE_GOODS, TRADE_GOOD_NAMES, castleLabel } from '../gamedata.js';
+import { CARAVAN_GOODS, TRADE_GOOD_NAMES, castleLabel } from '../gamedata.js';
 
-const RES_ICON = { wood: Wood, stone: Rock, iron: Pick, food: Wheat, wine: Wine };
+const RES_ICON = { gold: Coin, wood: Wood, stone: Rock, iron: Pick, food: Wheat, wine: Wine };
 
 const TABS = [
   { key: 'caravan', label: 'کاروان' },
@@ -13,7 +13,7 @@ const TABS = [
   { key: 'black',   label: 'بازار سیاه' },
 ];
 
-const emptyAmounts = () => Object.fromEntries(TRADE_GOODS.map(g => [g, 0]));
+const emptyAmounts = () => Object.fromEntries(CARAVAN_GOODS.map(g => [g, 0]));
 
 export default function Trade() {
   const { me, setMe, toast } = useGame();
@@ -152,7 +152,7 @@ export default function Trade() {
                   </>
                 )}
                 <label className="f">کالاها</label>
-                {TRADE_GOODS.map(g => {
+                {CARAVAN_GOODS.map(g => {
                   const Icon = RES_ICON[g];
                   return (
                     <div className="troop" key={g}>
