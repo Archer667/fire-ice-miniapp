@@ -835,7 +835,7 @@ const M = {
     const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
     if (!p) throw new Error('بازیکن پیدا نشد');
     if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
-    return { name: p.name, castle: p.castle, resources: mockPlayerResources[tgId] };
+    return { name: p.name, castle: p.castle, resources: mockPlayerResources[tgId], resource_caps: { ...RESOURCE_CAPS } };
   },
   adminSetPlayerResources: (tgId, resources) => {
     if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
