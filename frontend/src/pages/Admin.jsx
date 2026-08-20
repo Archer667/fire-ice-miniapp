@@ -47,6 +47,7 @@ const TAB_GROUPS = [
       { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
       { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
       { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
+      { key: 'rumor_admin', label: 'مدیریت شایعات', description: 'دیدن نویسنده و حذف شایعه' },
       { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
     ],
   },
@@ -212,6 +213,11 @@ export default function Admin() {
   const [rebellionBusyId, setRebellionBusyId] = useState(null);
   const [adminNotifications, setAdminNotifications] = useState(null);
   const [notificationFilter, setNotificationFilter] = useState('unread');
+  const [adminRumors, setAdminRumors] = useState(null);
+  const [rumorDeleteBusy, setRumorDeleteBusy] = useState(null);
+  const [cleanupPreview, setCleanupPreview] = useState(null);
+  const [cleanupConfirm, setCleanupConfirm] = useState({});
+  const [cleanupBusy, setCleanupBusy] = useState(null);
 
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
@@ -245,6 +251,8 @@ export default function Admin() {
   }).catch(e => toast(e.message));
 
   const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
+  const loadAdminRumors = () => api.adminRumors().then(setAdminRumors).catch(e => toast(e.message));
+  const loadCleanupPreview = () => { if (isFull) api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message)); };
   const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
   const loadRebellionSettings = () => {
     if (!isFull) return;
@@ -281,6 +289,8 @@ export default function Admin() {
 
   useEffect(() => {
     loadAdminNotifications();
+    loadAdminRumors();
+    loadCleanupPreview();
     loadPendingPlayers();
     loadRoster();
     loadCampaigns();
@@ -832,6 +842,34 @@ export default function Admin() {
       loadBalance();
     } catch (e) { toast(e.message); }
     setBalanceBusyId(null);
+  };
+
+  const deleteAdminRumor = async (row) => {
+    if (!window.confirm(`شایعهٔ «${row.text.slice(0, 60)}» حذف شود؟ محبوبیت کم‌شده برنمی‌گردد.`)) return;
+    setRumorDeleteBusy(row.id);
+    try {
+      await api.adminDeleteRumor(row.id);
+      setAdminRumors(prev => prev?.filter(x => x.id !== row.id));
+      toast('شایعه حذف شد');
+    } catch (e) { toast(e.message); }
+    setRumorDeleteBusy(null);
+  };
+
+  const runCleanup = async (category, token, label) => {
+    if ((cleanupConfirm[category] || '').trim() !== token) {
+      toast(`برای پاک‌سازی باید دقیقاً ${token} را بنویسی`);
+      return;
+    }
+    if (!window.confirm(`تاریخچهٔ ${label} پاک شود؟ این کار برگشت‌ناپذیر است.`)) return;
+    setCleanupBusy(category);
+    try {
+      const result = await api.adminCleanup(category, token);
+      toast(`${result.deleted.toLocaleString('fa-IR')} مورد از ${label} پاک شد`);
+      setCleanupConfirm(prev => ({ ...prev, [category]: '' }));
+      loadCleanupPreview();
+      if (category === 'rumors') loadAdminRumors();
+    } catch (e) { toast(e.message); }
+    setCleanupBusy(null);
   };
 
   const markNotificationRead = async (id) => {
@@ -2135,6 +2173,35 @@ export default function Admin() {
         </>
       )}
 
+      {tab === 'rumor_admin' && (
+        <>
+          <div className="sect up u2">مدیریت شایعات</div>
+          <div className="page-sub up u2" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
+            شایعه برای بازیکن‌ها ناشناسه، ولی ادمین برای رسیدگی به تخلف نویسندهٔ واقعی رو می‌بینه. حذف شایعه، محبوبیتی که قبلاً کم شده رو برنمی‌گردونه.
+          </div>
+          <div className="admin-rumor-list up u3">
+            {adminRumors === null && <div className="loading">در حال گرفتن شایعات...</div>}
+            {adminRumors && adminRumors.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>شایعه‌ای وجود نداره</div>}
+            {adminRumors && adminRumors.map(row => (
+              <article className="admin-rumor-card card" key={row.id}>
+                <header>
+                  <div><b>نویسنده: {row.author_name}</b><small>شناسه: {row.author_tg_id}</small></div>
+                  <time>{new Date(row.created_at).toLocaleString('fa-IR')}</time>
+                </header>
+                <div className="admin-rumor-target">علیه: {row.target_name} · شناسه {row.target_tg_id}</div>
+                <p>{row.text}</p>
+                <footer>
+                  <span>👍 {row.likes.toLocaleString('fa-IR')} · 👎 {row.dislikes.toLocaleString('fa-IR')}</span>
+                  <button type="button" className="btn ghost" disabled={rumorDeleteBusy === row.id} onClick={() => deleteAdminRumor(row)}>
+                    {rumorDeleteBusy === row.id ? 'در حال حذف...' : 'حذف شایعه'}
+                  </button>
+                </footer>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
       {tab === 'bot_messages' && (
         <>
           <div className="sect up u2">ارسال پیام مستقیم از طرف بات تلگرام</div>
@@ -2188,6 +2255,36 @@ export default function Admin() {
               </div>
             ))}
           </div>
+
+          <div className="sect up u3">پاک‌سازی داده‌های قدیمی</div>
+          <div className="page-sub up u3" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
+            این ابزارها برای سبک‌کردن دیتابیس‌اند و حساب، منابع، نقشه و قلعه‌های بازیکن‌ها رو پاک نمی‌کنن. موارد فعال و پرونده‌های منتظر داوری هم محافظت می‌شن.
+          </div>
+          <div className="admin-cleanup-grid up u3">
+            {[
+              { key: 'messages', token: 'MESSAGES', label: 'پیام‌ها و اطلاعیه‌ها', note: 'تمام نامه‌های خصوصی و اطلاعیه‌های داخل کلاغ‌ها' },
+              { key: 'rumors', token: 'RUMORS', label: 'شایعات', note: 'تمام شایعات و واکنش‌های آن‌ها' },
+              { key: 'campaigns', token: 'CAMPAIGNS', label: 'لشکرکشی‌های بسته', note: 'فقط تاریخچه؛ لشکر فعال حذف نمی‌شه' },
+              { key: 'reports', token: 'REPORTS', label: 'گزارش‌های حل‌شده', note: 'جاسوسی و رول داوری‌شده؛ پروندهٔ باز محفوظ می‌مونه' },
+            ].map(item => (
+              <div className="card admin-cleanup-card" key={item.key}>
+                <header><b>{item.label}</b><span>{(cleanupPreview?.[item.key] || 0).toLocaleString('fa-IR')} مورد</span></header>
+                <p>{item.note}</p>
+                <label className="f">برای تایید بنویس: <code>{item.token}</code></label>
+                <input value={cleanupConfirm[item.key] || ''} onChange={e => setCleanupConfirm(prev => ({ ...prev, [item.key]: e.target.value }))}
+                       placeholder={item.token} dir="ltr" />
+                <button type="button" className="btn ghost" disabled={cleanupBusy === item.key || (cleanupConfirm[item.key] || '').trim() !== item.token}
+                        onClick={() => runCleanup(item.key, item.token, item.label)}>
+                  {cleanupBusy === item.key ? 'در حال پاک‌سازی...' : `پاک‌کردن ${item.label}`}
+                </button>
+              </div>
+            ))}
+          </div>
+          {cleanupPreview?.protected && (
+            <div className="admin-cleanup-protected up u3">
+              محافظت‌شده: {cleanupPreview.protected.active_campaigns.toLocaleString('fa-IR')} لشکر فعال · {cleanupPreview.protected.pending_spy.toLocaleString('fa-IR')} جاسوسی منتظر · {cleanupPreview.protected.pending_roleplays.toLocaleString('fa-IR')} رول منتظر
+            </div>
+          )}
 
           {me.is_owner && (
             <>
