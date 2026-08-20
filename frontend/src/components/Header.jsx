@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Menu, Mail, Coin, Wood, Rock, Pick } from './Icons.jsx';
 import { useGame } from '../store.jsx';
@@ -11,6 +12,17 @@ const TICKER_RES = [
 
 export default function Header({ onOpenMenu, onOpenRavens }) {
   const { me, unread } = useGame();
+  const [ravenAttention, setRavenAttention] = useState(false);
+  const previousUnread = useRef(0);
+
+  useEffect(() => {
+    const shouldAnimate = unread > 0 && (previousUnread.current === 0 || unread > previousUnread.current);
+    previousUnread.current = unread;
+    if (!shouldAnimate) return;
+    setRavenAttention(true);
+    const timer = setTimeout(() => setRavenAttention(false), 4200);
+    return () => clearTimeout(timer);
+  }, [unread]);
   return (
     <div className="header">
       <button className="hamburger" onClick={() => { haptic(); onOpenMenu(); }} aria-label="منو">
@@ -27,9 +39,11 @@ export default function Header({ onOpenMenu, onOpenRavens }) {
           ))}
         </div>
       )}
-      <button className="ravens-icon" onClick={() => { haptic(); onOpenRavens?.(); }} aria-label="کلاغ‌ها">
+      <button className={`ravens-icon ${ravenAttention ? 'needs-attention' : ''}`}
+              onClick={() => { haptic(); setRavenAttention(false); onOpenRavens?.(); }}
+              aria-label={unread > 0 ? `کلاغ‌ها؛ ${unread.toLocaleString('fa-IR')} مورد تازه` : 'کلاغ‌ها'}>
         <Mail s={14} />
-        {unread > 0 && <span className="dot badge" />}
+        {unread > 0 && <span className="raven-count badge">{unread > 99 ? '۹۹+' : unread.toLocaleString('fa-IR')}</span>}
       </button>
     </div>
   );
