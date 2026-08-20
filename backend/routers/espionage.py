@@ -7,6 +7,7 @@ from game import now, can_afford, pay
 from game_data import spy_travel_minutes
 from config import SPY_GOLD_COST, SPY_MEN_COST
 from routers.war import owner_of_castle
+from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/espionage", tags=["espionage"])
 
@@ -54,6 +55,19 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
         "created_at": now(),
     }
     res = await spy_missions.insert_one(doc)
+    await notify_admins(
+        "espionage",
+        "👁️ سناریوی جاسوسی تازه",
+        f"{p['name']} از {p['castle']} برای جاسوسی از {body.target_castle} سناریو فرستاد.",
+        dedupe_key=f"spy-submitted:{res.inserted_id}",
+        priority="normal",
+        player_name=p["name"],
+        player_tg_id=user["id"],
+        castle=body.target_castle,
+        action="از پنل ادمین ← جنگ و رول‌ها ← جاسوسی، سناریو را امتیاز بده.",
+        source_id=str(res.inserted_id),
+        deadline=arrival_at,
+    )
     return {"ok": True, "id": str(res.inserted_id), "travel_minutes": travel}
 
 @router.get("/mine")
