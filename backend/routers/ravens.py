@@ -8,13 +8,13 @@ import telegram_bot
 
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
-async def send_system_message(to_tg_id: int, to_name: str, text: str):
+async def send_system_message(to_tg_id: int, to_name: str, text: str, kind: str = "general"):
     """پیام از طرف «رخدادها» — برای روایت نتیجهٔ نبردها و اطلاعیه‌های ادمین. علاوه بر
     صندوق داخل اپ، یک پوش واقعی تلگرام هم می‌رود تا کاربر بیرون از اپ هم خبردار شود"""
     await messages.insert_one({
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
         "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
-        "text": text[:2000], "read": False, "created_at": now(),
+        "text": text[:2000], "kind": kind, "read": False, "created_at": now(),
     })
     telegram_bot.push(to_tg_id, f"{SYSTEM_SENDER_NAME}: {text}")
 
@@ -66,6 +66,7 @@ async def inbox(user: dict = Depends(get_user)):
                 "last_text": m["text"],
                 "last_at": m["created_at"].isoformat(),
                 "unread": 0,
+                "kind": m.get("kind", "general"),
             }
         if m["to_id"] == user["id"] and not m["read"]:
             convos[other]["unread"] += 1
@@ -86,5 +87,5 @@ async def thread(other_tg_id: int, user: dict = Depends(get_user)):
     await messages.update_many({"from_id": other_tg_id, "to_id": user["id"]}, {"$set": {"read": True}})
     out = []
     async for m in messages.find(q).sort("created_at", 1).limit(100):
-        out.append({"mine": m["from_id"] == user["id"], "text": m["text"], "at": m["created_at"].isoformat()})
+        out.append({"mine": m["from_id"] == user["id"], "text": m["text"], "kind": m.get("kind", "general"), "at": m["created_at"].isoformat()})
     return out
