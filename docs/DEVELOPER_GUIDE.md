@@ -154,7 +154,7 @@ export const MOCK = !BASE;
    sync که **همون قواعد، همون ترتیبِ چک، همون پیام‌هایِ فارسی**یِ روترِ پایتونی رو تکرار می‌کنه.
 ۳. **`export const api = { ... }`** (خطِ ~۱۵۰۶ تا آخر) — هر تابعِ صادرشده یک ternary یک‌خطیه.
 
-### یک مثالِ کاملِ سه‌لایه — شایعه
+### یک مثالِ کاملِ سه‌لایه — توییت
 ```js
 // لایهٔ سوم — export const api
 sendRumor: (targetTgId, text) => MOCK ? Promise.resolve(M.sendRumor(targetTgId, text))
@@ -162,11 +162,11 @@ sendRumor: (targetTgId, text) => MOCK ? Promise.resolve(M.sendRumor(targetTgId, 
 
 // لایهٔ دوم — const M
 sendRumor: (targetTgId, text) => {
-  if (targetTgId === 1) throw new Error('نمی‌توانی علیه خودت شایعه بسازی');
+  if (targetTgId === 1) throw new Error('نمی‌توانی علیه خودت توییت بسازی');
   const t = text.trim();
-  if (t.length < 10) throw new Error('متن شایعه خیلی کوتاه است');
+  if (t.length < 10) throw new Error('متن توییت خیلی کوتاه است');
   ...
-  if (!mockCanAfford({ gold: RUMOR_GOLD_COST })) throw new Error('طلای کافی برای پخش این شایعه نداری');
+  if (!mockCanAfford({ gold: RUMOR_GOLD_COST })) throw new Error('طلای کافی برای پخش این توییت نداری');
   mockPay({ gold: RUMOR_GOLD_COST });
   target.popularity = Math.max(0, (target.popularity ?? 50) - RUMOR_POPULARITY_DAMAGE);
   mockRumors.unshift({ id: String(mockRumorSeq++), ... });
@@ -267,7 +267,7 @@ const act = async (row) => {
 
 سه خونهٔ متفاوت، به‌ترتیبِ اولویتِ جستجو:
 
-**الف) `backend/config.py`** — ثابت‌هایِ اسکالرِ مسطح (تولیدِ پایه، سقف‌ها، هزینهٔ جاسوسی/شایعه/
+**الف) `backend/config.py`** — ثابت‌هایِ اسکالرِ مسطح (تولیدِ پایه، سقف‌ها، هزینهٔ جاسوسی/توییت/
 ضیافت، وزن‌هایِ امتیاز). مثال:
 ```python
 DAILY_PRODUCTION = {"gold": 200, "food": 300, ...}
