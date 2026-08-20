@@ -95,10 +95,10 @@ async def admin_delete_rumor(rumor_id: str, user: dict = Depends(admin_user)):
     try:
         oid = ObjectId(rumor_id)
     except Exception:
-        raise HTTPException(400, "شناسه شایعه نامعتبر است")
+        raise HTTPException(400, "شناسه توییت نامعتبر است")
     result = await rumors.delete_one({"_id": oid})
     if not result.deleted_count:
-        raise HTTPException(404, "شایعه پیدا نشد")
+        raise HTTPException(404, "توییت پیدا نشد")
     return {"ok": True}
 
 
@@ -129,7 +129,7 @@ class CleanupBody(BaseModel):
 async def cleanup_data(body: CleanupBody, user: dict = Depends(full_admin_user)):
     labels = {
         "messages": ("MESSAGES", "پیام"),
-        "rumors": ("RUMORS", "شایعه"),
+        "rumors": ("RUMORS", "توییت"),
         "campaigns": ("CAMPAIGNS", "لشکرکشی بسته"),
         "reports": ("REPORTS", "گزارش حل‌شده"),
     }
@@ -1140,7 +1140,7 @@ class ResetGameBody(BaseModel):
 async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
     """ری‌استارت کامل بازی — فقط صاحب بازی، فقط با تایپ عبارت تاییدیه (RESET).
     حذف می‌شود: همهٔ بازیکنانِ غیرادمین و کل تاریخچهٔ لشکرکشی/جاسوسی/پیام/رول/
-    شایعه/اتحاد/رای‌گیری/کاروان/مقام‌ها.
+    توییت/اتحاد/رای‌گیری/کاروان/مقام‌ها.
     دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه (map_castles)، آیتم‌ها و
     بازارهایی که ادمین‌ها ساخته‌اند (items، market_listings، black_market_listings)،
     خودِ نقش‌های ادمین (admin_roles)، و حساب/پیشرفتِ خودِ ادمین‌ها دست‌نخورده می‌ماند"""
