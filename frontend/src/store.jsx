@@ -8,6 +8,7 @@ export function GameProvider({ children }) {
   const [toastMsg, setToastMsg] = useState('');
   const [show, setShow] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [unreadBreakdown, setUnreadBreakdown] = useState({ announcements: 0, messages: 0, rumors: 0 });
 
   const toast = useCallback((m) => {
     setToastMsg(m); setShow(true);
@@ -15,7 +16,14 @@ export function GameProvider({ children }) {
   }, []);
 
   const refreshUnread = useCallback(() => {
-    api.ravensUnread().then(r => setUnread(r.count)).catch(() => {});
+    api.ravensUnread().then(r => {
+      setUnread(r.count || 0);
+      setUnreadBreakdown({
+        announcements: r.announcements || 0,
+        messages: r.messages || 0,
+        rumors: r.rumors || 0,
+      });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -25,6 +33,6 @@ export function GameProvider({ children }) {
     return () => clearInterval(id);
   }, [me?.registered, refreshUnread]);
 
-  return <Ctx.Provider value={{ me, setMe, toast, toastMsg, show, unread, refreshUnread }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ me, setMe, toast, toastMsg, show, unread, unreadBreakdown, refreshUnread }}>{children}</Ctx.Provider>;
 }
 export const useGame = () => useContext(Ctx);
