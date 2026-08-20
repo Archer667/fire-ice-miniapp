@@ -7,6 +7,7 @@ from db import players, campaigns, roleplays
 from game import now, owned_castles
 from game_data import ROLEPLAY_CATEGORIES
 from routers.war import ATTACK_OP_TYPES, ROLEPLAY_WINDOW_HOURS
+from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/roleplay", tags=["roleplay"])
 
@@ -59,6 +60,36 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         "created_at": now(),
     }
     res = await roleplays.insert_one(doc)
+    if campaign_id:
+        submitted = await roleplays.count_documents({"campaign_id": campaign_id})
+        deadline = c["arrival_at"] + timedelta(hours=ROLEPLAY_WINDOW_HOURS)
+        both_ready = submitted >= 2
+        await notify_admins(
+            "war_roleplay",
+            "⚔️ هر دو رول جنگ آمادهٔ داوری‌اند" if both_ready else "📜 رول جنگ تازه ثبت شد",
+            f"{p['name']} رول نبرد «{c.get('name') or 'بدون نام'}» در {c['target_castle']} را فرستاد."
+            + (f" حالا هر {submitted} رول موجود است." if both_ready else " هنوز منتظر رول طرف دیگر هستیم."),
+            dedupe_key=(f"war-both-ready:{campaign_id}" if both_ready else f"war-roleplay:{res.inserted_id}"),
+            priority="high" if both_ready else "normal",
+            player_name=p["name"],
+            player_tg_id=user["id"],
+            castle=c["target_castle"],
+            action="از پنل ادمین ← جنگ و رول‌ها ← رول‌ها، روایت طرفین را بررسی کن.",
+            source_id=campaign_id,
+            deadline=deadline,
+        )
+    else:
+        await notify_admins(
+            "roleplay",
+            "📜 رول تازه منتظر داوری است",
+            f"{p['name']} یک رول در دستهٔ «{ROLEPLAY_CATEGORIES[body.category]}» فرستاد.",
+            dedupe_key=f"roleplay:{res.inserted_id}",
+            player_name=p["name"],
+            player_tg_id=user["id"],
+            castle=p.get("castle"),
+            action="از پنل ادمین ← جنگ و رول‌ها ← رول‌ها، نتیجه را ثبت کن.",
+            source_id=str(res.inserted_id),
+        )
     return {"ok": True, "id": str(res.inserted_id)}
 
 @router.get("/mine")
