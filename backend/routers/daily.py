@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
@@ -109,4 +110,6 @@ async def notify_daily_rewards():
             "برای گرفتنش وارد بازی شو و روی جایزهٔ روزانه بزن.",
             kind="daily",
         )
+        # یادآوریِ روزانه ممکنه هم‌زمان برای همه آماده بشه؛ با این فاصله از سقف ارسال تلگرام رد نمی‌شیم.
+        await asyncio.sleep(0.05)
 
