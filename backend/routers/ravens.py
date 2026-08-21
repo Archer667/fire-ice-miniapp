@@ -8,14 +8,23 @@ import telegram_bot
 
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
-async def send_system_message(to_tg_id: int, to_name: str, text: str, kind: str = "general"):
-    """پیام از طرف «رخدادها» — برای روایت نتیجهٔ نبردها و اطلاعیه‌های ادمین. علاوه بر
-    صندوق داخل اپ، یک پوش واقعی تلگرام هم می‌رود تا کاربر بیرون از اپ هم خبردار شود"""
-    await messages.insert_one({
+async def send_system_message(
+    to_tg_id: int, to_name: str, text: str, kind: str = "general",
+    image_url: str | None = None, starts_at=None, ends_at=None,
+):
+    """پیام سیستمی داخل کلاغ و تلگرام؛ ایونت می‌تواند تصویر و بازهٔ زمانی هم داشته باشد."""
+    doc = {
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
         "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
         "text": text[:2000], "kind": kind, "read": False, "created_at": now(),
-    })
+    }
+    if image_url:
+        doc["image_url"] = image_url[:1000]
+    if starts_at:
+        doc["starts_at"] = starts_at
+    if ends_at:
+        doc["ends_at"] = ends_at
+    await messages.insert_one(doc)
     telegram_bot.push(to_tg_id, f"{SYSTEM_SENDER_NAME}: {text}")
 
 class SendBody(BaseModel):
@@ -102,5 +111,11 @@ async def thread(other_tg_id: int, user: dict = Depends(get_user)):
     await messages.update_many({"from_id": other_tg_id, "to_id": user["id"]}, {"$set": {"read": True}})
     out = []
     async for m in messages.find(q).sort("created_at", 1).limit(100):
-        out.append({"mine": m["from_id"] == user["id"], "text": m["text"], "kind": m.get("kind", "general"), "at": m["created_at"].isoformat()})
+        out.append({
+            "mine": m["from_id"] == user["id"], "text": m["text"],
+            "kind": m.get("kind", "general"), "at": m["created_at"].isoformat(),
+            "image_url": m.get("image_url"),
+            "starts_at": m["starts_at"].isoformat() if m.get("starts_at") else None,
+            "ends_at": m["ends_at"].isoformat() if m.get("ends_at") else None,
+        })
     return out
