@@ -36,6 +36,9 @@ DEFAULT_SETTINGS = {
         {"max": 15, "popularity": 0}, {"max": 20, "popularity": -1},
         {"max": 100, "popularity": -2},
     ],
+    "tax_overage_start": 20,
+    "tax_overage_step": 5,
+    "tax_overage_popularity": -1,
     "chance_low_start": 5,
     "chance_low_step": 3,
     "chance_high_start": 40,
@@ -77,6 +80,19 @@ def rebellion_chance(popularity: int, settings: dict) -> int:
     return min(100, int(settings["chance_high_start"]) + (high_risk - 1 - popularity) * int(settings["chance_high_step"]))
 
 def _tax_delta(rate: int, settings: dict) -> int:
+    """اثر روزانهٔ مالیات؛ بالاتر از آستانه، هر پله جریمهٔ محبوبیت بیشتری می‌دهد."""
+    rate = max(0, min(100, int(rate)))
+    overage_start = int(settings.get("tax_overage_start", 20))
+    if rate > overage_start:
+        base_delta = 0
+        for band in settings["tax_bands"]:
+            if overage_start <= int(band["max"]):
+                base_delta = int(band["popularity"])
+                break
+        step = max(1, int(settings.get("tax_overage_step", 5)))
+        penalty = int(settings.get("tax_overage_popularity", -1))
+        extra_steps = (rate - overage_start + step - 1) // step
+        return base_delta + extra_steps * penalty
     for band in settings["tax_bands"]:
         if rate <= int(band["max"]):
             return int(band["popularity"])
