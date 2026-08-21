@@ -1618,6 +1618,10 @@ export const api = {
     : req('/api/admin/building-balance', { method: 'POST', body: JSON.stringify(b) }),
   adminResetBuildingBalance: (id) => MOCK ? Promise.resolve(M.adminResetBuildingBalance(id))
     : req(`/api/admin/building-balance/${id}/reset`, { method: 'POST' }),
+  adminPlayerBuildings: (tgId) => MOCK ? Promise.resolve({ castles: [], max_level: 30 })
+    : req(`/api/admin/players/${tgId}/buildings`),
+  adminSetPlayerBuilding: (tgId, buildingId, castle, level) => MOCK ? Promise.resolve({ ok: true })
+    : req(`/api/admin/players/${tgId}/buildings/${buildingId}`, { method: 'POST', body: JSON.stringify({ castle, level }) }),
   setTax:    (rate) => MOCK ? Promise.resolve(M.setTax(rate)) : req('/api/players/tax', { method: 'POST', body: JSON.stringify({ rate }) }),
   titles:    () => MOCK ? Promise.resolve(M.titles()) : req('/api/titles'),
   setSmallCouncil: (seat, tgId) => MOCK ? Promise.resolve(M.setSmallCouncil(seat, tgId))
