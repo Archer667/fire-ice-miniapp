@@ -11,7 +11,7 @@ from db import (
 )
 import game_data
 import telegram_bot
-from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades
+from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades, owned_castles, castle_building_state, normalize_building_state
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
 from config import ADMIN_IDS
@@ -1263,6 +1263,64 @@ async def reset_building_balance(building_id: str, user: dict = Depends(full_adm
         {"_id": BUILDING_OVERRIDES_DOC_ID}, {"$unset": {f"overrides.{building_id}": ""}}, upsert=True,
     )
     return {"ok": True}
+
+
+class AdminPlayerBuildingBody(BaseModel):
+    castle: str
+    level: int
+
+@router.get("/players/{tg_id}/buildings")
+async def admin_player_buildings(tg_id: int, user: dict = Depends(full_admin_user)):
+    """وضعیت همهٔ ساختمان‌ها در تک‌تک قلعه‌های یک بازیکن برای مدیریت مستقیم."""
+    player = await players.find_one({"tg_id": tg_id})
+    if not player:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    resolve_building_upgrades(player)
+    await players.update_one({"tg_id": tg_id}, {"$set": {
+        "buildings": player.get("buildings", {}),
+        "castle_buildings": player.get("castle_buildings", {}),
+    }})
+    castles = []
+    for castle in owned_castles(player):
+        state = castle_building_state(player, castle)
+        rows = []
+        for bid, meta in BUILDINGS.items():
+            st = normalize_building_state(state.get(bid))
+            rows.append({
+                "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
+                "requires_port": bool(meta.get("requires_port")),
+                "level": int(st.get("level", 0)),
+                "upgrade_to": st.get("upgrade_to"),
+                "ready_at": st.get("ready_at").isoformat() if st.get("ready_at") else None,
+            })
+        castles.append({"castle": castle, "home": castle == player.get("castle"), "buildings": rows})
+    return {"tg_id": tg_id, "player_name": player.get("name"), "castles": castles, "max_level": game_data.MAX_BUILDING_LEVEL}
+
+@router.post("/players/{tg_id}/buildings/{building_id}")
+async def admin_set_player_building(
+    tg_id: int, building_id: str, body: AdminPlayerBuildingBody,
+    user: dict = Depends(full_admin_user),
+):
+    """سطح ساختمان را مستقیم تعیین می‌کند؛ صفر یعنی حذف و ثبت سطح، ساختِ درحال‌انجام را لغو می‌کند."""
+    if building_id not in BUILDINGS:
+        raise HTTPException(400, "ساختمان نامعتبر")
+    if not 0 <= body.level <= game_data.MAX_BUILDING_LEVEL:
+        raise HTTPException(400, f"سطح باید بین صفر تا {game_data.MAX_BUILDING_LEVEL} باشد")
+    player = await players.find_one({"tg_id": tg_id})
+    if not player:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    if body.castle not in owned_castles(player):
+        raise HTTPException(400, "این قلعه متعلق به بازیکن نیست")
+    state = castle_building_state(player, body.castle)
+    if body.level == 0:
+        state.pop(building_id, None)
+    else:
+        state[building_id] = {"level": body.level, "upgrade_to": None, "ready_at": None}
+    await players.update_one({"tg_id": tg_id}, {"$set": {
+        "buildings": player.get("buildings", {}),
+        "castle_buildings": player.get("castle_buildings", {}),
+    }})
+    return {"ok": True, "building_id": building_id, "castle": body.castle, "level": body.level}
 
 
 class MedalAwardBody(BaseModel):
