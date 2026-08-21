@@ -7,7 +7,7 @@ from game import now, apply_production, effective_caps, owned_castles, resolve_b
 from medals import medal_rows, normalize_stats, sync_medals
 from admin_notifications import notify_admins
 from game_data import REGIONS, CASTLE_HOUSES
-from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, max_tax_rate, OWNER_ID
+from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, OWNER_ID
 from ranks import scored_players
 from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
 
@@ -158,7 +158,6 @@ async def me(user: dict = Depends(get_user)):
         "medals": medal_rows(p),
         "stats": normalize_stats(p),
         "tax_rate": p.get("tax_rate", TAX_RATE_DEFAULT),
-        "max_tax_rate": max_tax_rate(popularity),
         "rank": rank, "total_players": total,
         "day": day, "season_length": SEASON_LENGTH_DAYS,
     }
@@ -203,9 +202,8 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
         raise HTTPException(403, "اول ثبت‌نام کن")
     p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
-    cap = max_tax_rate(p.get("popularity", POPULARITY_START))
-    if not (0 <= body.rate <= cap):
-        raise HTTPException(400, f"نرخ مالیات باید بین ۰ تا {cap} درصد باشد")
+    if not (0 <= body.rate <= 100):
+        raise HTTPException(400, "نرخ مالیات باید بین ۰ تا ۱۰۰ درصد باشد")
     await players.update_one({"tg_id": user["id"]},
         {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"],
                   "stats": normalize_stats(p), "medals": sync_medals(p)}})
