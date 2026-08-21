@@ -84,7 +84,7 @@ export default function Dashboard({ goTo }) {
   };
 
   const changeTax = async (delta) => {
-    const rate = Math.max(0, Math.min(me.max_tax_rate, me.tax_rate + delta));
+    const rate = Math.max(0, Math.min(100, me.tax_rate + delta));
     if (rate === me.tax_rate) return;
     setTaxBusy(true);
     try {
@@ -237,11 +237,11 @@ export default function Dashboard({ goTo }) {
           <div className="val">{(me.popularity ?? 0).toLocaleString('fa-IR')}٪</div>
         </div>
         <div className="tax-row">
-          <span>نرخ مالیات <small>(سقف {me.max_tax_rate.toLocaleString('fa-IR')}٪ با این محبوبیت)</small></span>
+          <span>نرخ مالیات</span>
           <div className="tax-stepper">
             <button type="button" aria-label="کاهش نرخ مالیات" disabled={taxBusy || me.tax_rate <= 0} onClick={() => changeTax(-1)}>−</button>
             <b>{me.tax_rate.toLocaleString('fa-IR')}٪</b>
-            <button type="button" aria-label="افزایش نرخ مالیات" disabled={taxBusy || me.tax_rate >= me.max_tax_rate} onClick={() => changeTax(1)}>+</button>
+            <button type="button" aria-label="افزایش نرخ مالیات" disabled={taxBusy || me.tax_rate >= 100} onClick={() => changeTax(1)}>+</button>
           </div>
         </div>
         {rebellion && (
