@@ -204,8 +204,14 @@ export default function Admin() {
   const [grantBusy, setGrantBusy] = useState(false);
 
   const [balanceList, setBalanceList] = useState(null);
-  const [balanceDrafts, setBalanceDrafts] = useState({}); // buildingId -> { resourceKey: stringValue }
+  const [balanceDrafts, setBalanceDrafts] = useState({});
   const [balanceBusyId, setBalanceBusyId] = useState(null);
+  const [buildingAdminMode, setBuildingAdminMode] = useState('global');
+  const [playerBuildingTarget, setPlayerBuildingTarget] = useState([]);
+  const [playerBuildingData, setPlayerBuildingData] = useState(null);
+  const [playerBuildingCastle, setPlayerBuildingCastle] = useState('');
+  const [playerBuildingDrafts, setPlayerBuildingDrafts] = useState({});
+  const [playerBuildingBusyId, setPlayerBuildingBusyId] = useState(null);
   const [rebellionSettings, setRebellionSettings] = useState(null);
   const [rebellionsList, setRebellionsList] = useState(null);
   const [rebellionSettingsBusy, setRebellionSettingsBusy] = useState(false);
@@ -237,17 +243,12 @@ export default function Admin() {
   const loadItems = () => api.adminListItems().then(setItemsList).catch(e => toast(e.message));
   const loadBalance = () => api.adminGetBuildingBalance().then(list => {
     setBalanceList(list);
-    setBalanceDrafts(prev => {
-      const next = { ...prev };
-      for (const b of list) {
-        if (next[b.id]) continue;
-        next[b.id] = {
-          ...Object.fromEntries(Object.keys(b.base_produces).map(k => [k, String(b.produces[k] ?? '')])),
-          ...Object.fromEntries(Object.keys(b.base_cap_bonus).map(k => [k, String(b.cap_bonus[k] ?? '')])),
-        };
-      }
-      return next;
-    });
+    setBalanceDrafts(Object.fromEntries(list.map(b => [b.id, {
+      cost: Object.fromEntries(Object.keys(b.base_cost || {}).map(k => [k, String(b.cost?.[k] ?? b.base_cost[k])])),
+      cost_step_percent: String(b.cost_step_percent ?? b.base_cost_step_percent ?? 15),
+      produces: Object.fromEntries(Object.keys(b.base_produces || {}).map(k => [k, String(b.produces?.[k] ?? b.base_produces[k])])),
+      cap_bonus: Object.fromEntries(Object.keys(b.base_cap_bonus || {}).map(k => [k, String(b.cap_bonus?.[k] ?? b.base_cap_bonus[k])])),
+    }])));
   }).catch(e => toast(e.message));
 
   const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
@@ -311,6 +312,22 @@ export default function Admin() {
     resetCastlePicker();
     setEditingCastle(null);
   }, [mapRegion]);
+
+  useEffect(() => {
+    if (!playerBuildingTarget.length) {
+      setPlayerBuildingData(null); setPlayerBuildingCastle(''); setPlayerBuildingDrafts({});
+      return;
+    }
+    setPlayerBuildingData(null);
+    api.adminPlayerBuildings(playerBuildingTarget[0].tg_id).then(data => {
+      setPlayerBuildingData(data);
+      const firstCastle = data.castles?.[0]?.castle || '';
+      setPlayerBuildingCastle(firstCastle);
+      setPlayerBuildingDrafts(Object.fromEntries(
+        (data.castles || []).flatMap(castle => castle.buildings.map(b => [`${castle.castle}::${b.id}`, String(b.level)]))
+      ));
+    }).catch(e => toast(e.message));
+  }, [playerBuildingTarget]);
 
   useEffect(() => {
     if (!resTarget.length) { setResValues(null); setResCaps(null); setResCampaigns(null); return; }
@@ -804,29 +821,45 @@ export default function Admin() {
     setGrantBusy(false);
   };
 
-  const setBalanceDraft = (bid, key, value) => {
-    setBalanceDrafts(prev => ({ ...prev, [bid]: { ...prev[bid], [key]: value } }));
+  const setBalanceDraft = (bid, section, key, value) => {
+    setBalanceDrafts(prev => ({
+      ...prev,
+      [bid]: {
+        ...prev[bid],
+        [section]: key === null ? value : { ...(prev[bid]?.[section] || {}), [key]: value },
+      },
+    }));
+  };
+
+  const parseBalanceMap = (values, errorText) => {
+    const out = {};
+    for (const [key, value] of Object.entries(values || {})) {
+      const n = parseInt(value, 10);
+      if (isNaN(n) || n < 0) throw new Error(errorText);
+      out[key] = n;
+    }
+    return out;
   };
 
   const saveBalance = async (b) => {
     const draft = balanceDrafts[b.id] || {};
-    const produces = {};
-    for (const k of Object.keys(b.base_produces)) {
-      const n = parseInt(draft[k], 10);
-      if (isNaN(n) || n < 0) { toast('مقدارها باید عدد صحیح و غیرمنفی باشند'); return; }
-      produces[k] = n;
-    }
-    const capBonus = {};
-    for (const k of Object.keys(b.base_cap_bonus)) {
-      const n = parseInt(draft[k], 10);
-      if (isNaN(n) || n < 0) { toast('مقدارها باید عدد صحیح و غیرمنفی باشند'); return; }
-      capBonus[k] = n;
-    }
+    let payload;
+    try {
+      const step = Number(draft.cost_step_percent);
+      if (!Number.isFinite(step) || step < 0 || step > 500) throw new Error('درصد رشد هزینه باید بین صفر تا ۵۰۰ باشد');
+      payload = {
+        building_id: b.id,
+        cost: parseBalanceMap(draft.cost, 'هزینه‌ها باید عدد صحیح و غیرمنفی باشند'),
+        cost_step_percent: step,
+        produces: parseBalanceMap(draft.produces, 'مقدار تولید باید عدد صحیح و غیرمنفی باشد'),
+        cap_bonus: parseBalanceMap(draft.cap_bonus, 'افزایش سقف باید عدد صحیح و غیرمنفی باشد'),
+      };
+    } catch (e) { toast(e.message); return; }
     setBalanceBusyId(b.id);
     try {
-      await api.adminSetBuildingBalance({ building_id: b.id, produces, cap_bonus: capBonus });
+      await api.adminSetBuildingBalance(payload);
       haptic('medium');
-      toast(`بازدهی «${b.name}» ذخیره شد`);
+      toast(`تنظیمات «${b.name}» ذخیره شد`);
       loadBalance();
     } catch (e) { toast(e.message); }
     setBalanceBusyId(null);
@@ -838,10 +871,31 @@ export default function Admin() {
       await api.adminResetBuildingBalance(b.id);
       haptic();
       toast(`«${b.name}» به مقدار پیش‌فرض برگشت`);
-      setBalanceDrafts(prev => { const next = { ...prev }; delete next[b.id]; return next; });
       loadBalance();
     } catch (e) { toast(e.message); }
     setBalanceBusyId(null);
+  };
+
+  const savePlayerBuilding = async (row) => {
+    if (!playerBuildingTarget.length || !playerBuildingCastle) return;
+    const key = `${playerBuildingCastle}::${row.id}`;
+    const level = parseInt(playerBuildingDrafts[key], 10);
+    const maxLevel = playerBuildingData?.max_level || 30;
+    if (isNaN(level) || level < 0 || level > maxLevel) {
+      toast(`سطح باید بین صفر تا ${maxLevel.toLocaleString('fa-IR')} باشد`); return;
+    }
+    setPlayerBuildingBusyId(row.id);
+    try {
+      await api.adminSetPlayerBuilding(playerBuildingTarget[0].tg_id, row.id, playerBuildingCastle, level);
+      haptic('medium');
+      toast(level === 0 ? `«${row.name}» حذف شد` : `سطح «${row.name}» روی ${level.toLocaleString('fa-IR')} ثبت شد`);
+      const data = await api.adminPlayerBuildings(playerBuildingTarget[0].tg_id);
+      setPlayerBuildingData(data);
+      setPlayerBuildingDrafts(Object.fromEntries(
+        (data.castles || []).flatMap(castle => castle.buildings.map(b => [`${castle.castle}::${b.id}`, String(b.level)]))
+      ));
+    } catch (e) { toast(e.message); }
+    setPlayerBuildingBusyId(null);
   };
 
   const deleteAdminRumor = async (row) => {
