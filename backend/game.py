@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from config import (
     DAILY_PRODUCTION, RESOURCE_CAPS, TAX_RATE_DEFAULT,
-    POPULARITY_START, max_tax_rate, tax_yield_multiplier,
+    POPULARITY_START, tax_yield_multiplier,
 )
 from game_data import BUILDINGS, building_produces, building_cap_bonus
 
@@ -104,7 +104,7 @@ def daily_production(player: dict) -> dict:
             prod[k] = prod.get(k, 0) + v * level
 
     men = player["resources"].get("men", 0)
-    tax_rate = min(player.get("tax_rate", TAX_RATE_DEFAULT), max_tax_rate(player.get("popularity", POPULARITY_START)))
+    tax_rate = max(0, min(100, int(player.get("tax_rate", TAX_RATE_DEFAULT))))
     multiplier = tax_yield_multiplier(player.get("popularity", POPULARITY_START))
     prod["gold"] = prod.get("gold", 0) + round(men * (tax_rate / 100) * multiplier)
     return prod
