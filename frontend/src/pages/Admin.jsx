@@ -1805,49 +1805,175 @@ export default function Admin() {
 
       {tab === 'balance' && isFull && (
         <>
-          <div className="sect up u2">بازدهی و سقفِ ساختمان‌ها</div>
-          <div className="page-sub up u2" style={{ marginTop: -4 }}>
-            هر مقداری اینجا تغییر بدی، سراسری روی همهٔ بازیکن‌ها اثر می‌ذاره — این‌ها مقدارِ افزوده به‌ازای هر سطحِ همان ساختمانه
+          <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
+            <button type="button" role="tab" aria-selected={buildingAdminMode === 'global'}
+                    className={`rbtn tab ${buildingAdminMode === 'global' ? 'on' : ''}`}
+                    onClick={() => setBuildingAdminMode('global')}>تنظیمات سراسری</button>
+            <button type="button" role="tab" aria-selected={buildingAdminMode === 'player'}
+                    className={`rbtn tab ${buildingAdminMode === 'player' ? 'on' : ''}`}
+                    onClick={() => setBuildingAdminMode('player')}>ساختمان‌های بازیکن</button>
           </div>
-          {!balanceList && <div className="loading">در حال بارگذاری...</div>}
-          {balanceList && balanceList.map(b => {
-            const draft = balanceDrafts[b.id] || {};
-            const busy = balanceBusyId === b.id;
-            return (
-              <div className="card up u2" key={b.id} style={{ marginBottom: 10 }}>
-                <div className="res">
-                  <div className="n">
-                    {b.name}
-                    {b.overridden && <small style={{ color: 'var(--az)' }}>سفارشی — با پیش‌فرض کد فرق دارد</small>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
-                  {Object.keys(b.base_produces).map(k => (
-                    <div key={k} style={{ minWidth: 110 }}>
-                      <label className="f" style={{ marginTop: 0, fontSize: 11 }}>{RES_LABEL[k] || k} / روز <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_produces[k]})</small></label>
-                      <input type="number" min="0" value={draft[k] ?? ''} onChange={e => setBalanceDraft(b.id, k, e.target.value)} />
-                    </div>
-                  ))}
-                  {Object.keys(b.base_cap_bonus).map(k => (
-                    <div key={k} style={{ minWidth: 110 }}>
-                      <label className="f" style={{ marginTop: 0, fontSize: 11 }}>سقفِ {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cap_bonus[k]})</small></label>
-                      <input type="number" min="0" value={draft[k] ?? ''} onChange={e => setBalanceDraft(b.id, k, e.target.value)} />
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                  <button className="btn" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => saveBalance(b)}>
-                    {busy ? '...' : 'ذخیره'}
-                  </button>
-                  {b.overridden && (
-                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => resetBalance(b)}>
-                      بازگشت به پیش‌فرض
-                    </button>
-                  )}
-                </div>
+
+          {buildingAdminMode === 'global' && (
+            <>
+              <div className="sect up u2">هزینه و بازدهی همهٔ ساختمان‌ها</div>
+              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
+                تغییرات این بخش سراسری است و روی ساخت‌های بعدیِ همهٔ بازیکن‌ها اثر می‌گذارد. هزینهٔ پایه برای سطح ۱ است؛
+                درصد رشد تعیین می‌کند هزینهٔ هر سطح نسبت به سطح قبلی چقدر بیشتر شود. تولید و سقف هم به‌ازای هر سطح حساب می‌شوند.
               </div>
-            );
-          })}
+              {!balanceList && <div className="loading">در حال بارگذاری...</div>}
+              {balanceList && balanceList.map(b => {
+                const draft = balanceDrafts[b.id] || {};
+                const busy = balanceBusyId === b.id;
+                const typeName = b.type === 'economy' ? 'اقتصادی' : b.type === 'barracks' ? 'پادگان' : b.type === 'armory' ? 'کارگاه تسلیحات' : 'دفاعی';
+                const preview = level => Object.entries(draft.cost || {}).map(([k, raw]) => {
+                  const base = Math.max(0, parseInt(raw, 10) || 0);
+                  const step = Math.max(0, Number(draft.cost_step_percent) || 0) / 100;
+                  return `${RES_LABEL[k] || k}: ${Math.round(base * (1 + (level - 1) * step)).toLocaleString('fa-IR')}`;
+                }).join(' · ');
+                return (
+                  <div className="card up u2" key={b.id} style={{ marginBottom: 12 }}>
+                    <div className="res">
+                      <div className="n">
+                        {b.name}
+                        <small>{typeName}{b.overridden ? ' · تنظیم سفارشی فعال است' : ' · تنظیمات پیش‌فرض بازی'}</small>
+                      </div>
+                    </div>
+
+                    <div className="sect" style={{ margin: '14px 0 4px' }}>۱. هزینهٔ ساخت و ارتقا</div>
+                    <div className="page-sub" style={{ margin: '0 0 9px', lineHeight: 1.8 }}>
+                      هزینهٔ پایه همان هزینهٔ ساخت سطح ۱ است. ارتقاهای بعدی با درصد رشد زیر محاسبه می‌شوند.
+                    </div>
+                    <div className="grid2">
+                      {Object.keys(b.base_cost || {}).map(k => (
+                        <div key={k}>
+                          <label className="f" style={{ marginTop: 0 }}>{RES_LABEL[k] || k} برای سطح ۱ <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cost[k]})</small></label>
+                          <input type="number" min="0" value={draft.cost?.[k] ?? ''}
+                                 onChange={e => setBalanceDraft(b.id, 'cost', k, e.target.value)} />
+                        </div>
+                      ))}
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>رشد هزینه در هر سطح <small style={{ color: 'var(--low)' }}>(درصد)</small></label>
+                        <input type="number" min="0" max="500" step="0.5" value={draft.cost_step_percent ?? ''}
+                               onChange={e => setBalanceDraft(b.id, 'cost_step_percent', null, e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="notice-guide" style={{ marginTop: 9 }}>
+                      <strong>پیش‌نمایش هزینه با عددهای فعلی</strong>
+                      <span>سطح ۱: {preview(1) || 'بدون هزینه'}<br />سطح ۲: {preview(2) || 'بدون هزینه'}<br />سطح ۱۰: {preview(10) || 'بدون هزینه'}</span>
+                    </div>
+
+                    <div className="sect" style={{ margin: '16px 0 4px' }}>۲. بازدهی هر سطح</div>
+                    <div className="page-sub" style={{ margin: '0 0 9px', lineHeight: 1.8 }}>
+                      تولید روزانه و افزایش سقف ذخیره برای هر یک سطح ساختمان است؛ سطح ۵ پنج برابر عدد ثبت‌شده اثر دارد.
+                    </div>
+                    {(Object.keys(b.base_produces || {}).length > 0 || Object.keys(b.base_cap_bonus || {}).length > 0) ? (
+                      <div className="grid2">
+                        {Object.keys(b.base_produces || {}).map(k => (
+                          <div key={`produce-${k}`}>
+                            <label className="f" style={{ marginTop: 0 }}>تولید روزانهٔ {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_produces[k]})</small></label>
+                            <input type="number" min="0" value={draft.produces?.[k] ?? ''}
+                                   onChange={e => setBalanceDraft(b.id, 'produces', k, e.target.value)} />
+                          </div>
+                        ))}
+                        {Object.keys(b.base_cap_bonus || {}).map(k => (
+                          <div key={`cap-${k}`}>
+                            <label className="f" style={{ marginTop: 0 }}>افزایش سقف {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cap_bonus[k]})</small></label>
+                            <input type="number" min="0" value={draft.cap_bonus?.[k] ?? ''}
+                                   onChange={e => setBalanceDraft(b.id, 'cap_bonus', k, e.target.value)} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="notice-guide">
+                        <strong>بازدهی منبع ندارد</strong>
+                        <span>این ساختمان تولید یا سقف انبار اضافه نمی‌کند و کارکردش نظامی، دفاعی یا بازکردن قابلیت است.</span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+                      <button className="btn" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => saveBalance(b)}>
+                        {busy ? 'در حال ذخیره...' : 'ذخیرهٔ تنظیمات ساختمان'}
+                      </button>
+                      {b.overridden && (
+                        <button className="btn ghost" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => resetBalance(b)}>
+                          بازگشت کامل به پیش‌فرض
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {buildingAdminMode === 'player' && (
+            <>
+              <div className="sect up u2">مدیریت ساختمان‌های یک بازیکن</div>
+              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
+                این بخش فقط ساختمان‌های بازیکن انتخاب‌شده را تغییر می‌دهد. سطح صفر یعنی حذف ساختمان؛ سطح ۱ یعنی ساخت اولیه.
+                ثبت مستقیم سطح، هر ساخت یا ارتقای درحال‌انجامِ همان ساختمان را لغو می‌کند.
+              </div>
+              <div className="card up u2">
+                <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
+                <PlayerPicker value={playerBuildingTarget} onChange={setPlayerBuildingTarget} single placeholder="بازیکن را انتخاب کن..." />
+                {playerBuildingTarget.length > 0 && !playerBuildingData && <div className="loading">در حال گرفتن ساختمان‌ها...</div>}
+                {playerBuildingData && (
+                  <>
+                    <label className="f">قلعهٔ موردنظر</label>
+                    <select value={playerBuildingCastle} onChange={e => setPlayerBuildingCastle(e.target.value)}>
+                      {playerBuildingData.castles.map(castle => (
+                        <option key={castle.castle} value={castle.castle}>{castle.castle}{castle.home ? ' · قلعهٔ اصلی' : ''}</option>
+                      ))}
+                    </select>
+                    <div className="notice-guide">
+                      <strong>تغییر مستقیم سطح</strong>
+                      <span>منابع بازیکن کم یا زیاد نمی‌شود. این ابزار برای اصلاح وضعیت، جایزه، جریمه یا رفع خطای ادمینی است.</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {playerBuildingData && playerBuildingData.castles.find(c => c.castle === playerBuildingCastle)?.buildings.map(row => {
+                const key = `${playerBuildingCastle}::${row.id}`;
+                const busy = playerBuildingBusyId === row.id;
+                const typeName = row.type === 'economy' ? 'اقتصادی' : row.type === 'barracks' ? 'پادگان' : row.type === 'armory' ? 'کارگاه تسلیحات' : 'دفاعی';
+                return (
+                  <div className="card up u3" key={row.id} style={{ marginBottom: 9 }}>
+                    <div className="res">
+                      <div className="n">
+                        {row.name}
+                        <small>
+                          {typeName} · سطح فعلی {row.level.toLocaleString('fa-IR')}
+                          {row.upgrade_to ? ` · درحال ارتقا به سطح ${row.upgrade_to.toLocaleString('fa-IR')}` : ''}
+                          {row.requires_port ? ' · فقط قلعهٔ بندری' : ''}
+                        </small>
+                      </div>
+                    </div>
+                    <div className="grid2" style={{ marginTop: 10, alignItems: 'end' }}>
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>سطح جدید (۰ تا {playerBuildingData.max_level})</label>
+                        <input type="number" min="0" max={playerBuildingData.max_level}
+                               value={playerBuildingDrafts[key] ?? String(row.level)}
+                               onChange={e => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: e.target.value }))} />
+                      </div>
+                      <button className="btn" disabled={busy} onClick={() => savePlayerBuilding(row)}>
+                        {busy ? 'در حال ثبت...' : 'ثبت سطح'}
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '0' }))}>حذف (سطح صفر)</button>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '1' }))}>ساخت سطح ۱</button>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: String(playerBuildingData.max_level) }))}>حداکثر</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </>
       )}
 
