@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
-import { Ship, Keep, Coliseum } from './Icons.jsx';
+import { Ship, Keep, Coliseum, Swords } from './Icons.jsx';
 import { MAP_IMAGE } from '../mapCoords.js';
 import { REGIONS_STATIC, castleLabel, REGION_COLORS, PACT_COLORS, ALLIANCE_TYPES, SEA_EDGES, isSeaEdge } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
@@ -27,7 +27,50 @@ const KIND_ICON = { castle: Keep, city: Keep, ruin: Coliseum, port: Ship };
  * با تب کوچک اطلاعات دقیقاً کنار همان پین) و هم برای حالت ادمین (کلیک روی خودِ
  * نقشه برای گرفتن مختصات یک نقطهٔ خالی) به کار می‌رود.
  * مختصات هر قلعه درصدی از عرض/ارتفاع کامل تصویر است (۰ تا ۱۰۰) */
-export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel, colorMode = 'region', routeSegments, seaLaneSegments }) {
+function ArmyMarker({ campaign, coords }) {
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setTick(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, []);
+
+  const points = (campaign.route_path || [campaign.from, campaign.to]).map(n => coords[n]).filter(Boolean);
+  if (campaign.arrived || points.length < 2 || !campaign.departed_at || !campaign.arrival_at) return null;
+  const start = new Date(campaign.departed_at).getTime();
+  const end = new Date(campaign.arrival_at).getTime();
+  const progress = Math.max(0, Math.min(1, (tick - start) / Math.max(1, end - start)));
+  if (progress >= 1) return null;
+
+  const lengths = [];
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const len = Math.hypot(points[i + 1][0] - points[i][0], points[i + 1][1] - points[i][1]);
+    lengths.push(len); total += len;
+  }
+  let remaining = progress * total;
+  let xy = points[points.length - 1];
+  for (let i = 0; i < lengths.length; i++) {
+    if (remaining <= lengths[i] || i === lengths.length - 1) {
+      const part = lengths[i] ? Math.max(0, Math.min(1, remaining / lengths[i])) : 0;
+      xy = [
+        points[i][0] + (points[i + 1][0] - points[i][0]) * part,
+        points[i][1] + (points[i + 1][1] - points[i][1]) * part,
+      ];
+      break;
+    }
+    remaining -= lengths[i];
+  }
+  const color = REGION_COLORS[campaign.owner_region] || '#d8c39a';
+  const label = `${campaign.mine ? 'لشکر تو' : `لشکر ${campaign.player_name || 'ناشناس'}`} — ${castleLabel(campaign.from)} به ${castleLabel(campaign.to)}`;
+  return (
+    <div className={`army-marker ${campaign.mine ? 'mine' : ''}`} style={{ left: `${xy[0]}%`, top: `${xy[1]}%`, '--army-color': color }} title={label} aria-label={label}>
+      <span className="army-halo" />
+      <span className="army-icon"><Swords s={9} /></span>
+    </div>
+  );
+}
+
+export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel, colorMode = 'region', routeSegments, seaLaneSegments, campaigns = [] }) {
   const zoom = useContext(ZoomContext);
   const handleFrameClick = (e) => {
     if (!onFrameClick) return;
@@ -100,6 +143,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
           </div>
         );
       })}
+      {campaigns.map(c => <ArmyMarker key={c.id || `${c.from}-${c.to}-${c.departed_at}`} campaign={c} coords={coords} />)}
     </div>
   );
 }
@@ -276,7 +320,8 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
           <MapFrame region={{ castles: filteredCastles }} coords={coords} pin={pin}
                     onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
                     onSelectTarget={onSelectTarget} pickLabel={pickLabel}
-                    colorMode={colorMode} routeSegments={routeSegments} seaLaneSegments={seaLaneSegments} />
+                    colorMode={colorMode} routeSegments={routeSegments} seaLaneSegments={seaLaneSegments}
+                    campaigns={(data.campaigns || []).filter(c => !c.arrived)} />
         </ZoomPanMap>
         {mapped.length > 6 && <MiniMap pins={mapped} view={view} onJump={jumpFromMiniMap} />}
         {myPin && (
@@ -307,3 +352,4 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
     </div>
   );
 }
+

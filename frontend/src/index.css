@@ -565,6 +565,30 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .pin.sm .dot { width: 10px; height: 10px; border-width: 1px; box-shadow: 0 0 0 2px rgba(0,0,0,0.35); }
 .pin.sm.owned .dot { width: 13px; height: 17px; padding-top: 3px; box-shadow: 0 2px 5px -2px rgba(0,0,0,0.55); }
 .pin.sm.owned .dot::before { inset: 1.2px 1.2px 2.6px 1.2px; }
+.army-marker {
+  position: absolute; width: 13px; height: 13px; z-index: 5;
+  transform: translate(-50%, -50%); pointer-events: auto;
+  transition: left 260ms linear, top 260ms linear;
+}
+.army-icon {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  width: 13px; height: 13px; border: 1px solid var(--army-color);
+  border-radius: 50%; color: var(--army-color); background: rgba(10,14,20,.92);
+  box-shadow: 0 0 0 2px rgba(0,0,0,.45), 0 0 8px color-mix(in srgb, var(--army-color) 65%, transparent);
+}
+.army-halo {
+  position: absolute; inset: -4px; border: 1px solid var(--army-color); border-radius: 50%;
+  opacity: .55; animation: army-signal 1.8s ease-in-out infinite;
+}
+.army-marker.mine .army-icon { background: color-mix(in srgb, var(--army-color) 24%, rgba(10,14,20,.94)); }
+@keyframes army-signal {
+  0%, 100% { transform: scale(.75); opacity: .2; }
+  50% { transform: scale(1.18); opacity: .7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .army-marker { transition: none; }
+  .army-halo { animation: none; }
+}
 .pin-popup {
   /* left/top/bottom/right/transform/transform-origin تماماً inline تعیین می‌شوند —
      چون بسته به جای پین روی نقشه (کنار لبه‌ها) و زوم فعلی فرق می‌کنند */
@@ -1148,3 +1172,4 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .tweet-composer { margin-bottom: 12px; }
 .tweet-composer-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 12px; }
 .tweet-composer-actions .btn { margin: 0; }
+

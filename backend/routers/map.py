@@ -97,14 +97,24 @@ async def get_map(user: dict = Depends(get_user)):
     cur = campaigns.find({"active": True}).sort("created_at", -1).limit(50)
     async for s in cur:
         mine = s["tg_id"] == user["id"]
-        if mine or s["created_at"] <= reveal_before:
+        departed_at = s.get("moved_at") or s.get("created_at")
+        if mine or departed_at <= reveal_before:
             arrival_at = s.get("arrival_at")
+            owner_row = by_tgid.get(s["tg_id"])
+            owner = owner_row["player"] if owner_row else None
             camps.append({
+                "id": str(s["_id"]),
                 "from": s["origin_castle"], "to": s["target_castle"], "op_type": s["op_type"],
                 "name": s.get("name", ""),
                 "mine": mine,
-                "revealed_minutes_ago": int((now() - s["created_at"]).total_seconds() // 60) - (0 if mine else CAMPAIGN_REVEAL_MINUTES),
+                "player_name": s.get("player_name", ""),
+                "owner_region": owner.get("region") if owner else None,
+                "route_path": s.get("route_path") or [s["origin_castle"], s["target_castle"]],
+                "departed_at": departed_at.isoformat() if departed_at else None,
+                "arrival_at": arrival_at.isoformat() if arrival_at else None,
+                "revealed_minutes_ago": int((now() - departed_at).total_seconds() // 60) - (0 if mine else CAMPAIGN_REVEAL_MINUTES),
                 "travel_minutes": s.get("travel_minutes", 0),
                 "arrived": (now() >= arrival_at) if arrival_at else True,
             })
     return {"regions": regions, "campaigns": camps}
+

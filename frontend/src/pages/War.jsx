@@ -40,7 +40,11 @@ export default function War() {
   const loadLegions = () => api.legions().then(setLegions).catch(e => { toast(e.message); setLegions([]); });
   const loadWarWindow = () => api.warWindow().then(setWarWindow).catch(() => setWarWindow({ open: true }));
 
-  useEffect(() => { loadMap(); loadMine(); loadLegions(); loadWarWindow(); }, []);
+  useEffect(() => {
+    loadMap(); loadMine(); loadLegions(); loadWarWindow();
+    const mapTimer = setInterval(loadMap, 30000);
+    return () => clearInterval(mapTimer);
+  }, []);
   const windowClosed = warWindow ? !warWindow.open : false;
 
   const visibleReports = mine || [];
