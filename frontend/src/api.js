@@ -1661,17 +1661,34 @@ export const api = {
   searchPlayers: (q) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q)),
 
   /* ---------- شورش و محبوبیت ---------- */
-  rebellionStatus: () => MOCK ? Promise.resolve({
-    popularity: mockMe.popularity ?? 50, ration: mockMe.food_ration || 'normal', chance: 0,
-    safe_popularity: 50, guaranteed_popularity: 30,
-    ration_levels: {
+  rebellionStatus: () => MOCK ? Promise.resolve((() => {
+    const popularity = mockMe.popularity ?? 50;
+    const taxRate = mockMe.tax_rate ?? 10;
+    const taxHeavyThreshold = Math.max(0, Math.min(100, 20 + Math.floor((popularity - 50) / 5)));
+    const taxBands = [{ max: 5, p: 2 }, { max: 10, p: 1 }, { max: 15, p: 0 }, { max: 20, p: -1 }, { max: 100, p: -2 }];
+    const baseTax = (taxBands.find(b => taxHeavyThreshold <= b.max) || taxBands.at(-1)).p;
+    const taxDelta = taxRate > taxHeavyThreshold ? baseTax - Math.ceil((taxRate - taxHeavyThreshold) / 5)
+      : (taxBands.find(b => taxRate <= b.max) || taxBands.at(-1)).p;
+    const levels = {
       very_low: { label: 'جیره ناچیز', multiplier: .5, popularity: -3 },
       low: { label: 'جیره کم', multiplier: .75, popularity: -1 },
       normal: { label: 'جیره معمولی', multiplier: 1, popularity: 0 },
       good: { label: 'جیره خوب', multiplier: 1.25, popularity: 1 },
       abundant: { label: 'جیره فراوان', multiplier: 1.5, popularity: 2 },
-    }, active: null,
-  }) : req('/api/rebellions/status'),
+    };
+    const ration = mockMe.food_ration || 'normal';
+    const men = mockMe.resources?.men || 0;
+    const food = Math.round(Math.max(1, men * .2) * levels[ration].multiplier);
+    const rationDelta = (mockMe.resources?.food || 0) >= food ? levels[ration].popularity : -3;
+    return {
+      popularity, ration, chance: 0, safe_popularity: 50, guaranteed_popularity: 30,
+      ration_levels: levels, tax_rate: taxRate, tax_heavy_threshold: taxHeavyThreshold,
+      tax_daily_popularity: taxDelta, ration_daily_popularity: rationDelta,
+      combined_daily_popularity: taxDelta + rationDelta, ration_food_per_day: food,
+      estimated_tax_gold_per_day: Math.round(men * taxRate / 100 * taxYieldMultiplier(popularity)),
+      tax_yield_percent: Math.round(taxYieldMultiplier(popularity) * 100), active: null,
+    };
+  })()) : req('/api/rebellions/status'),
   setFoodRation: (level) => MOCK ? Promise.resolve((mockMe.food_ration = level, { ok: true, ration: level }))
     : req('/api/rebellions/ration', { method: 'POST', body: JSON.stringify({ level }) }),
   submitRebellionRoleplay: (id, text) => MOCK ? Promise.resolve({ ok: true })

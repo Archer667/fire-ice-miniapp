@@ -4,7 +4,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin
-from config import POPULARITY_START
+from config import POPULARITY_START, tax_yield_multiplier
 from db import players, rebellions, rebellion_checks, game_settings
 from game import now
 from routers.ravens import send_system_message
@@ -39,6 +39,8 @@ DEFAULT_SETTINGS = {
     "tax_overage_start": 20,
     "tax_overage_step": 5,
     "tax_overage_popularity": -1,
+    "tax_popularity_step": 5,
+    "tax_limit_per_step": 1,
     "chance_low_start": 5,
     "chance_low_step": 3,
     "chance_high_start": 40,
@@ -79,10 +81,19 @@ def rebellion_chance(popularity: int, settings: dict) -> int:
         return min(100, int(settings["chance_low_start"]) + (safe - 1 - popularity) * int(settings["chance_low_step"]))
     return min(100, int(settings["chance_high_start"]) + (high_risk - 1 - popularity) * int(settings["chance_high_step"]))
 
-def _tax_delta(rate: int, settings: dict) -> int:
+def tax_overage_threshold(popularity: int, settings: dict) -> int:
+    """آستانهٔ مالیات سنگین با محبوبیت حرکت می‌کند: مقدار پایه برای محبوبیت ۵۰ است؛
+    به‌ازای هر tax_popularity_step محبوبیت، tax_limit_per_step درصد تغییر می‌کند."""
+    base = int(settings.get("tax_overage_start", 20))
+    pop_step = max(1, int(settings.get("tax_popularity_step", 5)))
+    limit_step = int(settings.get("tax_limit_per_step", 1))
+    offset = ((int(popularity) - POPULARITY_START) // pop_step) * limit_step
+    return max(0, min(100, base + offset))
+
+def _tax_delta(rate: int, settings: dict, popularity: int = POPULARITY_START) -> int:
     """اثر روزانهٔ مالیات؛ بالاتر از آستانه، هر پله جریمهٔ محبوبیت بیشتری می‌دهد."""
     rate = max(0, min(100, int(rate)))
-    overage_start = int(settings.get("tax_overage_start", 20))
+    overage_start = tax_overage_threshold(popularity, settings)
     if rate > overage_start:
         base_delta = 0
         for band in settings["tax_bands"]:
@@ -152,8 +163,8 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     ration_delta = int(ration["popularity"])
     if consumed < wanted:
         ration_delta = int(settings["starvation_popularity"])
-    tax_delta = _tax_delta(int(player.get("tax_rate", 10)), settings)
     old_popularity = int(player.get("popularity", POPULARITY_START))
+    tax_delta = _tax_delta(int(player.get("tax_rate", 10)), settings, old_popularity)
     popularity = max(0, min(100, old_popularity + ration_delta + tax_delta))
     await players.update_one({"tg_id": player["tg_id"]}, {
         "$set": {
@@ -220,12 +231,31 @@ async def status(user: dict = Depends(get_user)):
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
     settings = await get_settings()
+    popularity = int(p.get("popularity", POPULARITY_START))
+    tax_rate = int(p.get("tax_rate", 10))
+    ration_key = p.get("food_ration", settings["default_ration"])
+    ration = settings["ration_levels"].get(ration_key, settings["ration_levels"]["normal"])
+    men = max(0, int(p.get("resources", {}).get("men", 0)))
+    base_food = max(1, round(men * float(settings["base_food_per_100_men"]) / 100))
+    wanted_food = max(0, round(base_food * float(ration["multiplier"])))
+    food_available = max(0, int(p.get("resources", {}).get("food", 0)))
+    ration_delta = int(ration["popularity"]) if food_available >= wanted_food else int(settings["starvation_popularity"])
+    tax_delta = _tax_delta(tax_rate, settings, popularity)
     active = await rebellions.find_one({"tg_id": user["id"], "status": {"$in": ACTIVE_STATUSES}}, sort=[("created_at", -1)])
     return {
-        "popularity": p.get("popularity", POPULARITY_START),
-        "ration": p.get("food_ration", settings["default_ration"]),
+        "popularity": popularity,
+        "ration": ration_key,
         "ration_levels": settings["ration_levels"],
-        "chance": rebellion_chance(int(p.get("popularity", POPULARITY_START)), settings),
+        "chance": rebellion_chance(popularity, settings),
+        "tax_rate": tax_rate,
+        "tax_heavy_threshold": tax_overage_threshold(popularity, settings),
+        "tax_daily_popularity": tax_delta,
+        "ration_daily_popularity": ration_delta,
+        "combined_daily_popularity": tax_delta + ration_delta,
+        "ration_food_per_day": wanted_food,
+        "ration_food_available": food_available,
+        "estimated_tax_gold_per_day": round(men * (tax_rate / 100) * tax_yield_multiplier(popularity)),
+        "tax_yield_percent": round(tax_yield_multiplier(popularity) * 100),
         "safe_popularity": settings["safe_popularity"],
         "guaranteed_popularity": settings["guaranteed_popularity"],
         "high_risk_popularity": settings["high_risk_popularity"],
@@ -285,6 +315,8 @@ async def update_settings(body: SettingsBody, user: dict = Depends(full_admin_us
         raise HTTPException(400, "ترتیب حدها باید قطعی < خطر زیاد < امن و بین صفر تا صد باشد")
     if int(merged["roleplay_hours"]) < 1:
         raise HTTPException(400, "مهلت رول باید حداقل یک ساعت باشد")
+    if int(merged.get("tax_popularity_step", 5)) < 1 or int(merged.get("tax_overage_step", 5)) < 1:
+        raise HTTPException(400, "پله‌های محبوبیت و مالیات باید حداقل یک باشند")
     await game_settings.update_one({"_id": SETTINGS_ID}, {"$set": {"settings": merged, "updated_at": now()}}, upsert=True)
     return merged
 
@@ -324,3 +356,4 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
     }})
     await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}")
     return {"ok": True, "popularity": popularity, "resources": resources}
+

@@ -2317,6 +2317,16 @@ export default function Admin() {
                   {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => <option key={key} value={key}>{level.label}</option>)}
                 </select>
                 <div className="sect" style={{ marginTop: 16 }}>اثر نرخ مالیات</div>
+                <div className="page-sub" style={{ marginBottom: 10, lineHeight: 1.8 }}>
+                  آستانهٔ پایه برای محبوبیت ۵۰ محاسبه می‌شود. با هر پله تغییر محبوبیت، آستانهٔ مالیات سنگین هم به اندازهٔ تعیین‌شده جابه‌جا می‌شود؛ بالاتر از آستانه، به ازای هر پله مالیات جریمهٔ اضافه اعمال می‌شود.
+                </div>
+                <div className="grid2" style={{ marginBottom: 10 }}>
+                  <div><label className="f">آستانهٔ پایه مالیات سنگین</label><input type="number" value={rebellionSettings.tax_overage_start ?? 20} onChange={e => setRebellionNumber('tax_overage_start', e.target.value)} /></div>
+                  <div><label className="f">هر چند محبوبیت یک پله؟</label><input type="number" min="1" value={rebellionSettings.tax_popularity_step ?? 5} onChange={e => setRebellionNumber('tax_popularity_step', e.target.value)} /></div>
+                  <div><label className="f">تغییر آستانه در هر پله محبوبیت</label><input type="number" value={rebellionSettings.tax_limit_per_step ?? 1} onChange={e => setRebellionNumber('tax_limit_per_step', e.target.value)} /></div>
+                  <div><label className="f">هر چند درصد مالیات اضافه یک پله؟</label><input type="number" min="1" value={rebellionSettings.tax_overage_step ?? 5} onChange={e => setRebellionNumber('tax_overage_step', e.target.value)} /></div>
+                  <div><label className="f">جریمه محبوبیت هر پله اضافه</label><input type="number" value={rebellionSettings.tax_overage_popularity ?? -1} onChange={e => setRebellionNumber('tax_overage_popularity', e.target.value)} /></div>
+                </div>
                 {(rebellionSettings.tax_bands || []).map((band, index) => (
                   <div className="grid2" key={index} style={{ marginBottom: 8 }}>
                     <div><label className="f">تا نرخ مالیات</label><input type="number" value={band.max}

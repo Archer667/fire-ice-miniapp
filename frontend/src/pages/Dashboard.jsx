@@ -65,7 +65,8 @@ export default function Dashboard({ goTo }) {
     try {
       await api.setFoodRation(level);
       haptic();
-      setRebellion(prev => ({ ...prev, ration: level }));
+      const fresh = await api.rebellionStatus();
+      setRebellion(fresh);
       toast('سهم غله مردم ثبت شد؛ اثرش در محاسبه روزانه اعمال می‌شود');
     } catch (e) { toast(e.message); }
     setRationBusy(false);
@@ -91,6 +92,8 @@ export default function Dashboard({ goTo }) {
       await api.setTax(rate);
       haptic();
       setMe({ ...me, tax_rate: rate });
+      const fresh = await api.rebellionStatus();
+      setRebellion(fresh);
     } catch (e) { toast(e.message); }
     setTaxBusy(false);
   };
@@ -245,6 +248,17 @@ export default function Dashboard({ goTo }) {
           </div>
         </div>
         {rebellion && (
+          <div className="page-sub" style={{ marginTop: 7, lineHeight: 1.9 }}>
+            آستانهٔ مالیات سنگین با محبوبیت فعلی: <b>{rebellion.tax_heavy_threshold.toLocaleString('fa-IR')}٪</b>
+            {' · '}اثر مالیات فعلی در بررسی روزانه: <b style={{ color: rebellion.tax_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
+              {rebellion.tax_daily_popularity > 0 ? '+' : ''}{rebellion.tax_daily_popularity.toLocaleString('fa-IR')} محبوبیت
+            </b>
+            <br />
+            درآمد تخمینی همین مالیات: {rebellion.estimated_tax_gold_per_day.toLocaleString('fa-IR')} طلا در روز
+            {' · '}بازده مالیات با محبوبیت فعلی: {rebellion.tax_yield_percent.toLocaleString('fa-IR')}٪
+          </div>
+        )}
+        {rebellion && (
           <>
             <div style={{ marginTop: 14 }}>
               <label className="f">سهم غله مردم</label>
@@ -256,6 +270,13 @@ export default function Dashboard({ goTo }) {
                 ))}
               </select>
               <div className="page-sub" style={{ marginTop: 6 }}>
+                مصرف روزانهٔ این سهم: حدود {rebellion.ration_food_per_day.toLocaleString('fa-IR')} غله
+                {' · '}اثر غله: {rebellion.ration_daily_popularity > 0 ? '+' : ''}{rebellion.ration_daily_popularity.toLocaleString('fa-IR')} محبوبیت
+                <br />
+                جمع اثر مالیات و غله در بررسی روزانه: <b style={{ color: rebellion.combined_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
+                  {rebellion.combined_daily_popularity > 0 ? '+' : ''}{rebellion.combined_daily_popularity.toLocaleString('fa-IR')} محبوبیت
+                </b>
+                <br />
                 احتمال شورش در بررسی روزانه: {rebellion.chance.toLocaleString('fa-IR')}٪ · حد امن {rebellion.safe_popularity.toLocaleString('fa-IR')} · شورش قطعی زیر {rebellion.guaranteed_popularity.toLocaleString('fa-IR')}
               </div>
             </div>
@@ -292,3 +313,4 @@ export default function Dashboard({ goTo }) {
     </>
   );
 }
+
