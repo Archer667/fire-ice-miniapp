@@ -58,13 +58,8 @@ SPY_MEN_COST = 5   # «جاسوس» از جمعیت کم می‌شود؛ اگر 
 
 # ---- مالیات و محبوبیت ----
 TAX_RATE_DEFAULT = 10     # درصد، در ابتدای بازی
-TAX_RATE_BASE_MAX = 20    # سقف مالیات بدون احتساب بونوس محبوبیت
 POPULARITY_START = 50
 POPULARITY_MAX = 100
-
-def max_tax_rate(popularity: int) -> int:
-    """محبوبیت بالاتر یعنی نارضایتی کمتر → سقف مالیات هم بالاتر می‌رود"""
-    return max(0, TAX_RATE_BASE_MAX + (popularity - POPULARITY_START) // 5)
 
 def tax_yield_multiplier(popularity: int) -> float:
     """بازدهی مالیات به نسبت جمعیت — با محبوبیت بیشتر می‌شود"""
@@ -112,3 +107,4 @@ DAILY_REWARDS = [
     {"gold": 350, "wine": 10, "men": 30},
     {"gold": 600, "men": 80,  "wine": 20, "food": 200},
 ]
+

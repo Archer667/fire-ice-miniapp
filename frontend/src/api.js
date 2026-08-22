@@ -23,7 +23,7 @@ async function req(path, opts = {}) {
 /* ---------- دیتای mock برای حالت بدون سرور ---------- */
 import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
-  DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT, maxTaxRate,
+  DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, PACT_PRIORITY, WARDEN_GROUPS,
   COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea, DEFAULT_SEA_CASTLES,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
@@ -245,7 +245,7 @@ function mockApplyProduction() {
     for (const [k, v] of Object.entries(produces)) prod[k] = (prod[k] || 0) + v;
   }
   const men = mockMe.resources.men || 0;
-  const taxRate = Math.min(mockMe.tax_rate ?? TAX_RATE_DEFAULT, maxTaxRate(mockMe.popularity ?? POPULARITY_START));
+  const taxRate = Math.max(0, Math.min(100, mockMe.tax_rate ?? TAX_RATE_DEFAULT));
   const multiplier = taxYieldMultiplier(mockMe.popularity ?? POPULARITY_START);
   prod.gold = (prod.gold || 0) + Math.round(men * (taxRate / 100) * multiplier);
 
@@ -395,7 +395,6 @@ const M = {
       },
       points: mockMe.points ?? 100, alliance_count: mockMe.alliance_count ?? 0,
       popularity: mockMe.popularity ?? POPULARITY_START, tax_rate: mockMe.tax_rate ?? TAX_RATE_DEFAULT,
-      max_tax_rate: maxTaxRate(mockMe.popularity ?? POPULARITY_START),
       rank: mockMe.rank ?? 5, total_players: 12, day: mockMe.day ?? 18, season_length: 30,
     });
     return { ok: true, moved: !wasPending };
@@ -414,8 +413,7 @@ const M = {
     return { ok: true };
   },
   setTax: (rate) => {
-    const cap = maxTaxRate(mockMe.popularity ?? POPULARITY_START);
-    if (rate < 0 || rate > cap) throw new Error(`نرخ مالیات باید بین ۰ تا ${cap} درصد باشد`);
+    if (rate < 0 || rate > 100) throw new Error('نرخ مالیات باید بین ۰ تا ۱۰۰ درصد باشد');
     mockMe.tax_rate = rate;
     return { ok: true, tax_rate: rate };
   },
@@ -1448,7 +1446,6 @@ const M = {
     if (!mockCanAfford(FEAST_COST)) throw new Error('شراب یا غذای کافی برای ضیافت نداری');
     mockPay(FEAST_COST);
     mockMe.popularity = Math.min(POPULARITY_MAX, (mockMe.popularity ?? POPULARITY_START) + FEAST_POPULARITY_GAIN);
-    mockMe.max_tax_rate = maxTaxRate(mockMe.popularity);
     mockLastFeast = now;
     return { ok: true, popularity: mockMe.popularity };
   },

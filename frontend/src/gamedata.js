@@ -870,7 +870,6 @@ export const DEFAULT_TITLE = { lord: 'لرد جوان', lady: 'لیدی جوان
 export const POPULARITY_START = 50;
 export const POPULARITY_MAX = 100;
 export const TAX_RATE_DEFAULT = 10;
-export const TAX_RATE_BASE_MAX = 20;
 export const FEAST_COST = { wine: 40, food: 80 };
 export const FEAST_POPULARITY_GAIN = 8;
 
@@ -890,10 +889,6 @@ export const DAILY_REWARDS = [
   { gold: 600, men: 80,  wine: 20, food: 200 },
 ];
 
-export function maxTaxRate(popularity) {
-  return Math.max(0, TAX_RATE_BASE_MAX + Math.floor((popularity - POPULARITY_START) / 5));
-}
-
 // تولید/سقفِ پایه (بدون ساختمان) — آینه‌ی DAILY_PRODUCTION/RESOURCE_CAPS در backend/config.py
 export const DAILY_PRODUCTION = { gold: 200, food: 300, men: 50, iron: 40, stone: 40, wood: 50, wine: 0 };
 export const RESOURCE_CAPS = {
@@ -908,3 +903,4 @@ export function taxYieldMultiplier(popularity) {
 export const TRADE_GOODS = ['wood', 'stone', 'iron', 'food', 'wine'];
 export const CARAVAN_GOODS = ['gold', ...TRADE_GOODS];
 export const TRADE_GOOD_NAMES = { gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
+
