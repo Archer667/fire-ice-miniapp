@@ -577,8 +577,9 @@ export default function War() {
 
       {tab === 'reports' && (
         <div className="up u2">
+          <div className="page-sub" style={{ margin: '0 4px 10px' }}>گزارش لشکرکشی‌های همهٔ بازیکنان؛ گزارش‌های قدیمی ۲۴ ساعت بعد از رسیدن از این فهرست خارج می‌شوند.</div>
           {visibleReports.length === 0 && (
-            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکری نفرستاده‌ای</div>
+            <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز گزارشی از لشکرکشی‌ها نیست</div>
           )}
           {visibleReports.map(c => (
             <div className="card" key={c.id} style={{ marginBottom: 10 }}>

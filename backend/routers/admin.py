@@ -1016,9 +1016,28 @@ async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin
     return {
         "name": p["name"],
         "castle": p["castle"],
+        "points": int(p.get("points", 0)),
         "resources": res,
         "resource_caps": resource_caps,
     }
+
+class AdjustPlayerPointsBody(BaseModel):
+    delta: int
+
+@router.post("/players/{tg_id}/points")
+async def admin_adjust_player_points(tg_id: int, body: AdjustPlayerPointsBody, user: dict = Depends(full_admin_user)):
+    """امتیاز بازیکن را به مقدار مثبت/منفی تغییر می‌دهد؛ امتیاز هیچ‌وقت زیر صفر نمی‌رود."""
+    if body.delta == 0:
+        raise HTTPException(400, "مقدار تغییر امتیاز نباید صفر باشد")
+    if abs(body.delta) > 1_000_000:
+        raise HTTPException(400, "مقدار تغییر امتیاز بیش از حد بزرگ است")
+    p = await players.find_one({"tg_id": tg_id})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    old_points = int(p.get("points", 0))
+    new_points = max(0, old_points + int(body.delta))
+    await players.update_one({"tg_id": tg_id}, {"$set": {"points": new_points}})
+    return {"ok": True, "old_points": old_points, "points": new_points, "applied_delta": new_points - old_points}
 
 class SetPlayerResourcesBody(BaseModel):
     resources: dict

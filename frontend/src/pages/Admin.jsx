@@ -177,6 +177,9 @@ export default function Admin() {
   const [resTarget, setResTarget] = useState([]);
   const [resValues, setResValues] = useState(null);
   const [resCaps, setResCaps] = useState(null);
+  const [resPoints, setResPoints] = useState(null);
+  const [pointDelta, setPointDelta] = useState('');
+  const [pointBusy, setPointBusy] = useState(false);
   const [resBusy, setResBusy] = useState(false);
   const [resCampaigns, setResCampaigns] = useState(null);
 
@@ -331,12 +334,13 @@ export default function Admin() {
   }, [playerBuildingTarget]);
 
   useEffect(() => {
-    if (!resTarget.length) { setResValues(null); setResCaps(null); setResCampaigns(null); return; }
-    setResValues(null); setResCaps(null); setResCampaigns(null);
+    if (!resTarget.length) { setResValues(null); setResCaps(null); setResPoints(null); setResCampaigns(null); return; }
+    setResValues(null); setResCaps(null); setResPoints(null); setPointDelta(''); setResCampaigns(null);
     api.adminGetPlayerResources(resTarget[0].tg_id)
       .then(r => {
         setResValues(r.resources);
         setResCaps(r.resource_caps || {});
+        setResPoints(r.points ?? 0);
       })
       .catch(e => { toast(e.message); setResTarget([]); });
     api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message));
@@ -462,6 +466,21 @@ export default function Admin() {
       toast(`منابع «${resTarget[0].name}» به‌روزرسانی شد`);
     } catch (e) { toast(e.message); }
     setResBusy(false);
+  };
+
+  const adjustPoints = async () => {
+    if (!resTarget.length) return;
+    const delta = Number(pointDelta);
+    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش امتیاز را وارد کن'); return; }
+    setPointBusy(true);
+    try {
+      const result = await api.adminAdjustPlayerPoints(resTarget[0].tg_id, delta);
+      setResPoints(result.points);
+      setPointDelta('');
+      haptic('medium');
+      toast(`امتیاز «${resTarget[0].name}» به ${result.points.toLocaleString('fa-IR')} رسید`);
+    } catch (e) { toast(e.message); }
+    setPointBusy(false);
   };
 
   const toggleWarWindow = async () => {
@@ -2084,6 +2103,19 @@ export default function Admin() {
             )}
             {resValues && (
               <>
+                <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
+                  <div className="res" style={{ marginBottom: 8 }}>
+                    <div className="n">امتیاز بازیکن<small>امتیاز فعلی: {(resPoints ?? 0).toLocaleString('fa-IR')}</small></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="number" value={pointDelta} placeholder="مثلاً ۱۰۰ یا ۵۰-"
+                           style={{ margin: 0, flex: 1 }} onChange={e => setPointDelta(e.target.value)} />
+                    <button className="btn" style={{ width: 'auto', padding: '10px 16px' }} disabled={pointBusy} onClick={adjustPoints}>
+                      {pointBusy ? '...' : 'اعمال'}
+                    </button>
+                  </div>
+                  <div className="page-sub" style={{ marginTop: 7 }}>عدد مثبت امتیاز اضافه می‌کند و عدد منفی از امتیاز کم می‌کند؛ امتیاز زیر صفر نمی‌رود.</div>
+                </div>
                 <div className="page-sub" style={{ margin: '4px 4px 12px', lineHeight: 1.9 }}>
                   عددِ سمت راست موجودی فعلیه و زیرش سقف واقعی بازیکن نوشته شده؛ این سقف از ساختمان‌های همهٔ قلعه‌هاش حساب می‌شه.
                 </div>

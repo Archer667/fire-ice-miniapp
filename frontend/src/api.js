@@ -834,7 +834,14 @@ const M = {
     const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
     if (!p) throw new Error('بازیکن پیدا نشد');
     if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
-    return { name: p.name, castle: p.castle, resources: mockPlayerResources[tgId], resource_caps: { ...RESOURCE_CAPS } };
+    return { name: p.name, castle: p.castle, points: p.points || 0, resources: mockPlayerResources[tgId], resource_caps: { ...RESOURCE_CAPS } };
+  },
+  adminAdjustPlayerPoints: (tgId, delta) => {
+    const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+    if (!p) throw new Error('بازیکن پیدا نشد');
+    const old = p.points || 0;
+    p.points = Math.max(0, old + Number(delta || 0));
+    return { ok: true, old_points: old, points: p.points, applied_delta: p.points - old };
   },
   adminSetPlayerResources: (tgId, resources) => {
     if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
@@ -1569,6 +1576,8 @@ export const api = {
   adminGetPlayerResources: (tgId) => MOCK ? Promise.resolve(M.adminGetPlayerResources(tgId)) : req(`/api/admin/players/${tgId}/resources`),
   adminSetPlayerResources: (tgId, resources) => MOCK ? Promise.resolve(M.adminSetPlayerResources(tgId, resources))
     : req(`/api/admin/players/${tgId}/resources`, { method: 'POST', body: JSON.stringify({ resources }) }),
+  adminAdjustPlayerPoints: (tgId, delta) => MOCK ? Promise.resolve(M.adminAdjustPlayerPoints(tgId, delta))
+    : req(`/api/admin/players/${tgId}/points`, { method: 'POST', body: JSON.stringify({ delta }) }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   weeklyLeaderboard: () => MOCK ? Promise.resolve(M.weeklyLeaderboard()) : req('/api/leaderboard/weekly'),
   dailyStatus: () => MOCK ? Promise.resolve(M.dailyStatus()) : req('/api/daily/status'),
