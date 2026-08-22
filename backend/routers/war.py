@@ -33,6 +33,18 @@ DIRECT_ATTACK_OP_TYPES = {"attack", "naval_raid"}
 DEFENSE_OP_TYPES = {"defense", "garrison"}
 ROLEPLAY_WINDOW_HOURS = 6
 
+def campaign_waiting_for_result(campaign: dict) -> bool:
+    """حملهٔ مستقیم از لحظهٔ رسیدن تا ثبت نتیجه توسط ادمین قفل است. این محاسبه
+    مستقل از واچر/فلگ دیتابیس است تا در فاصلهٔ اجرای واچر یا برای مقصد خالی هم
+    هیچ راهی برای حرکت یا لغو حمله وجود نداشته باشد."""
+    arrival_at = campaign.get("arrival_at")
+    return bool(
+        campaign.get("active")
+        and campaign.get("op_type") in DIRECT_ATTACK_OP_TYPES
+        and (not arrival_at or now() >= arrival_at)
+        and not campaign.get("combat_resolved_at")
+    )
+
 # ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
 REPORT_VISIBLE_HOURS = 24
 
@@ -399,7 +411,7 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         raise HTTPException(404, "لشکر پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
-    if c.get("engagement_locked"):
+    if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قابل لغو یا حرکت نیست")
 
     # اتمیک و مشروط به active=True — وگرنه دو کلیکِ هم‌زمانِ لغو هردو از رویِ همون
@@ -438,7 +450,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     c = await campaigns.find_one({"_id": oid, "tg_id": user["id"], "active": True})
     if not c:
         raise HTTPException(404, "لشکر فعال پیدا نشد")
-    if c.get("engagement_locked"):
+    if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قفل می‌ماند")
     if c.get("arrival_at") and now() < c["arrival_at"]:
         raise HTTPException(400, "این لشکر هنوز به مقصد قبلی نرسیده است")
@@ -526,6 +538,7 @@ async def legions(user: dict = Depends(get_user)):
     async for c in cur:
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
+        waiting_result = campaign_waiting_for_result(c)
         troops = [
             {"name": troop_name(t), "count": n}
             for t, n in c.get("troops", {}).items() if n and n > 0
@@ -538,8 +551,9 @@ async def legions(user: dict = Depends(get_user)):
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
-            "engagement_locked": bool(c.get("engagement_locked")),
-            "can_move": arrived and not c.get("engagement_locked"),
+            "engagement_locked": bool(c.get("engagement_locked") or waiting_result),
+            "waiting_for_result": waiting_result,
+            "can_move": arrived and not c.get("engagement_locked") and not waiting_result,
             "can_attack": c["op_type"] == "siege" and arrived and not c.get("engagement_locked"),
             "created_at": c["created_at"].isoformat(),
             "arrival_at": arrival_at.isoformat() if arrival_at else None,
@@ -622,16 +636,19 @@ async def notify_arrivals():
                 f"لشکری از {origin} با نام «{name}» به قلعه‌ات ({target}) رسید — مراقب باش.",
             )
 
-        if c["op_type"] in DIRECT_ATTACK_OP_TYPES and target_owner and target_owner["tg_id"] != c["tg_id"]:
+        if c["op_type"] in DIRECT_ATTACK_OP_TYPES:
             engagement_id = str(c["_id"])
             await campaigns.update_one({"_id": c["_id"]}, {"$set": {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
             }})
-            await campaigns.update_many({
-                "tg_id": target_owner["tg_id"], "active": True,
-                "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
-                "arrival_at": {"$lte": now()},
-            }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id}})
+            if target_owner and target_owner["tg_id"] != c["tg_id"]:
+                await campaigns.update_many({
+                    "tg_id": target_owner["tg_id"], "active": True,
+                    "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
+                    "arrival_at": {"$lte": now()},
+                }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id}})
+
+        if c["op_type"] in DIRECT_ATTACK_OP_TYPES and target_owner and target_owner["tg_id"] != c["tg_id"]:
             attacker_summary = troops_summary(c.get("troops", {}))
             defense_troops = await defending_troops(target, target_owner["tg_id"])
             defender_summary = troops_summary(defense_troops)

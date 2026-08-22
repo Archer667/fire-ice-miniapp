@@ -556,7 +556,9 @@ export default function War() {
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {c.engagement_locked && (
-                  <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>درگیر نبرد — تا ثبت نتیجه قفل است</div>
+                  <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>
+                    {c.waiting_for_result ? 'حمله رسیده — منتظر نتیجهٔ ادمین' : 'درگیر نبرد — تا ثبت نتیجه قفل است'}
+                  </div>
                 )}
                 {c.can_move && (
                   <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => relaunchFrom(c)}>حرکت بده</button>
