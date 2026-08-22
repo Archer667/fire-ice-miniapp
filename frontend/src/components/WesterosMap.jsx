@@ -23,6 +23,14 @@ function popupPlacement(xy, zoom) {
 
 const KIND_ICON = { castle: Keep, city: Keep, ruin: Coliseum, port: Ship };
 
+// بک‌اند زمان‌ها را با datetime.utcnow و بدون پسوند منطقهٔ زمانی می‌فرستد.
+// WebView تلگرام رشتهٔ بدون Z را ساعت محلی حساب می‌کند و ارتش را زودتر رسیده می‌دید.
+function utcMillis(value) {
+  if (!value) return NaN;
+  const text = String(value);
+  return new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`).getTime();
+}
+
 /** تصویر نقشه + پین‌های قلعه/شهرهای دارای مختصات — هم برای نمایش (کلیک روی پین،
  * با تب کوچک اطلاعات دقیقاً کنار همان پین) و هم برای حالت ادمین (کلیک روی خودِ
  * نقشه برای گرفتن مختصات یک نقطهٔ خالی) به کار می‌رود.
@@ -39,8 +47,8 @@ function ArmyMarker({ campaign, coords }) {
   // اگر دو سر اصلی مختصات دارند، آیکن را دست‌کم مستقیم میان مبدا و مقصد نشان بده.
   if (points.length < 2 && coords[campaign.from] && coords[campaign.to]) points = [coords[campaign.from], coords[campaign.to]];
   if (campaign.arrived || points.length < 2 || !campaign.departed_at || !campaign.arrival_at) return null;
-  const start = new Date(campaign.departed_at).getTime();
-  const end = new Date(campaign.arrival_at).getTime();
+  const start = utcMillis(campaign.departed_at);
+  const end = utcMillis(campaign.arrival_at);
   const progress = Math.max(0, Math.min(1, (tick - start) / Math.max(1, end - start)));
   if (progress >= 1) return null;
 

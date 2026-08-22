@@ -18,6 +18,12 @@ const TABS = [
 const SEEN_KEY = 'fireice_war_reports_seen';
 const loadSeenIds = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); } };
 
+function utcMillis(value) {
+  if (!value) return NaN;
+  const text = String(value);
+  return new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(text) ? text : `${text}Z`).getTime();
+}
+
 function ArrivalCountdown({ arrivalAt, arrived }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -26,8 +32,8 @@ function ArrivalCountdown({ arrivalAt, arrived }) {
     return () => clearInterval(timer);
   }, [arrivalAt, arrived]);
   if (arrived || !arrivalAt) return <>رسیده به مقصد</>;
-  const seconds = Math.max(0, Math.ceil((new Date(arrivalAt).getTime() - nowMs) / 1000));
-  if (seconds <= 0) return <>در حال ثبت رسیدن...</>;
+  const seconds = Math.max(0, Math.ceil((utcMillis(arrivalAt) - nowMs) / 1000));
+  if (seconds <= 0) return <>رسیده به مقصد</>;
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
@@ -60,7 +66,8 @@ export default function War() {
   useEffect(() => {
     loadMap(); loadMine(); loadLegions(); loadWarWindow();
     const mapTimer = setInterval(loadMap, 30000);
-    return () => clearInterval(mapTimer);
+    const armyTimer = setInterval(() => { loadMine(); loadLegions(); }, 15000);
+    return () => { clearInterval(mapTimer); clearInterval(armyTimer); };
   }, []);
   const windowClosed = warWindow ? !warWindow.open : false;
 
