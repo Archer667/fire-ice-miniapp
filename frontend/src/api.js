@@ -1543,6 +1543,8 @@ export const api = {
   warRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
     : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
+  moveCampaign: (id, b) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/move`, { method: 'POST', body: JSON.stringify(b) }),
+  orderSiegeAttack: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/attack`, { method: 'POST' }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
   adminDeleteMapCastle: (name) => MOCK ? Promise.resolve(M.adminDeleteMapCastle(name))
@@ -1694,8 +1696,8 @@ export const api = {
     : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
-  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
-    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords, winner_tg_id: winnerTgId }) }),
+  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null, attackerLosses = {}, defenderLosses = {}) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
+    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords, winner_tg_id: winnerTgId, attacker_losses: attackerLosses, defender_losses: defenderLosses }) }),
   warRoleplayEligible: () => MOCK ? Promise.resolve(M.warRoleplayEligible()) : req('/api/war/roleplay-eligible'),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
@@ -1719,3 +1721,4 @@ export const api = {
   adminResetGame: (confirm) => MOCK ? Promise.resolve(M.adminResetGame(confirm))
     : req('/api/admin/reset-game', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
+

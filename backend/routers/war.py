@@ -29,6 +29,7 @@ OP_TYPES = {
 # نبردهای واقعی (نه جای‌گیری/دفاعی) — بعد از رسیدن، آمار دو طرف رد و بدل می‌شود و
 # هر دو طرف تا ROLEPLAY_WINDOW_HOURS بعد فرصت دارند سناریوی جنگ را از صفحهٔ رول‌ها بفرستند
 ATTACK_OP_TYPES = {"attack", "siege", "naval_raid"}
+DIRECT_ATTACK_OP_TYPES = {"attack", "naval_raid"}
 DEFENSE_OP_TYPES = {"defense", "garrison"}
 ROLEPLAY_WINDOW_HOURS = 6
 
@@ -63,6 +64,11 @@ class CampaignBody(BaseModel):
     name: str = ""
     troops: dict            # {troop_id: count}
     via: list[str] | None = None   # مسیرِ انتخابیِ بازیکن (اگر چند گزینهٔ مسیر بود) — از /war/routes
+
+class MoveCampaignBody(BaseModel):
+    target_castle: str
+    op_type: str = "garrison"
+    via: list[str] | None = None
 
 async def all_castle_terrain() -> dict:
     """نگاشتِ اسمِ هر قلعه/شهرِ بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) به نوع
@@ -261,6 +267,18 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
 
+    # قلعه‌ای که دشمن به آن رسیده و هنوز نتیجهٔ حمله/محاصره‌اش مشخص نشده، فقط
+    # اجازهٔ ساخت لشکر دفاعی دارد؛ نه گسیل یک لشکر تازه و نه جای‌گیری در بیرون.
+    if body.op_type != "defense":
+        besieged = await campaigns.find_one({
+            "tg_id": {"$ne": user["id"]}, "active": True,
+            "op_type": {"$in": list(ATTACK_OP_TYPES)},
+            "target_castle": body.origin_castle, "arrival_at": {"$lte": now()},
+            "combat_resolved_at": {"$exists": False},
+        })
+        if besieged:
+            raise HTTPException(403, "این قلعه زیر حمله یا محاصره است — فعلاً فقط می‌توانی برای همین قلعه لشکر دفاعی بسازی")
+
     valid_origins = {p["castle"]} | set(p.get("castle_buildings", {})) | await stationed_origins(user["id"])
     if body.origin_castle not in valid_origins:
         raise HTTPException(400, "مبدا باید قلعهٔ خودت یا جایی باشد که لشکرت همین الان مستقر است")
@@ -380,6 +398,8 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         raise HTTPException(404, "لشکر پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
+    if c.get("engagement_locked"):
+        raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قابل لغو یا حرکت نیست")
 
     # اتمیک و مشروط به active=True — وگرنه دو کلیکِ هم‌زمانِ لغو هردو از رویِ همون
     # خواندنِ قدیمی رد می‌شن و منابع/تسلیحات دوبار برمی‌گردن
@@ -407,6 +427,92 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         "weapons_refunded": weapons_refund,
     }
 
+@router.post("/{campaign_id}/move")
+async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = Depends(get_user)):
+    """همان لشکرِ رسیده را بدون ساخت دوباره و بدون کم‌کردن نفرات/طلا به مقصد بعدی می‌فرستد."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ لشکر نامعتبر است")
+    c = await campaigns.find_one({"_id": oid, "tg_id": user["id"], "active": True})
+    if not c:
+        raise HTTPException(404, "لشکر فعال پیدا نشد")
+    if c.get("engagement_locked"):
+        raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قفل می‌ماند")
+    if c.get("arrival_at") and now() < c["arrival_at"]:
+        raise HTTPException(400, "این لشکر هنوز به مقصد قبلی نرسیده است")
+    if body.op_type not in ("attack", "siege", "naval_raid", "garrison"):
+        raise HTTPException(400, "فرمان حرکت نامعتبر است")
+    if not (await get_war_window())["open"]:
+        raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است")
+
+    origin = c["target_castle"]
+    if body.target_castle == origin:
+        raise HTTPException(400, "مقصد جدید باید با محل فعلی لشکر فرق داشته باشد")
+    names, ports = await all_castle_names_and_ports()
+    if body.target_castle not in names:
+        raise HTTPException(400, "مقصد در نقشه شناخته‌شده نیست")
+    if body.op_type == "siege" and body.target_castle in ports:
+        raise HTTPException(400, "محاصره فقط برای قلعه‌های غیربندری است")
+    if body.op_type == "naval_raid" and (origin not in ports or body.target_castle not in ports):
+        raise HTTPException(400, "غارت دریایی باید از یک بندر به بندر دیگر باشد")
+
+    # از قلعهٔ تحت حمله نمی‌شود لشکر مستقر را هم فراری داد؛ دفاع باید همان‌جا بماند.
+    besieged = await campaigns.find_one({
+        "tg_id": {"$ne": user["id"]}, "active": True,
+        "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": origin,
+        "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
+    })
+    if besieged:
+        raise HTTPException(403, "این قلعه زیر حمله یا محاصره است و هیچ لشکری نمی‌تواند از آن خارج شود")
+
+    terrain = await all_castle_terrain()
+    blocked = await blocked_castles_for(user["id"])
+    opts = travel_routes(origin, body.target_castle, blocked, terrain=terrain)
+    if not opts:
+        raise HTTPException(400, await blocked_route_message(origin, body.target_castle, blocked))
+    chosen = next((r for r in opts if r["path"] == body.via), None) if body.via else None
+    chosen = chosen or opts[0]
+    troops = {k: max(0, int(v or 0)) for k, v in c.get("troops", {}).items()}
+    naval_capacity = sum(NAVAL_TROOPS[t]["capacity"] * n for t, n in troops.items() if t in NAVAL_TROOPS)
+    land_men = sum(n for t, n in troops.items() if t not in NAVAL_TROOPS)
+    if chosen.get("via_sea") and land_men > naval_capacity:
+        raise HTTPException(400, f"کشتی‌های این لشکر فقط ظرفیت جابه‌جایی {naval_capacity} نیروی زمینی را دارند")
+
+    arrival_at = now() + timedelta(minutes=chosen["minutes"])
+    await campaigns.update_one({"_id": oid}, {
+        "$set": {
+            "origin_castle": origin, "target_castle": body.target_castle,
+            "op_type": body.op_type, "travel_minutes": chosen["minutes"],
+            "route_path": chosen["path"], "arrival_at": arrival_at,
+            "arrival_notified": False, "moved_at": now(),
+        },
+        "$unset": {
+            "combat_resolved_at": "", "combat_outcome": "", "winner_tg_id": "",
+            "medal_outcome_recorded": "", "engagement_campaign_id": "",
+        },
+    })
+    return {"ok": True, "arrival_at": arrival_at.isoformat(), "travel_minutes": chosen["minutes"], "route_path": chosen["path"]}
+
+@router.post("/{campaign_id}/attack")
+async def order_siege_attack(campaign_id: str, user: dict = Depends(get_user)):
+    """محاصرهٔ رسیده را به حملهٔ مستقیم تبدیل می‌کند؛ واچر درگیری را ایجاد و لشکرها را قفل می‌کند."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ لشکر نامعتبر است")
+    c = await campaigns.find_one({"_id": oid, "tg_id": user["id"], "active": True})
+    if not c:
+        raise HTTPException(404, "لشکر پیدا نشد")
+    if c.get("op_type") != "siege" or (c.get("arrival_at") and now() < c["arrival_at"]):
+        raise HTTPException(400, "فقط لشکر محاصره‌ای که به مقصد رسیده می‌تواند دستور حمله بگیرد")
+    if c.get("engagement_locked"):
+        raise HTTPException(409, "این لشکر همین حالا درگیر نبرد است")
+    await campaigns.update_one({"_id": oid}, {"$set": {
+        "op_type": "attack", "arrival_at": now(), "arrival_notified": False, "attack_ordered_at": now(),
+    }})
+    return {"ok": True}
+
 @router.get("/legions")
 async def legions(user: dict = Depends(get_user)):
     """همهٔ لشکرهای فعالِ من — از جمله دفاعی/جای‌گیری — برای مدیریت (لغو یا حرکت‌دادن).
@@ -429,7 +535,9 @@ async def legions(user: dict = Depends(get_user)):
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
-            "can_relaunch": c["op_type"] == "garrison" and arrived,
+            "engagement_locked": bool(c.get("engagement_locked")),
+            "can_move": arrived and not c.get("engagement_locked"),
+            "can_attack": c["op_type"] == "siege" and arrived and not c.get("engagement_locked"),
             "created_at": c["created_at"].isoformat(),
             "arrival_at": arrival_at.isoformat() if arrival_at else None,
         })
@@ -482,6 +590,7 @@ async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:
     cur = campaigns.find({
         "tg_id": owner_tg_id, "active": True,
         "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": castle_name,
+        "arrival_at": {"$lte": now()},
     })
     async for c in cur:
         for tid, n in c.get("troops", {}).items():
@@ -510,7 +619,16 @@ async def notify_arrivals():
                 f"لشکری از {origin} با نام «{name}» به قلعه‌ات ({target}) رسید — مراقب باش.",
             )
 
-        if c["op_type"] in ATTACK_OP_TYPES and target_owner and target_owner["tg_id"] != c["tg_id"]:
+        if c["op_type"] in DIRECT_ATTACK_OP_TYPES and target_owner and target_owner["tg_id"] != c["tg_id"]:
+            engagement_id = str(c["_id"])
+            await campaigns.update_one({"_id": c["_id"]}, {"$set": {
+                "engagement_locked": True, "engagement_campaign_id": engagement_id,
+            }})
+            await campaigns.update_many({
+                "tg_id": target_owner["tg_id"], "active": True,
+                "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
+                "arrival_at": {"$lte": now()},
+            }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id}})
             attacker_summary = troops_summary(c.get("troops", {}))
             defense_troops = await defending_troops(target, target_owner["tg_id"])
             defender_summary = troops_summary(defense_troops)
@@ -549,7 +667,7 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out = []
     cur = campaigns.find({
-        "tg_id": user["id"], "op_type": {"$in": list(ATTACK_OP_TYPES)},
+        "tg_id": user["id"], "op_type": {"$in": list(DIRECT_ATTACK_OP_TYPES)},
         "arrival_at": {"$lte": now(), "$gte": cutoff},
     })
     async for c in cur:
@@ -558,7 +676,7 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
             out.append(row)
 
     cur2 = campaigns.find({
-        "tg_id": {"$ne": user["id"]}, "op_type": {"$in": list(ATTACK_OP_TYPES)},
+        "tg_id": {"$ne": user["id"]}, "op_type": {"$in": list(DIRECT_ATTACK_OP_TYPES)},
         "target_castle": {"$in": owned_castles(p)},
         "arrival_at": {"$lte": now(), "$gte": cutoff},
     })
@@ -569,3 +687,4 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
+

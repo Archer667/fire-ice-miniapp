@@ -189,6 +189,7 @@ export default function Admin() {
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
   const [roleplayWinners, setRoleplayWinners] = useState({}); // roleplayId -> winner tg_id
+  const [roleplayLosses, setRoleplayLosses] = useState({}); // roleplayId -> {attacker:{troopId:n}, defender:{troopId:n}}
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
   const [itemsList, setItemsList] = useState(null);
@@ -605,13 +606,15 @@ export default function Admin() {
     if (roleplay?.category === 'war' && !winnerTgId) { toast('برندهٔ نبرد را مشخص کن'); return; }
     setRoleplayBusyId(roleplayId);
     try {
-      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId);
+      const losses = roleplayLosses[roleplayId] || {};
+      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId, losses.attacker || {}, losses.defender || {});
       haptic('medium');
       toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
       setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayVisibility(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayOtherLords(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayWinners(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayLosses(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
@@ -1439,6 +1442,39 @@ export default function Admin() {
                 )}
                 {r.category === 'war' && r.war && (
                   <>
+                    <div style={{ margin: '10px 0', padding: 10, borderRadius: 12, border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>نیروهای درگیر و ثبت تلفات</div>
+                      <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 8 }}>
+                        عددی که برای هر نیرو می‌زنی از همان لشکر کم می‌شود. عدد را خالی یا صفر بگذار یعنی آن نیرو تلفاتی نداشته.
+                      </div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--danger)', marginBottom: 6 }}>
+                        مهاجم — {r.war.attacker_name} · {(r.war.attacker_army?.men || 0).toLocaleString('fa-IR')} نفر
+                      </div>
+                      {(r.war.attacker_army?.troops || []).map(t => (
+                        <div className="troop" key={`a-${t.id}`}>
+                          <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} نفر حاضر</small></div>
+                          <input type="number" min="0" max={t.count} placeholder="تلفات"
+                            value={roleplayLosses[r.id]?.attacker?.[t.id] ?? ''}
+                            onChange={e => setRoleplayLosses(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), attacker: { ...(prev[r.id]?.attacker || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} />
+                        </div>
+                      ))}
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--az2)', margin: '10px 0 6px' }}>
+                        مدافع — {r.war.defender_name} · {(r.war.defender_armies || []).reduce((s, a) => s + (a.men || 0), 0).toLocaleString('fa-IR')} نفر
+                      </div>
+                      {Object.values((r.war.defender_armies || []).flatMap(a => a.troops || []).reduce((m, t) => {
+                        m[t.id] = m[t.id] ? { ...m[t.id], count: m[t.id].count + t.count } : { ...t }; return m;
+                      }, {})).map(t => (
+                        <div className="troop" key={`d-${t.id}`}>
+                          <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} نفر حاضر در دفاع</small></div>
+                          <input type="number" min="0" max={t.count} placeholder="تلفات"
+                            value={roleplayLosses[r.id]?.defender?.[t.id] ?? ''}
+                            onChange={e => setRoleplayLosses(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), defender: { ...(prev[r.id]?.defender || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} />
+                        </div>
+                      ))}
+                      {(!r.war.defender_armies || r.war.defender_armies.length === 0) && (
+                        <div style={{ fontSize: 11, color: 'var(--low)' }}>هیچ لشکر دفاعیِ رسیده‌ای در این قلعه ثبت نشده.</div>
+                      )}
+                    </div>
                     <label className="f" style={{ marginTop: 0 }}>برندهٔ نبرد</label>
                     <div className="grid2" role="radiogroup" aria-label="برندهٔ نبرد">
                       <button type="button" role="radio" aria-checked={roleplayWinners[r.id] === r.war.attacker_tg_id}
@@ -2497,3 +2533,4 @@ export default function Admin() {
     </>
   );
 }
+

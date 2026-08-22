@@ -13,9 +13,9 @@ import game_data
 import telegram_bot
 from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades, owned_castles, castle_building_state, normalize_building_state
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power
 from config import ADMIN_IDS
-from routers.war import OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
+from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
 
@@ -315,7 +315,31 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
                     "defender_tg_id": defender["tg_id"] if defender else None,
                     "defender_name": defender["name"] if defender else "مدافع نامشخص",
                     "target_castle": campaign["target_castle"],
+                    "attacker_army": {
+                        "campaign_id": str(campaign["_id"]),
+                        "men": campaign.get("men_committed", sum(campaign.get("troops", {}).values())),
+                        "troops": [
+                            {"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n}
+                            for tid, n in campaign.get("troops", {}).items() if n and n > 0
+                        ],
+                    },
+                    "defender_armies": [],
                 }
+                if defender:
+                    async for dc in campaigns.find({
+                        "tg_id": defender["tg_id"], "active": True,
+                        "op_type": {"$in": list(DEFENSE_OP_TYPES)},
+                        "target_castle": campaign["target_castle"],
+                        "arrival_at": {"$lte": now()},
+                    }):
+                        row["war"]["defender_armies"].append({
+                            "campaign_id": str(dc["_id"]), "name": dc.get("name", "لشکر دفاعی"),
+                            "men": dc.get("men_committed", sum(dc.get("troops", {}).values())),
+                            "troops": [
+                                {"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n}
+                                for tid, n in dc.get("troops", {}).items() if n and n > 0
+                            ],
+                        })
         out.append(row)
     return out
 
@@ -324,8 +348,55 @@ class RoleplayResultBody(BaseModel):
     visibility: str = "participants"   # "participants" | "all" — چه کسی نتیجه را کلاغ می‌گیرد
     other_lords: list[int] = []
     winner_tg_id: int | None = None        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
+    attacker_losses: dict[str, int] = {}
+    defender_losses: dict[str, int] = {}
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
+
+async def _apply_campaign_losses(campaign: dict, losses: dict[str, int]):
+    """تلفات را از ترکیب واقعی همان لشکر کم می‌کند؛ نفرات قبلاً موقع ساخت از منابع
+    پلیر کم شده‌اند، بنابراین اینجا چیزی دوباره از منابع قلمرو کم نمی‌شود."""
+    troops = dict(campaign.get("troops", {}))
+    for tid, raw in losses.items():
+        loss = int(raw or 0)
+        if loss < 0:
+            raise HTTPException(400, "تلفات نمی‌تواند منفی باشد")
+        if tid not in troops and loss:
+            raise HTTPException(400, f"نیروی {tid} در این لشکر وجود ندارد")
+        if loss > int(troops.get(tid, 0)):
+            raise HTTPException(400, f"تلفات {tid} از تعداد حاضر در لشکر بیشتر است")
+        troops[tid] = int(troops.get(tid, 0)) - loss
+    men = sum(max(0, int(n or 0)) for n in troops.values())
+    owner = await players.find_one({"tg_id": campaign["tg_id"]})
+    levels = dict(building_levels_for(owner, campaign.get("origin_castle"))) if owner else {}
+    update = {"troops": troops, "men_committed": men, "power": campaign_power(troops, levels)}
+    if men == 0:
+        update.update({"active": False, "status": "destroyed", "engagement_locked": False})
+    await campaigns.update_one({"_id": campaign["_id"]}, {"$set": update})
+
+async def _apply_defender_losses(defender_tg_id: int, target_castle: str, engagement_id: str, losses: dict[str, int]):
+    """تلفات تجمیعی مدافع را میان لشکرهای دفاعی همان قلعه پخش می‌کند."""
+    armies = [c async for c in campaigns.find({
+        "tg_id": defender_tg_id, "active": True,
+        "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target_castle,
+        "$or": [{"engagement_campaign_id": engagement_id}, {"arrival_at": {"$lte": now()}}],
+    }).sort("created_at", 1)]
+    available = {}
+    for army in armies:
+        for tid, n in army.get("troops", {}).items():
+            available[tid] = available.get(tid, 0) + int(n or 0)
+    for tid, raw in losses.items():
+        if int(raw or 0) < 0 or int(raw or 0) > available.get(tid, 0):
+            raise HTTPException(400, f"تلفات {tid} از تعداد کل مدافعان بیشتر است")
+    remaining = {tid: int(n or 0) for tid, n in losses.items()}
+    for army in armies:
+        share = {}
+        for tid, left in list(remaining.items()):
+            take = min(left, int(army.get("troops", {}).get(tid, 0) or 0))
+            if take:
+                share[tid] = take
+                remaining[tid] -= take
+        await _apply_campaign_losses(army, share)
 
 @router.post("/roleplay/{roleplay_id}/respond")
 async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
@@ -380,6 +451,14 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 raise HTTPException(400, "برندهٔ نبرد را از بین مهاجم و مدافع انتخاب کن")
             combat_outcome = "attacker" if body.winner_tg_id == campaign["tg_id"] else "defender"
 
+            # تلفات دقیق همزمان با نتیجه ثبت می‌شود. برای مدافع، جمع هر نوع نیرو
+            # میان همهٔ لشکرهای دفاعی حاضر در همان قلعه تقسیم می‌شود.
+            await _apply_campaign_losses(campaign, body.attacker_losses)
+            if defender:
+                await _apply_defender_losses(
+                    defender["tg_id"], campaign["target_castle"], str(campaign["_id"]), body.defender_losses,
+                )
+
     other_lord_names = []
     for tg_id in body.other_lords:
         lord = await players.find_one({"tg_id": tg_id})
@@ -412,6 +491,13 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 defender_delta = war_pop["defense_win"] if combat_outcome == "defender" else war_pop["defense_loss"]
                 defender_pop = max(0, min(100, int(defender.get("popularity", 50)) + int(defender_delta)))
                 await players.update_one({"tg_id": defender["tg_id"]}, {"$set": {"popularity": defender_pop}})
+
+        # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
+        # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
+        await campaigns.update_many(
+            {"engagement_campaign_id": str(campaign["_id"])},
+            {"$set": {"engagement_locked": False}, "$unset": {"engagement_campaign_id": ""}},
+        )
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
@@ -1379,3 +1465,4 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
+

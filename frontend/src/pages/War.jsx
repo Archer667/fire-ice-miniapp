@@ -78,6 +78,8 @@ export default function War() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [cancelBusyId, setCancelBusyId] = useState(null);
+  const [movingLegion, setMovingLegion] = useState(null);
+  const [attackBusyId, setAttackBusyId] = useState(null);
 
   // اطلاعاتِ هر قلعه (اقلیمِ واقعی، بندری‌بودن، نوعِ زمین) از خودِ دادهٔ نقشه —
   // چون قلعهٔ دومِ یه لرد می‌تونه در اقلیمِ دیگه‌ای باشه یا بندری/غیربندری متفاوت
@@ -187,6 +189,9 @@ export default function War() {
   const overSeaCapacity = originIsSeaOnly && seaLandMen > seaCapacity;
   const overSeaRoute = !!chosenRoute?.via_sea && seaLandMen > seaCapacity;
   const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
+    : movingLegion && !target ? 'مقصد را انتخاب کن'
+    : movingLegion && target?.name === movingLegion.target ? 'مقصد جدید باید متفاوت باشد'
+    : movingLegion ? null
     : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
     : shortWeapon ? `${WEAPON_NAMES[shortWeapon[0]]} کافی نیست`
@@ -208,8 +213,23 @@ export default function War() {
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
     if (badOriginForNaval) { toast('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است'); return; }
-    if (overSeaCapacity) { toast(`مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
-    if (overSeaRoute) { toast(`این مسیر از آب می‌گذرد — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
+    if (!movingLegion && overSeaCapacity) { toast(`مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
+    if (!movingLegion && overSeaRoute) { toast(`این مسیر از آب می‌گذرد — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`); return; }
+    if (movingLegion) {
+      if (!target) { toast('مقصد جدید لشکر را از روی نقشه انتخاب کن'); return; }
+      setBusy(true);
+      try {
+        const res = await api.moveCampaign(movingLegion.id, {
+          target_castle: target.name, op_type: opType,
+          via: chosenRoute ? chosenRoute.path : undefined,
+        });
+        haptic('medium');
+        toast(`فرمان حرکت صادر شد — حدود ${(res.travel_minutes || 0).toLocaleString('fa-IR')} دقیقه تا مقصد`);
+        setMovingLegion(null); setTarget(null); loadMine(); loadLegions();
+      } catch (e) { toast(e.message); }
+      setBusy(false);
+      return;
+    }
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
@@ -265,9 +285,22 @@ export default function War() {
 
   const relaunchFrom = (c) => {
     haptic();
+    setMovingLegion(c);
     setOrigin(c.target);
+    setOpType('garrison');
+    setTarget(null);
     setTab('command');
-    toast(`مبدا فرمان روی «${c.target}» تنظیم شد — لشکر جدید رو از همون‌جا بفرست`);
+    toast(`لشکر «${c.name}» انتخاب شد — مقصد جدیدش را از روی نقشه مشخص کن`);
+  };
+
+  const orderAttack = async (c) => {
+    setAttackBusyId(c.id);
+    try {
+      await api.orderSiegeAttack(c.id);
+      haptic('medium'); toast('دستور حمله صادر شد — لشکر و مدافعان تا اعلام نتیجه قفل می‌شوند');
+      loadLegions(); loadMine();
+    } catch (e) { toast(e.message); }
+    setAttackBusyId(null);
   };
 
   if (mapError) return (
@@ -314,17 +347,24 @@ export default function War() {
 
           <div className="sect up u3">ساخت لشکر</div>
           <div className="card up u3">
+            {movingLegion && (
+              <div style={{ marginBottom: 12, padding: 10, borderRadius: 12, background: 'rgba(77,163,255,.08)', color: 'var(--az2)', fontSize: 12 }}>
+                در حال جابه‌جایی همان لشکر «{movingLegion.name}» با {movingLegion.men_committed.toLocaleString('fa-IR')} نفر؛ هیچ نفر، طلا یا سلاح تازه‌ای کم نمی‌شود.
+                <button className="btn ghost" style={{ marginTop: 8, padding: 8 }} onClick={() => { setMovingLegion(null); setTarget(null); }}>لغو فرمان حرکت</button>
+              </div>
+            )}
             <label className="f" style={{ marginTop: 0 }}>نام لشکر</label>
             <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
 
             <label className="f">مبدا</label>
-            <select value={origin} onChange={e => setOrigin(e.target.value)}>
+            <select value={origin} disabled={!!movingLegion} onChange={e => setOrigin(e.target.value)}>
+              {movingLegion && !originOptions.includes(movingLegion.target) && <option value={movingLegion.target}>{castleLabel(movingLegion.target)} (محل فعلی لشکر)</option>}
               {originOptions.map(o => <option key={o} value={o}>{castleLabel(o)}{myCastles.includes(o) ? ' (قلعهٔ خودت)' : ' (لشکر مستقر)'}</option>)}
             </select>
 
             <label className="f">نوع عملیات</label>
             <select value={opType} onChange={e => { setOpType(e.target.value); setTarget(null); }}>
-              {OP_TYPES.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              {OP_TYPES.filter(o => !movingLegion || o.id !== 'defense').map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
 
             {op.needsTarget ? (
@@ -392,7 +432,7 @@ export default function War() {
             )}
           </div>
 
-          <div className="sect up u3">گسیل نیرو</div>
+          {!movingLegion && <><div className="sect up u3">گسیل نیرو</div>
           <div className="page-sub up u3" style={{ margin: '0 4px 10px' }}>
             هر نیروی عمومی به پادگانِ همان یگان نیاز دارد؛ کارگاه تسلیحاتش هم لازم است اما فقط برای تولید تسلیحات — هر سرباز موقع اعزام یک واحد از تسلیحاتِ همان یگان مصرف می‌کند. کشتی جنگی فقط در قلعه/شهر بندری و بعد از ساخت بندر ممکن است.
           </div>
@@ -443,11 +483,11 @@ export default function War() {
                 <small>توان</small>
               </div>
             </div>
-          </div>
+          </div></>}
 
           <div className="up u3">
             <button className="btn" disabled={!!formIssue || busy} onClick={send}>
-              {formIssue || (busy ? 'در حال ارسال...' : 'مُهر و ارسال فرمان')}
+              {formIssue || (busy ? 'در حال ارسال...' : movingLegion ? 'صدور فرمان حرکت همین لشکر' : 'مُهر و ارسال فرمان')}
             </button>
           </div>
         </>
@@ -487,10 +527,16 @@ export default function War() {
                 {c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                {c.can_relaunch && (
+                {c.engagement_locked && (
+                  <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>درگیر نبرد — تا ثبت نتیجه قفل است</div>
+                )}
+                {c.can_move && (
                   <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => relaunchFrom(c)}>حرکت بده</button>
                 )}
-                <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} disabled={cancelBusyId === c.id} onClick={() => cancelCampaign(c)}>
+                {c.can_attack && (
+                  <button className="btn" style={{ padding: 10, fontSize: 12, flex: 1 }} disabled={attackBusyId === c.id} onClick={() => orderAttack(c)}>{attackBusyId === c.id ? '...' : 'دستور حمله'}</button>
+                )}
+                <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} disabled={cancelBusyId === c.id || c.engagement_locked} onClick={() => cancelCampaign(c)}>
                   {cancelBusyId === c.id ? '...' : 'لغو لشکر'}
                 </button>
               </div>
@@ -539,3 +585,4 @@ export default function War() {
     </>
   );
 }
+
