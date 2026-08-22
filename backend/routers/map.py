@@ -94,7 +94,9 @@ async def get_map(user: dict = Depends(get_user)):
     # (فرمان خودت را همیشه می‌بینی)
     reveal_before = now() - timedelta(minutes=CAMPAIGN_REVEAL_MINUTES)
     camps = []
-    cur = campaigns.find({"active": True}).sort("created_at", -1).limit(50)
+    # فقط ارتش‌های واقعاً در راه؛ قبلاً لشکرهای دفاعی/مستقرِ رسیده هم سقف ۵۰تایی
+    # این Query را پر می‌کردند و ممکن بود یک حرکت واقعی اصلاً به فرانت نرسد.
+    cur = campaigns.find({"active": True, "arrival_at": {"$gt": now()}}).sort("arrival_at", 1).limit(100)
     async for s in cur:
         mine = s["tg_id"] == user["id"]
         departed_at = s.get("moved_at") or s.get("created_at")

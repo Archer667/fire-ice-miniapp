@@ -1525,7 +1525,7 @@ export const api = {
   gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
   me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
   register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
-  map:       () => MOCK ? Promise.resolve(M.map()) : req('/api/map'),
+  map:       () => MOCK ? Promise.resolve(M.map()) : req(`/api/map?_=${Date.now()}`, { cache: 'no-store' }),
   warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
   legions:   () => MOCK ? Promise.resolve(M.legions()) : req('/api/war/legions'),
   warWindow: () => MOCK ? Promise.resolve(M.warWindow()) : req('/api/war/window'),

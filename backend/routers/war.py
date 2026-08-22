@@ -269,7 +269,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     # قلعه‌ای که دشمن به آن رسیده و هنوز نتیجهٔ حمله/محاصره‌اش مشخص نشده، فقط
     # اجازهٔ ساخت لشکر دفاعی دارد؛ نه گسیل یک لشکر تازه و نه جای‌گیری در بیرون.
-    if body.op_type != "defense":
+    origin_owner = await owner_of_castle(body.origin_castle)
+    if body.op_type != "defense" and origin_owner and origin_owner["tg_id"] == user["id"]:
         besieged = await campaigns.find_one({
             "tg_id": {"$ne": user["id"]}, "active": True,
             "op_type": {"$in": list(ATTACK_OP_TYPES)},
@@ -458,13 +459,15 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
         raise HTTPException(400, "غارت دریایی باید از یک بندر به بندر دیگر باشد")
 
     # از قلعهٔ تحت حمله نمی‌شود لشکر مستقر را هم فراری داد؛ دفاع باید همان‌جا بماند.
-    besieged = await campaigns.find_one({
-        "tg_id": {"$ne": user["id"]}, "active": True,
-        "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": origin,
-        "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
-    })
-    if besieged:
-        raise HTTPException(403, "این قلعه زیر حمله یا محاصره است و هیچ لشکری نمی‌تواند از آن خارج شود")
+    origin_owner = await owner_of_castle(origin)
+    if origin_owner and origin_owner["tg_id"] == user["id"]:
+        besieged = await campaigns.find_one({
+            "tg_id": {"$ne": user["id"]}, "active": True,
+            "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": origin,
+            "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
+        })
+        if besieged:
+            raise HTTPException(403, "این قلعه زیر حمله یا محاصره است و هیچ لشکری نمی‌تواند از آن خارج شود")
 
     terrain = await all_castle_terrain()
     blocked = await blocked_castles_for(user["id"])

@@ -34,7 +34,10 @@ function ArmyMarker({ campaign, coords }) {
     return () => clearInterval(timer);
   }, []);
 
-  const points = (campaign.route_path || [campaign.from, campaign.to]).map(n => coords[n]).filter(Boolean);
+  let points = (campaign.route_path || [campaign.from, campaign.to]).map(n => coords[n]).filter(Boolean);
+  // مسیرهای قدیمی ممکن است اسم یک ایستگاه حذف‌شده/بدون مختصات را داشته باشند؛
+  // اگر دو سر اصلی مختصات دارند، آیکن را دست‌کم مستقیم میان مبدا و مقصد نشان بده.
+  if (points.length < 2 && coords[campaign.from] && coords[campaign.to]) points = [coords[campaign.from], coords[campaign.to]];
   if (campaign.arrived || points.length < 2 || !campaign.departed_at || !campaign.arrival_at) return null;
   const start = new Date(campaign.departed_at).getTime();
   const end = new Date(campaign.arrival_at).getTime();

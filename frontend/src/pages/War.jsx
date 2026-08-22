@@ -18,6 +18,23 @@ const TABS = [
 const SEEN_KEY = 'fireice_war_reports_seen';
 const loadSeenIds = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); } };
 
+function ArrivalCountdown({ arrivalAt, arrived }) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (arrived || !arrivalAt) return undefined;
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [arrivalAt, arrived]);
+  if (arrived || !arrivalAt) return <>رسیده به مقصد</>;
+  const seconds = Math.max(0, Math.ceil((new Date(arrivalAt).getTime() - nowMs) / 1000));
+  if (seconds <= 0) return <>در حال ثبت رسیدن...</>;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts = [h > 0 ? `${h.toLocaleString('fa-IR')} ساعت` : '', m > 0 ? `${m.toLocaleString('fa-IR')} دقیقه` : '', `${s.toLocaleString('fa-IR')} ثانیه`].filter(Boolean);
+  return <>در راه — {parts.join(' و ')} تا رسیدن</>;
+}
+
 export default function War() {
   const { me, setMe, toast } = useGame();
   const gold = me.resources.gold;
@@ -528,7 +545,7 @@ export default function War() {
                 </div>
               )}
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
-                {c.arrived ? 'رسیده به مقصد' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
+                <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {c.engagement_locked && (
@@ -574,8 +591,7 @@ export default function War() {
               )}
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 8 }}>
                 {!c.active ? 'لغوشده'
-                  : c.arrived ? 'رسیده به مقصد'
-                  : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`}
+                  : <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />}
               </div>
               {c.active && (
                 <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} disabled={cancelBusyId === c.id} onClick={() => cancelCampaign(c)}>
