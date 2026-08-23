@@ -35,7 +35,7 @@ function utcMillis(value) {
  * با تب کوچک اطلاعات دقیقاً کنار همان پین) و هم برای حالت ادمین (کلیک روی خودِ
  * نقشه برای گرفتن مختصات یک نقطهٔ خالی) به کار می‌رود.
  * مختصات هر قلعه درصدی از عرض/ارتفاع کامل تصویر است (۰ تا ۱۰۰) */
-function ArmyMarker({ campaign, coords }) {
+function ArmyMarker({ campaign, coords, active, onToggle, zoom }) {
   const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setTick(Date.now()), 250);
@@ -73,16 +73,30 @@ function ArmyMarker({ campaign, coords }) {
   }
   const color = REGION_COLORS[campaign.owner_region] || '#d8c39a';
   const label = `${campaign.mine ? 'لشکر تو' : `لشکر ${campaign.player_name || 'ناشناس'}`} — ${castleLabel(campaign.from)} به ${castleLabel(campaign.to)}`;
+  const minutesLeft = Math.max(1, Math.ceil((end - tick) / 60000));
   return (
-    <div className={`army-marker ${campaign.mine ? 'mine' : ''}`} style={{ left: `${xy[0]}%`, top: `${xy[1]}%`, '--army-color': color }} title={label} aria-label={label}>
+    <div className={`army-marker ${campaign.mine ? 'mine' : ''} ${active ? 'active' : ''}`}
+         role="button" tabIndex={0}
+         style={{ left: `${xy[0]}%`, top: `${xy[1]}%`, '--army-color': color }} title={label} aria-label={label}
+         onClick={(e) => { e.stopPropagation(); haptic(); onToggle(); }}
+         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggle(); } }}>
       <span className="army-halo" />
       <span className="army-icon"><Swords s={9} /></span>
+      {active && (
+        <div className="pin-popup army-popup" style={popupPlacement(xy, zoom)} onClick={(e) => e.stopPropagation()}>
+          <div className="pi-name">{campaign.mine ? (campaign.name || 'لشکر تو') : 'لشکر در حرکت'}</div>
+          <div className="pi-owner">فرمانده: {campaign.mine ? 'تو' : (campaign.player_name || 'نامشخص')}</div>
+          <div className="pi-stats">از {castleLabel(campaign.from)} به {castleLabel(campaign.to)}</div>
+          <div className="pi-stats">حدود {minutesLeft.toLocaleString('fa-IR')} دقیقه تا رسیدن</div>
+        </div>
+      )}
     </div>
   );
 }
 
 export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel, colorMode = 'region', routeSegments, seaLaneSegments, campaigns = [] }) {
   const zoom = useContext(ZoomContext);
+  const [activeArmy, setActiveArmy] = useState(null);
   const handleFrameClick = (e) => {
     if (!onFrameClick) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -154,7 +168,11 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
           </div>
         );
       })}
-      {campaigns.map(c => <ArmyMarker key={c.id || `${c.from}-${c.to}-${c.departed_at}`} campaign={c} coords={coords} />)}
+      {campaigns.map(c => {
+        const id = c.id || `${c.from}-${c.to}-${c.departed_at}`;
+        return <ArmyMarker key={id} campaign={c} coords={coords} zoom={zoom}
+                 active={activeArmy === id} onToggle={() => setActiveArmy(activeArmy === id ? null : id)} />;
+      })}
     </div>
   );
 }
