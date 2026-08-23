@@ -120,4 +120,3 @@ async def get_map(user: dict = Depends(get_user)):
                 "arrived": (now() >= arrival_at) if arrival_at else True,
             })
     return {"regions": regions, "campaigns": camps}
-
