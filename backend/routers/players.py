@@ -114,7 +114,8 @@ async def me(user: dict = Depends(get_user)):
         "resources": p["resources"], "last_tick": p["last_tick"],
         "buildings": p["buildings"], "castle_buildings": p.get("castle_buildings", {}),
     }})
-    day = min(SEASON_LENGTH_DAYS, ( (now() - p["created_at"]).days % SEASON_LENGTH_DAYS ) + 1)
+    season_start = p.get("season_started_at") or p["created_at"]
+    day = min(SEASON_LENGTH_DAYS, (((now() - season_start).days % SEASON_LENGTH_DAYS) + 1))
     # موجودیِ واقعی تو دیتابیس اعشاریه (تا تولیدِ کم‌مقدار بینِ چک‌ها گم نشه) — برای
     # نمایش به بازیکن رند می‌شود
     display_resources = {k: (round(v) if isinstance(v, (int, float)) else v) for k, v in p["resources"].items()}
