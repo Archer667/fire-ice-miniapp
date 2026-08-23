@@ -829,6 +829,7 @@ export const ROLEPLAY_CATEGORIES = {
   diplomacy: 'دیپلماسی',
   economy:   'اقتصاد',
   rebellion: 'شورش',
+  security:  'دفاعی (امنیتی)',
   other:     'آزاد',
 };
 
