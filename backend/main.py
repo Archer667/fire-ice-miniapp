@@ -37,6 +37,7 @@ import telegram_bot
 
 logger = logging.getLogger(__name__)
 
+# API deployment marker: battle-centered roleplay/admin endpoints are available.
 app = FastAPI(title="والریا : سیزن اول — API", version="1.0")
 
 app.add_middleware(
@@ -244,3 +245,4 @@ async def gamedata():
         "max_building_level": MAX_BUILDING_LEVEL, "warden_groups": WARDEN_GROUPS,
         "alliance_types": ALLIANCE_TYPES,
     }
+
