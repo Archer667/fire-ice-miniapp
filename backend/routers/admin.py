@@ -1,4 +1,5 @@
 import random
+import re
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -110,7 +111,7 @@ async def cleanup_preview(user: dict = Depends(full_admin_user)):
         "campaigns": await campaigns.count_documents({"active": {"$ne": True}}),
         "reports": (
             await spy_missions.count_documents({"resolved": True})
-            + await roleplays.count_documents({"resolved": True})
+            + await roleplays.count_documents({"resolved": True, "category": {"$ne": "security"}})
         ),
         "protected": {
             "active_campaigns": await campaigns.count_documents({"active": True}),
@@ -147,7 +148,8 @@ async def cleanup_data(body: CleanupBody, user: dict = Depends(full_admin_user))
         deleted = (await campaigns.delete_many({"active": {"$ne": True}})).deleted_count
     else:
         spy_deleted = (await spy_missions.delete_many({"resolved": True})).deleted_count
-        roleplay_deleted = (await roleplays.delete_many({"resolved": True})).deleted_count
+        # رول امنیتی آرشیو دائمی است و با پاک‌سازی گزارش‌های حل‌شده حذف نمی‌شود.
+        roleplay_deleted = (await roleplays.delete_many({"resolved": True, "category": {"$ne": "security"}})).deleted_count
         deleted = spy_deleted + roleplay_deleted
 
     return {"ok": True, "deleted": deleted, "label": label}
@@ -341,6 +343,25 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
                             ],
                         })
         out.append(row)
+    return out
+
+@router.get("/roleplay/security")
+async def search_security_roleplays(q: str = "", tg_id: int | None = None, user: dict = Depends(admin_user)):
+    """آرشیو رول‌های دفاعی/امنیتی؛ نتیجه ندارند و صرفاً با نام بازیکن یا متن قابل جست‌وجویند."""
+    query = {"category": "security"}
+    if tg_id is not None:
+        query["tg_id"] = tg_id
+    term = q.strip()
+    if term:
+        safe = re.escape(term[:100])
+        query["$or"] = [{"player_name": {"$regex": safe, "$options": "i"}}, {"text": {"$regex": safe, "$options": "i"}}]
+    out = []
+    async for row in roleplays.find(query).sort("created_at", -1).limit(200):
+        out.append({
+            "id": str(row["_id"]), "tg_id": row["tg_id"],
+            "player": row.get("player_name", "نامشخص"), "castle": row.get("castle"),
+            "text": row.get("text", ""), "created_at": row["created_at"].isoformat(),
+        })
     return out
 
 @router.get("/battles")
@@ -1568,3 +1589,4 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
+
