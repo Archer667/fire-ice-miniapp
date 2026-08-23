@@ -12,6 +12,7 @@ from game_data import (
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
+from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/war", tags=["war"])
 
@@ -612,6 +613,26 @@ def troops_summary(troops: dict) -> str:
     parts = [f"{troop_name(tid)}×{n}" for tid, n in troops.items() if n]
     return "، ".join(parts) if parts else "بدون نیرو"
 
+async def notify_battle_admins(engagement_id: str, location: str, attacker: dict, defender: dict, defender_troops: dict):
+    """همان لحظهٔ تشکیل پروندهٔ نبرد، آمار دو طرف را در بات و پنل همهٔ ادمین‌ها می‌فرستد."""
+    attacker_troops = dict(attacker.get("troops", {}))
+    attacker_total = sum(max(0, int(n or 0)) for n in attacker_troops.values())
+    defender_total = sum(max(0, int(n or 0)) for n in defender_troops.values())
+    attacker_name = attacker.get("player_name") or "مهاجم"
+    defender_name = defender.get("player_name") or defender.get("name") or "مدافع"
+    detail = (
+        f"محل درگیری: {location}\n"
+        f"{attacker_name}: {attacker_total} نفر — {troops_summary(attacker_troops)}\n"
+        f"{defender_name}: {defender_total} نفر — {troops_summary(defender_troops)}"
+    )
+    await notify_admins(
+        "battle_started", "⚔️ نبرد تازه آغاز شد", detail,
+        dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
+        player_name=attacker_name, player_tg_id=attacker.get("tg_id"), castle=location,
+        source_id=engagement_id, deadline=now() + timedelta(hours=ROLEPLAY_WINDOW_HOURS),
+        action="در پنل ادمین ← نبردها، نیروها و رول‌های دو طرف را بررسی کن.",
+    )
+
 async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:
     """مجموع نیروهای «دفاعی»/«جای‌گیری»ِ فعالِ صاحب قلعه که مستقر همان‌جاست"""
     total = {}
@@ -672,6 +693,7 @@ async def detect_route_encounters():
             msg = f"لشکرهای شما در {location} با هم روبه‌رو شدند و تا اعلام نتیجهٔ ادمین قفل‌اند. تا {ROLEPLAY_WINDOW_HOURS} ساعت فرصت ارسال رول جنگ دارید."
             await send_system_message(root["tg_id"], root["player_name"], msg)
             await send_system_message(opponent["tg_id"], opponent["player_name"], msg)
+            await notify_battle_admins(engagement_id, location, root, opponent, dict(opponent.get("troops", {})))
 
 async def notify_arrivals():
     """کلاغی به مبدا که «لشکرت رسید» و کلاغی به صاحب مقصد که «لشکری به قلعه‌ات رسید» —
@@ -750,6 +772,7 @@ async def notify_arrivals():
             )
             await send_system_message(c["tg_id"], c["player_name"], stats_text)
             await send_system_message(battle_defender["tg_id"], battle_defender["name"], stats_text)
+            await notify_battle_admins(engagement_id, target, c, battle_defender, defense_troops)
 
         await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
 
