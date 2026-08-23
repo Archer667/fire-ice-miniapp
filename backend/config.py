@@ -107,4 +107,3 @@ DAILY_REWARDS = [
     {"gold": 350, "wine": 10, "men": 30},
     {"gold": 600, "men": 80,  "wine": 20, "food": 200},
 ]
-
