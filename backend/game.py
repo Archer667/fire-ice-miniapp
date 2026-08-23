@@ -103,6 +103,11 @@ def daily_production(player: dict) -> dict:
         for k, v in building_produces(bid).items():
             prod[k] = prod.get(k, 0) + v * level
 
+    # دهکده فقط ظرفیت جمعیت را زیاد می‌کند؛ سرعت رشد خود جمعیت تابع محبوبیت است.
+    # محبوبیت ۵۰ = رشد عادی، صفر = نصف رشد و ۱۰۰ = یک‌ونیم برابر رشد.
+    popularity = max(0, min(100, int(player.get("popularity", POPULARITY_START))))
+    prod["men"] = round(prod.get("men", 0) * (0.5 + popularity / 100), 2)
+
     men = player["resources"].get("men", 0)
     tax_rate = max(0, min(100, int(player.get("tax_rate", TAX_RATE_DEFAULT))))
     multiplier = tax_yield_multiplier(player.get("popularity", POPULARITY_START))
