@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -15,6 +15,8 @@ const TABS = [
   { key: 'alliances', label: 'اتحادها' },
   { key: 'polls',     label: 'رای‌گیری' },
 ];
+const ALLIANCE_SEEN_KEY = 'valeria_public_alliances_seen';
+const loadSeenAllianceIds = () => { try { return new Set(JSON.parse(localStorage.getItem(ALLIANCE_SEEN_KEY)) || []); } catch { return new Set(); } };
 const TRIBUTE_STATUS_FA = { pending: 'در انتظار پرداخت', paid: 'پرداخت‌شده', expired: 'منقضی (پرداخت نشد)' };
 function hoursLeft(dueAt) {
   return Math.max(0, Math.round((new Date(dueAt).getTime() - Date.now()) / 3600000));
@@ -26,6 +28,7 @@ export default function Diplomacy() {
   const [titles, setTitles] = useState(null);
   const [alliances, setAlliances] = useState(null);
   const [publicAlliances, setPublicAlliances] = useState(null);
+  const [seenAllianceIds, setSeenAllianceIds] = useState(loadSeenAllianceIds);
   const [polls, setPolls] = useState(null);
   const [targets, setTargets] = useState([]);
   const [type, setType] = useState('non_aggression');
@@ -54,6 +57,20 @@ export default function Diplomacy() {
     api.tributeMine().then(setTribute).catch(e => toast(e.message));
   };
   useEffect(() => { load(); }, []);
+
+  const newAllianceCount = useMemo(
+    () => (publicAlliances || []).filter(a => !seenAllianceIds.has(a.id)).length,
+    [publicAlliances, seenAllianceIds]
+  );
+
+  const openTab = (key) => {
+    setTab(key);
+    if (key !== 'alliances' || !publicAlliances?.length) return;
+    const next = new Set(seenAllianceIds);
+    publicAlliances.forEach(a => next.add(a.id));
+    setSeenAllianceIds(next);
+    localStorage.setItem(ALLIANCE_SEEN_KEY, JSON.stringify([...next]));
+  };
 
   useEffect(() => {
     if (tribute?.demand_targets?.length && !demandTargetId) {
@@ -221,7 +238,12 @@ export default function Diplomacy() {
         {TABS.map(t => (
           <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
                className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>
+               onClick={() => { haptic(); openTab(t.key); }}>
+            {t.label}
+            {t.key === 'alliances' && newAllianceCount > 0 && (
+              <span className="tab-count-badge">{newAllianceCount.toLocaleString('fa-IR')}</span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -517,3 +539,4 @@ export default function Diplomacy() {
     </>
   );
 }
+
