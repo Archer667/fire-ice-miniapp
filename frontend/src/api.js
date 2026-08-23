@@ -244,6 +244,8 @@ function mockApplyProduction() {
     const { produces } = buildingYield(id, level);
     for (const [k, v] of Object.entries(produces)) prod[k] = (prod[k] || 0) + v;
   }
+  const popularity = Math.max(0, Math.min(100, mockMe.popularity ?? POPULARITY_START));
+  prod.men = (prod.men || 0) * (0.5 + popularity / 100);
   const men = mockMe.resources.men || 0;
   const taxRate = Math.max(0, Math.min(100, mockMe.tax_rate ?? TAX_RATE_DEFAULT));
   const multiplier = taxYieldMultiplier(mockMe.popularity ?? POPULARITY_START);
@@ -1749,5 +1751,8 @@ export const api = {
   adminResetGamePreview: () => MOCK ? Promise.resolve(M.adminResetGamePreview()) : req('/api/admin/reset-game/preview'),
   adminResetGame: (confirm) => MOCK ? Promise.resolve(M.adminResetGame(confirm))
     : req('/api/admin/reset-game', { method: 'POST', body: JSON.stringify({ confirm }) }),
+  adminResetSeason: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
+    : req('/api/admin/reset-season', { method: 'POST', body: JSON.stringify({ confirm }) }),
+  adminResetScoreboard: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
+    : req('/api/admin/reset-scoreboard', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
-
