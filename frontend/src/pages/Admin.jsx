@@ -148,6 +148,10 @@ export default function Admin() {
   const [resetPreview, setResetPreview] = useState(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
+  const [seasonResetConfirm, setSeasonResetConfirm] = useState('');
+  const [seasonResetBusy, setSeasonResetBusy] = useState(false);
+  const [scoreResetConfirm, setScoreResetConfirm] = useState('');
+  const [scoreResetBusy, setScoreResetBusy] = useState(false);
 
   const [mapRegion, setMapRegion] = useState('north');
   const [mapData, setMapData] = useState(null);
@@ -651,6 +655,30 @@ export default function Admin() {
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
+  };
+
+  const resetSeason = async () => {
+    if (seasonResetConfirm.trim() !== 'NEWSEASON') { toast('عبارت NEWSEASON را دقیق تایپ کن'); return; }
+    if (!window.confirm('فصل تازه شروع شود؟ پیشرفت همه صفر می‌شود، اما بازیکن‌ها و قلعه‌هایشان باقی می‌مانند.')) return;
+    setSeasonResetBusy(true);
+    try {
+      const res = await api.adminResetSeason(seasonResetConfirm.trim());
+      haptic('medium'); toast(`فصل تازه شروع شد؛ ${res.players_reset ?? 0} بازیکن ریست شد`);
+      setSeasonResetConfirm(''); loadRoster(); loadCampaigns(); loadMapData();
+    } catch (e) { toast(e.message); }
+    setSeasonResetBusy(false);
+  };
+
+  const resetScoreboard = async () => {
+    if (scoreResetConfirm.trim() !== 'SCOREBOARD') { toast('عبارت SCOREBOARD را دقیق تایپ کن'); return; }
+    if (!window.confirm('مبنای امتیاز همهٔ بازیکن‌ها از همین لحظه صفر شود؟')) return;
+    setScoreResetBusy(true);
+    try {
+      const res = await api.adminResetScoreboard(scoreResetConfirm.trim());
+      haptic('medium'); toast(`جدول امتیازات ${res.players_reset ?? 0} بازیکن صفر شد`);
+      setScoreResetConfirm(''); loadRoster();
+    } catch (e) { toast(e.message); }
+    setScoreResetBusy(false);
   };
 
   const resolveBattle = async (battle) => {
@@ -2638,6 +2666,29 @@ export default function Admin() {
           {me.is_owner && (
             <>
               <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
+              <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>شروع فصل تازه بدون حذف بازیکن‌ها</div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
+                  منابع، ساختمان‌ها، نیروها، مدال‌ها، محبوبیت و تاریخچهٔ فصل پاک و از مقدار آغازین شروع می‌شوند.
+                  حساب بازیکن، خاندان، اقلیم، قلعهٔ اصلی و قلعه‌های فتح‌شده سر جای خود می‌مانند.
+                </div>
+                <label className="f">برای تایید بنویس: <code>NEWSEASON</code></label>
+                <input value={seasonResetConfirm} onChange={e => setSeasonResetConfirm(e.target.value)} placeholder="NEWSEASON" dir="ltr" />
+                <button className="btn ghost" disabled={seasonResetConfirm.trim() !== 'NEWSEASON' || seasonResetBusy} onClick={resetSeason}>
+                  {seasonResetBusy ? 'در حال شروع فصل...' : 'شروع فصل تازه'}
+                </button>
+              </div>
+              <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فقط جدول امتیازات</div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
+                  امتیاز همه از همین لحظه صفر می‌شود؛ منابع، ساختمان‌ها، نیروها، مقام‌ها و مالکیت قلعه‌ها تغییر نمی‌کنند.
+                </div>
+                <label className="f">برای تایید بنویس: <code>SCOREBOARD</code></label>
+                <input value={scoreResetConfirm} onChange={e => setScoreResetConfirm(e.target.value)} placeholder="SCOREBOARD" dir="ltr" />
+                <button className="btn ghost" disabled={scoreResetConfirm.trim() !== 'SCOREBOARD' || scoreResetBusy} onClick={resetScoreboard}>
+                  {scoreResetBusy ? 'در حال ریست...' : 'ریست جدول امتیازات'}
+                </button>
+              </div>
               <div className="card up u3" style={{ borderColor: 'var(--danger)' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>ری‌استارت کامل بازی</div>
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
@@ -2666,4 +2717,3 @@ export default function Admin() {
     </>
   );
 }
-
