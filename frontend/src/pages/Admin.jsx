@@ -188,6 +188,10 @@ export default function Admin() {
   const [spyBusyId, setSpyBusyId] = useState(null);
 
   const [roleplayPending, setRoleplayPending] = useState(null);
+  const [securityRoleplays, setSecurityRoleplays] = useState(null);
+  const [securityQuery, setSecurityQuery] = useState('');
+  const [securityPlayer, setSecurityPlayer] = useState([]);
+  const [securitySearching, setSecuritySearching] = useState(false);
   const [battles, setBattles] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
@@ -237,6 +241,12 @@ export default function Admin() {
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
   const loadSpyResolved = () => api.adminSpyResolved().then(setSpyResolved).catch(e => toast(e.message));
   const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
+  const loadSecurityRoleplays = async () => {
+    setSecuritySearching(true);
+    try { setSecurityRoleplays(await api.adminSecurityRoleplays(securityQuery.trim(), securityPlayer[0]?.tg_id || null)); }
+    catch (e) { toast(e.message); setSecurityRoleplays([]); }
+    setSecuritySearching(false);
+  };
   const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadAlliances = () => api.adminListAlliances().then(setAlliancesList).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
@@ -305,6 +315,7 @@ export default function Admin() {
     loadSpyPending();
     loadSpyResolved();
     loadRoleplayPending();
+    api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(() => setSecurityRoleplays([]));
     loadBattles();
     loadAlliances();
     loadRebellions();
@@ -1320,6 +1331,7 @@ export default function Admin() {
               { key: 'campaigns', label: 'لشکرکشی‌ها' },
               { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'espionage', label: 'جاسوسی' },
+              { key: 'security', label: 'آرشیو امنیتی' },
               { key: 'roleplay',  label: 'رول‌ها' },
             ].map(t => (
               <button type="button" key={t.key} role="tab" aria-selected={warSubTab === t.key}
@@ -1472,6 +1484,41 @@ export default function Admin() {
           </div>
           )}
           </>
+          )}
+
+          {warSubTab === 'security' && (
+          <div className="up u2">
+            <div className="page-sub" style={{ marginBottom: 10 }}>
+              رول‌های دفاعی و امنیتی نتیجه ندارند و همیشه در این آرشیو می‌مانند. با نام بازیکن یا بخشی از متن رول جست‌وجو کن.
+            </div>
+            <div className="card" style={{ marginBottom: 12 }}>
+              <label className="f" style={{ marginTop: 0 }}>بازیکن (اختیاری)</label>
+              <PlayerPicker value={securityPlayer} onChange={setSecurityPlayer} single placeholder="همهٔ بازیکن‌ها" />
+              <label className="f">نام بازیکن یا عبارت داخل رول</label>
+              <input value={securityQuery} onChange={e => setSecurityQuery(e.target.value)}
+                     onKeyDown={e => { if (e.key === 'Enter') loadSecurityRoleplays(); }}
+                     placeholder="مثلاً نگهبانان دروازه یا نام لرد..." />
+              <div style={{ display: 'flex', gap: 7, marginTop: 10 }}>
+                <button className="btn" disabled={securitySearching} onClick={loadSecurityRoleplays}>
+                  {securitySearching ? 'در حال جست‌وجو...' : 'جست‌وجو در آرشیو'}
+                </button>
+                <button className="btn ghost" style={{ width: 'auto' }} onClick={() => {
+                  setSecurityQuery(''); setSecurityPlayer([]); setSecuritySearching(true);
+                  api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(e => toast(e.message)).finally(() => setSecuritySearching(false));
+                }}>پاک‌کردن فیلتر</button>
+              </div>
+            </div>
+            {securityRoleplays === null && <div className="loading">در حال بارگذاری آرشیو...</div>}
+            {securityRoleplays && securityRoleplays.length === 0 && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>رول امنیتی‌ای با این مشخصات پیدا نشد</div>
+            )}
+            {securityRoleplays && securityRoleplays.map(r => (
+              <div className="card" key={r.id} style={{ marginBottom: 10 }}>
+                <div className="res"><div className="ic"><Shield s={16} /></div><div className="n">{r.player}<small>{castleLabel(r.castle)} · {new Date(r.created_at).toLocaleString('fa-IR')}</small></div></div>
+                <div style={{ marginTop: 10, whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.9, color: 'var(--mid)' }}>{r.text}</div>
+              </div>
+            ))}
+          </div>
           )}
 
           {warSubTab === 'roleplay' && (
@@ -2619,3 +2666,4 @@ export default function Admin() {
     </>
   );
 }
+
