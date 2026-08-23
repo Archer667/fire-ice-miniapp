@@ -381,4 +381,3 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
     </div>
   );
 }
-
