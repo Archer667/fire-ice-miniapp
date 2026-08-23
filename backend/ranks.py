@@ -82,7 +82,7 @@ async def scored_players() -> list:
         if not p.get("region") or not p.get("castle"):
             continue  # هنوز ادمین خاندان/قلعه‌اش را مشخص نکرده — هنوز عملاً وارد بازی نشده
         bonus, rank_label = title_bonus_and_rank(p["tg_id"], h)
-        score = round(base_score(p) + bonus)
+        score = max(0, round(base_score(p) + bonus - p.get("scoreboard_baseline", 0)))
         rows.append({"player": p, "score": score, "rank_label": rank_label})
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows
