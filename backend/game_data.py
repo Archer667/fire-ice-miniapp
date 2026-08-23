@@ -105,12 +105,14 @@ BUILDINGS = {
     "iron_mine":   {"name": "معدن آهن",   "cost": {"gold": 200, "wood": 80},  "hours": 6,  "type": "economy", "produces": {"iron": 6}},
     "gold_mine":   {"name": "معدن طلا",   "cost": {"gold": 400, "stone": 100, "wood": 100}, "hours": 12, "type": "economy", "produces": {"gold": 12}},
     "market":      {"name": "بازار",       "cost": {"gold": 250, "wood": 70},  "hours": 6,  "type": "economy", "produces": {"gold": 3}},
-    "village":     {"name": "دهکده",       "cost": {"gold": 300, "stone": 150, "iron": 40}, "hours": 8,  "type": "economy", "cap_bonus": {"men": 40}},
+    "village":     {"name": "دهکده",       "cost": {"gold": 300, "stone": 150, "iron": 40}, "hours": 8,  "type": "economy", "cap_bonus": {"men": 100}},
     "farm":        {"name": "مزرعه",       "cost": {"gold": 100, "wood": 50},  "hours": 3,  "type": "economy", "produces": {"food": 10}},
     "ranch":       {"name": "دامداری",     "cost": {"gold": 150, "wood": 60},  "hours": 4,  "type": "economy", "produces": {"food": 6}},
     "winery":      {"name": "می‌کده",      "cost": {"gold": 220, "food": 60, "wood": 70}, "hours": 6,  "type": "economy", "produces": {"wine": 5}},
-    "warehouse":   {"name": "انبار",        "cost": {"gold": 220, "stone": 70, "wood": 60}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 40, "stone": 15, "iron": 15}},
+    "warehouse":   {"name": "انبار غذا",    "cost": {"gold": 220, "stone": 70, "wood": 60}, "hours": 5,  "type": "economy", "cap_bonus": {"food": 200}},
+    "goods_warehouse": {"name": "انبار کالا", "cost": {"gold": 300, "stone": 100, "wood": 80}, "hours": 6, "type": "economy", "cap_bonus": {"wood": 120, "stone": 90, "iron": 70, "wine": 30}},
     "treasury":    {"name": "خزانه",        "cost": {"gold": 350, "stone": 100, "wood": 80}, "hours": 6,  "type": "economy", "cap_bonus": {"gold": 300}},
+    "weapon_warehouse": {"name": "انبار تسلیحات", "cost": {"gold": 380, "stone": 120, "wood": 100, "iron": 50}, "hours": 8, "type": "economy", "cap_bonus": {"weapon_sword": 75, "weapon_spear": 75, "weapon_archer": 75, "weapon_lcav": 50, "weapon_hcav": 50}},
 
     # --- نظامی: پادگان هر یگان (پیش‌نیاز استخدام) ---
     "camp_sword":  {"name": "پادگان پیاده‌نظام",   "cost": {"gold": 250, "iron": 50,  "wood": 90},  "hours": 6,  "type": "barracks", "unit": "infantry"},
@@ -880,4 +882,3 @@ def spy_travel_minutes(origin_castle: str, target_castle: str) -> int:
 TRADE_GOODS = ["wood", "stone", "iron", "food", "wine"]
 CARAVAN_GOODS = ["gold", *TRADE_GOODS]
 TRADE_GOOD_NAMES = {"gold": "سکه", "wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب"}
-
