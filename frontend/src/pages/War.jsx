@@ -587,7 +587,7 @@ export default function War() {
                 <div className="ic"><Swords s={16} /></div>
                 <div className="n">
                   {c.name}
-                  <small>{c.op_name} · فرستنده: {c.sender}</small>
+                  <small>{c.mine ? c.op_name : 'لشکرکشی'} · فرستنده: {c.sender}</small>
                 </div>
               </div>
               {c.route_path && c.route_path.length > 2 ? (
