@@ -54,10 +54,12 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "قبلاً سناریوی این نبرد را فرستاده‌ای")
         campaign_id = body.campaign_id
 
+    result_required = body.category != "security"
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "castle": p["castle"],
         "category": body.category, "text": text[:4000], "campaign_id": campaign_id,
-        "result": None, "resolved": False,
+        "result": None, "resolved": not result_required,
+        "result_required": result_required,
         "created_at": now(),
     }
     res = await roleplays.insert_one(doc)
@@ -79,7 +81,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             source_id=campaign_id,
             deadline=deadline,
         )
-    else:
+    elif result_required:
         await notify_admins(
             "roleplay",
             "📜 رول تازه منتظر داوری است",
@@ -91,7 +93,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             action="از پنل ادمین ← جنگ و رول‌ها ← رول‌ها، نتیجه را ثبت کن.",
             source_id=str(res.inserted_id),
         )
-    return {"ok": True, "id": str(res.inserted_id)}
+    return {"ok": True, "id": str(res.inserted_id), "result_required": result_required}
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):
@@ -102,7 +104,9 @@ async def mine(user: dict = Depends(get_user)):
             "id": str(r["_id"]), "category": r["category"],
             "category_name": ROLEPLAY_CATEGORIES.get(r["category"], r["category"]),
             "text": r["text"], "resolved": r["resolved"], "result": r["result"],
+            "result_required": r.get("result_required", r.get("category") != "security"),
             "campaign_id": r.get("campaign_id"),
             "created_at": r["created_at"].isoformat(),
         })
     return out
+
