@@ -9,21 +9,21 @@ import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
 
 const RES_META = {
-  gold:  { name: 'طلا', d: 'معدن طلا · بازار', Icon: Coin,  max: 2000 },
-  food:  { name: 'غذا', d: 'مزرعه · دامداری', Icon: Wheat, max: 2000 },
-  men:   { name: 'نیروی انسانی', d: 'ظرفیت استخدام', Icon: People, max: 1000 },
-  wood:  { name: 'چوب', d: 'چوب‌بری', Icon: Wood, max: 800 },
-  iron:  { name: 'آهن', d: 'معدن آهن', Icon: Pick, max: 500 },
-  stone: { name: 'سنگ', d: 'معدن سنگ', Icon: Rock, max: 500 },
-  wine:  { name: 'شراب', d: 'می‌کده · ضیافت و پیمان‌ها', Icon: Wine, max: 300 },
+  gold:  { name: 'طلا', d: 'تولید: معدن و بازار · سقف: خزانه', Icon: Coin,  max: 2000 },
+  food:  { name: 'غذا', d: 'تولید: مزرعه و دامداری · سقف: انبار غذا', Icon: Wheat, max: 2000 },
+  men:   { name: 'نیروی انسانی', d: 'رشد با محبوبیت · سقف با دهکده', Icon: People, max: 1000 },
+  wood:  { name: 'چوب', d: 'تولید: چوب‌بری · سقف: انبار کالا', Icon: Wood, max: 800 },
+  iron:  { name: 'آهن', d: 'تولید: معدن آهن · سقف: انبار کالا', Icon: Pick, max: 500 },
+  stone: { name: 'سنگ', d: 'تولید: معدن سنگ · سقف: انبار کالا', Icon: Rock, max: 500 },
+  wine:  { name: 'شراب', d: 'تولید: می‌کده · سقف کمتر در انبار کالا', Icon: Wine, max: 300 },
 };
 
 const WEAPON_META = {
-  weapon_sword:  { d: 'کارگاه تسلیحات پیاده‌نظام', max: 300 },
-  weapon_spear:  { d: 'کارگاه تسلیحات نیزه‌داران', max: 300 },
-  weapon_archer: { d: 'کارگاه تسلیحات کمانداران', max: 300 },
-  weapon_lcav:   { d: 'کارگاه تسلیحات سوارهٔ سبک', max: 200 },
-  weapon_hcav:   { d: 'کارگاه تسلیحات سوارهٔ سنگین', max: 200 },
+  weapon_sword:  { d: 'تولید: کارگاه · سقف: انبار تسلیحات', max: 300 },
+  weapon_spear:  { d: 'تولید: کارگاه · سقف: انبار تسلیحات', max: 300 },
+  weapon_archer: { d: 'تولید: کارگاه · سقف: انبار تسلیحات', max: 300 },
+  weapon_lcav:   { d: 'تولید: کارگاه · سقف: انبار تسلیحات', max: 200 },
+  weapon_hcav:   { d: 'تولید: کارگاه · سقف: انبار تسلیحات', max: 200 },
 };
 
 const RANK_LABEL_FA = { overlord: 'بالادستی اقلیم', warden: 'والی', king: 'پادشاه/ملکه' };
@@ -313,4 +313,3 @@ export default function Dashboard({ goTo }) {
     </>
   );
 }
-
