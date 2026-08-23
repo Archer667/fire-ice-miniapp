@@ -106,8 +106,9 @@ async def get_map(user: dict = Depends(get_user)):
             owner = owner_row["player"] if owner_row else None
             camps.append({
                 "id": str(s["_id"]),
-                "from": s["origin_castle"], "to": s["target_castle"], "op_type": s["op_type"],
-                "name": s.get("name", ""),
+                "from": s["origin_castle"], "to": s["target_castle"],
+                "op_type": s["op_type"] if mine else None,
+                "name": s.get("name", "") if mine else "لشکر در حرکت",
                 "mine": mine,
                 "player_name": s.get("player_name", ""),
                 "owner_region": owner.get("region") if owner else None,
