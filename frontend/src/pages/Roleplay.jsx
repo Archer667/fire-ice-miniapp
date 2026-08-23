@@ -37,9 +37,9 @@ export default function Roleplay() {
     if (noBattleChosen) { toast('یک نبرد را انتخاب کن'); return; }
     setBusy(true);
     try {
-      await api.sendRoleplay(category, text.trim(), isWar ? campaignId : undefined);
+      const sent = await api.sendRoleplay(category, text.trim(), isWar ? campaignId : undefined);
       haptic('medium');
-      toast('رول برای بررسی شورای جنگ فرستاده شد');
+      toast(sent.result_required === false ? 'رول امنیتی ثبت و در آرشیو ادمین ذخیره شد' : 'رول برای بررسی شورای جنگ فرستاده شد');
       setText('');
       load();
       if (isWar) loadBattles();
@@ -113,7 +113,9 @@ export default function Roleplay() {
             <div className="card" key={r.id} style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span className="title-tag" style={{ marginInlineStart: 0 }}>{r.category_name}</span>
-                <span className={`poll-status ${r.resolved ? '' : 'open'}`}>{r.resolved ? 'پاسخ آمد' : 'در انتظار بررسی'}</span>
+                <span className={`poll-status ${r.result_required === false || r.resolved ? '' : 'open'}`}>
+                  {r.result_required === false ? 'ثبت شده' : r.resolved ? 'پاسخ آمد' : 'در انتظار بررسی'}
+                </span>
               </div>
               <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.8, color: 'var(--mid)' }}>{r.text}</div>
               {r.resolved && (
@@ -128,3 +130,4 @@ export default function Roleplay() {
     </>
   );
 }
+
