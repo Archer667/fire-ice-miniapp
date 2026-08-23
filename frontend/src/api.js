@@ -1002,15 +1002,16 @@ const M = {
       if (mockRoleplays.some(r => r.category === 'war' && r.campaign_id === campaignId)) throw new Error('قبلاً سناریوی این نبرد را فرستاده‌ای');
       campaign_id = campaignId;
     }
+    const result_required = category !== 'security';
     mockRoleplays.push({
       id: String(mockRoleplaySeq++), category, text: t, campaign_id,
-      result: null, resolved: false, created_at: new Date().toISOString(),
+      result: null, resolved: !result_required, result_required, created_at: new Date().toISOString(),
     });
-    return { ok: true };
+    return { ok: true, result_required };
   },
   roleplayMine: () => mockRoleplays.slice().reverse().map(r => ({
     id: r.id, category: r.category, category_name: ROLEPLAY_CATEGORIES[r.category] || r.category,
-    text: r.text, resolved: r.resolved, result: r.result, campaign_id: r.campaign_id, created_at: r.created_at,
+    text: r.text, resolved: r.resolved, result: r.result, result_required: r.result_required !== false, campaign_id: r.campaign_id, created_at: r.created_at,
   })),
   adminRoleplayPending: () => mockRoleplays.filter(r => !r.resolved).slice().reverse().map(r => ({
     id: r.id, player: mockMe.name || 'تو', tg_id: 1, castle: mockMe.castle,
@@ -1719,6 +1720,8 @@ export const api = {
     : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
+  adminSecurityRoleplays: (query = '', tgId = null) => MOCK ? Promise.resolve([])
+    : req(`/api/admin/roleplay/security?q=${encodeURIComponent(query)}${tgId ? `&tg_id=${tgId}` : ''}`),
   adminBattles: () => MOCK ? Promise.resolve([]) : req('/api/admin/battles'),
   adminResolveBattle: (campaignId, result, visibility, winnerTgId, attackerLosses = {}, defenderLosses = {}) => MOCK ? Promise.resolve({ ok: true })
     : req(`/api/admin/battles/${campaignId}/resolve`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', winner_tg_id: winnerTgId, attacker_losses: attackerLosses, defender_losses: defenderLosses }) }),
@@ -1747,3 +1750,4 @@ export const api = {
   adminResetGame: (confirm) => MOCK ? Promise.resolve(M.adminResetGame(confirm))
     : req('/api/admin/reset-game', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
+
