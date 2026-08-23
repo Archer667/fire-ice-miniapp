@@ -184,7 +184,18 @@ async def _load_building_overrides():
     try:
         doc = await game_settings.find_one({"_id": BUILDING_OVERRIDES_DOC_ID})
         game_data.BUILDING_OVERRIDES.clear()
-        game_data.BUILDING_OVERRIDES.update((doc or {}).get("overrides", {}))
+        for bid, override in (doc or {}).get("overrides", {}).items():
+            meta = game_data.BUILDINGS.get(bid)
+            if not meta:
+                continue
+            clean = dict(override)
+            for field in ("produces", "cap_bonus"):
+                if field in clean:
+                    allowed = set(meta.get(field, {}))
+                    clean[field] = {k: v for k, v in clean[field].items() if k in allowed}
+                    if not clean[field]:
+                        clean.pop(field)
+            game_data.BUILDING_OVERRIDES[bid] = clean
     except Exception:
         logger.exception("loading building overrides failed")
 
@@ -246,4 +257,3 @@ async def gamedata():
         "max_building_level": MAX_BUILDING_LEVEL, "warden_groups": WARDEN_GROUPS,
         "alliance_types": ALLIANCE_TYPES,
     }
-
