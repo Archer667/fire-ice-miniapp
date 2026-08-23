@@ -613,6 +613,14 @@ def troops_summary(troops: dict) -> str:
     parts = [f"{troop_name(tid)}×{n}" for tid, n in troops.items() if n]
     return "، ".join(parts) if parts else "بدون نیرو"
 
+def battle_army_snapshot(campaign: dict) -> dict:
+    return {
+        "campaign_id": str(campaign.get("_id", "")),
+        "name": campaign.get("name", "لشکر"),
+        "men": campaign.get("men_committed", sum(campaign.get("troops", {}).values())),
+        "troops": dict(campaign.get("troops", {})),
+    }
+
 async def notify_battle_admins(engagement_id: str, location: str, attacker: dict, defender: dict, defender_troops: dict):
     """همان لحظهٔ تشکیل پروندهٔ نبرد، آمار دو طرف را در بات و پنل همهٔ ادمین‌ها می‌فرستد."""
     attacker_troops = dict(attacker.get("troops", {}))
@@ -684,6 +692,10 @@ async def detect_route_encounters():
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
                 "opponent_campaign_id": str(opponent["_id"]), "opponent_tg_id": opponent["tg_id"],
                 "battle_location": location, "battle_started_at": now(),
+                "battle_attacker_snapshot": battle_army_snapshot(root),
+                "battle_defender_snapshot": [battle_army_snapshot(opponent)],
+                "battle_defender_tg_id": opponent["tg_id"],
+                "battle_defender_name": opponent.get("player_name", "طرف مقابل"),
             }})
             await campaigns.update_one({"_id": opponent["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
@@ -720,6 +732,7 @@ async def notify_arrivals():
             "_id": {"$ne": c["_id"]}, "tg_id": {"$ne": c["tg_id"]}, "active": True,
             "target_castle": target, "arrival_at": {"$lte": now()},
             "combat_resolved_at": {"$exists": False},
+            "engagement_locked": {"$ne": True},
         }).sort("arrival_at", 1):
             if not await players_are_friendly(c["tg_id"], other["tg_id"]):
                 opposing_army = other
@@ -734,9 +747,25 @@ async def notify_arrivals():
         creates_battle = (c["op_type"] in DIRECT_ATTACK_OP_TYPES and not owner_is_friendly) or opposing_army is not None
         if creates_battle:
             engagement_id = str(c["_id"])
+            battle_defender = target_owner if target_owner and target_owner["tg_id"] != c["tg_id"] else None
+            if not battle_defender and opposing_army:
+                battle_defender = await players.find_one({"tg_id": opposing_army["tg_id"]})
+            defender_armies = [opposing_army] if opposing_army else []
+            if battle_defender and not opposing_army:
+                defender_armies = [d async for d in campaigns.find({
+                    "tg_id": battle_defender["tg_id"], "active": True,
+                    "engagement_locked": {"$ne": True},
+                    "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
+                    "arrival_at": {"$lte": now()},
+                })]
             engagement_update = {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
-                "battle_location": target,
+                "battle_location": target, "battle_started_at": now(),
+                "battle_attacker_snapshot": battle_army_snapshot(c),
+                "battle_defender_snapshot": [battle_army_snapshot(a) for a in defender_armies],
+                "battle_defender_army_ids": [str(a["_id"]) for a in defender_armies],
+                "battle_defender_tg_id": battle_defender["tg_id"] if battle_defender else None,
+                "battle_defender_name": battle_defender["name"] if battle_defender else "بدون مدافع",
             }
             if opposing_army:
                 engagement_update["opponent_campaign_id"] = str(opposing_army["_id"])
@@ -751,16 +780,17 @@ async def notify_arrivals():
             if target_owner and target_owner["tg_id"] != c["tg_id"]:
                 await campaigns.update_many({
                     "tg_id": target_owner["tg_id"], "active": True,
+                    "engagement_locked": {"$ne": True},
                     "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
                     "arrival_at": {"$lte": now()},
                 }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id}})
 
-        battle_defender = target_owner if target_owner and target_owner["tg_id"] != c["tg_id"] else None
-        if not battle_defender and opposing_army:
-            battle_defender = await players.find_one({"tg_id": opposing_army["tg_id"]})
         if creates_battle and battle_defender:
             attacker_summary = troops_summary(c.get("troops", {}))
-            defense_troops = dict(opposing_army.get("troops", {})) if opposing_army else await defending_troops(target, battle_defender["tg_id"])
+            defense_troops = {}
+            for army in defender_armies:
+                for tid, count in army.get("troops", {}).items():
+                    defense_troops[tid] = defense_troops.get(tid, 0) + count
             defender_summary = troops_summary(defense_troops)
             defender_power = opposing_army.get("power", 0) if opposing_army else campaign_power(defense_troops, _building_levels(battle_defender, target))
             attacker_power = c.get("power", 0)
