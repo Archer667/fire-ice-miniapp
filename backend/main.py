@@ -168,6 +168,7 @@ async def _ensure_indexes():
         await admin_notifications.create_index([("created_at", -1)])
         await roleplays.create_index("resolved")
         await roleplays.create_index("tg_id")
+        await roleplays.create_index([("category", 1), ("created_at", -1)])
         await rebellion_checks.create_index([("tg_id", 1), ("day", 1)], unique=True)
         await rebellions.create_index([("status", 1), ("deadline", 1)])
         await rebellions.create_index("tg_id")
