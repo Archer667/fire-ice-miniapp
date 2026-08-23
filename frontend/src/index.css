@@ -581,6 +581,15 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   opacity: .55; animation: army-signal 1.8s ease-in-out infinite;
 }
 .army-marker.mine .army-icon { background: color-mix(in srgb, var(--army-color) 24%, rgba(10,14,20,.94)); }
+.army-marker.active { z-index: 9; }
+.army-marker.active .army-icon { transform: scale(1.18); }
+.army-popup { line-height: 1.65; text-align: right; cursor: default; }
+.tab-count-badge {
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px;
+  margin-inline-start: 6px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 9px; background: var(--danger); color: #fff;
+  font-size: 9px; font-weight: 800; line-height: 1;
+}
 @keyframes army-signal {
   0%, 100% { transform: scale(.75); opacity: .2; }
   50% { transform: scale(1.18); opacity: .7; }
