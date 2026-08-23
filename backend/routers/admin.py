@@ -391,9 +391,13 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             if opponent:
                 defender = await players.find_one({"tg_id": opponent["tg_id"]})
                 defender_armies.append(opponent)
+        if root.get("battle_defender_tg_id"):
+            defender = await players.find_one({"tg_id": root["battle_defender_tg_id"]})
         if not defender:
             defender = await owner_of_castle(root["target_castle"])
-        if defender and not defender_armies:
+        if root.get("battle_defender_snapshot") is not None:
+            defender_armies = root.get("battle_defender_snapshot", [])
+        elif defender and not defender_armies:
             defender_armies = [d async for d in campaigns.find({
                 "tg_id": defender["tg_id"], "active": True,
                 "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": root["target_castle"],
@@ -403,7 +407,7 @@ async def list_open_battles(user: dict = Depends(admin_user)):
         async for rp in roleplays.find({"category": "war", "campaign_id": engagement_id}):
             rolls.append({"id": str(rp["_id"]), "tg_id": rp["tg_id"], "player": rp["player_name"], "text": rp["text"]})
         army_row = lambda a: {
-            "campaign_id": str(a["_id"]), "name": a.get("name", "لشکر"),
+            "campaign_id": a.get("campaign_id") or str(a.get("_id", "")), "name": a.get("name", "لشکر"),
             "men": a.get("men_committed", sum(a.get("troops", {}).values())),
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
         }
@@ -412,8 +416,8 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "location": root.get("battle_location") or root["target_castle"],
             "attacker_tg_id": root["tg_id"], "attacker_name": attacker["name"] if attacker else root.get("player_name", "طرف اول"),
             "defender_tg_id": defender["tg_id"] if defender else None,
-            "defender_name": defender["name"] if defender else "بدون مدافع",
-            "attacker_army": army_row(root), "defender_armies": [army_row(a) for a in defender_armies],
+            "defender_name": defender["name"] if defender else root.get("battle_defender_name", "بدون مدافع"),
+            "attacker_army": army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [army_row(a) for a in defender_armies],
             "rolls": rolls, "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
         })
     return out
@@ -471,13 +475,16 @@ async def _apply_campaign_losses(campaign: dict, losses: dict[str, int]):
         update.update({"active": False, "status": "destroyed", "engagement_locked": False})
     await campaigns.update_one({"_id": campaign["_id"]}, {"$set": update})
 
-async def _apply_defender_losses(defender_tg_id: int, target_castle: str, engagement_id: str, losses: dict[str, int]):
+async def _apply_defender_losses(defender_tg_id: int, target_castle: str, engagement_id: str, losses: dict[str, int], army_ids: list[str] | None = None):
     """تلفات تجمیعی مدافع را میان لشکرهای دفاعی همان قلعه پخش می‌کند."""
-    armies = [c async for c in campaigns.find({
+    query = {
         "tg_id": defender_tg_id, "active": True,
         "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target_castle,
-        "$or": [{"engagement_campaign_id": engagement_id}, {"arrival_at": {"$lte": now()}}],
-    }).sort("created_at", 1)]
+        "engagement_campaign_id": engagement_id,
+    }
+    if army_ids:
+        query["_id"] = {"$in": [ObjectId(x) for x in army_ids]}
+    armies = [c async for c in campaigns.find(query).sort("created_at", 1)]
     available = {}
     for army in armies:
         for tid, n in army.get("troops", {}).items():
@@ -562,6 +569,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             elif defender:
                 await _apply_defender_losses(
                     defender["tg_id"], campaign["target_castle"], str(campaign["_id"]), body.defender_losses,
+                    campaign.get("battle_defender_army_ids"),
                 )
 
     other_lord_names = []
