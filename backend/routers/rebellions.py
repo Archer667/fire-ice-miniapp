@@ -356,4 +356,3 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
     }})
     await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}")
     return {"ok": True, "popularity": popularity, "resources": resources}
-
