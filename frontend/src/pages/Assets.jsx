@@ -7,7 +7,7 @@ import { ITEM_RARITY_HEX, castleLabel } from '../gamedata.js';
 
 const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat, wine: Wine, men: People };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا', wine: 'شراب', men: 'نیروی انسانی' };
-const BUILDING_ICON = { market: Market, farm: Farm, ranch: Ranch, winery: Winery, warehouse: Warehouse, treasury: Coin, village: People };
+const BUILDING_ICON = { market: Market, farm: Farm, ranch: Ranch, winery: Winery, warehouse: Warehouse, goods_warehouse: Warehouse, weapon_warehouse: Warehouse, treasury: Coin, village: People };
 
 const TABS = [
   { key: 'castle', label: 'دارایی‌های قلعه' },
