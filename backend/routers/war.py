@@ -801,4 +801,3 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
-
