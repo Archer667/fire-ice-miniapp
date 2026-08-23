@@ -13,9 +13,9 @@ from db import (
 import game_data
 import telegram_bot
 from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades, owned_castles, castle_building_state, normalize_building_state
-from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows
+from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows, normalize_stats
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power
-from config import ADMIN_IDS
+from config import ADMIN_IDS, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
 from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
@@ -1346,6 +1346,63 @@ async def reset_game_preview(user: dict = Depends(owner_user)):
 class ResetGameBody(BaseModel):
     confirm: str
 
+async def _clear_season_history():
+    """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
+    for collection in (
+        campaigns, spy_missions, messages, roleplays, rebellions, rebellion_checks,
+        rumors, alliances, polls, caravans, hierarchy, item_grants, admin_notifications,
+    ):
+        await collection.delete_many({})
+
+@router.post("/reset-season")
+async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
+    """شروع فصل تازه بدون حذف بازیکن، جایگاه، قلعه، خاندان یا قلعه‌های فتح‌شده."""
+    if body.confirm.strip() != "NEWSEASON":
+        raise HTTPException(400, "برای تایید، دقیقاً عبارت NEWSEASON را تایپ کن")
+    started_at = now()
+    rebellion_settings = await get_rebellion_settings()
+    reset_count = 0
+    async for player in players.find({}):
+        extra_castles = {castle: {} for castle in (player.get("castle_buildings") or {})}
+        blank = {}
+        normalize_stats(blank)
+        title = DEFAULT_TITLE.get(player.get("gender", "lord"), DEFAULT_TITLE["lord"])
+        await players.update_one({"_id": player["_id"]}, {
+            "$set": {
+                "resources": dict(STARTING_RESOURCES), "troops": {}, "buildings": {},
+                "castle_buildings": extra_castles, "points": 100, "scoreboard_baseline": 0,
+                "popularity": POPULARITY_START, "tax_rate": TAX_RATE_DEFAULT,
+                "alliance_count": 0, "last_feast": None, "last_tick": started_at,
+                "season_started_at": started_at, "stats": blank["stats"], "medals": {},
+                "title": title, "food_ration": rebellion_settings.get("default_ration", "normal"), "daily_streak": 0,
+            },
+            "$unset": {
+                "daily_last_claim_date": "", "weekly_baseline_score": "",
+                "weekly_baseline_at": "", "epithet": "",
+            },
+        })
+        reset_count += 1
+    await _clear_season_history()
+    return {"ok": True, "players_reset": reset_count}
+
+@router.post("/reset-scoreboard")
+async def reset_scoreboard(body: ResetGameBody, user: dict = Depends(owner_user)):
+    """صفرکردن مبنای جدول، بدون تغییر منابع، ساختمان‌ها و دارایی بازیکنان."""
+    if body.confirm.strip() != "SCOREBOARD":
+        raise HTTPException(400, "برای تایید، دقیقاً عبارت SCOREBOARD را تایپ کن")
+    from ranks import base_score, get_hierarchy_doc, title_bonus_and_rank
+    hierarchy_doc = await get_hierarchy_doc()
+    count = 0
+    async for player in players.find({}):
+        bonus, _ = title_bonus_and_rank(player["tg_id"], hierarchy_doc)
+        baseline = round(base_score(player) + bonus)
+        await players.update_one({"_id": player["_id"]}, {
+            "$set": {"scoreboard_baseline": baseline},
+            "$unset": {"weekly_baseline_score": "", "weekly_baseline_at": ""},
+        })
+        count += 1
+    return {"ok": True, "players_reset": count}
+
 @router.post("/reset-game")
 async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
     """ری‌استارت کامل بازی — فقط صاحب بازی، فقط با تایپ عبارت تاییدیه (RESET).
@@ -1377,18 +1434,7 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
 
     deleted = await players.delete_many({"tg_id": {"$nin": list(admin_ids)}})
 
-    await campaigns.delete_many({})
-    await spy_missions.delete_many({})
-    await messages.delete_many({})
-    await roleplays.delete_many({})
-    await rebellions.delete_many({})
-    await rebellion_checks.delete_many({})
-    await rumors.delete_many({})
-    await alliances.delete_many({})
-    await polls.delete_many({})
-    await caravans.delete_many({})
-    await hierarchy.delete_many({})
-    await item_grants.delete_many({})
+    await _clear_season_history()
     # اتحادها پاک شدند، پس شمارندهٔ اتحادِ ادمین‌هایی که نگه داشته شدند هم صفر شود
     await players.update_many({}, {"$set": {"alliance_count": 0}})
 
@@ -1589,4 +1635,3 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
-
