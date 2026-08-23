@@ -542,6 +542,7 @@ async def legions(user: dict = Depends(get_user)):
     cur = campaigns.find({"tg_id": user["id"], "active": True}).sort("created_at", -1).limit(50)
     out = []
     async for c in cur:
+        is_mine = c["tg_id"] == user["id"]
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
         waiting_result = campaign_waiting_for_result(c)
@@ -551,8 +552,12 @@ async def legions(user: dict = Depends(get_user)):
         ]
         out.append({
             "id": str(c["_id"]),
-            "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
-            "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            # نوع فرمان و نام سفارشی فقط برای صاحب همان لشکر است؛ گزارش عمومی
+            # صرفاً وجود و مسیر لشکرکشی را نشان می‌دهد.
+            "mine": is_mine,
+            "op_type": c["op_type"] if is_mine else None,
+            "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]) if is_mine else "لشکرکشی",
+            "name": (c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])) if is_mine else "لشکرکشی",
             "origin": c["origin_castle"], "target": c["target_castle"],
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
@@ -796,3 +801,4 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
+
