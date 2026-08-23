@@ -38,13 +38,14 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         except Exception:
             raise HTTPException(400, "شناسهٔ نبرد نامعتبر است")
         c = await campaigns.find_one({"_id": oid})
-        if not c or c["op_type"] not in ATTACK_OP_TYPES:
+        if not c or not c.get("engagement_locked"):
             raise HTTPException(404, "این نبرد پیدا نشد")
         is_attacker = c["tg_id"] == user["id"]
         is_defender = c["target_castle"] in owned_castles(p) and c["tg_id"] != user["id"]
-        if not (is_attacker or is_defender):
+        is_opponent = c.get("opponent_tg_id") == user["id"]
+        if not (is_attacker or is_defender or is_opponent):
             raise HTTPException(403, "این نبرد به تو ربطی ندارد")
-        arrival_at = c.get("arrival_at")
+        arrival_at = c.get("battle_started_at") or c.get("arrival_at")
         if not arrival_at or now() < arrival_at:
             raise HTTPException(400, "این نبرد هنوز به مقصد نرسیده")
         if now() > arrival_at + timedelta(hours=ROLEPLAY_WINDOW_HOURS):

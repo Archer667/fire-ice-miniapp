@@ -105,7 +105,7 @@ export default function Admin() {
   const [addCastleBusyId, setAddCastleBusyId] = useState(null);
   const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
 
-  const [warSubTab, setWarSubTab] = useState('campaigns'); // 'campaigns' | 'espionage' | 'roleplay'
+  const [warSubTab, setWarSubTab] = useState('campaigns'); // campaigns | battles | espionage | roleplay
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
   const [warWindow, setWarWindow] = useState(null);
@@ -188,6 +188,7 @@ export default function Admin() {
   const [spyBusyId, setSpyBusyId] = useState(null);
 
   const [roleplayPending, setRoleplayPending] = useState(null);
+  const [battles, setBattles] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
@@ -236,6 +237,7 @@ export default function Admin() {
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
   const loadSpyResolved = () => api.adminSpyResolved().then(setSpyResolved).catch(e => toast(e.message));
   const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
+  const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
   const loadAlliances = () => api.adminListAlliances().then(setAlliancesList).catch(e => toast(e.message));
   const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
   const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
@@ -303,6 +305,7 @@ export default function Admin() {
     loadSpyPending();
     loadSpyResolved();
     loadRoleplayPending();
+    loadBattles();
     loadAlliances();
     loadRebellions();
     loadRebellionSettings();
@@ -635,6 +638,22 @@ export default function Admin() {
       setRoleplayWinners(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayLosses(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       loadRoleplayPending();
+    } catch (e) { toast(e.message); }
+    setRoleplayBusyId(null);
+  };
+
+  const resolveBattle = async (battle) => {
+    const id = battle.campaign_id;
+    const result = (roleplayResults[id] || '').trim();
+    const winner = roleplayWinners[id];
+    if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
+    if (!winner) { toast('برندهٔ نبرد را مشخص کن'); return; }
+    setRoleplayBusyId(id);
+    try {
+      const losses = roleplayLosses[id] || {};
+      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winner, losses.attacker || {}, losses.defender || {});
+      toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
+      loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
   };
@@ -1299,6 +1318,7 @@ export default function Admin() {
           <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ و رول‌ها">
             {[
               { key: 'campaigns', label: 'لشکرکشی‌ها' },
+              { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'espionage', label: 'جاسوسی' },
               { key: 'roleplay',  label: 'رول‌ها' },
             ].map(t => (
@@ -1357,6 +1377,30 @@ export default function Admin() {
                 </div>
               </div>
             ))}
+          </div>
+          )}
+
+          {warSubTab === 'battles' && (
+          <div className="up u2">
+            <div className="page-sub" style={{ marginBottom: 12 }}>هر درگیری یک پرونده دارد؛ رول دو طرف، نیروها و ثبت نتیجه همه همین‌جاست. حتی اگر هیچ‌کس رول نداده باشد می‌توانی نتیجه را ثبت کنی.</div>
+            {battles === null && <div className="loading">در حال بارگذاری نبردها...</div>}
+            {battles && battles.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>نبرد بازی نداریم</div>}
+            {battles && battles.map(b => {
+              const defenders = Object.values((b.defender_armies || []).flatMap(a => a.troops || []).reduce((m, t) => { m[t.id] = m[t.id] ? { ...m[t.id], count: m[t.id].count + t.count } : { ...t }; return m; }, {}));
+              return <div className="card" key={b.campaign_id} style={{ marginBottom: 12 }}>
+                <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.attacker_name} در برابر {b.defender_name} · {castleLabel(b.location)}</small></div></div>
+                <div className="notice-guide" style={{ marginTop: 10 }}><strong>رول‌های جنگ</strong><span>{b.rolls.length ? b.rolls.map(r => `${r.player}: ${r.text}`).join('\n') : 'هیچ‌کدام از طرفین هنوز رول نفرستاده‌اند؛ داوری همچنان باز است.'}</span></div>
+                <div className="sect" style={{ margin: '14px 0 7px' }}>نیروها و تلفات</div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--danger)' }}>{b.attacker_name} · {b.attacker_army.men.toLocaleString('fa-IR')} نفر</div>
+                {b.attacker_army.troops.map(t => <div className="troop" key={`ba-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attacker?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attacker: { ...(p[b.campaign_id]?.attacker || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} /></div>)}
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--az2)', marginTop: 10 }}>{b.defender_name} · {defenders.reduce((s,t) => s+t.count, 0).toLocaleString('fa-IR')} نفر</div>
+                {defenders.map(t => <div className="troop" key={`bd-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defender?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defender: { ...(p[b.campaign_id]?.defender || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} /></div>)}
+                <label className="f">برنده</label><div className="grid2">{[[b.attacker_tg_id,b.attacker_name],[b.defender_tg_id,b.defender_name]].filter(x => x[0]).map(([id,name]) => <button type="button" key={id} className={`rbtn pick ${roleplayWinners[b.campaign_id] === id ? 'sel' : ''}`} onClick={() => setRoleplayWinners(p => ({...p,[b.campaign_id]:id}))}><div className="n">{name}</div></button>)}</div>
+                <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
+                <div className="grid2" style={{ marginTop: 9 }}><button type="button" className={`rbtn pick ${(roleplayVisibility[b.campaign_id] || 'participants') === 'participants' ? 'sel' : ''}`} onClick={() => setRoleplayVisibility(p => ({...p,[b.campaign_id]:'participants'}))}><div className="n">فقط طرفین</div></button><button type="button" className={`rbtn pick ${roleplayVisibility[b.campaign_id] === 'all' ? 'sel' : ''}`} onClick={() => setRoleplayVisibility(p => ({...p,[b.campaign_id]:'all'}))}><div className="n">اعلام عمومی</div></button></div>
+                <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
+              </div>;
+            })}
           </div>
           )}
 
@@ -2575,4 +2619,3 @@ export default function Admin() {
     </>
   );
 }
-

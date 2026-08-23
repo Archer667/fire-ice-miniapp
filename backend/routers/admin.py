@@ -343,6 +343,60 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
         out.append(row)
     return out
 
+@router.get("/battles")
+async def list_open_battles(user: dict = Depends(admin_user)):
+    """پرونده‌های نبرد مستقل از رول؛ بنابراین حتی با صفر رول هم قابل داوری‌اند."""
+    out = []
+    seen = set()
+    cur = campaigns.find({"engagement_locked": True, "combat_resolved_at": {"$exists": False}}).sort("arrival_at", -1).limit(100)
+    async for c in cur:
+        engagement_id = c.get("engagement_campaign_id") or str(c["_id"])
+        if engagement_id in seen:
+            continue
+        seen.add(engagement_id)
+        try:
+            root = await campaigns.find_one({"_id": ObjectId(engagement_id)}) or c
+        except Exception:
+            root = c
+        attacker = await players.find_one({"tg_id": root["tg_id"]})
+        defender = None
+        defender_armies = []
+        opponent_id = root.get("opponent_campaign_id")
+        if opponent_id:
+            try:
+                opponent = await campaigns.find_one({"_id": ObjectId(opponent_id)})
+            except Exception:
+                opponent = None
+            if opponent:
+                defender = await players.find_one({"tg_id": opponent["tg_id"]})
+                defender_armies.append(opponent)
+        if not defender:
+            defender = await owner_of_castle(root["target_castle"])
+        if defender and not defender_armies:
+            defender_armies = [d async for d in campaigns.find({
+                "tg_id": defender["tg_id"], "active": True,
+                "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": root["target_castle"],
+                "arrival_at": {"$lte": now()},
+            })]
+        rolls = []
+        async for rp in roleplays.find({"category": "war", "campaign_id": engagement_id}):
+            rolls.append({"id": str(rp["_id"]), "tg_id": rp["tg_id"], "player": rp["player_name"], "text": rp["text"]})
+        army_row = lambda a: {
+            "campaign_id": str(a["_id"]), "name": a.get("name", "لشکر"),
+            "men": a.get("men_committed", sum(a.get("troops", {}).values())),
+            "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
+        }
+        out.append({
+            "campaign_id": engagement_id, "name": root.get("name", "نبرد"),
+            "location": root.get("battle_location") or root["target_castle"],
+            "attacker_tg_id": root["tg_id"], "attacker_name": attacker["name"] if attacker else root.get("player_name", "طرف اول"),
+            "defender_tg_id": defender["tg_id"] if defender else None,
+            "defender_name": defender["name"] if defender else "بدون مدافع",
+            "attacker_army": army_row(root), "defender_armies": [army_row(a) for a in defender_armies],
+            "rolls": rolls, "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
+        })
+    return out
+
 class RoleplayResultBody(BaseModel):
     result: str
     visibility: str = "participants"   # "participants" | "all" — چه کسی نتیجه را کلاغ می‌گیرد
@@ -352,6 +406,28 @@ class RoleplayResultBody(BaseModel):
     defender_losses: dict[str, int] = {}
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
+
+@router.post("/battles/{campaign_id}/resolve")
+async def resolve_battle_without_required_roll(campaign_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
+    """اگر هیچ‌کدام رول نداده باشند، یک رکورد داوری سیستمی می‌سازد و همان مسیر امن نتیجه را اجرا می‌کند."""
+    existing = await roleplays.find_one({"category": "war", "campaign_id": campaign_id, "resolved": False})
+    if existing:
+        return await respond_roleplay(str(existing["_id"]), body, user)
+    try:
+        campaign = await campaigns.find_one({"_id": ObjectId(campaign_id)})
+    except Exception:
+        campaign = None
+    if not campaign or campaign.get("combat_resolved_at"):
+        raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
+    doc = {
+        "tg_id": campaign["tg_id"], "player_name": campaign.get("player_name", "طرف اول"),
+        "castle": campaign.get("origin_castle"), "category": "war",
+        "text": "رولی از طرف بازیکنان ارسال نشد؛ نتیجه مستقیماً توسط ادمین ثبت شد.",
+        "campaign_id": campaign_id, "result": None, "resolved": False, "created_at": now(),
+        "admin_generated": True,
+    }
+    inserted = await roleplays.insert_one(doc)
+    return await respond_roleplay(str(inserted.inserted_id), body, user)
 
 async def _apply_campaign_losses(campaign: dict, losses: dict[str, int]):
     """تلفات را از ترکیب واقعی همان لشکر کم می‌کند؛ نفرات قبلاً موقع ساخت از منابع
@@ -441,7 +517,13 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             campaign = None
         if campaign:
             recipient_tg_ids.add(campaign["tg_id"])
-            defender = await owner_of_castle(campaign["target_castle"])
+            opponent_campaign = None
+            if campaign.get("opponent_campaign_id"):
+                try:
+                    opponent_campaign = await campaigns.find_one({"_id": ObjectId(campaign["opponent_campaign_id"])})
+                except Exception:
+                    opponent_campaign = None
+            defender = await players.find_one({"tg_id": opponent_campaign["tg_id"]}) if opponent_campaign else await owner_of_castle(campaign["target_castle"])
             if defender:
                 recipient_tg_ids.add(defender["tg_id"])
             valid_winners = {campaign["tg_id"]}
@@ -454,7 +536,9 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             # تلفات دقیق همزمان با نتیجه ثبت می‌شود. برای مدافع، جمع هر نوع نیرو
             # میان همهٔ لشکرهای دفاعی حاضر در همان قلعه تقسیم می‌شود.
             await _apply_campaign_losses(campaign, body.attacker_losses)
-            if defender:
+            if opponent_campaign:
+                await _apply_campaign_losses(opponent_campaign, body.defender_losses)
+            elif defender:
                 await _apply_defender_losses(
                     defender["tg_id"], campaign["target_castle"], str(campaign["_id"]), body.defender_losses,
                 )
@@ -1484,4 +1568,3 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
-
