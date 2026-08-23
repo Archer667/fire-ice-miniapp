@@ -615,4 +615,3 @@ export default function War() {
     </>
   );
 }
-
