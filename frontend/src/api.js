@@ -1552,6 +1552,9 @@ export const api = {
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   moveCampaign: (id, b) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/move`, { method: 'POST', body: JSON.stringify(b) }),
   orderSiegeAttack: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/attack`, { method: 'POST' }),
+  ambushOptions: () => MOCK ? Promise.resolve([]) : req('/api/war/ambush/options'),
+  myAmbushes: () => MOCK ? Promise.resolve([]) : req('/api/war/ambush/mine'),
+  createAmbush: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/war/ambush', { method: 'POST', body: JSON.stringify(b) }),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
   adminDeleteMapCastle: (name) => MOCK ? Promise.resolve(M.adminDeleteMapCastle(name))
@@ -1712,6 +1715,8 @@ export const api = {
 
   /* ---------- پنل ادمین ---------- */
   adminCampaigns: () => MOCK ? Promise.resolve(M.adminCampaigns()) : req('/api/admin/campaigns'),
+  adminAmbushes: () => MOCK ? Promise.resolve([]) : req('/api/admin/ambushes'),
+  adminScoreAmbush: (id, coefficient) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/ambushes/${id}/score`, { method: 'POST', body: JSON.stringify({ coefficient }) }),
   adminPlayerCampaigns: (tgId) => MOCK ? Promise.resolve(M.adminPlayerCampaigns(tgId)) : req(`/api/admin/players/${tgId}/campaigns`),
   adminDisbandCampaign: (id) => MOCK ? Promise.resolve(M.adminDisbandCampaign(id)) : req(`/api/admin/campaigns/${id}/disband`, { method: 'POST' }),
   adminDestroyCampaign: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/destroy`, { method: 'POST' }),
