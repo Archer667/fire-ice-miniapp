@@ -567,7 +567,7 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .pin.sm.owned .dot::before { inset: 1.2px 1.2px 2.6px 1.2px; }
 .army-marker {
   position: absolute; width: 13px; height: 13px; z-index: 5;
-  transform: translate(-50%, -50%); pointer-events: auto;
+  transform: translate(calc(-50% + var(--army-dx, 0px)), calc(-50% + var(--army-dy, 0px))); pointer-events: auto;
   transition: left 260ms linear, top 260ms linear;
 }
 .army-icon {
