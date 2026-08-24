@@ -22,6 +22,45 @@ from routers.rebellions import get_settings as get_rebellion_settings
 from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+MUSIC_SETTINGS_ID = "background_music"
+MAX_MUSIC_DATA_URL_CHARS = 10_000_000
+
+class MusicSettingsBody(BaseModel):
+    enabled: bool = False
+    title: str = "موسیقی والریا"
+    audio_url: str = ""
+    volume: int = 35
+    loop: bool = True
+    autoplay: bool = True
+
+@router.get("/music")
+async def admin_music_settings(user: dict = Depends(get_user)):
+    user = await get_full_admin(user)
+    doc = await game_settings.find_one({"_id": MUSIC_SETTINGS_ID}) or {}
+    return {
+        "enabled": bool(doc.get("enabled", False)), "title": doc.get("title", "موسیقی والریا"),
+        "audio_url": doc.get("audio_url", ""), "volume": int(doc.get("volume", 35)),
+        "loop": bool(doc.get("loop", True)), "autoplay": bool(doc.get("autoplay", True)),
+    }
+
+@router.post("/music")
+async def save_admin_music_settings(body: MusicSettingsBody, user: dict = Depends(get_user)):
+    user = await get_full_admin(user)
+    source = body.audio_url.strip()
+    if source and not (source.startswith("data:audio/") or source.startswith("https://")):
+        raise HTTPException(400, "فایل صوتی یا لینک امن https وارد کن")
+    if len(source) > MAX_MUSIC_DATA_URL_CHARS:
+        raise HTTPException(400, "حجم فایل موسیقی زیاد است؛ فایل باید حداکثر حدود ۷ مگابایت باشد")
+    if body.enabled and not source:
+        raise HTTPException(400, "برای فعال‌کردن موسیقی ابتدا فایل یا لینک آن را وارد کن")
+    doc = {
+        "enabled": body.enabled, "title": body.title.strip()[:80] or "موسیقی والریا",
+        "audio_url": source, "volume": max(0, min(100, body.volume)),
+        "loop": body.loop, "autoplay": body.autoplay, "updated_at": now(),
+        "updated_by": user["id"],
+    }
+    await game_settings.update_one({"_id": MUSIC_SETTINGS_ID}, {"$set": doc}, upsert=True)
+    return {k: v for k, v in doc.items() if k not in ("updated_at", "updated_by")}
 
 async def admin_user(user: dict = Depends(get_user)):
     """ادمین کامل یا محدود — برای سناریوها"""
