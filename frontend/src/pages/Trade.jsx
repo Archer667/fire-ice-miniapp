@@ -46,6 +46,11 @@ export default function Trade() {
   const [market, setMarket] = useState(null);
   const [buyQty, setBuyQty] = useState({});
   const [buyBusy, setBuyBusy] = useState(null);
+  const [playerMarket, setPlayerMarket] = useState(null);
+  const [sellResource, setSellResource] = useState(CARAVAN_GOODS.find(g => g !== 'gold'));
+  const [sellQty, setSellQty] = useState(1);
+  const [playerBuyQty, setPlayerBuyQty] = useState({});
+  const [playerMarketBusy, setPlayerMarketBusy] = useState(null);
 
   const [black, setBlack] = useState(null);
   const [blackQty, setBlackQty] = useState({});
@@ -54,9 +59,38 @@ export default function Trade() {
   const loadAlliances = () => api.diplomacyMine().then(setAlliances).catch(e => toast(e.message));
   const loadCaravans = () => api.myCaravans().then(setCaravans).catch(e => toast(e.message));
   const loadMarket = () => api.market().then(setMarket).catch(e => toast(e.message));
+  const loadPlayerMarket = () => api.playerMarket().then(setPlayerMarket).catch(e => toast(e.message));
   const loadBlack = () => api.blackMarket().then(setBlack).catch(e => toast(e.message));
 
-  useEffect(() => { loadAlliances(); loadCaravans(); loadMarket(); loadBlack(); }, []);
+  useEffect(() => { loadAlliances(); loadCaravans(); loadMarket(); loadPlayerMarket(); loadBlack(); }, []);
+
+  const sellToPlayerMarket = async () => {
+    setPlayerMarketBusy('sell');
+    try {
+      await api.playerMarketSell(sellResource, Math.max(1, Number(sellQty) || 1));
+      haptic('medium'); toast('کالا با قیمت ثابت هر واحد یک سکه برای فروش گذاشته شد');
+      api.me().then(setMe); loadPlayerMarket();
+    } catch (e) { toast(e.message); }
+    setPlayerMarketBusy(null);
+  };
+
+  const buyFromPlayer = async (listing) => {
+    const qty = Math.max(1, Math.min(listing.qty, Number(playerBuyQty[listing.id]) || 1));
+    setPlayerMarketBusy(listing.id);
+    try {
+      await api.playerMarketBuy(listing.id, qty); haptic('medium');
+      toast(`${qty.toLocaleString('fa-IR')} واحد خریدی؛ ${qty.toLocaleString('fa-IR')} سکه پرداخت شد`);
+      api.me().then(setMe); loadPlayerMarket();
+    } catch (e) { toast(e.message); }
+    setPlayerMarketBusy(null);
+  };
+
+  const cancelPlayerSale = async (listing) => {
+    setPlayerMarketBusy(listing.id);
+    try { await api.playerMarketCancel(listing.id); toast('آگهی برداشته شد و باقی کالا برگشت'); api.me().then(setMe); loadPlayerMarket(); }
+    catch (e) { toast(e.message); }
+    setPlayerMarketBusy(null);
+  };
 
   const partners = (alliances || []).filter(a =>
     a.status === 'accepted' && (a.type === 'trade' || a.type === 'full_alliance'));
@@ -198,7 +232,30 @@ export default function Trade() {
       {tab === 'market' && (
         <>
           <div className="sect up u2">بازار وستروس</div>
-          <div className="page-sub up u2" style={{ marginTop: -6 }}>فقط خرید — قیمت‌ها زنده نوسان می‌کنند</div>
+          <div className="page-sub up u2" style={{ marginTop: -6 }}>بازار رسمی قیمت شناور دارد؛ در بازار لردها هر واحد کالا دقیقاً یک سکه است.</div>
+          <div className="card up u2" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, marginBottom: 8 }}>فروش کالای خودت</div>
+            <div className="grid2">
+              <select value={sellResource} onChange={e => setSellResource(e.target.value)}>
+                {CARAVAN_GOODS.filter(g => g !== 'gold').map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
+              </select>
+              <input type="number" min="1" value={sellQty} onChange={e => setSellQty(Math.max(1, Number(e.target.value) || 1))} />
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8 }}>قیمت قابل تغییر نیست: هر واحد ۱ سکه. کالا تا زمان فروش یا برداشتن آگهی از موجودی‌ات خارج می‌شود.</div>
+            <button className="btn ghost" style={{ marginTop: 10 }} disabled={playerMarketBusy === 'sell'} onClick={sellToPlayerMarket}>ثبت برای فروش</button>
+          </div>
+          <div className="sect up u2">آگهی لردها</div>
+          <div className="up u2">
+            {(!playerMarket || playerMarket.length === 0) && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>فعلاً آگهی بازیکنی وجود ندارد</div>}
+            {(playerMarket || []).map(m => <div className="card market-row" key={m.id}>
+              <div className="res"><div className="n">{m.name}<small>فروشنده: {m.seller_name} · {m.qty.toLocaleString('fa-IR')} واحد</small></div><div className="val">۱ <Coin s={12} /></div></div>
+              {m.mine ? <button className="btn ghost" disabled={playerMarketBusy === m.id} onClick={() => cancelPlayerSale(m)}>برداشتن آگهی</button> : <div className="buy-row">
+                <input type="number" min="1" max={m.qty} value={playerBuyQty[m.id] || 1} onChange={e => setPlayerBuyQty({ ...playerBuyQty, [m.id]: Math.max(1, Math.min(m.qty, Number(e.target.value) || 1)) })} />
+                <button className="btn ghost" disabled={playerMarketBusy === m.id} onClick={() => buyFromPlayer(m)}>خرید</button>
+              </div>}
+            </div>)}
+          </div>
+          <div className="sect up u2">بازار رسمی</div>
           <div className="up u2">
             {(!market || market.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کالایی در بازار نیست</div>
@@ -271,3 +328,4 @@ export default function Trade() {
     </>
   );
 }
+
