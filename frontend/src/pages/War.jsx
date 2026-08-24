@@ -626,8 +626,8 @@ export default function War() {
           {ambushes === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
           {ambushes && ambushes.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی نساخته‌ای</div>}
           {(ambushes || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 9 }}>
-            <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">کمین مسیر {castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)}<small>{a.men_committed.toLocaleString('fa-IR')} سرباز · {a.status === 'pending_score' ? 'منتظر ضریب ادمین' : a.status === 'active' ? `فعال با ضریب ${Number(a.coefficient).toLocaleString('fa-IR')}` : `مصرف‌شده${a.victim_name ? ` علیه ${a.victim_name}` : ''}`}</small></div></div>
-            {a.casualties != null && <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8 }}>{a.casualties.toLocaleString('fa-IR')} نفر تلفات وارد کرد.</div>}
+            <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">کمین مسیر {castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)}<small>{a.men_committed.toLocaleString('fa-IR')} سرباز · {a.status === 'pending_score' ? 'منتظر داوری ادمین' : a.status === 'active' ? `فعال؛ ضریب ${Number(a.coefficient).toLocaleString('fa-IR')} · امتیاز ${Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}` : `مصرف‌شده${a.victim_name ? ` علیه ${a.victim_name}` : ''}`}</small></div></div>
+            {a.casualties != null && <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8 }}>به دشمن {a.casualties.toLocaleString('fa-IR')} تلفات زد · تلفات نیروهای خودی {(a.ambusher_losses || 0).toLocaleString('fa-IR')} نفر · بازمانده‌ها منحل و هزینه‌های غیرغله‌ای برگشتند.</div>}
           </div>)}
         </div>
       )}
