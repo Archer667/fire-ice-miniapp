@@ -53,6 +53,7 @@ export default function War() {
   const [buildings, setBuildings] = useState(null);
   const [mine, setMine] = useState(null);
   const [legions, setLegions] = useState(null);
+  const [ambushes, setAmbushes] = useState(null);
   const [seenIds, setSeenIds] = useState(loadSeenIds);
   const [warWindow, setWarWindow] = useState(null);
 
@@ -62,12 +63,13 @@ export default function War() {
   };
   const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
   const loadLegions = () => api.legions().then(setLegions).catch(e => { toast(e.message); setLegions([]); });
+  const loadAmbushes = () => api.myAmbushes().then(setAmbushes).catch(e => { toast(e.message); setAmbushes([]); });
   const loadWarWindow = () => api.warWindow().then(setWarWindow).catch(() => setWarWindow({ open: true }));
 
   useEffect(() => {
-    loadMap(); loadMine(); loadLegions(); loadWarWindow();
+    loadMap(); loadMine(); loadLegions(); loadAmbushes(); loadWarWindow();
     const mapTimer = setInterval(loadMap, 30000);
-    const armyTimer = setInterval(() => { loadMine(); loadLegions(); }, 15000);
+    const armyTimer = setInterval(() => { loadMine(); loadLegions(); loadAmbushes(); }, 15000);
     return () => { clearInterval(mapTimer); clearInterval(armyTimer); };
   }, []);
   const windowClosed = warWindow ? !warWindow.open : false;
@@ -109,6 +111,7 @@ export default function War() {
   const [cancelBusyId, setCancelBusyId] = useState(null);
   const [movingLegion, setMovingLegion] = useState(null);
   const [attackBusyId, setAttackBusyId] = useState(null);
+  const [ambushScenario, setAmbushScenario] = useState('');
 
   // اطلاعاتِ هر قلعه (اقلیمِ واقعی، بندری‌بودن، نوعِ زمین) از خودِ دادهٔ نقشه —
   // چون قلعهٔ دومِ یه لرد می‌تونه در اقلیمِ دیگه‌ای باشه یا بندری/غیربندری متفاوت
@@ -220,6 +223,7 @@ export default function War() {
   const overGold = totalGoldCost > gold;
   const shortEquipmentResource = Object.entries(equipmentCost).find(([resource, amount]) => resource !== 'gold' && amount > (me.resources[resource] || 0));
   const overMen = menCommitted > men;
+  const soldierMen = useMemo(() => allTroops.reduce((s, t) => s + (t.naval ? 0 : (counts[t.id] || 0)), 0), [counts, allTroops]);
   const badPortTarget = op.portOnly && target && !target.port;
   const seaCapacity = useMemo(
     () => NAVAL_TROOP_IDS.reduce((s, tid) => s + (counts[tid] || 0) * NAVAL_TROOPS.find(t => t.id === tid).capacity, 0),
@@ -247,7 +251,8 @@ export default function War() {
     : badOriginForNaval ? 'مبدا باید بندر باشد'
     : overSeaCapacity ? `مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`
     : overSeaRoute ? `این مسیر از آب می‌گذرد — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند، کشتی بیشتری اضافه کن یا مسیرِ دیگری انتخاب کن`
-    : menCommitted <= 0 ? 'نیرویی گسیل نکرده‌ای'
+    : opType === 'ambush' && ambushScenario.trim().length < 20 ? 'سناریوی کمین باید حداقل ۲۰ نویسه باشد'
+    : soldierMen < (opType === 'ambush' ? 50 : 100) ? `${opType === 'ambush' ? 'کمین' : 'لشکر'} حداقل ${opType === 'ambush' ? '۵۰' : '۱۰۰'} سرباز می‌خواهد`
     : null;
 
   const resetForm = () => {
@@ -284,6 +289,11 @@ export default function War() {
     if (shortWeapon) { toast(`${WEAPON_NAMES[shortWeapon[0]]} کافی نداری`); return; }
     setBusy(true);
     try {
+      if (opType === 'ambush') {
+        await api.createAmbush({ origin_castle: origin, target_castle: target.name, troops: counts, scenario: ambushScenario.trim() });
+        haptic('medium'); toast('کمین ساخته شد و برای تعیین ضریب به ادمین رفت');
+        api.me().then(setMe); setAmbushScenario(''); resetForm(); loadLegions(); setBusy(false); return;
+      }
       await api.submitCampaign({
         origin_castle: origin, op_type: opType,
         target_castle: op.needsTarget ? target.name : null,
@@ -464,7 +474,13 @@ export default function War() {
               )
             )}
 
-            {op.needsTarget && opType !== 'garrison' && (
+            {opType === 'ambush' && <>
+              <label className="f">سناریوی کمین</label>
+              <textarea rows={5} maxLength={4000} value={ambushScenario} onChange={e => setAmbushScenario(e.target.value)}
+                placeholder="نحوهٔ پنهان‌شدن نیروها، زمان یورش و نقشهٔ کمین را بنویس..." />
+              <div className="page-sub" style={{ margin: '8px 4px 0' }}>کمین فقط روی جادهٔ مستقیم قلعهٔ مبدا تا قلعهٔ بعدی پذیرفته می‌شود. ادمین بر اساس این سناریو ضریب می‌دهد.</div>
+            </>}
+            {op.needsTarget && opType !== 'garrison' && opType !== 'ambush' && (
               <div className="page-sub" style={{ margin: '10px 4px 0' }}>
                 سناریوی نبرد اینجا نوشته نمی‌شود — وقتی لشکر برسد، آمار دو طرف رد و بدل می‌شود و تا ۶ ساعت بعد می‌توانی از صفحهٔ «رول‌ها» سناریوی جنگ را بفرستی.
               </div>
@@ -606,6 +622,13 @@ export default function War() {
               </div>
             </div>
           ))}
+          <div className="sect" style={{ marginTop: 18 }}>کمین‌های من</div>
+          {ambushes === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
+          {ambushes && ambushes.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی نساخته‌ای</div>}
+          {(ambushes || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 9 }}>
+            <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">کمین مسیر {castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)}<small>{a.men_committed.toLocaleString('fa-IR')} سرباز · {a.status === 'pending_score' ? 'منتظر ضریب ادمین' : a.status === 'active' ? `فعال با ضریب ${Number(a.coefficient).toLocaleString('fa-IR')}` : `مصرف‌شده${a.victim_name ? ` علیه ${a.victim_name}` : ''}`}</small></div></div>
+            {a.casualties != null && <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8 }}>{a.casualties.toLocaleString('fa-IR')} نفر تلفات وارد کرد.</div>}
+          </div>)}
         </div>
       )}
 
