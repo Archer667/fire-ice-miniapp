@@ -14,7 +14,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 # بی‌سروصدا فقط لاگ می‌شد و هیچ‌وقت هیچ ایندکس یکتایی واقعاً ساخته نمی‌شد)
 from db import (
     players as players_col, map_castles, admin_roles, game_settings,
-    campaigns, caravans, spy_missions, messages, alliances, roleplays, tributes,
+    campaigns, ambushes, caravans, spy_missions, messages, alliances, roleplays, tributes,
     rebellion_checks, rebellions, admin_notifications,
 )
 from routers import (
@@ -154,6 +154,8 @@ async def _ensure_indexes():
     try:
         await campaigns.create_index([("active", 1), ("arrival_at", 1)])
         await campaigns.create_index("tg_id")
+        await ambushes.create_index([("edge_key", 1), ("status", 1)])
+        await ambushes.create_index("tg_id")
         await caravans.create_index([("active", 1), ("arrival_at", 1)])
         await caravans.create_index("tg_id")
         await caravans.create_index("target_tg_id")
@@ -257,3 +259,4 @@ async def gamedata():
         "max_building_level": MAX_BUILDING_LEVEL, "warden_groups": WARDEN_GROUPS,
         "alliance_types": ALLIANCE_TYPES,
     }
+
