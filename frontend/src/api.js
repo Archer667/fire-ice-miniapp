@@ -1725,8 +1725,8 @@ export const api = {
   adminSecurityRoleplays: (query = '', tgId = null) => MOCK ? Promise.resolve([])
     : req(`/api/admin/roleplay/security?q=${encodeURIComponent(query)}${tgId ? `&tg_id=${tgId}` : ''}`),
   adminBattles: () => MOCK ? Promise.resolve([]) : req('/api/admin/battles'),
-  adminResolveBattle: (campaignId, result, visibility, winnerTgId, attackerLosses = {}, defenderLosses = {}) => MOCK ? Promise.resolve({ ok: true })
-    : req(`/api/admin/battles/${campaignId}/resolve`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', winner_tg_id: winnerTgId, attacker_losses: attackerLosses, defender_losses: defenderLosses }) }),
+  adminResolveBattle: (campaignId, result, visibility, winnerTgId, attackerLosses = {}, defenderLosses = {}, attackerEquipmentLosses = {}, defenderEquipmentLosses = {}) => MOCK ? Promise.resolve({ ok: true })
+    : req(`/api/admin/battles/${campaignId}/resolve`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', winner_tg_id: winnerTgId, attacker_losses: attackerLosses, defender_losses: defenderLosses, attacker_equipment_losses: attackerEquipmentLosses, defender_equipment_losses: defenderEquipmentLosses }) }),
   adminDismissBattle: (campaignId) => MOCK ? Promise.resolve({ ok: true })
     : req(`/api/admin/battles/${campaignId}/dismiss`, { method: 'POST' }),
   adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null, attackerLosses = {}, defenderLosses = {}) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
