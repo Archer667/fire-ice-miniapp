@@ -440,8 +440,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
 @router.post("/{campaign_id}/cancel")
 async def cancel(campaign_id: str, user: dict = Depends(get_user)):
-    """لغو لشکر فعال — طلا، نفرات، و تسلیحاتِ مصرف‌شده (بر اساس ترکیب نیروها) کامل
-    برمی‌گردد؛ فقط غله‌ای که تا همین الان به‌عنوان آذوقهٔ روزانه مصرف شده برنمی‌گردد"""
+    """لغو تا پنج دقیقه بدون جریمه؛ پس از آن فقط نیمی از هزینه و نفرات برمی‌گردد."""
     c = await campaigns.find_one({"_id": ObjectId(campaign_id)})
     if not c or c["tg_id"] != user["id"]:
         raise HTTPException(404, "لشکر پیدا نشد")
@@ -466,17 +465,25 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         if weapon_key:
             weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
 
+    grace_started_at = c.get("moved_at") or c.get("created_at") or now()
+    penalty_applied = (now() - grace_started_at) > timedelta(minutes=5)
+    refund_ratio = 0.5 if penalty_applied else 1.0
+    def refundable(value):
+        return max(0, int(int(value or 0) * refund_ratio))
+
     p = await players.find_one({"tg_id": user["id"]})
     if p:
-        equipment_refund = dict(c.get("equipment_cost", {}))
-        deltas = {"men": c["men_committed"], "gold": c["gold_cost"], **weapons_refund}
+        equipment_refund = {k: refundable(v) for k, v in c.get("equipment_cost", {}).items()}
+        weapons_refund = {k: refundable(v) for k, v in weapons_refund.items()}
+        deltas = {"men": refundable(c["men_committed"]), "gold": refundable(c["gold_cost"]), **weapons_refund}
         for resource, amount in equipment_refund.items():
             deltas[resource] = deltas.get(resource, 0) + amount
         add_resources(p, deltas)
         await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
     return {
-        "ok": True, "men_refunded": c["men_committed"], "gold_refunded": c["gold_cost"],
-        "weapons_refunded": weapons_refund, "equipment_refunded": c.get("equipment_cost", {}),
+        "ok": True, "penalty_applied": penalty_applied, "refund_ratio": refund_ratio,
+        "men_refunded": refundable(c["men_committed"]), "gold_refunded": refundable(c["gold_cost"]),
+        "weapons_refunded": weapons_refund, "equipment_refunded": equipment_refund,
     }
 
 @router.post("/{campaign_id}/move")
@@ -932,3 +939,4 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
+
