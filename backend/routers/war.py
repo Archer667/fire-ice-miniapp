@@ -640,6 +640,11 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
         "$unset": {
             "combat_resolved_at": "", "combat_outcome": "", "winner_tg_id": "",
             "medal_outcome_recorded": "", "engagement_campaign_id": "",
+            "battle_root_campaign_id": "", "battle_is_root": "", "battle_cancelled_at": "",
+            "battle_started_at": "", "battle_open": "", "battle_location": "",
+            "battle_attacker_snapshot": "", "battle_defender_snapshot": "",
+            "battle_defender_army_ids": "", "battle_defender_tg_id": "", "battle_defender_name": "",
+            "opponent_campaign_id": "", "opponent_tg_id": "", "public_start_notified": "",
         },
     })
     return {"ok": True, "arrival_at": arrival_at.isoformat(), "travel_minutes": move_minutes, "route_path": chosen["path"]}
@@ -778,14 +783,18 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
     )
     # اعلان عمومی شروع نبرد: فقط هویت طرفین و محل؛ ترکیب/تعداد نیروها محرمانه و فقط
     # برای خود طرفین و ادمین‌هاست. فلگ اتمیک جلوی ارسال دوبارهٔ همان اعلان را می‌گیرد.
-    try:
-        root_id = ObjectId(engagement_id)
-    except Exception:
-        root_id = None
     claimed = await campaigns.update_one(
-        {"_id": root_id, "public_start_notified": {"$ne": True}},
+        {"engagement_campaign_id": engagement_id, "battle_is_root": True, "public_start_notified": {"$ne": True}},
         {"$set": {"public_start_notified": True}},
-    ) if root_id else None
+    )
+    if not claimed.matched_count:  # سازگاری با پرونده‌های قدیمی که battle_id همان campaign_id بود
+        try:
+            claimed = await campaigns.update_one(
+                {"_id": ObjectId(engagement_id), "public_start_notified": {"$ne": True}},
+                {"$set": {"public_start_notified": True}},
+            )
+        except Exception:
+            claimed = None
     if claimed and claimed.modified_count:
         public_text = f"⚔️ نبردی میان لرد {attacker_name} و لرد {defender_name} در {location} آغاز شد."
         async for player in players.find({}, {"tg_id": 1, "name": 1}):
@@ -904,10 +913,11 @@ async def detect_route_encounters():
             if not shared:
                 continue
             root, opponent = (a, b) if str(a["_id"]) < str(b["_id"]) else (b, a)
-            engagement_id = str(root["_id"])
+            engagement_id = str(ObjectId())
             location = f"مسیر {shared[0]} — {shared[1]}"
             await campaigns.update_one({"_id": root["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
+                "battle_root_campaign_id": str(root["_id"]), "battle_is_root": True,
                 "opponent_campaign_id": str(opponent["_id"]), "opponent_tg_id": opponent["tg_id"],
                 "battle_location": location, "battle_started_at": now(),
                 "battle_open": True,
@@ -918,6 +928,7 @@ async def detect_route_encounters():
             }})
             await campaigns.update_one({"_id": opponent["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
+                "battle_root_campaign_id": str(root["_id"]), "battle_is_root": False,
                 "opponent_campaign_id": str(root["_id"]), "opponent_tg_id": root["tg_id"],
                 "battle_location": location, "battle_started_at": now(),
             }})
@@ -973,7 +984,7 @@ async def notify_arrivals():
         owner_is_friendly = bool(target_owner and await players_are_friendly(c["tg_id"], target_owner["tg_id"]))
         creates_battle = (c["op_type"] in DIRECT_ATTACK_OP_TYPES and not owner_is_friendly) or opposing_army is not None
         if creates_battle:
-            engagement_id = str(c["_id"])
+            engagement_id = str(ObjectId())
             battle_defender = target_owner if target_owner and target_owner["tg_id"] != c["tg_id"] else None
             if not battle_defender and opposing_army:
                 battle_defender = await players.find_one({"tg_id": opposing_army["tg_id"]})
@@ -987,6 +998,7 @@ async def notify_arrivals():
                 })]
             engagement_update = {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
+                "battle_root_campaign_id": str(c["_id"]), "battle_is_root": True,
                 "battle_location": target, "battle_started_at": now(),
                 "battle_open": True,
                 "battle_attacker_snapshot": battle_army_snapshot(c),
@@ -1002,6 +1014,7 @@ async def notify_arrivals():
             if opposing_army:
                 await campaigns.update_one({"_id": opposing_army["_id"]}, {"$set": {
                     "engagement_locked": True, "engagement_campaign_id": engagement_id,
+                    "battle_root_campaign_id": str(c["_id"]), "battle_is_root": False,
                     "opponent_campaign_id": str(c["_id"]), "opponent_tg_id": c["tg_id"],
                     "battle_location": target,
                 }})
@@ -1011,7 +1024,8 @@ async def notify_arrivals():
                     "engagement_locked": {"$ne": True},
                     "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
                     "arrival_at": {"$lte": now()},
-                }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id}})
+                }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id,
+                              "battle_root_campaign_id": str(c["_id"]), "battle_is_root": False}})
 
         if creates_battle and battle_defender:
             attacker_summary = troops_summary(c.get("troops", {}))
@@ -1052,10 +1066,12 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     async def build(c, role):
         canonical_id = c.get("engagement_campaign_id") or str(c["_id"])
-        try:
-            root = await campaigns.find_one({"_id": ObjectId(canonical_id)})
-        except Exception:
-            root = c
+        root = await campaigns.find_one({"engagement_campaign_id": canonical_id, "battle_is_root": True})
+        if not root:
+            try:
+                root = await campaigns.find_one({"_id": ObjectId(c.get("battle_root_campaign_id") or canonical_id)})
+            except Exception:
+                root = c
         root = root or c
         already = await roleplays.find_one({"tg_id": user["id"], "campaign_id": canonical_id})
         if already:
