@@ -8,7 +8,7 @@ from game import now, can_afford, pay, normalize_building_state, add_resources, 
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
-    _dijkstra_path, DEFAULT_SEA_CASTLES,
+    _dijkstra_path, DEFAULT_SEA_CASTLES, SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -76,6 +76,7 @@ class CampaignBody(BaseModel):
     target_castle: str | None = None
     name: str = ""
     troops: dict            # {troop_id: count}
+    equipment: dict = {}    # {equipment_id: count}
     via: list[str] | None = None   # مسیرِ انتخابیِ بازیکن (اگر چند گزینهٔ مسیر بود) — از /war/routes
 
 class MoveCampaignBody(BaseModel):
@@ -248,6 +249,26 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
         men += n
     return gold, men, food, weapons
 
+def equipment_cost_and_effect(equipment: dict, buildings: dict):
+    workshop_level = normalize_building_state(buildings.get(SIEGE_WORKSHOP_BUILDING))["level"]
+    cost, siege_power, slowdown = {}, 0, 0.0
+    for eid, raw in equipment.items():
+        count = max(0, int(raw or 0))
+        if not count:
+            continue
+        if count > 100:
+            raise HTTPException(400, "از هر نوع ادوات حداکثر ۱۰۰ عدد می‌توانی همراه یک لشکر ببری")
+        meta = SIEGE_EQUIPMENT.get(eid)
+        if not meta:
+            raise HTTPException(400, "نوع ادوات نظامی نامعتبر است")
+        if workshop_level < meta["level"]:
+            raise HTTPException(400, f"برای ساخت {meta['name']} به کارگاه مهندسی ادوات سطح {meta['level']} نیاز داری")
+        for resource, amount in meta["cost"].items():
+            cost[resource] = cost.get(resource, 0) + amount * count
+        siege_power += meta["siege_power"] * count
+        slowdown += meta["slowdown"] * count
+    return cost, siege_power, min(1.0, slowdown)
+
 async def stationed_origins(tg_id: int) -> set:
     """قلعه‌هایی که لشکر فعلی این بازیکن با عملیات «جای‌گیری» در آن‌ها مستقر است —
     فقط جای‌گیری‌هایی که واقعاً رسیده‌اند، وگرنه لشکری که هنوز در راهِ جای‌گیری است
@@ -344,9 +365,9 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     terrain = await all_castle_terrain()
     origin_is_port = terrain.get(body.origin_castle, "land") in ("coastal", "sea")
     origin_region = await region_of_castle(body.origin_castle) or p["region"]
-    gold, men, food_per_day, weapons = troop_food_and_gold(
-        origin_region, body.troops, _building_levels(p, body.origin_castle), origin_is_port,
-    )
+    origin_buildings = _building_levels(p, body.origin_castle)
+    gold, men, food_per_day, weapons = troop_food_and_gold(origin_region, body.troops, origin_buildings, origin_is_port)
+    equipment_cost, equipment_power, equipment_slowdown = equipment_cost_and_effect(body.equipment, origin_buildings)
     if men <= 0:
         raise HTTPException(400, "هیچ نیرویی گسیل نکرده‌ای")
     if not can_afford(p["resources"], {"gold": gold}):
@@ -356,6 +377,11 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     for weapon_key, needed in weapons.items():
         if p["resources"].get(weapon_key, 0) < needed:
             raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
+    combined_cost = {"gold": gold, **weapons}
+    for resource, amount in equipment_cost.items():
+        combined_cost[resource] = combined_cost.get(resource, 0) + amount
+    if not can_afford(p["resources"], combined_cost):
+        raise HTTPException(400, "منابع لازم برای ساخت ادوات انتخاب‌شده کافی نیست")
 
     naval_capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
     land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
@@ -379,10 +405,11 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
                 raise HTTPException(400, "این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن")
             raise HTTPException(400, f"این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
         travel, route_path = chosen["minutes"], chosen["path"]
+    travel = max(travel, round(travel * (1 + equipment_slowdown)))
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p, body.origin_castle))
 
-    pay(p["resources"], {"gold": gold, **weapons})
+    pay(p["resources"], combined_cost)
     p["resources"]["men"] = p["resources"].get("men", 0) - men
 
     # فرمان خصمانه علیه عدم‌تجاوز/اتحاد کامل بالاتر کاملاً مسدود شده است.
@@ -397,6 +424,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "op_type": body.op_type, "target_castle": target_castle,
         "name": body.name.strip()[:60] or op["name"], "troops": body.troops, "power": power,
         "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
+        "equipment": {k: int(v or 0) for k, v in body.equipment.items() if k in SIEGE_EQUIPMENT and int(v or 0) > 0},
+        "equipment_cost": equipment_cost, "equipment_power": equipment_power,
         "travel_minutes": travel, "arrival_at": arrival_at, "route_path": route_path,
         "penalty_charged": penalty_charged,
         "active": True, "arrival_notified": False,
@@ -439,12 +468,15 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
 
     p = await players.find_one({"tg_id": user["id"]})
     if p:
+        equipment_refund = dict(c.get("equipment_cost", {}))
         deltas = {"men": c["men_committed"], "gold": c["gold_cost"], **weapons_refund}
+        for resource, amount in equipment_refund.items():
+            deltas[resource] = deltas.get(resource, 0) + amount
         add_resources(p, deltas)
         await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
     return {
         "ok": True, "men_refunded": c["men_committed"], "gold_refunded": c["gold_cost"],
-        "weapons_refunded": weapons_refund,
+        "weapons_refunded": weapons_refund, "equipment_refunded": c.get("equipment_cost", {}),
     }
 
 @router.post("/{campaign_id}/move")
@@ -502,11 +534,13 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     if chosen.get("via_sea") and land_men > naval_capacity:
         raise HTTPException(400, f"کشتی‌های این لشکر فقط ظرفیت جابه‌جایی {naval_capacity} نیروی زمینی را دارند")
 
-    arrival_at = now() + timedelta(minutes=chosen["minutes"])
+    move_slowdown = min(1.0, sum(SIEGE_EQUIPMENT.get(eid, {}).get("slowdown", 0) * int(count or 0) for eid, count in c.get("equipment", {}).items()))
+    move_minutes = max(chosen["minutes"], round(chosen["minutes"] * (1 + move_slowdown)))
+    arrival_at = now() + timedelta(minutes=move_minutes)
     await campaigns.update_one({"_id": oid}, {
         "$set": {
             "origin_castle": origin, "target_castle": body.target_castle,
-            "op_type": body.op_type, "travel_minutes": chosen["minutes"],
+            "op_type": body.op_type, "travel_minutes": move_minutes,
             "route_path": chosen["path"], "arrival_at": arrival_at,
             "arrival_notified": False, "moved_at": now(),
         },
@@ -515,7 +549,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
             "medal_outcome_recorded": "", "engagement_campaign_id": "",
         },
     })
-    return {"ok": True, "arrival_at": arrival_at.isoformat(), "travel_minutes": chosen["minutes"], "route_path": chosen["path"]}
+    return {"ok": True, "arrival_at": arrival_at.isoformat(), "travel_minutes": move_minutes, "route_path": chosen["path"]}
 
 @router.post("/{campaign_id}/attack")
 async def order_siege_attack(campaign_id: str, user: dict = Depends(get_user)):
@@ -563,6 +597,7 @@ async def legions(user: dict = Depends(get_user)):
             "name": (c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])) if is_mine else "لشکرکشی",
             "origin": c["origin_castle"], "target": c["target_castle"],
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
+            "equipment": c.get("equipment", {}), "equipment_power": c.get("equipment_power", 0),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
             "engagement_locked": bool(c.get("engagement_locked") or waiting_result),
@@ -621,6 +656,8 @@ def battle_army_snapshot(campaign: dict) -> dict:
         "name": campaign.get("name", "لشکر"),
         "men": campaign.get("men_committed", sum(campaign.get("troops", {}).values())),
         "troops": dict(campaign.get("troops", {})),
+        "equipment": dict(campaign.get("equipment", {})),
+        "equipment_power": int(campaign.get("equipment_power", 0) or 0),
     }
 
 async def notify_battle_admins(engagement_id: str, location: str, attacker: dict, defender: dict, defender_troops: dict):
@@ -635,6 +672,10 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         f"{attacker_name}: {attacker_total} نفر — {troops_summary(attacker_troops)}\n"
         f"{defender_name}: {defender_total} نفر — {troops_summary(defender_troops)}"
     )
+    attacker_equipment = "، ".join(f"{SIEGE_EQUIPMENT.get(k, {}).get('name', k)}×{v}" for k, v in attacker.get("equipment", {}).items() if v)
+    defender_equipment = "، ".join(f"{SIEGE_EQUIPMENT.get(k, {}).get('name', k)}×{v}" for k, v in defender.get("equipment", {}).items() if v)
+    if attacker_equipment or defender_equipment:
+        detail += f"\nادوات {attacker_name}: {attacker_equipment or 'ندارد'}\nادوات {defender_name}: {defender_equipment or 'ندارد'}"
     await notify_admins(
         "battle_started", "⚔️ نبرد تازه آغاز شد", detail,
         dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
@@ -719,7 +760,14 @@ async def detect_route_encounters():
                 "opponent_campaign_id": str(root["_id"]), "opponent_tg_id": root["tg_id"],
                 "battle_location": location, "battle_started_at": now(),
             }})
-            msg = f"لشکرهای شما در {location} با هم روبه‌رو شدند و تا اعلام نتیجهٔ ادمین قفل‌اند. تا {ROLEPLAY_WINDOW_HOURS} ساعت فرصت ارسال رول جنگ دارید."
+            root_eq = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in root.get("equipment", {}).items() if count) or "بدون ادوات"
+            opponent_eq = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in opponent.get("equipment", {}).items() if count) or "بدون ادوات"
+            msg = (
+                f"لشکرهای شما در {location} با هم روبه‌رو شدند و تا اعلام نتیجهٔ ادمین قفل‌اند.\n"
+                f"{root['player_name']}: {troops_summary(root.get('troops', {}))} · ادوات: {root_eq}\n"
+                f"{opponent['player_name']}: {troops_summary(opponent.get('troops', {}))} · ادوات: {opponent_eq}\n"
+                f"تا {ROLEPLAY_WINDOW_HOURS} ساعت فرصت ارسال رول جنگ دارید."
+            )
             await send_system_message(root["tg_id"], root["player_name"], msg)
             await send_system_message(opponent["tg_id"], opponent["player_name"], msg)
             await notify_battle_admins(engagement_id, location, root, opponent, dict(opponent.get("troops", {})))
@@ -810,12 +858,19 @@ async def notify_arrivals():
                 for tid, count in army.get("troops", {}).items():
                     defense_troops[tid] = defense_troops.get(tid, 0) + count
             defender_summary = troops_summary(defense_troops)
+            attacker_equipment_summary = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in c.get("equipment", {}).items() if count) or "بدون ادوات"
+            defender_equipment_totals = {}
+            for army in defender_armies:
+                for eid, count in army.get("equipment", {}).items():
+                    defender_equipment_totals[eid] = defender_equipment_totals.get(eid, 0) + int(count or 0)
+            defender_equipment_summary = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in defender_equipment_totals.items() if count) or "بدون ادوات"
             defender_power = opposing_army.get("power", 0) if opposing_army else campaign_power(defense_troops, _building_levels(battle_defender, target))
             attacker_power = c.get("power", 0)
             stats_text = (
                 f"آمار نبرد «{name}» در {target}:\n"
                 f"مهاجم ({c['player_name']}): {attacker_summary} — توان {attacker_power}\n"
                 f"طرف مقابل ({battle_defender['name']}): {defender_summary} — توان {defender_power}\n"
+                f"ادوات مهاجم: {attacker_equipment_summary}\nادوات طرف مقابل: {defender_equipment_summary}\n"
                 f"هر دو طرف تا {ROLEPLAY_WINDOW_HOURS} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
             )
             await send_system_message(c["tg_id"], c["player_name"], stats_text)
