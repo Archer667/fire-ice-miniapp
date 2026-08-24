@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 async def send_system_message(
     to_tg_id: int, to_name: str, text: str, kind: str = "general",
     image_url: str | None = None, starts_at=None, ends_at=None,
+    via_raven: bool = True, via_bot: bool = True,
 ):
     """پیام سیستمی داخل کلاغ و تلگرام؛ ایونت می‌تواند تصویر و بازهٔ زمانی هم داشته باشد."""
     doc = {
@@ -24,8 +25,10 @@ async def send_system_message(
         doc["starts_at"] = starts_at
     if ends_at:
         doc["ends_at"] = ends_at
-    await messages.insert_one(doc)
-    telegram_bot.push(to_tg_id, f"{SYSTEM_SENDER_NAME}: {text}")
+    if via_raven:
+        await messages.insert_one(doc)
+    if via_bot:
+        telegram_bot.push(to_tg_id, f"{SYSTEM_SENDER_NAME}: {text}")
 
 class SendBody(BaseModel):
     to_tg_ids: list[int]
@@ -119,3 +122,4 @@ async def thread(other_tg_id: int, user: dict = Depends(get_user)):
             "ends_at": m["ends_at"].isoformat() if m.get("ends_at") else None,
         })
     return out
+
