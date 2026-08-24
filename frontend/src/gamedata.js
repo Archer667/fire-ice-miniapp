@@ -73,7 +73,7 @@ export const SIEGE_EQUIPMENT = [
   { id: 'ballista', name: 'بالیستا', level: 2, cost: { gold: 180, wood: 110, iron: 50 }, siege_power: 10, slowdown: .025 },
   { id: 'fire_barrel', name: 'بشکهٔ آتش', level: 2, cost: { gold: 60, wood: 20, iron: 10, wine: 20 }, siege_power: 7, slowdown: .008 },
   { id: 'siege_tower', name: 'برج متحرک محاصره', level: 3, cost: { gold: 350, wood: 250, iron: 80 }, siege_power: 20, slowdown: .05 },
-  { id: 'trebuchet', name: 'تربوشه', level: 3, cost: { gold: 500, wood: 300, stone: 120, iron: 80 }, siege_power: 28, slowdown: .07 },
+  { id: 'trebuchet', name: 'ترابوشه', level: 3, cost: { gold: 500, wood: 300, stone: 120, iron: 80 }, siege_power: 28, slowdown: .07 },
 ];
 
 // نوع دسترسیِ زمینی/دریاییِ هر قلعه — از پنل ادمین (تب نقشه) روی هر پین مشخص می‌شود
