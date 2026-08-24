@@ -1333,7 +1333,7 @@ async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_use
     cur = campaigns.find({"tg_id": tg_id}).sort("created_at", -1).limit(30)
     async for c in cur:
         troops = [
-            {"name": COMMON_TROOPS[t]["name"] if t in COMMON_TROOPS else t, "count": n}
+            {"id": t, "name": COMMON_TROOPS[t]["name"] if t in COMMON_TROOPS else t, "count": n}
             for t, n in c["troops"].items() if n and n > 0
         ]
         arrival_at = c.get("arrival_at")
@@ -1350,7 +1350,7 @@ async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_use
 
 @router.post("/campaigns/{campaign_id}/disband")
 async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_admin_user)):
-    """ادمین هر لشکرکشیِ فعالی را (از هر بازیکنی) منحل می‌کند — نفراتش به صاحبش برمی‌گردد"""
+    """انحلال اداری: تمام نفرات، سکه، سلاح و ادوات به صاحب لشکر برمی‌گردد."""
     try:
         oid = ObjectId(campaign_id)
     except Exception:
@@ -1360,16 +1360,78 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
         raise HTTPException(404, "این لشکرکشی پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکرکشی دیگر فعال نیست")
-    await campaigns.update_one({"_id": oid}, {"$set": {"active": False, "status": "disbanded"}})
+    changed = await campaigns.update_one({"_id": oid, "active": True}, {"$set": {"active": False, "status": "disbanded"}})
+    if not changed.matched_count:
+        raise HTTPException(409, "وضعیت لشکر همین الان تغییر کرد")
     owner = await players.find_one({"tg_id": c["tg_id"]})
     if owner:
-        add_resources(owner, {"men": c["men_committed"]})
+        refund = {"men": c.get("men_committed", 0), "gold": c.get("gold_cost", 0)}
+        for troop_id, count in c.get("troops", {}).items():
+            weapon = TROOP_WEAPON_KEY.get(troop_id)
+            if weapon:
+                refund[weapon] = refund.get(weapon, 0) + int(count or 0) * WEAPON_PER_SOLDIER
+        for resource, amount in c.get("equipment_cost", {}).items():
+            refund[resource] = refund.get(resource, 0) + int(amount or 0)
+        add_resources(owner, refund)
         await players.update_one({"tg_id": c["tg_id"]}, {"$set": {"resources": owner["resources"]}})
         await send_system_message(
             owner["tg_id"], owner["name"],
-            f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و نفراتش به خانه برگشتند.",
+            f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و تمام هزینه‌های باقی‌مانده‌اش برگشت.",
         )
     return {"ok": True}
+
+@router.post("/campaigns/{campaign_id}/destroy")
+async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_admin_user)):
+    """انهدام کامل لشکر؛ هیچ هزینه یا نیرویی برنمی‌گردد."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ لشکرکشی نامعتبر است")
+    c = await campaigns.find_one({"_id": oid, "active": True})
+    if not c:
+        raise HTTPException(404, "لشکر فعال پیدا نشد")
+    result = await campaigns.update_one(
+        {"_id": oid, "active": True},
+        {"$set": {"active": False, "status": "destroyed", "troops": {}, "men_committed": 0, "power": 0, "destroyed_at": now()}},
+    )
+    if not result.matched_count:
+        raise HTTPException(409, "وضعیت لشکر همین الان تغییر کرد")
+    owner = await players.find_one({"tg_id": c["tg_id"]}, {"tg_id": 1, "name": 1})
+    if owner:
+        await send_system_message(owner["tg_id"], owner["name"], f"لشکر «{c.get('name', 'بی‌نام')}» به فرمان ادمین کاملاً منهدم شد؛ هیچ هزینه‌ای برنگشت.")
+    return {"ok": True}
+
+class ReduceCampaignBody(BaseModel):
+    troops: dict[str, int]
+
+@router.post("/campaigns/{campaign_id}/reduce")
+async def admin_reduce_campaign(campaign_id: str, body: ReduceCampaignBody, user: dict = Depends(full_admin_user)):
+    """تلفات مستقیم ادمین؛ مقدار هر فیلد از همان نوع نیرو کم می‌شود و بازپرداخت ندارد."""
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ لشکرکشی نامعتبر است")
+    c = await campaigns.find_one({"_id": oid, "active": True})
+    if not c:
+        raise HTTPException(404, "لشکر فعال پیدا نشد")
+    current = dict(c.get("troops", {}))
+    removed = {}
+    for troop_id, raw in body.troops.items():
+        loss = max(0, int(raw or 0))
+        if troop_id not in current or loss > int(current[troop_id] or 0):
+            raise HTTPException(400, f"تلفات {troop_id} از نیروی حاضر بیشتر است")
+        if loss:
+            current[troop_id] -= loss
+            removed[troop_id] = loss
+    if not removed:
+        raise HTTPException(400, "حداقل یک تلفات وارد کن")
+    old_men = max(1, int(c.get("men_committed", 0) or 0))
+    men = sum(int(v or 0) for v in current.values())
+    await campaigns.update_one({"_id": oid, "active": True}, {"$set": {
+        "troops": current, "men_committed": men,
+        "power": round(float(c.get("power", 0)) * men / old_men, 2), "admin_losses_at": now(),
+    }})
+    return {"ok": True, "removed": removed, "men_remaining": men}
 
 @router.get("/war-window")
 async def admin_get_war_window(user: dict = Depends(admin_user)):
@@ -1402,13 +1464,17 @@ class SendBotMessageBody(BaseModel):
     text: str
     send_to_all: bool = False
     to_tg_ids: list[int] | None = None
+    via_bot: bool = True
+    via_raven: bool = False
 
 @router.post("/send-bot-message")
 async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_user)):
-    """ارسال پیام مستقیم از طرف بات تلگرام، بدون ثبت در صندوق کلاغ‌های داخل اپ."""
+    """ارسال انتخابی در بات تلگرام، صندوق کلاغ، یا هر دو."""
     text = body.text.strip()[:4000]
     if not text:
         raise HTTPException(400, "متن پیام نمی‌تواند خالی باشد")
+    if not body.via_bot and not body.via_raven:
+        raise HTTPException(400, "حداقل یکی از مسیرهای بات یا کلاغ را انتخاب کن")
 
     if body.send_to_all:
         targets = await players.find({}, {"tg_id": 1, "name": 1}).to_list(None)
@@ -1424,8 +1490,11 @@ async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_
         raise HTTPException(404, "هیچ بازیکنی برای ارسال پیدا نشد")
 
     for target in targets:
-        telegram_bot.push(target["tg_id"], text)
-    return {"ok": True, "sent_to": len(targets)}
+        await send_system_message(
+            target["tg_id"], target["name"], text,
+            via_bot=body.via_bot, via_raven=body.via_raven,
+        )
+    return {"ok": True, "sent_to": len(targets), "via_bot": body.via_bot, "via_raven": body.via_raven}
 
 class WarWindowBody(BaseModel):
     open: bool
@@ -1798,3 +1867,4 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
+
