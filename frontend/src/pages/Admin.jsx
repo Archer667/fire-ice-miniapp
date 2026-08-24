@@ -109,6 +109,9 @@ export default function Admin() {
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
   const [campaignLosses, setCampaignLosses] = useState({});
+  const [ambushesList, setAmbushesList] = useState(null);
+  const [ambushScores, setAmbushScores] = useState({});
+  const [ambushBusyId, setAmbushBusyId] = useState(null);
   const [warWindow, setWarWindow] = useState(null);
   const [warWindowBusy, setWarWindowBusy] = useState(false);
   const [eventTitle, setEventTitle] = useState('');
@@ -245,6 +248,7 @@ export default function Admin() {
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
+  const loadAmbushes = () => api.adminAmbushes().then(setAmbushesList).catch(e => toast(e.message));
   const loadWarWindow = () => api.adminGetWarWindow().then(setWarWindow).catch(e => toast(e.message));
   const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
   const loadSpyResolved = () => api.adminSpyResolved().then(setSpyResolved).catch(e => toast(e.message));
@@ -319,6 +323,7 @@ export default function Admin() {
     loadPendingPlayers();
     loadRoster();
     loadCampaigns();
+    loadAmbushes();
     loadWarWindow();
     loadSpyPending();
     loadSpyResolved();
@@ -662,6 +667,15 @@ export default function Admin() {
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
+  };
+
+  const scoreAmbush = async (id) => {
+    const coefficient = Number(ambushScores[id]);
+    if (Number.isNaN(coefficient) || coefficient < 0 || coefficient > 10) { toast('ضریب باید بین صفر تا ۱۰ باشد'); return; }
+    setAmbushBusyId(id);
+    try { await api.adminScoreAmbush(id, coefficient); haptic('medium'); toast('ضریب ثبت شد و کمین فعال شد'); loadAmbushes(); }
+    catch (e) { toast(e.message); }
+    setAmbushBusyId(null);
   };
 
   const reduceCampaign = async (campaign) => {
@@ -1392,6 +1406,7 @@ export default function Admin() {
           <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ و رول‌ها">
             {[
               { key: 'campaigns', label: 'لشکرکشی‌ها' },
+              { key: 'ambushes', label: `کمین‌ها${ambushesList?.filter(a => a.status === 'pending_score').length ? ` (${ambushesList.filter(a => a.status === 'pending_score').length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'espionage', label: 'جاسوسی' },
               { key: 'security', label: 'آرشیو امنیتی' },
@@ -1454,6 +1469,21 @@ export default function Admin() {
             ))}
           </div>
           )}
+
+          {warSubTab === 'ambushes' && <div className="up u2">
+            <div className="page-sub" style={{ marginBottom: 12 }}>سناریو و نفرات کمین را بررسی کن و ضریب صفر تا ۱۰ بده. تلفات برابر تعداد سربازان کمین ضرب‌در ضریب است و هنگام عبور خودکار اعمال می‌شود.</div>
+            {ambushesList === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
+            {ambushesList && ambushesList.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی ثبت نشده</div>}
+            {(ambushesList || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 10 }}>
+              <div className="res"><div className="ic"><Eye s={16} /></div><div className="n">{a.player}<small>{castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)} · {a.men_committed.toLocaleString('fa-IR')} نفر</small></div></div>
+              <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>
+              <div style={{ fontSize: 11.5, marginBottom: 8 }}>نیروها: {a.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ')}</div>
+              {a.status === 'pending_score' ? <div className="buy-row">
+                <input type="number" min="0" max="10" step="0.1" placeholder="ضریب ۰ تا ۱۰" value={ambushScores[a.id] ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} />
+                <button className="btn" disabled={ambushBusyId === a.id} onClick={() => scoreAmbush(a.id)}>ثبت و فعال‌سازی</button>
+              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name}` : ''}</span></div>}
+            </div>)}
+          </div>}
 
           {warSubTab === 'battles' && (
           <div className="up u2">
