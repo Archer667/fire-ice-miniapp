@@ -92,19 +92,21 @@ async def notify_admin_deadlines():
         deadline = campaign["arrival_at"] + timedelta(hours=ROLEPLAY_WINDOW_HOURS)
         if deadline > soon:
             continue
-        submitted = await roleplays.count_documents({"campaign_id": str(campaign["_id"])})
+        battle_id = campaign.get("engagement_campaign_id") or str(campaign["_id"])
+        submitted = await roleplays.count_documents({"campaign_id": battle_id})
         if submitted >= 2:
             continue
         await notify_admins(
             "war_deadline",
             "⏳ مهلت رول جنگ رو به پایان است",
             f"نبرد «{campaign.get('name') or 'بدون نام'}» در {campaign.get('target_castle')} کمتر از دو ساعت مهلت دارد؛ {submitted} طرف از ۲ طرف رول فرستاده.",
-            dedupe_key=f"war-deadline:{campaign['_id']}",
+            dedupe_key=f"war-deadline:{battle_id}",
             priority="high",
             player_name=campaign.get("player_name"),
             player_tg_id=campaign.get("tg_id"),
             castle=campaign.get("target_castle"),
             action="رول‌های نبرد را بررسی کن و در صورت نیاز به طرفین یادآوری کن.",
-            source_id=str(campaign["_id"]),
+            source_id=battle_id,
             deadline=deadline,
         )
+
