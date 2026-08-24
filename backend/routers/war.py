@@ -752,6 +752,7 @@ def troops_summary(troops: dict) -> str:
 def battle_army_snapshot(campaign: dict) -> dict:
     return {
         "campaign_id": str(campaign.get("_id", "")),
+        "tg_id": campaign.get("tg_id"), "player_name": campaign.get("player_name", "نامشخص"),
         "name": campaign.get("name", "لشکر"),
         "men": campaign.get("men_committed", sum(campaign.get("troops", {}).values())),
         "troops": dict(campaign.get("troops", {})),
@@ -1031,6 +1032,42 @@ async def notify_arrivals():
 
         owner_is_friendly = bool(target_owner and await players_are_friendly(c["tg_id"], target_owner["tg_id"]))
         creates_battle = (c["op_type"] in DIRECT_ATTACK_OP_TYPES and not owner_is_friendly) or opposing_army is not None
+        # تا وقتی نتیجهٔ نبرد قلعه ثبت نشده، مهاجم تازه پروندهٔ جدا نمی‌سازد؛ با
+        # snapshot و زمان ورود مستقل به همان نبرد باز اضافه و قفل می‌شود.
+        open_battle = None
+        if creates_battle and c["op_type"] in DIRECT_ATTACK_OP_TYPES:
+            open_battle = await campaigns.find_one({
+                "battle_is_root": True, "battle_open": True, "battle_location": target,
+                "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False},
+                "_id": {"$ne": c["_id"]},
+            })
+        if open_battle:
+            engagement_id = open_battle["engagement_campaign_id"]
+            joined_at = now()
+            snapshot = battle_army_snapshot(c)
+            await campaigns.update_one({"_id": c["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
+                "engagement_locked": True, "engagement_campaign_id": engagement_id,
+                "battle_root_campaign_id": str(open_battle["_id"]), "battle_is_root": False,
+                "battle_location": target, "battle_started_at": joined_at,
+            }})
+            await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {
+                "$push": {
+                    "battle_attacker_snapshots": snapshot,
+                    "battle_attacker_army_ids": str(c["_id"]),
+                    "battle_attacker_joins": {"campaign_id": str(c["_id"]), "tg_id": c["tg_id"], "player_name": c["player_name"], "joined_at": joined_at},
+                }
+            })
+            join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به نبرد بازِ {target} اضافه شد: {troops_summary(c.get('troops', {}))}"
+            participant_ids = {x for x in [open_battle.get("tg_id"), open_battle.get("battle_defender_tg_id"), c.get("tg_id")] if x is not None}
+            async for participant in players.find({"tg_id": {"$in": list(participant_ids)}}):
+                await send_system_message(participant["tg_id"], participant["name"], join_text, kind="battle")
+            await notify_admins(
+                "battle_attacker_joined", "⚔️ مهاجم تازه به نبرد اضافه شد", join_text,
+                dedupe_key=f"battle-join:{engagement_id}:{c['_id']}", priority="urgent",
+                player_name=c["player_name"], player_tg_id=c["tg_id"], castle=target, source_id=engagement_id,
+            )
+            await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
+            continue
         if creates_battle:
             engagement_id = str(ObjectId())
             battle_defender = target_owner if target_owner and target_owner["tg_id"] != c["tg_id"] else None
@@ -1051,6 +1088,9 @@ async def notify_arrivals():
                 "battle_location": target, "battle_started_at": now(),
                 "battle_open": True,
                 "battle_attacker_snapshot": battle_army_snapshot(c),
+                "battle_attacker_snapshots": [battle_army_snapshot(c)],
+                "battle_attacker_army_ids": [str(c["_id"])],
+                "battle_attacker_joins": [{"campaign_id": str(c["_id"]), "tg_id": c["tg_id"], "player_name": c["player_name"], "joined_at": now()}],
                 "battle_defender_snapshot": [battle_army_snapshot(a) for a in defender_armies],
                 "battle_defense_infrastructure": defense_infrastructure,
                 "battle_defender_army_ids": [str(a["_id"]) for a in defender_armies],
