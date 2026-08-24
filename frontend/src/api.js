@@ -1531,6 +1531,9 @@ const M = {
 export const api = {
   gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
   me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
+  musicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/players/music'),
+  adminMusicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/admin/music'),
+  adminSaveMusicSettings: (settings) => MOCK ? Promise.resolve(settings) : req('/api/admin/music', { method: 'POST', body: JSON.stringify(settings) }),
   register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
   map:       () => MOCK ? Promise.resolve(M.map()) : req(`/api/map?_=${Date.now()}`, { cache: 'no-store' }),
   warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
