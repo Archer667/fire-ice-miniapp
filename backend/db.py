@@ -6,6 +6,7 @@ db = client[DB_NAME]
 
 players    = db.players
 campaigns  = db.campaigns
+ambushes   = db.ambushes
 map_castles = db.map_castles
 spy_missions = db.spy_missions
 messages   = db.messages
