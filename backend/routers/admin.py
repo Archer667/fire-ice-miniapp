@@ -19,6 +19,7 @@ from config import ADMIN_IDS, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEF
 from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
 from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
+from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -369,7 +370,14 @@ async def list_open_battles(user: dict = Depends(admin_user)):
     """پرونده‌های نبرد مستقل از رول؛ بنابراین حتی با صفر رول هم قابل داوری‌اند."""
     out = []
     seen = set()
-    cur = campaigns.find({"engagement_locked": True, "combat_resolved_at": {"$exists": False}}).sort("arrival_at", -1).limit(100)
+    cur = campaigns.find({
+        "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False},
+        "$or": [
+            {"battle_open": True},
+            {"engagement_locked": True},
+            {"battle_started_at": {"$exists": True}, "opponent_campaign_id": {"$exists": True}},
+        ],
+    }).sort("arrival_at", -1).limit(150)
     async for c in cur:
         engagement_id = c.get("engagement_campaign_id") or str(c["_id"])
         if engagement_id in seen:
@@ -414,7 +422,7 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "men": a.get("men_committed", sum(a.get("troops", {}).values())),
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
         }
-        out.append({
+        battle_row = {
             "campaign_id": engagement_id, "name": root.get("name", "نبرد"),
             "location": root.get("battle_location") or root["target_castle"],
             "attacker_tg_id": root["tg_id"], "attacker_name": attacker["name"] if attacker else root.get("player_name", "طرف اول"),
@@ -422,7 +430,18 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "defender_name": defender["name"] if defender else root.get("battle_defender_name", "بدون مدافع"),
             "attacker_army": army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [army_row(a) for a in defender_armies],
             "rolls": rolls, "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
-        })
+        }
+        out.append(battle_row)
+        # repair اعلان: اگر پرونده در نسخهٔ قدیمی ساخته شده و اعلان لحظه‌ای‌اش جا افتاده،
+        # اولین بار که پنل آن را بازیابی می‌کند فقط یک اعلان ماندگار/تلگرامی ساخته می‌شود.
+        await notify_admins(
+            "battle_started", "⚔️ نبرد باز نیاز به رسیدگی دارد",
+            f"{battle_row['attacker_name']} در برابر {battle_row['defender_name']}\nمحل: {battle_row['location']}",
+            dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
+            player_name=battle_row["attacker_name"], player_tg_id=battle_row["attacker_tg_id"],
+            castle=battle_row["location"], source_id=engagement_id,
+            action="در پنل ادمین ← نبردها، پرونده را بررسی یا منحل کن.",
+        )
     return out
 
 class RoleplayResultBody(BaseModel):
@@ -434,6 +453,41 @@ class RoleplayResultBody(BaseModel):
     defender_losses: dict[str, int] = {}
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
+
+@router.post("/battles/{campaign_id}/dismiss")
+async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
+    """انحلال اداری نبرد بدون برنده/تلفات؛ لشکرهای همان پرونده آزاد می‌شوند."""
+    try:
+        root = await campaigns.find_one({"_id": ObjectId(campaign_id)})
+    except Exception:
+        root = None
+    if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
+        raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
+
+    participant_ids = [root["_id"]]
+    for raw_id in [root.get("opponent_campaign_id"), *(root.get("battle_defender_army_ids") or [])]:
+        if raw_id:
+            try:
+                participant_ids.append(ObjectId(raw_id))
+            except Exception:
+                pass
+    unlocked = await campaigns.update_many({
+        "$or": [
+            {"_id": {"$in": participant_ids}},
+            {"engagement_campaign_id": campaign_id},
+        ]
+    }, {
+        "$set": {"engagement_locked": False, "battle_open": False, "battle_cancelled_at": now()},
+        "$unset": {"engagement_campaign_id": "", "opponent_campaign_id": "", "opponent_tg_id": ""},
+    })
+    await roleplays.update_many({"category": "war", "campaign_id": campaign_id, "resolved": False}, {"$set": {
+        "resolved": True, "resolved_at": now(), "result": "این نبرد توسط ادمین منحل شد و نتیجه‌ای نداشت.",
+    }})
+
+    recipients = {root.get("tg_id"), root.get("battle_defender_tg_id"), root.get("opponent_tg_id")} - {None}
+    async for participant in players.find({"tg_id": {"$in": list(recipients)}}):
+        await send_system_message(participant["tg_id"], participant["name"], "این نبرد توسط ادمین منحل شد و لشکرهای درگیر آزاد شدند.")
+    return {"ok": True, "armies_unlocked": unlocked.modified_count}
 
 @router.post("/battles/{campaign_id}/resolve")
 async def resolve_battle_without_required_roll(campaign_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
@@ -588,7 +642,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             {"_id": campaign["_id"], "medal_outcome_recorded": {"$ne": True}},
             {"$set": {
                 "medal_outcome_recorded": True, "combat_outcome": combat_outcome,
-                "winner_tg_id": body.winner_tg_id, "combat_resolved_at": now(),
+                "winner_tg_id": body.winner_tg_id, "combat_resolved_at": now(), "battle_open": False,
             }},
         )
         if outcome_guard.modified_count:
