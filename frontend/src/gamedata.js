@@ -64,6 +64,17 @@ export const NAVAL_TROOPS = [
 ];
 export const NAVAL_TROOP_IDS = NAVAL_TROOPS.map(t => t.id);
 export const NAVAL_CAMP_BUILDING = 'port';
+export const SIEGE_WORKSHOP_BUILDING = 'siege_workshop';
+export const SIEGE_EQUIPMENT = [
+  { id: 'ladder', name: 'نردبان محاصره', level: 1, cost: { gold: 30, wood: 30 }, siege_power: 2, slowdown: .005 },
+  { id: 'mantlet', name: 'سپر متحرک', level: 1, cost: { gold: 40, wood: 40, iron: 10 }, siege_power: 1, slowdown: .006 },
+  { id: 'battering_ram', name: 'دژکوب', level: 1, cost: { gold: 120, wood: 100, iron: 30 }, siege_power: 8, slowdown: .02 },
+  { id: 'catapult', name: 'منجنیق', level: 2, cost: { gold: 200, wood: 140, stone: 50, iron: 30 }, siege_power: 14, slowdown: .035 },
+  { id: 'ballista', name: 'بالیستا', level: 2, cost: { gold: 180, wood: 110, iron: 50 }, siege_power: 10, slowdown: .025 },
+  { id: 'fire_barrel', name: 'بشکهٔ آتش', level: 2, cost: { gold: 60, wood: 20, iron: 10, wine: 20 }, siege_power: 7, slowdown: .008 },
+  { id: 'siege_tower', name: 'برج متحرک محاصره', level: 3, cost: { gold: 350, wood: 250, iron: 80 }, siege_power: 20, slowdown: .05 },
+  { id: 'trebuchet', name: 'تربوشه', level: 3, cost: { gold: 500, wood: 300, stone: 120, iron: 80 }, siege_power: 28, slowdown: .07 },
+];
 
 // نوع دسترسیِ زمینی/دریاییِ هر قلعه — از پنل ادمین (تب نقشه) روی هر پین مشخص می‌شود
 export const MAP_TERRAINS = [
@@ -770,6 +781,7 @@ export const BUILDINGS_STATIC = {
   armory_archer: { name: 'کارگاه تسلیحات کمانداران',    cost: { gold: 160, iron: 50,  wood: 60 }, hours: 5,  type: 'armory', unit: 'archer',    produces: { weapon_archer: 6 } },
   armory_lcav:   { name: 'کارگاه تسلیحات سوارهٔ سبک',   cost: { gold: 280, iron: 100, wood: 50 }, hours: 8,  type: 'armory', unit: 'light_cav', produces: { weapon_lcav: 4 } },
   armory_hcav:   { name: 'کارگاه تسلیحات سوارهٔ سنگین', cost: { gold: 400, iron: 180, wood: 60 }, hours: 12, type: 'armory', unit: 'heavy_cav', produces: { weapon_hcav: 3 } },
+  siege_workshop: { name: 'کارگاه مهندسی ادوات', cost: { gold: 900, stone: 350, wood: 420, iron: 180 }, hours: 18, type: 'armory', max_level: 3 },
   // دفاعی
   port:        { name: 'بندر',         cost: { gold: 600, stone: 200, wood: 260 }, hours: 12, type: 'defense', requires_port: true },
   wall:        { name: 'دیوار دفاعی', cost: { gold: 400, stone: 300, iron: 60 }, hours: 12, type: 'defense' },
