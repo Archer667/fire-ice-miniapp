@@ -1716,7 +1716,7 @@ export const api = {
   /* ---------- پنل ادمین ---------- */
   adminCampaigns: () => MOCK ? Promise.resolve(M.adminCampaigns()) : req('/api/admin/campaigns'),
   adminAmbushes: () => MOCK ? Promise.resolve([]) : req('/api/admin/ambushes'),
-  adminScoreAmbush: (id, coefficient) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/ambushes/${id}/score`, { method: 'POST', body: JSON.stringify({ coefficient }) }),
+  adminScoreAmbush: (id, coefficient, ambushScore) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/ambushes/${id}/score`, { method: 'POST', body: JSON.stringify({ coefficient, ambush_score: ambushScore }) }),
   adminPlayerCampaigns: (tgId) => MOCK ? Promise.resolve(M.adminPlayerCampaigns(tgId)) : req(`/api/admin/players/${tgId}/campaigns`),
   adminDisbandCampaign: (id) => MOCK ? Promise.resolve(M.adminDisbandCampaign(id)) : req(`/api/admin/campaigns/${id}/disband`, { method: 'POST' }),
   adminDestroyCampaign: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/destroy`, { method: 'POST' }),
