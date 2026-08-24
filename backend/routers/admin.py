@@ -587,6 +587,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     campaign = None
     defender = None
     combat_outcome = None
+    opponent_campaign = None
 
     if r["category"] == "war" and r.get("campaign_id"):
         sibling = await roleplays.find_one({
@@ -602,7 +603,6 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             campaign = None
         if campaign:
             recipient_tg_ids.add(campaign["tg_id"])
-            opponent_campaign = None
             if campaign.get("opponent_campaign_id"):
                 try:
                     opponent_campaign = await campaigns.find_one({"_id": ObjectId(campaign["opponent_campaign_id"])})
@@ -674,13 +674,49 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         **({"winner_tg_id": body.winner_tg_id, "combat_outcome": combat_outcome} if combat_outcome else {}),
     }})
 
-    if body.visibility == "all":
+    # شروع و پایان جنگ رویداد عمومی‌اند؛ گزینهٔ visibility برای رول‌های غیرجنگی
+    # همچنان معتبر است، اما نتیجهٔ خودِ نبرد همیشه برای همه می‌رود.
+    if body.visibility == "all" or (campaign and combat_outcome):
         recipient_tg_ids = {p["tg_id"] async for p in players.find({}, {"tg_id": 1})}
 
     cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
-    prefix = "اعلامیهٔ عمومی" if body.visibility == "all" else f"نتیجهٔ رول «{cat_name}»{'ِ نبرد' if r['category'] == 'war' else ''}"
+    prefix = "اعلامیهٔ عمومی" if body.visibility == "all" or (campaign and combat_outcome) else f"نتیجهٔ رول «{cat_name}»{'ِ نبرد' if r['category'] == 'war' else ''}"
     parties_line = ""
-    if other_lord_names:
+    if campaign and combat_outcome:
+        attacker_player = await players.find_one({"tg_id": campaign["tg_id"]})
+        winner_player = await players.find_one({"tg_id": body.winner_tg_id})
+        attacker_name = attacker_player["name"] if attacker_player else campaign.get("player_name", "مهاجم")
+        defender_name = defender["name"] if defender else campaign.get("battle_defender_name", "مدافع")
+
+        def count_line(values: dict, empty_text: str = "بدون تلفات") -> str:
+            parts = []
+            for tid, raw in values.items():
+                count = max(0, int(raw or 0))
+                if count:
+                    parts.append(f"{COMMON_TROOPS.get(tid, {}).get('name', tid)}: {count:,}")
+            return "، ".join(parts) if parts else empty_text
+
+        attacker_before = {k: int(v or 0) for k, v in campaign.get("troops", {}).items()}
+        defender_before = {}
+        if opponent_campaign:
+            defender_before = {k: int(v or 0) for k, v in opponent_campaign.get("troops", {}).items()}
+        else:
+            for army in campaign.get("battle_defender_snapshot", []):
+                for tid, count in army.get("troops", {}).items():
+                    defender_before[tid] = defender_before.get(tid, 0) + int(count or 0)
+        attacker_after = {tid: max(0, n - int(body.attacker_losses.get(tid, 0) or 0)) for tid, n in attacker_before.items()}
+        defender_after = {tid: max(0, n - int(body.defender_losses.get(tid, 0) or 0)) for tid, n in defender_before.items()}
+        location = campaign.get("battle_location") or campaign.get("target_castle", "محل نامشخص")
+        parties_line = (
+            f"\n⚔️ طرفین: لرد {attacker_name} در برابر لرد {defender_name}"
+            f"\n📍 محل نبرد: {location}"
+            f"\n🏆 برنده: لرد {winner_player['name'] if winner_player else 'نامشخص'}"
+            f"\nتلفات {attacker_name}: {count_line(body.attacker_losses)}"
+            f"\nنیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}"
+            f"\nتلفات {defender_name}: {count_line(body.defender_losses)}"
+            f"\nنیروهای باقی‌مانده {defender_name}: {count_line(defender_after, 'هیچ نیرویی باقی نمانده')}"
+        )
+    elif other_lord_names:
         all_names = list(dict.fromkeys([r["player_name"], *other_lord_names]))
         parties_line = f"\nطرف‌های این رول: {' و '.join(all_names)}"
     for tg_id in recipient_tg_ids:
