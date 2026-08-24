@@ -343,7 +343,8 @@ async def my_ambushes(user: dict = Depends(get_user)):
         out.append({
             "id": str(a["_id"]), "origin_castle": a["origin_castle"], "target_castle": a["target_castle"],
             "men_committed": a.get("soldiers_committed", a["men_committed"]), "status": a["status"], "coefficient": a.get("coefficient"),
-            "casualties": a.get("casualties"), "victim_name": a.get("victim_name"),
+            "ambush_score": a.get("ambush_score"), "casualties": a.get("casualties"),
+            "ambusher_losses": a.get("ambusher_losses"), "refund": a.get("refund"), "victim_name": a.get("victim_name"),
         })
     return out
 
@@ -863,14 +864,47 @@ async def process_route_ambushes():
                 "power": round(float(army.get("power", 0)) * remaining / old_men, 2),
                 "active": not destroyed, "status": "ambush_destroyed" if destroyed else army.get("status", "active"),
             }})
+
+            # کیفیت کمین تعیین می‌کند چند درصد از نیروهای کمین‌گذار در ضدحمله/عقب‌نشینی
+            # از بین می‌روند. بازمانده‌ها منحل می‌شوند و نفرات، سکه و سلاحشان برمی‌گردد؛
+            # غلهٔ مصرف‌شده هیچ‌وقت جزو بازپرداخت نیست.
+            quality = max(0, min(100, int(ambush.get("ambush_score", 50))))
+            ambush_troops = {k: max(0, int(v or 0)) for k, v in ambush.get("troops", {}).items()}
+            ambusher_loss_troops = {k: min(v, round(v * (100 - quality) / 100)) for k, v in ambush_troops.items()}
+            surviving_troops = {k: v - ambusher_loss_troops[k] for k, v in ambush_troops.items()}
+            original_total = sum(ambush_troops.values())
+            surviving_total = sum(surviving_troops.values())
+            ambusher_losses = original_total - surviving_total
+            surviving_gold = 0
+            for tid, count in surviving_troops.items():
+                if tid in COMMON_TROOPS:
+                    surviving_gold += COMMON_TROOPS[tid]["cost"] * count
+                elif tid in NAVAL_TROOPS:
+                    surviving_gold += NAVAL_TROOPS[tid]["cost"] * count
+                else:
+                    surviving_gold += SPECIAL_TROOP_COST * count
+            refund = {"men": surviving_total, "gold": surviving_gold}
+            for tid, count in surviving_troops.items():
+                weapon_key = TROOP_WEAPON_KEY.get(tid)
+                if weapon_key and count:
+                    refund[weapon_key] = refund.get(weapon_key, 0) + count * WEAPON_PER_SOLDIER
+            ambusher = await players.find_one({"tg_id": ambush["tg_id"]})
+            if ambusher:
+                add_resources(ambusher, refund)
+                await players.update_one({"tg_id": ambush["tg_id"]}, {"$set": {"resources": ambusher["resources"]}})
             await ambushes.update_one({"_id": ambush["_id"]}, {"$set": {
                 "status": "triggered", "casualties": casualties, "losses": losses, "campaign_id": str(army["_id"]),
+                "ambusher_losses": ambusher_losses, "ambusher_loss_troops": ambusher_loss_troops,
+                "surviving_troops": surviving_troops, "refund": refund,
             }})
             detail = "، ".join(f"{COMMON_TROOPS.get(tid, {}).get('name', tid)}: {count}" for tid, count in losses.items()) or "بدون تلفات"
+            refund_text = "، ".join(f"{amount} {WEAPON_NAMES.get(resource, {'men': 'نفر', 'gold': 'سکه'}.get(resource, resource))}" for resource, amount in refund.items() if amount) or "هیچ"
             text = (
                 f"🏹 کمین در مسیر {path[i]} — {path[i + 1]} فعال شد.\n"
                 f"کمین‌گذار: {ambush['player_name']} · هدف: {army['player_name']}\n"
-                f"ضریب: {ambush.get('coefficient', 0):g} · تلفات: {casualties} نفر\nجزئیات: {detail}"
+                f"ضریب: {ambush.get('coefficient', 0):g} · امتیاز کمین: {quality}\n"
+                f"تلفات لشکر هدف: {casualties} نفر · جزئیات: {detail}\n"
+                f"تلفات نیروهای کمین‌گذار: {ambusher_losses} · بازپرداخت بازمانده‌ها: {refund_text}"
             )
             await send_system_message(ambush["tg_id"], ambush["player_name"], text, kind="ambush")
             await send_system_message(army["tg_id"], army["player_name"], text, kind="ambush")
