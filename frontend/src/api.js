@@ -1544,8 +1544,8 @@ export const api = {
     : req(`/api/admin/players/${tgId}/medals/realm-storyteller`, { method: 'POST', body: JSON.stringify({ tier, reason }) }),
   adminAwardSpecialMedal: (tgId, medal) => MOCK ? Promise.resolve(M.adminAwardSpecialMedal(tgId, medal))
     : req(`/api/admin/players/${tgId}/medals/special`, { method: 'POST', body: JSON.stringify(medal) }),
-  adminSendBotMessage: (text, sendToAll, toTgIds = []) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
-    : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds }) }),
+  adminSendBotMessage: (text, sendToAll, toTgIds = [], viaBot = true, viaRaven = false) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
+    : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds, via_bot: viaBot, via_raven: viaRaven }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
   warRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
     : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
@@ -1564,6 +1564,13 @@ export const api = {
   market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),
   marketBuy: (resource, qty) => MOCK ? Promise.resolve(M.marketBuy(resource, qty))
     : req('/api/market/buy', { method: 'POST', body: JSON.stringify({ resource, qty }) }),
+  playerMarket: () => MOCK ? Promise.resolve([]) : req('/api/market/players'),
+  playerMarketSell: (resource, qty) => MOCK ? Promise.resolve({ ok: true })
+    : req('/api/market/players', { method: 'POST', body: JSON.stringify({ resource, qty }) }),
+  playerMarketBuy: (listingId, qty) => MOCK ? Promise.resolve({ ok: true })
+    : req('/api/market/players/buy', { method: 'POST', body: JSON.stringify({ listing_id: listingId, qty }) }),
+  playerMarketCancel: (listingId) => MOCK ? Promise.resolve({ ok: true })
+    : req(`/api/market/players/${encodeURIComponent(listingId)}`, { method: 'DELETE' }),
   blackMarket: () => MOCK ? Promise.resolve(M.blackMarket()) : req('/api/market/black'),
   blackMarketBuy: (listingId, qty) => MOCK ? Promise.resolve(M.blackMarketBuy(listingId, qty))
     : req('/api/market/black/buy', { method: 'POST', body: JSON.stringify({ listing_id: listingId, qty }) }),
@@ -1707,6 +1714,8 @@ export const api = {
   adminCampaigns: () => MOCK ? Promise.resolve(M.adminCampaigns()) : req('/api/admin/campaigns'),
   adminPlayerCampaigns: (tgId) => MOCK ? Promise.resolve(M.adminPlayerCampaigns(tgId)) : req(`/api/admin/players/${tgId}/campaigns`),
   adminDisbandCampaign: (id) => MOCK ? Promise.resolve(M.adminDisbandCampaign(id)) : req(`/api/admin/campaigns/${id}/disband`, { method: 'POST' }),
+  adminDestroyCampaign: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/destroy`, { method: 'POST' }),
+  adminReduceCampaign: (id, troops) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/reduce`, { method: 'POST', body: JSON.stringify({ troops }) }),
 
   /* ---------- جاسوسی ---------- */
   sendSpy: (targetCastle, scenario) => MOCK ? Promise.resolve(M.sendSpy(targetCastle, scenario))
@@ -1758,3 +1767,4 @@ export const api = {
   adminResetScoreboard: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
     : req('/api/admin/reset-scoreboard', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
+
