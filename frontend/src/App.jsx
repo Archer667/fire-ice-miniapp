@@ -19,6 +19,7 @@ import Header from './components/Header.jsx';
 import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
 import Toast from './components/Toast.jsx';
+import BackgroundMusic from './components/BackgroundMusic.jsx';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
@@ -53,9 +54,11 @@ export default function App() {
           </div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />
+          <BackgroundMusic />
         </>
       )}
       <Toast />
     </div>
   );
 }
+
