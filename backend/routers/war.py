@@ -3,12 +3,12 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, campaigns, map_castles, roleplays, game_settings, alliances
+from db import players, campaigns, ambushes, map_castles, roleplays, game_settings, alliances
 from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
-    _dijkstra_path, DEFAULT_SEA_CASTLES, SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING,
+    _dijkstra_path, DEFAULT_SEA_CASTLES, SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING, TRAVEL_GRAPH, is_sea_edge,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 from routers.ravens import send_system_message
@@ -33,6 +33,8 @@ ATTACK_OP_TYPES = {"attack", "siege", "naval_raid"}
 DIRECT_ATTACK_OP_TYPES = {"attack", "naval_raid"}
 DEFENSE_OP_TYPES = {"defense", "garrison"}
 ROLEPLAY_WINDOW_HOURS = 6
+MIN_CAMPAIGN_MEN = 100
+MIN_AMBUSH_MEN = 50
 
 def campaign_waiting_for_result(campaign: dict) -> bool:
     """حملهٔ مستقیم از لحظهٔ رسیدن تا ثبت نتیجه توسط ادمین قفل است. این محاسبه
@@ -83,6 +85,12 @@ class MoveCampaignBody(BaseModel):
     target_castle: str
     op_type: str = "garrison"
     via: list[str] | None = None
+
+class AmbushBody(BaseModel):
+    origin_castle: str
+    target_castle: str
+    troops: dict
+    scenario: str
 
 async def all_castle_terrain() -> dict:
     """نگاشتِ اسمِ هر قلعه/شهرِ بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) به نوع
@@ -310,6 +318,84 @@ async def routes(origin_castle: str, target_castle: str, user: dict = Depends(ge
         raise HTTPException(400, await blocked_route_message(origin_castle, target_castle, blocked))
     return {"routes": opts}
 
+def ambush_edge_key(a: str, b: str) -> str:
+    return "\u0000".join(sorted((a, b)))
+
+@router.get("/ambush/options")
+async def ambush_options(user: dict = Depends(get_user)):
+    """فقط جاده‌های مستقیمِ متصل به قلعه‌های خود بازیکن قابل کمین‌اند."""
+    p = await players.find_one({"tg_id": user["id"]})
+    if not p:
+        raise HTTPException(403, "اول ثبت‌نام کن")
+    terrain = await all_castle_terrain()
+    out = []
+    for origin in owned_castles(p):
+        for target in TRAVEL_GRAPH.get(origin, {}):
+            key = ambush_edge_key(origin, target)
+            occupied = await ambushes.find_one({"edge_key": key, "status": {"$in": ["pending_score", "active"]}}, {"_id": 1})
+            out.append({"origin_castle": origin, "target_castle": target, "sea": is_sea_edge(origin, target, terrain), "occupied": bool(occupied)})
+    return out
+
+@router.get("/ambush/mine")
+async def my_ambushes(user: dict = Depends(get_user)):
+    out = []
+    async for a in ambushes.find({"tg_id": user["id"]}).sort("created_at", -1).limit(30):
+        out.append({
+            "id": str(a["_id"]), "origin_castle": a["origin_castle"], "target_castle": a["target_castle"],
+            "men_committed": a.get("soldiers_committed", a["men_committed"]), "status": a["status"], "coefficient": a.get("coefficient"),
+            "casualties": a.get("casualties"), "victim_name": a.get("victim_name"),
+        })
+    return out
+
+@router.post("/ambush")
+async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
+    p = await players.find_one({"tg_id": user["id"]})
+    if not p:
+        raise HTTPException(403, "اول ثبت‌نام کن")
+    if not (await get_war_window())["open"]:
+        raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است و کمین تازه ساخته نمی‌شود")
+    if body.origin_castle not in owned_castles(p):
+        raise HTTPException(400, "کمین فقط باید از یکی از قلعه‌های خودت ساخته شود")
+    if body.target_castle not in TRAVEL_GRAPH.get(body.origin_castle, {}):
+        raise HTTPException(400, "کمین فقط روی جادهٔ مستقیم بین قلعهٔ تو و قلعهٔ بعدی ساخته می‌شود")
+    scenario = body.scenario.strip()
+    if len(scenario) < 20:
+        raise HTTPException(400, "سناریوی کمین باید حداقل ۲۰ نویسه باشد")
+    edge_key = ambush_edge_key(body.origin_castle, body.target_castle)
+    if await ambushes.find_one({"edge_key": edge_key, "status": {"$in": ["pending_score", "active"]}}):
+        raise HTTPException(409, "در این مسیر از قبل یک کمین وجود دارد")
+    terrain = await all_castle_terrain()
+    is_sea = is_sea_edge(body.origin_castle, body.target_castle, terrain)
+    origin_region = await region_of_castle(body.origin_castle) or p["region"]
+    buildings = _building_levels(p, body.origin_castle)
+    gold, men, food_per_day, weapons = troop_food_and_gold(origin_region, body.troops, buildings, terrain.get(body.origin_castle) in ("coastal", "sea"))
+    naval_capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n > 0)
+    land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n > 0)
+    if land_men < MIN_AMBUSH_MEN:
+        raise HTTPException(400, f"هر کمین باید حداقل {MIN_AMBUSH_MEN} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
+    if is_sea and land_men > naval_capacity:
+        raise HTTPException(400, f"این مسیر دریایی است؛ کشتی‌ها فقط ظرفیت حمل {naval_capacity} نفر را دارند")
+    cost = {"gold": gold, **weapons}
+    if not can_afford(p["resources"], cost) or p["resources"].get("men", 0) < men:
+        raise HTTPException(400, "منابع، نفرات، سکه یا سلاح کافی برای این کمین نداری")
+    pay(p["resources"], cost)
+    p["resources"]["men"] -= men
+    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
+    doc = {
+        "tg_id": user["id"], "player_name": p["name"], "origin_castle": body.origin_castle,
+        "target_castle": body.target_castle, "edge_key": edge_key, "sea": is_sea,
+        "troops": {k: int(v or 0) for k, v in body.troops.items() if int(v or 0) > 0},
+        "men_committed": men, "soldiers_committed": land_men, "gold_cost": gold, "weapons_cost": weapons,
+        "food_per_day": food_per_day, "scenario": scenario[:4000], "status": "pending_score", "created_at": now(),
+    }
+    res = await ambushes.insert_one(doc)
+    await notify_admins(
+        "ambush_pending", "🏹 کمین تازه منتظر ضریب است",
+        f"{p['name']} · مسیر {body.origin_castle} — {body.target_castle}\n{land_men} سرباز\nسناریو: {scenario[:500]}",
+        dedupe_key=f"ambush:{res.inserted_id}", priority="urgent", player_name=p["name"], player_tg_id=user["id"], source_id=str(res.inserted_id),
+    )
+    return {"ok": True, "id": str(res.inserted_id), "status": "pending_score"}
+
 @router.post("/submit")
 async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
@@ -368,8 +454,6 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     origin_buildings = _building_levels(p, body.origin_castle)
     gold, men, food_per_day, weapons = troop_food_and_gold(origin_region, body.troops, origin_buildings, origin_is_port)
     equipment_cost, equipment_power, equipment_slowdown = equipment_cost_and_effect(body.equipment, origin_buildings)
-    if men <= 0:
-        raise HTTPException(400, "هیچ نیرویی گسیل نکرده‌ای")
     if not can_afford(p["resources"], {"gold": gold}):
         raise HTTPException(400, "خزانه کافی نیست")
     if p["resources"].get("men", 0) < men:
@@ -385,6 +469,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     naval_capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
     land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
+    if land_men < MIN_CAMPAIGN_MEN:
+        raise HTTPException(400, f"هر لشکر باید حداقل {MIN_CAMPAIGN_MEN} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
 
     same_castle = target_castle == body.origin_castle
     if not same_castle:
@@ -718,6 +804,74 @@ async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:
             total[tid] = total.get(tid, 0) + n
     return total
 
+def apply_automatic_losses(troops: dict, requested: int) -> tuple[dict, dict, int]:
+    """تلفات را متناسب بین سربازها پخش می‌کند؛ کشتی‌ها هدفِ «نفرات» کمین نیستند."""
+    current = {k: max(0, int(v or 0)) for k, v in troops.items()}
+    soldier_ids = [k for k, v in current.items() if k not in NAVAL_TROOPS and v > 0]
+    available = sum(current[k] for k in soldier_ids)
+    total_loss = min(max(0, int(requested)), available)
+    losses, remaining_loss = {}, total_loss
+    if available:
+        for index, tid in enumerate(soldier_ids):
+            loss = remaining_loss if index == len(soldier_ids) - 1 else min(current[tid], round(total_loss * current[tid] / available))
+            loss = min(current[tid], max(0, loss))
+            current[tid] -= loss
+            losses[tid] = loss
+            remaining_loss -= loss
+    return current, {k: v for k, v in losses.items() if v}, total_loss
+
+async def process_route_ambushes():
+    """وقتی زمان ورود لشکر به یال کمین برسد، کمین یک‌بار مصرف و تلفات خودکار اعمال می‌شود."""
+    moving = campaigns.find({
+        "active": True, "engagement_locked": {"$ne": True}, "arrival_at": {"$gt": now()},
+        "route_path.1": {"$exists": True},
+    }).sort("arrival_at", 1).limit(150)
+    async for army in moving:
+        path = army.get("route_path", [])
+        started = army.get("moved_at") or army.get("created_at")
+        arrival = army.get("arrival_at")
+        if not started or not arrival or len(path) < 2:
+            continue
+        for i in range(len(path) - 1):
+            edge_entry = started + (arrival - started) * (i / (len(path) - 1))
+            if now() < edge_entry:
+                break
+            ambush = await ambushes.find_one({"edge_key": ambush_edge_key(path[i], path[i + 1]), "status": "active"})
+            if not ambush or ambush["tg_id"] == army["tg_id"] or await active_peace_pact(ambush["tg_id"], army["tg_id"]):
+                continue
+            claimed = await ambushes.update_one({"_id": ambush["_id"], "status": "active"}, {"$set": {
+                "status": "triggering", "triggered_at": now(), "victim_tg_id": army["tg_id"], "victim_name": army["player_name"],
+            }})
+            if not claimed.modified_count:
+                continue
+            requested = round(ambush.get("soldiers_committed", ambush["men_committed"]) * float(ambush.get("coefficient", 0)))
+            updated_troops, losses, casualties = apply_automatic_losses(army.get("troops", {}), requested)
+            old_men = max(1, int(army.get("men_committed", 0)))
+            remaining = sum(updated_troops.values())
+            destroyed = sum(v for k, v in updated_troops.items() if k not in NAVAL_TROOPS) <= 0
+            await campaigns.update_one({"_id": army["_id"], "active": True}, {"$set": {
+                "troops": updated_troops, "men_committed": remaining,
+                "power": round(float(army.get("power", 0)) * remaining / old_men, 2),
+                "active": not destroyed, "status": "ambush_destroyed" if destroyed else army.get("status", "active"),
+            }})
+            await ambushes.update_one({"_id": ambush["_id"]}, {"$set": {
+                "status": "triggered", "casualties": casualties, "losses": losses, "campaign_id": str(army["_id"]),
+            }})
+            detail = "، ".join(f"{COMMON_TROOPS.get(tid, {}).get('name', tid)}: {count}" for tid, count in losses.items()) or "بدون تلفات"
+            text = (
+                f"🏹 کمین در مسیر {path[i]} — {path[i + 1]} فعال شد.\n"
+                f"کمین‌گذار: {ambush['player_name']} · هدف: {army['player_name']}\n"
+                f"ضریب: {ambush.get('coefficient', 0):g} · تلفات: {casualties} نفر\nجزئیات: {detail}"
+            )
+            await send_system_message(ambush["tg_id"], ambush["player_name"], text, kind="ambush")
+            await send_system_message(army["tg_id"], army["player_name"], text, kind="ambush")
+            await notify_admins(
+                "ambush_triggered", "🏹 یک کمین فعال شد", text,
+                dedupe_key=f"ambush-triggered:{ambush['_id']}", priority="urgent",
+                player_name=ambush["player_name"], player_tg_id=ambush["tg_id"], source_id=str(ambush["_id"]),
+            )
+            break
+
 async def detect_route_encounters():
     """برخورد دو لشکرِ بی‌پیمان روی یک یالِ مشترک و در جهت مخالف.
     زمان عبور هر قطعه متناسب با تعداد قطعه‌های مسیر محاسبه می‌شود؛ واچر در اولین
@@ -784,6 +938,7 @@ async def notify_arrivals():
     یک‌بار برای هر لشکر، دقیقاً وقتی اولین بار به arrival_at می‌رسد. برای نبردهای واقعی
     (حمله/محاصره/غارت دریایی) آمار نیروهای مهاجم و مدافع هم برای هر دو طرف فرستاده می‌شود
     تا هر دو تا ۶ ساعت بعد سناریوی جنگ را از صفحهٔ رول‌ها بفرستند"""
+    await process_route_ambushes()
     await detect_route_encounters()
     cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}})
     async for c in cur:
