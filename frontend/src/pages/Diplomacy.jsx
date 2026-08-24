@@ -145,13 +145,15 @@ export default function Diplomacy() {
     setRespondBusyId(null);
   };
 
-  const leaveAlliance = async (id) => {
+  const leaveAlliance = async (alliance) => {
     if (respondBusyId) return;
-    setRespondBusyId(id);
+    const penalty = alliance.type === 'non_aggression' ? (alliance.penalty_gold || 0) : 0;
+    if (penalty && !window.confirm(`برای ترک این پیمان باید ${penalty.toLocaleString('fa-IR')} سکه غرامت بدهی. ادامه می‌دهی؟`)) return;
+    setRespondBusyId(alliance.id);
     try {
-      await api.diplomacyLeave(id);
+      await api.diplomacyLeave(alliance.id);
       haptic('medium');
-      toast('از پیمان تجاری خارج شدی');
+      toast(penalty ? `از پیمان خارج شدی و ${penalty.toLocaleString('fa-IR')} سکه غرامت پرداخت شد` : 'از پیمان خارج شدی');
       load();
     } catch (e) { toast(e.message); }
     setRespondBusyId(null);
@@ -326,8 +328,10 @@ export default function Diplomacy() {
                 <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => respond(a.id, false)}>رد</button>
               </div>
             )}
-            {a.type === 'trade' && a.status === 'accepted' && (
-              <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => leaveAlliance(a.id)}>ترک پیمان</button>
+            {(a.type === 'trade' || a.type === 'non_aggression') && a.status === 'accepted' && (
+              <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => leaveAlliance(a)}>
+                {a.type === 'non_aggression' ? `ترک با پرداخت ${(a.penalty_gold || 0).toLocaleString('fa-IR')} سکه` : 'ترک پیمان'}
+              </button>
             )}
           </div>
         ))}
