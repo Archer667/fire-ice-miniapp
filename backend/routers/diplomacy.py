@@ -156,30 +156,46 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
 
 @router.post("/{alliance_id}/leave")
 async def leave(alliance_id: str, user: dict = Depends(get_user)):
-    """پلیر می‌تواند از یک پیمانِ تجاریِ برقرار به میل خودش خارج شود — عدم‌تجاوز و
-    اتحاد کامل این راه ندارند (فقط ادمین می‌تواند منحلشان کند، یا خیانت باعث اخراج می‌شود)"""
+    """تجاری رایگان ترک می‌شود؛ عدم‌تجاوز فقط با پرداخت کامل غرامت به طرف مقابل."""
     a = await alliances.find_one({"_id": ObjectId(alliance_id)})
     if not a:
         raise HTTPException(404, "پیمان پیدا نشد")
     if user["id"] not in (a["from_id"], a["to_id"]):
         raise HTTPException(403, "این پیمان مال تو نیست")
-    if a["type"] != "trade":
-        raise HTTPException(400, "فقط از پیمان تجاری می‌شود خودت خارج شد")
+    if a["type"] not in ("trade", "non_aggression"):
+        raise HTTPException(400, "اتحاد کامل را فقط ادمین می‌تواند منحل کند")
     if a["status"] != "accepted":
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
+
+    penalty = int(a.get("penalty_gold", 0) or 0) if a["type"] == "non_aggression" else 0
+    me = await players.find_one({"tg_id": user["id"]})
+    if not me:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    me = apply_production(me)
+    if penalty and me.get("resources", {}).get("gold", 0) < penalty:
+        raise HTTPException(400, f"برای ترک این پیمان باید {penalty:,} سکه غرامت بدهی؛ طلای کافی نداری")
 
     guard = await alliances.update_one(
         {"_id": a["_id"], "status": "accepted"}, {"$set": {"status": "left", "left_by": user["id"], "ended_at": now()}},
     )
     if guard.matched_count == 0:
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
+    if penalty:
+        me["resources"]["gold"] -= penalty
+        await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
     await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
     await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
     other_id = a["to_id"] if a["from_id"] == user["id"] else a["from_id"]
     other_name = a["to_name"] if other_id == a["to_id"] else a["from_name"]
-    me = await players.find_one({"tg_id": user["id"]})
-    await send_system_message(other_id, other_name, f"لرد {me['name'] if me else ''} از پیمان تجاری‌تان خارج شد.")
-    return {"ok": True}
+    if penalty:
+        other = await players.find_one({"tg_id": other_id})
+        if other:
+            add_resources(other, {"gold": penalty})
+            await players.update_one({"tg_id": other_id}, {"$set": {"resources": other["resources"]}})
+    type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", "پیمان")
+    penalty_note = f" و {penalty:,} سکه غرامت به تو پرداخت کرد" if penalty else ""
+    await send_system_message(other_id, other_name, f"لرد {me['name']} از {type_name} خارج شد{penalty_note}.")
+    return {"ok": True, "penalty_paid": penalty}
 
 @router.post("/feast")
 async def feast(user: dict = Depends(get_user)):
