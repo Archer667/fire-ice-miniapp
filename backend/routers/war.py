@@ -642,6 +642,20 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         source_id=engagement_id, deadline=now() + timedelta(hours=ROLEPLAY_WINDOW_HOURS),
         action="در پنل ادمین ← نبردها، نیروها و رول‌های دو طرف را بررسی کن.",
     )
+    # اعلان عمومی شروع نبرد: فقط هویت طرفین و محل؛ ترکیب/تعداد نیروها محرمانه و فقط
+    # برای خود طرفین و ادمین‌هاست. فلگ اتمیک جلوی ارسال دوبارهٔ همان اعلان را می‌گیرد.
+    try:
+        root_id = ObjectId(engagement_id)
+    except Exception:
+        root_id = None
+    claimed = await campaigns.update_one(
+        {"_id": root_id, "public_start_notified": {"$ne": True}},
+        {"$set": {"public_start_notified": True}},
+    ) if root_id else None
+    if claimed and claimed.modified_count:
+        public_text = f"⚔️ نبردی میان لرد {attacker_name} و لرد {defender_name} در {location} آغاز شد."
+        async for player in players.find({}, {"tg_id": 1, "name": 1}):
+            await send_system_message(player["tg_id"], player["name"], public_text, kind="battle")
 
 async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:
     """مجموع نیروهای «دفاعی»/«جای‌گیری»ِ فعالِ صاحب قلعه که مستقر همان‌جاست"""
