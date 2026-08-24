@@ -2,7 +2,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
-from db import players, campaigns, alliances
+from db import players, campaigns, alliances, game_settings
 from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
 from medals import medal_rows, normalize_stats, sync_medals
 from admin_notifications import notify_admins
@@ -12,6 +12,22 @@ from ranks import scored_players
 from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
 
 router = APIRouter(prefix="/api/players", tags=["players"])
+
+MUSIC_SETTINGS_ID = "background_music"
+
+@router.get("/music")
+async def background_music(user: dict = Depends(get_user)):
+    """تنظیم عمومی موسیقی؛ پخش واقعی با رضایت مرورگر/بازیکن در فرانت انجام می‌شود."""
+    doc = await game_settings.find_one({"_id": MUSIC_SETTINGS_ID}) or {}
+    return {
+        "enabled": bool(doc.get("enabled", False)),
+        "title": doc.get("title", "موسیقی والریا"),
+        "audio_url": doc.get("audio_url", ""),
+        "volume": max(0, min(100, int(doc.get("volume", 35)))),
+        "loop": bool(doc.get("loop", True)),
+        "autoplay": bool(doc.get("autoplay", True)),
+        "updated_at": doc["updated_at"].isoformat() if doc.get("updated_at") else None,
+    }
 
 MAX_REQUESTED_CASTLES = 5
 
@@ -209,3 +225,4 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
         {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"],
                   "stats": normalize_stats(p), "medals": sync_medals(p)}})
     return {"ok": True, "tax_rate": body.rate}
+
