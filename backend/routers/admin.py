@@ -359,17 +359,21 @@ async def admin_list_ambushes(user: dict = Depends(admin_user)):
             ],
             "men_committed": a.get("soldiers_committed", a["men_committed"]), "status": a["status"],
             "coefficient": a.get("coefficient"), "casualties": a.get("casualties"),
-            "victim_name": a.get("victim_name"),
+            "ambush_score": a.get("ambush_score"), "ambusher_losses": a.get("ambusher_losses"),
+            "refund": a.get("refund"), "victim_name": a.get("victim_name"),
         })
     return out
 
 class AmbushScoreBody(BaseModel):
     coefficient: float
+    ambush_score: int
 
 @router.post("/ambushes/{ambush_id}/score")
 async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict = Depends(admin_user)):
     if body.coefficient < 0 or body.coefficient > 10:
         raise HTTPException(400, "ضریب کمین باید بین صفر تا ۱۰ باشد")
+    if body.ambush_score < 0 or body.ambush_score > 100:
+        raise HTTPException(400, "امتیاز کمین باید بین صفر تا ۱۰۰ باشد")
     try:
         oid = ObjectId(ambush_id)
     except Exception:
@@ -378,11 +382,12 @@ async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict =
     if not a:
         raise HTTPException(404, "کمین منتظر امتیاز پیدا نشد")
     await ambushes.update_one({"_id": oid, "status": "pending_score"}, {"$set": {
-        "coefficient": round(body.coefficient, 2), "status": "active", "scored_at": now(), "scored_by": user["id"],
+        "coefficient": round(body.coefficient, 2), "ambush_score": body.ambush_score,
+        "status": "active", "scored_at": now(), "scored_by": user["id"],
     }})
     owner = await players.find_one({"tg_id": a["tg_id"]}, {"tg_id": 1, "name": 1})
     if owner:
-        await send_system_message(owner["tg_id"], owner["name"], f"کمینت در مسیر {a['origin_castle']} — {a['target_castle']} با ضریب {body.coefficient:g} آماده شد.", kind="ambush")
+        await send_system_message(owner["tg_id"], owner["name"], f"کمینت در مسیر {a['origin_castle']} — {a['target_castle']} با ضریب {body.coefficient:g} و امتیاز {body.ambush_score} آماده شد.", kind="ambush")
     return {"ok": True, "status": "active"}
 
 @router.get("/roleplay/security")
