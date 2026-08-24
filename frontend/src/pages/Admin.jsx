@@ -111,6 +111,7 @@ export default function Admin() {
   const [campaignLosses, setCampaignLosses] = useState({});
   const [ambushesList, setAmbushesList] = useState(null);
   const [ambushScores, setAmbushScores] = useState({});
+  const [ambushQualityScores, setAmbushQualityScores] = useState({});
   const [ambushBusyId, setAmbushBusyId] = useState(null);
   const [warWindow, setWarWindow] = useState(null);
   const [warWindowBusy, setWarWindowBusy] = useState(false);
@@ -671,9 +672,11 @@ export default function Admin() {
 
   const scoreAmbush = async (id) => {
     const coefficient = Number(ambushScores[id]);
+    const ambushScore = Number(ambushQualityScores[id]);
     if (Number.isNaN(coefficient) || coefficient < 0 || coefficient > 10) { toast('ضریب باید بین صفر تا ۱۰ باشد'); return; }
+    if (Number.isNaN(ambushScore) || ambushScore < 0 || ambushScore > 100) { toast('امتیاز کمین باید بین صفر تا ۱۰۰ باشد'); return; }
     setAmbushBusyId(id);
-    try { await api.adminScoreAmbush(id, coefficient); haptic('medium'); toast('ضریب ثبت شد و کمین فعال شد'); loadAmbushes(); }
+    try { await api.adminScoreAmbush(id, coefficient, ambushScore); haptic('medium'); toast('ضریب و امتیاز ثبت شد و کمین فعال شد'); loadAmbushes(); }
     catch (e) { toast(e.message); }
     setAmbushBusyId(null);
   };
@@ -1471,17 +1474,18 @@ export default function Admin() {
           )}
 
           {warSubTab === 'ambushes' && <div className="up u2">
-            <div className="page-sub" style={{ marginBottom: 12 }}>سناریو و نفرات کمین را بررسی کن و ضریب صفر تا ۱۰ بده. تلفات برابر تعداد سربازان کمین ضرب‌در ضریب است و هنگام عبور خودکار اعمال می‌شود.</div>
+            <div className="page-sub" style={{ marginBottom: 12 }}>ضریب ۰ تا ۱۰، تلفات دشمن را مشخص می‌کند. امتیاز کمین ۰ تا ۱۰۰ کیفیت عقب‌نشینی است: مثلاً امتیاز ۸۰ یعنی ۲۰٪ نیروهای کمین‌گذار از بین می‌روند و ۸۰٪ با هزینه‌هایشان برمی‌گردند.</div>
             {ambushesList === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
             {ambushesList && ambushesList.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی ثبت نشده</div>}
             {(ambushesList || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 10 }}>
               <div className="res"><div className="ic"><Eye s={16} /></div><div className="n">{a.player}<small>{castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)} · {a.men_committed.toLocaleString('fa-IR')} نفر</small></div></div>
               <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>
               <div style={{ fontSize: 11.5, marginBottom: 8 }}>نیروها: {a.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ')}</div>
-              {a.status === 'pending_score' ? <div className="buy-row">
-                <input type="number" min="0" max="10" step="0.1" placeholder="ضریب ۰ تا ۱۰" value={ambushScores[a.id] ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} />
+              {a.status === 'pending_score' ? <div className="grid2">
+                <div><label className="f" style={{ marginTop: 0 }}>ضریب تلفات دشمن</label><input type="number" min="0" max="10" step="0.1" placeholder="۰ تا ۱۰" value={ambushScores[a.id] ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
+                <div><label className="f" style={{ marginTop: 0 }}>امتیاز کیفیت کمین</label><input type="number" min="0" max="100" placeholder="۰ تا ۱۰۰" value={ambushQualityScores[a.id] ?? ''} onChange={e => setAmbushQualityScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
                 <button className="btn" disabled={ambushBusyId === a.id} onClick={() => scoreAmbush(a.id)}>ثبت و فعال‌سازی</button>
-              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name}` : ''}</span></div>}
+              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')} · امتیاز {Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name}` : ''}{a.ambusher_losses != null ? ` · ${a.ambusher_losses.toLocaleString('fa-IR')} تلفات کمین‌گذار` : ''}</span></div>}
             </div>)}
           </div>}
 
