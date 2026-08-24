@@ -1,11 +1,9 @@
-from datetime import timedelta
 from fastapi import APIRouter, Depends
 from auth import get_user
 from db import campaigns, map_castles, alliances
 from game import now
 from game_data import REGIONS, CASTLE_HOUSES
 from game import owned_castles
-from config import CAMPAIGN_REVEAL_MINUTES
 from ranks import scored_players, get_hierarchy_doc
 from routers.war import all_castle_terrain
 
@@ -90,9 +88,8 @@ async def get_map(user: dict = Depends(get_user)):
             "coords": coords_by_region.get(rid, {}),
         })
 
-    # لشکرکشی‌های فعال و آشکارشده: ۳۰ دقیقه بعد از فرمان، زیر نقشه برای همه دیده می‌شوند
-    # (فرمان خودت را همیشه می‌بینی)
-    reveal_before = now() - timedelta(minutes=CAMPAIGN_REVEAL_MINUTES)
+    # همهٔ لشکرهای در حال حرکت فوراً روی نقشه دیده می‌شوند؛ جداسازی مارکرهای هم‌مکان
+    # در فرانت انجام می‌شود تا چند ارتش روی یک مسیر همدیگر را نپوشانند.
     camps = []
     # فقط ارتش‌های واقعاً در راه؛ قبلاً لشکرهای دفاعی/مستقرِ رسیده هم سقف ۵۰تایی
     # این Query را پر می‌کردند و ممکن بود یک حرکت واقعی اصلاً به فرانت نرسد.
@@ -100,7 +97,7 @@ async def get_map(user: dict = Depends(get_user)):
     async for s in cur:
         mine = s["tg_id"] == user["id"]
         departed_at = s.get("moved_at") or s.get("created_at")
-        if mine or departed_at <= reveal_before:
+        if departed_at:
             arrival_at = s.get("arrival_at")
             owner_row = by_tgid.get(s["tg_id"])
             owner = owner_row["player"] if owner_row else None
@@ -115,7 +112,7 @@ async def get_map(user: dict = Depends(get_user)):
                 "route_path": s.get("route_path") or [s["origin_castle"], s["target_castle"]],
                 "departed_at": departed_at.isoformat() if departed_at else None,
                 "arrival_at": arrival_at.isoformat() if arrival_at else None,
-                "revealed_minutes_ago": int((now() - departed_at).total_seconds() // 60) - (0 if mine else CAMPAIGN_REVEAL_MINUTES),
+                "revealed_minutes_ago": int((now() - departed_at).total_seconds() // 60),
                 "travel_minutes": s.get("travel_minutes", 0),
                 "arrived": (now() >= arrival_at) if arrival_at else True,
             })
