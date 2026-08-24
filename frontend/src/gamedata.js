@@ -844,6 +844,7 @@ export const ROLEPLAY_CATEGORIES = {
   economy:   'اقتصاد',
   rebellion: 'شورش',
   security:  'دفاعی (امنیتی)',
+  sabotage:  'خرابکاری',
   other:     'آزاد',
 };
 
@@ -918,3 +919,4 @@ export function taxYieldMultiplier(popularity) {
 export const TRADE_GOODS = ['wood', 'stone', 'iron', 'food', 'wine'];
 export const CARAVAN_GOODS = ['gold', ...TRADE_GOODS];
 export const TRADE_GOOD_NAMES = { gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
+
