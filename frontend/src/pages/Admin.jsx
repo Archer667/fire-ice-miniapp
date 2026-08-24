@@ -68,6 +68,7 @@ const TAB_GROUPS = [
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
       { key: 'balance', label: 'تعادل بازی', description: 'تغییر تولید و سقف ساختمان‌ها', fullOnly: true },
+      { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
     ],
   },
 ];
@@ -118,6 +119,8 @@ export default function Admin() {
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventBusy, setEventBusy] = useState(false);
+  const [musicSettings, setMusicSettings] = useState(null);
+  const [musicBusy, setMusicBusy] = useState(false);
   const [botMessage, setBotMessage] = useState('');
   const [botAudience, setBotAudience] = useState('all');
   const [botTargets, setBotTargets] = useState([]);
@@ -335,7 +338,7 @@ export default function Admin() {
     loadRebellions();
     loadRebellionSettings();
     loadMapData();
-    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); }
+    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message)); }
     if (me.is_owner) loadResetPreview();
   }, []);
 
@@ -668,6 +671,28 @@ export default function Admin() {
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
+  };
+
+  const chooseMusicFile = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('audio/')) { toast('فقط فایل صوتی انتخاب کن'); return; }
+    if (file.size > 7 * 1024 * 1024) { toast('حجم موسیقی باید حداکثر ۷ مگابایت باشد'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setMusicSettings(p => ({ ...(p || {}), audio_url: String(reader.result || ''), title: p?.title || file.name.replace(/\.[^.]+$/, '') }));
+    reader.onerror = () => toast('خواندن فایل موسیقی ناموفق بود');
+    reader.readAsDataURL(file);
+  };
+
+  const saveMusic = async () => {
+    if (!musicSettings) return;
+    setMusicBusy(true);
+    try {
+      const saved = await api.adminSaveMusicSettings({
+        ...musicSettings, volume: Math.max(0, Math.min(100, Number(musicSettings.volume) || 0)),
+      });
+      setMusicSettings(saved); haptic('medium'); toast('تنظیمات موسیقی بازی ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setMusicBusy(false);
   };
 
   const scoreAmbush = async (id) => {
@@ -2592,6 +2617,37 @@ export default function Admin() {
               {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
             </button>
           </div>
+        </>
+      )}
+
+      {tab === 'music' && isFull && (
+        <>
+          <div className="sect up u2">موسیقی پس‌زمینهٔ بازی</div>
+          <div className="page-sub up u2" style={{ marginTop: -10, lineHeight: 1.9 }}>
+            فایل برای همهٔ بازیکن‌ها پخش می‌شود. مرورگر ممکن است بار اول تا لمس دکمهٔ نت اجازهٔ پخش خودکار ندهد؛ هر بازیکن هم می‌تواند موسیقی را برای خودش قطع کند.
+          </div>
+          {!musicSettings ? <div className="loading">در حال بارگذاری تنظیمات موسیقی...</div> : <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>فایل موسیقی</label>
+            <input type="file" accept="audio/*" onChange={e => chooseMusicFile(e.target.files?.[0])} />
+            <div className="page-sub" style={{ marginTop: 7 }}>MP3، OGG یا M4A تا حداکثر ۷ مگابایت. فایل داخل دیتابیس بازی نگه‌داری می‌شود.</div>
+            <label className="f">یا لینک مستقیم موسیقی</label>
+            <input dir="ltr" value={musicSettings.audio_url?.startsWith('data:') ? '' : (musicSettings.audio_url || '')}
+                   onChange={e => setMusicSettings(p => ({ ...p, audio_url: e.target.value }))} placeholder="https://.../music.mp3" />
+            {musicSettings.audio_url && <audio controls loop={musicSettings.loop} src={musicSettings.audio_url} style={{ width: '100%', marginTop: 12 }} />}
+            <label className="f">نام قطعه</label>
+            <input value={musicSettings.title || ''} maxLength={80} onChange={e => setMusicSettings(p => ({ ...p, title: e.target.value }))} placeholder="مثلاً: نغمهٔ والریا" />
+            <label className="f">حجم پیش‌فرض — {Number(musicSettings.volume || 0).toLocaleString('fa-IR')}٪</label>
+            <input type="range" min="0" max="100" value={musicSettings.volume ?? 35} onChange={e => setMusicSettings(p => ({ ...p, volume: Number(e.target.value) }))} />
+            <div className="grid2" style={{ marginTop: 12 }}>
+              <label className="check"><input type="checkbox" checked={!!musicSettings.enabled} onChange={e => setMusicSettings(p => ({ ...p, enabled: e.target.checked }))} /> فعال برای بازیکن‌ها</label>
+              <label className="check"><input type="checkbox" checked={!!musicSettings.loop} onChange={e => setMusicSettings(p => ({ ...p, loop: e.target.checked }))} /> تکرار پیوسته</label>
+              <label className="check"><input type="checkbox" checked={!!musicSettings.autoplay} onChange={e => setMusicSettings(p => ({ ...p, autoplay: e.target.checked }))} /> تلاش برای پخش خودکار</label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn" disabled={musicBusy} onClick={saveMusic}>{musicBusy ? 'در حال ذخیره...' : 'ذخیره و اعمال برای همه'}</button>
+              <button className="btn ghost" disabled={musicBusy} onClick={() => setMusicSettings(p => ({ ...p, enabled: false, audio_url: '' }))}>پاک‌کردن فایل؛ سپس ذخیره</button>
+            </div>
+          </div>}
         </>
       )}
 
