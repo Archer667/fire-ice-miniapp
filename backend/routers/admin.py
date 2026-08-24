@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin, get_full_admin, get_owner
 from db import (
-    campaigns, players, admin_roles, map_castles, market_listings, black_market_listings,
+    campaigns, ambushes, players, admin_roles, map_castles, market_listings, black_market_listings,
     spy_missions, roleplays, items, item_grants, alliances, game_settings,
     caravans, messages, rumors, hierarchy, polls, rebellions, rebellion_checks, admin_notifications,
 )
@@ -345,6 +345,45 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
                         })
         out.append(row)
     return out
+
+@router.get("/ambushes")
+async def admin_list_ambushes(user: dict = Depends(admin_user)):
+    out = []
+    async for a in ambushes.find({}).sort("created_at", -1).limit(100):
+        out.append({
+            "id": str(a["_id"]), "player": a["player_name"], "tg_id": a["tg_id"],
+            "origin_castle": a["origin_castle"], "target_castle": a["target_castle"],
+            "scenario": a["scenario"], "troops": [
+                {"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": count}
+                for tid, count in a.get("troops", {}).items() if count
+            ],
+            "men_committed": a.get("soldiers_committed", a["men_committed"]), "status": a["status"],
+            "coefficient": a.get("coefficient"), "casualties": a.get("casualties"),
+            "victim_name": a.get("victim_name"),
+        })
+    return out
+
+class AmbushScoreBody(BaseModel):
+    coefficient: float
+
+@router.post("/ambushes/{ambush_id}/score")
+async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict = Depends(admin_user)):
+    if body.coefficient < 0 or body.coefficient > 10:
+        raise HTTPException(400, "ضریب کمین باید بین صفر تا ۱۰ باشد")
+    try:
+        oid = ObjectId(ambush_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ کمین نامعتبر است")
+    a = await ambushes.find_one({"_id": oid, "status": "pending_score"})
+    if not a:
+        raise HTTPException(404, "کمین منتظر امتیاز پیدا نشد")
+    await ambushes.update_one({"_id": oid, "status": "pending_score"}, {"$set": {
+        "coefficient": round(body.coefficient, 2), "status": "active", "scored_at": now(), "scored_by": user["id"],
+    }})
+    owner = await players.find_one({"tg_id": a["tg_id"]}, {"tg_id": 1, "name": 1})
+    if owner:
+        await send_system_message(owner["tg_id"], owner["name"], f"کمینت در مسیر {a['origin_castle']} — {a['target_castle']} با ضریب {body.coefficient:g} آماده شد.", kind="ambush")
+    return {"ok": True, "status": "active"}
 
 @router.get("/roleplay/security")
 async def search_security_roleplays(q: str = "", tg_id: int | None = None, user: dict = Depends(admin_user)):
@@ -1576,7 +1615,7 @@ class ResetGameBody(BaseModel):
 async def _clear_season_history():
     """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
     for collection in (
-        campaigns, spy_missions, messages, roleplays, rebellions, rebellion_checks,
+        campaigns, ambushes, spy_missions, messages, roleplays, rebellions, rebellion_checks,
         rumors, alliances, polls, caravans, hierarchy, item_grants, admin_notifications,
     ):
         await collection.delete_many({})
