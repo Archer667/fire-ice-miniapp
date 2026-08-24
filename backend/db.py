@@ -17,6 +17,7 @@ admin_notifications = db.admin_notifications
 caravans   = db.caravans
 market_listings = db.market_listings
 black_market_listings = db.black_market_listings
+player_market_listings = db.player_market_listings
 roleplays = db.roleplays
 rebellions = db.rebellions
 rebellion_checks = db.rebellion_checks
@@ -25,3 +26,4 @@ item_grants = db.item_grants
 rumors     = db.rumors
 game_settings = db.game_settings
 tributes   = db.tributes
+
