@@ -16,7 +16,7 @@ from game import now, add_resources, building_levels_for, effective_caps, resolv
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows, normalize_stats
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power, SIEGE_EQUIPMENT
 from config import ADMIN_IDS, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
-from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle
+from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle, battle_army_snapshot
 from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
 from admin_notifications import notify_admins
@@ -470,10 +470,15 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             rolls.append({"id": str(rp["_id"]), "tg_id": rp["tg_id"], "player": rp["player_name"], "text": rp["text"]})
         army_row = lambda a: {
             "campaign_id": a.get("campaign_id") or str(a.get("_id", "")), "name": a.get("name", "لشکر"),
+            "tg_id": a.get("tg_id"), "player_name": a.get("player_name", "مهاجم"),
             "men": a.get("men_committed", sum(a.get("troops", {}).values())),
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
             "equipment": [{"id": eid, "name": SIEGE_EQUIPMENT.get(eid, {}).get("name", eid), "count": n} for eid, n in a.get("equipment", {}).items() if n and n > 0],
         }
+        attacker_snapshots = list(root.get("battle_attacker_snapshots") or [])
+        root_snapshot = root.get("battle_attacker_snapshot") or battle_army_snapshot(root)
+        if not any(a.get("campaign_id") == str(root["_id"]) for a in attacker_snapshots):
+            attacker_snapshots.insert(0, root_snapshot)
         battle_row = {
             "campaign_id": engagement_id, "name": root.get("name", "نبرد"),
             "location": root.get("battle_location") or root["target_castle"],
@@ -481,8 +486,11 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "defender_tg_id": defender["tg_id"] if defender else None,
             "defender_name": defender["name"] if defender else root.get("battle_defender_name", "بدون مدافع"),
             "attacker_army": army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [army_row(a) for a in defender_armies],
+            "attacker_armies": [army_row(a) for a in attacker_snapshots],
+            "attacker_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_attacker_joins", [])],
             "defense_infrastructure": root.get("battle_defense_infrastructure", []),
-            "rolls": rolls, "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
+            "rolls": rolls, "started_at": root.get("battle_started_at", root.get("arrival_at")).isoformat() if (root.get("battle_started_at") or root.get("arrival_at")) else None,
+            "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
         }
         out.append(battle_row)
         # repair اعلان: اگر پرونده در نسخهٔ قدیمی ساخته شده و اعلان لحظه‌ای‌اش جا افتاده،
@@ -506,6 +514,8 @@ class RoleplayResultBody(BaseModel):
     defender_losses: dict[str, int] = {}
     attacker_equipment_losses: dict[str, int] = {}
     defender_equipment_losses: dict[str, int] = {}
+    attacker_army_losses: dict[str, dict[str, int]] = {}
+    attacker_army_equipment_losses: dict[str, dict[str, int]] = {}
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
 
@@ -671,11 +681,11 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     opponent_campaign = None
 
     if r["category"] == "war" and r.get("campaign_id"):
-        sibling = await roleplays.find_one({
+        siblings = await roleplays.find({
             "category": "war", "campaign_id": r["campaign_id"],
             "tg_id": {"$ne": r["tg_id"]}, "resolved": False,
-        })
-        if sibling:
+        }).to_list(None)
+        for sibling in siblings:
             ids_to_resolve.append(sibling["_id"])
             recipient_tg_ids.add(sibling["tg_id"])
         campaign = await _battle_root(r["campaign_id"])
@@ -689,7 +699,17 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             defender = await players.find_one({"tg_id": opponent_campaign["tg_id"]}) if opponent_campaign else await owner_of_castle(campaign["target_castle"])
             if defender:
                 recipient_tg_ids.add(defender["tg_id"])
-            valid_winners = {campaign["tg_id"]}
+            attacker_ids = campaign.get("battle_attacker_army_ids") or [str(campaign["_id"])]
+            attacker_campaigns = []
+            for army_id in attacker_ids:
+                try:
+                    army = await campaigns.find_one({"_id": ObjectId(army_id)})
+                except Exception:
+                    army = None
+                if army:
+                    attacker_campaigns.append(army)
+                    recipient_tg_ids.add(army["tg_id"])
+            valid_winners = {a["tg_id"] for a in attacker_campaigns} or {campaign["tg_id"]}
             if defender:
                 valid_winners.add(defender["tg_id"])
             if body.winner_tg_id not in valid_winners:
@@ -698,8 +718,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
             # تلفات دقیق همزمان با نتیجه ثبت می‌شود. برای مدافع، جمع هر نوع نیرو
             # میان همهٔ لشکرهای دفاعی حاضر در همان قلعه تقسیم می‌شود.
-            await _apply_campaign_losses(campaign, body.attacker_losses)
-            await _apply_equipment_losses(campaign, body.attacker_equipment_losses)
+            for attacker_army in attacker_campaigns or [campaign]:
+                aid = str(attacker_army["_id"])
+                await _apply_campaign_losses(attacker_army, body.attacker_army_losses.get(aid, body.attacker_losses if aid == str(campaign["_id"]) else {}))
+                await _apply_equipment_losses(attacker_army, body.attacker_army_equipment_losses.get(aid, body.attacker_equipment_losses if aid == str(campaign["_id"]) else {}))
             if opponent_campaign:
                 await _apply_campaign_losses(opponent_campaign, body.defender_losses)
                 await _apply_equipment_losses(opponent_campaign, body.defender_equipment_losses)
@@ -894,12 +916,19 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
         raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
 
     was_assigned = bool(target.get("region") and target.get("castle"))
+    old_castle = target.get("castle")
+    extra_castles = dict(target.get("castle_buildings", {}))
+    # انتقال خاندان یعنی قلعهٔ قبلی واقعاً آزاد می‌شود. ساختمان‌های قلعهٔ مقصد فقط
+    # وقتی حفظ می‌شوند که مقصد از قبل یکی از قلعه‌های اضافهٔ خود بازیکن بوده باشد.
+    new_home_buildings = extra_castles.pop(body.castle, {})
+    if old_castle:
+        extra_castles.pop(old_castle, None)
     house = CASTLE_HOUSES.get(body.castle)
     terrain = await all_castle_terrain()
     is_port = terrain.get(body.castle, "land") in ("coastal", "sea")
     await players.update_one({"tg_id": tg_id}, {"$set": {
         "region": body.region, "castle": body.castle, "is_port": is_port,
-        "house": house,
+        "house": house, "buildings": new_home_buildings, "castle_buildings": extra_castles,
     }})
     house_note = f" نامِ خاندانت «خاندان {house}» شد." if house else ""
     msg = (
