@@ -690,7 +690,7 @@ export default function Admin() {
     setRoleplayBusyId(id);
     try {
       const losses = roleplayLosses[id] || {};
-      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winner, losses.attacker || {}, losses.defender || {});
+      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winner, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {});
       toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
       loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
@@ -971,7 +971,7 @@ export default function Admin() {
     if (!playerBuildingTarget.length || !playerBuildingCastle) return;
     const key = `${playerBuildingCastle}::${row.id}`;
     const level = parseInt(playerBuildingDrafts[key], 10);
-    const maxLevel = playerBuildingData?.max_level || 30;
+    const maxLevel = row.max_level || playerBuildingData?.max_level || 30;
     if (isNaN(level) || level < 0 || level > maxLevel) {
       toast(`سطح باید بین صفر تا ${maxLevel.toLocaleString('fa-IR')} باشد`); return;
     }
@@ -1438,14 +1438,17 @@ export default function Admin() {
             {battles && battles.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>نبرد بازی نداریم</div>}
             {battles && battles.map(b => {
               const defenders = Object.values((b.defender_armies || []).flatMap(a => a.troops || []).reduce((m, t) => { m[t.id] = m[t.id] ? { ...m[t.id], count: m[t.id].count + t.count } : { ...t }; return m; }, {}));
+              const defenderEquipment = Object.values((b.defender_armies || []).flatMap(a => a.equipment || []).reduce((m, e) => { m[e.id] = m[e.id] ? { ...m[e.id], count: m[e.id].count + e.count } : { ...e }; return m; }, {}));
               return <div className="card" key={b.campaign_id} style={{ marginBottom: 12 }}>
                 <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.attacker_name} در برابر {b.defender_name} · {castleLabel(b.location)}</small></div></div>
                 <div className="notice-guide" style={{ marginTop: 10 }}><strong>رول‌های جنگ</strong><span>{b.rolls.length ? b.rolls.map(r => `${r.player}: ${r.text}`).join('\n') : 'هیچ‌کدام از طرفین هنوز رول نفرستاده‌اند؛ داوری همچنان باز است.'}</span></div>
                 <div className="sect" style={{ margin: '14px 0 7px' }}>نیروها و تلفات</div>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--danger)' }}>{b.attacker_name} · {b.attacker_army.men.toLocaleString('fa-IR')} نفر</div>
                 {b.attacker_army.troops.map(t => <div className="troop" key={`ba-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attacker?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attacker: { ...(p[b.campaign_id]?.attacker || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} /></div>)}
+                {(b.attacker_army.equipment || []).map(e => <div className="troop" key={`bae-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات حاضر</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.attackerEquipment?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackerEquipment: { ...(p[b.campaign_id]?.attackerEquipment || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } }))} /></div>)}
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--az2)', marginTop: 10 }}>{b.defender_name} · {defenders.reduce((s,t) => s+t.count, 0).toLocaleString('fa-IR')} نفر</div>
                 {defenders.map(t => <div className="troop" key={`bd-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defender?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defender: { ...(p[b.campaign_id]?.defender || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} /></div>)}
+                {defenderEquipment.map(e => <div className="troop" key={`bde-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات حاضر</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipment?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipment: { ...(p[b.campaign_id]?.defenderEquipment || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } }))} /></div>)}
                 <label className="f">برنده</label><div className="grid2">{[[b.attacker_tg_id,b.attacker_name],[b.defender_tg_id,b.defender_name]].filter(x => x[0]).map(([id,name]) => <button type="button" key={id} className={`rbtn pick ${roleplayWinners[b.campaign_id] === id ? 'sel' : ''}`} onClick={() => setRoleplayWinners(p => ({...p,[b.campaign_id]:id}))}><div className="n">{name}</div></button>)}</div>
                 <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
                 <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام طرفین، برنده، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
@@ -2138,8 +2141,8 @@ export default function Admin() {
                     </div>
                     <div className="grid2" style={{ marginTop: 10, alignItems: 'end' }}>
                       <div>
-                        <label className="f" style={{ marginTop: 0 }}>سطح جدید (۰ تا {playerBuildingData.max_level})</label>
-                        <input type="number" min="0" max={playerBuildingData.max_level}
+                        <label className="f" style={{ marginTop: 0 }}>سطح جدید (۰ تا {row.max_level || playerBuildingData.max_level})</label>
+                        <input type="number" min="0" max={row.max_level || playerBuildingData.max_level}
                                value={playerBuildingDrafts[key] ?? String(row.level)}
                                onChange={e => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: e.target.value }))} />
                       </div>
@@ -2153,7 +2156,7 @@ export default function Admin() {
                       <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
                               onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '1' }))}>ساخت سطح ۱</button>
                       <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
-                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: String(playerBuildingData.max_level) }))}>حداکثر</button>
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: String(row.max_level || playerBuildingData.max_level) }))}>حداکثر</button>
                     </div>
                   </div>
                 );
