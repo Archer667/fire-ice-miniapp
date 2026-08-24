@@ -697,6 +697,17 @@ export default function Admin() {
     setRoleplayBusyId(null);
   };
 
+  const dismissBattle = async (battle) => {
+    if (!window.confirm(`نبرد «${battle.name}» منحل شود؟ نتیجه و برنده‌ای ثبت نمی‌شود و لشکرها آزاد می‌شوند.`)) return;
+    setRoleplayBusyId(battle.campaign_id);
+    try {
+      await api.adminDismissBattle(battle.campaign_id);
+      haptic('medium'); toast('نبرد منحل و لشکرهای درگیر آزاد شدند');
+      loadBattles(); loadRoleplayPending(); loadCampaigns();
+    } catch (e) { toast(e.message); }
+    setRoleplayBusyId(null);
+  };
+
   const setOverlord = async () => {
     if (!overlordTarget.length) { toast('یک لرد را انتخاب کن'); return; }
     try {
@@ -1439,6 +1450,7 @@ export default function Admin() {
                 <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
                 <div className="grid2" style={{ marginTop: 9 }}><button type="button" className={`rbtn pick ${(roleplayVisibility[b.campaign_id] || 'participants') === 'participants' ? 'sel' : ''}`} onClick={() => setRoleplayVisibility(p => ({...p,[b.campaign_id]:'participants'}))}><div className="n">فقط طرفین</div></button><button type="button" className={`rbtn pick ${roleplayVisibility[b.campaign_id] === 'all' ? 'sel' : ''}`} onClick={() => setRoleplayVisibility(p => ({...p,[b.campaign_id]:'all'}))}><div className="n">اعلام عمومی</div></button></div>
                 <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
+                <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
               </div>;
             })}
           </div>
