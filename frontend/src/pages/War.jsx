@@ -17,6 +17,7 @@ const TABS = [
   { key: 'reports', label: 'گزارش‌ها' },
 ];
 const SEEN_KEY = 'fireice_war_reports_seen';
+const RESOURCE_NAMES_FA = { gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
 const loadSeenIds = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); } };
 
 function utcMillis(value) {
@@ -526,7 +527,7 @@ export default function War() {
                 <div className="troop" key={equipment.id}>
                   <div className="tn">
                     {equipment.name}<span className="troop-tag">سطح {equipment.level.toLocaleString('fa-IR')}</span>
-                    <small>توان محاصره {equipment.siege_power.toLocaleString('fa-IR')} · هزینه هر عدد: {Object.entries(equipment.cost).map(([k,v]) => `${v.toLocaleString('fa-IR')} ${k}`).join('، ')}</small>
+                    <small>توان محاصره {equipment.siege_power.toLocaleString('fa-IR')} · هزینه هر عدد: {Object.entries(equipment.cost).map(([k,v]) => `${v.toLocaleString('fa-IR')} ${RESOURCE_NAMES_FA[k] || k}`).join('، ')}</small>
                     {!unlockedEquipment && <small className="troop-locked">نیاز به کارگاه مهندسی ادوات سطح {equipment.level.toLocaleString('fa-IR')}</small>}
                   </div>
                   <input type="number" min="0" max="100" value={equipmentCounts[equipment.id] || ''} disabled={!unlockedEquipment} placeholder="۰"
