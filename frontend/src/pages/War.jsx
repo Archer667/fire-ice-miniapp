@@ -313,20 +313,10 @@ export default function War() {
     try {
       const res = await api.cancelCampaign(c.id);
       haptic('medium');
-      const weaponUpdates = Object.fromEntries(
-        Object.entries(res.weapons_refunded || {}).map(([wkey, n]) => [wkey, (me.resources[wkey] ?? 0) + n])
-      );
-      setMe({
-        ...me,
-        resources: {
-          ...me.resources,
-          men: men + (res.men_refunded ?? 0),
-          gold: gold + (res.gold_refunded ?? 0),
-          ...weaponUpdates,
-        },
-        active_campaigns: Math.max(0, (me.active_campaigns ?? 0) - 1),
-      });
-      toast('لشکر لغو شد و طلا، نفرات و تسلیحاتش به خانه برگشت');
+      api.me().then(setMe);
+      toast(res.penalty_applied
+        ? 'لشکر لغو شد؛ چون بیشتر از ۵ دقیقه گذشته بود، فقط ۵۰٪ نفرات و هزینه‌ها برگشت'
+        : 'لشکر در مهلت ۵ دقیقه‌ای لغو شد و تمام نفرات و هزینه‌ها برگشت');
       loadMine(); loadMap(); loadLegions();
     } catch (e) { toast(e.message); }
     setCancelBusyId(null);
@@ -659,3 +649,4 @@ export default function War() {
     </>
   );
 }
+
