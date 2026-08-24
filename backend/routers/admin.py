@@ -402,6 +402,9 @@ async def list_open_battles(user: dict = Depends(admin_user)):
                 "tg_id": defender["tg_id"], "active": True,
                 "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": root["target_castle"],
                 "arrival_at": {"$lte": now()},
+                # پرونده‌های قدیمی snapshot ندارند؛ دست‌کم فقط نیروهایی را نشان بده
+                # که واقعاً با شناسهٔ همین نبرد قفل شده‌اند، نه تمام ارتش‌های قلعه.
+                "engagement_campaign_id": engagement_id,
             })]
         rolls = []
         async for rp in roleplays.find({"category": "war", "campaign_id": engagement_id}):
