@@ -72,12 +72,21 @@ function ArmyMarker({ campaign, coords, active, onToggle, zoom }) {
     remaining -= lengths[i];
   }
   const color = REGION_COLORS[campaign.owner_region] || '#d8c39a';
+  // چند لشکر با مسیر/زمان مشابه دقیقاً روی هم می‌افتند. offset کوچک و ثابت بر اساس
+  // شناسه باعث می‌شود همهٔ آیکن‌ها دیده و جداگانه قابل کلیک باشند.
+  const markerId = String(campaign.id || `${campaign.from}-${campaign.to}-${campaign.departed_at}`);
+  let markerHash = 0;
+  for (let i = 0; i < markerId.length; i++) markerHash = ((markerHash * 31) + markerId.charCodeAt(i)) >>> 0;
+  const markerAngle = (markerHash % 360) * Math.PI / 180;
+  const markerRadius = 4 + (markerHash % 3) * 2;
+  const markerDx = Math.cos(markerAngle) * markerRadius;
+  const markerDy = Math.sin(markerAngle) * markerRadius;
   const label = `${campaign.mine ? 'لشکر تو' : `لشکر ${campaign.player_name || 'ناشناس'}`} — ${castleLabel(campaign.from)} به ${castleLabel(campaign.to)}`;
   const minutesLeft = Math.max(1, Math.ceil((end - tick) / 60000));
   return (
     <div className={`army-marker ${campaign.mine ? 'mine' : ''} ${active ? 'active' : ''}`}
          role="button" tabIndex={0}
-         style={{ left: `${xy[0]}%`, top: `${xy[1]}%`, '--army-color': color }} title={label} aria-label={label}
+         style={{ left: `${xy[0]}%`, top: `${xy[1]}%`, '--army-color': color, '--army-dx': `${markerDx}px`, '--army-dy': `${markerDy}px` }} title={label} aria-label={label}
          onClick={(e) => { e.stopPropagation(); haptic(); onToggle(); }}
          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggle(); } }}>
       <span className="army-halo" />
