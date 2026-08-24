@@ -404,6 +404,16 @@ async def search_security_roleplays(q: str = "", tg_id: int | None = None, user:
         })
     return out
 
+async def _battle_root(battle_id: str):
+    """ریشهٔ پروندهٔ جدید را با شناسهٔ مستقل نبرد پیدا می‌کند؛ پرونده‌های قدیمی هم پشتیبانی می‌شوند."""
+    root = await campaigns.find_one({"engagement_campaign_id": battle_id, "battle_is_root": True})
+    if root:
+        return root
+    try:
+        return await campaigns.find_one({"_id": ObjectId(battle_id)})
+    except Exception:
+        return None
+
 @router.get("/battles")
 async def list_open_battles(user: dict = Depends(admin_user)):
     """پرونده‌های نبرد مستقل از رول؛ بنابراین حتی با صفر رول هم قابل داوری‌اند."""
@@ -422,10 +432,7 @@ async def list_open_battles(user: dict = Depends(admin_user)):
         if engagement_id in seen:
             continue
         seen.add(engagement_id)
-        try:
-            root = await campaigns.find_one({"_id": ObjectId(engagement_id)}) or c
-        except Exception:
-            root = c
+        root = await _battle_root(engagement_id) or c
         attacker = await players.find_one({"tg_id": root["tg_id"]})
         defender = None
         defender_armies = []
@@ -499,10 +506,7 @@ class RoleplayResultBody(BaseModel):
 @router.post("/battles/{campaign_id}/dismiss")
 async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
     """انحلال اداری نبرد بدون برنده/تلفات؛ لشکرهای همان پرونده آزاد می‌شوند."""
-    try:
-        root = await campaigns.find_one({"_id": ObjectId(campaign_id)})
-    except Exception:
-        root = None
+    root = await _battle_root(campaign_id)
     if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
         raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
 
@@ -520,7 +524,7 @@ async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
         ]
     }, {
         "$set": {"engagement_locked": False, "battle_open": False, "battle_cancelled_at": now()},
-        "$unset": {"engagement_campaign_id": "", "opponent_campaign_id": "", "opponent_tg_id": ""},
+        "$unset": {"engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "", "opponent_campaign_id": "", "opponent_tg_id": ""},
     })
     await roleplays.update_many({"category": "war", "campaign_id": campaign_id, "resolved": False}, {"$set": {
         "resolved": True, "resolved_at": now(), "result": "این نبرد توسط ادمین منحل شد و نتیجه‌ای نداشت.",
@@ -537,10 +541,7 @@ async def resolve_battle_without_required_roll(campaign_id: str, body: RoleplayR
     existing = await roleplays.find_one({"category": "war", "campaign_id": campaign_id, "resolved": False})
     if existing:
         return await respond_roleplay(str(existing["_id"]), body, user)
-    try:
-        campaign = await campaigns.find_one({"_id": ObjectId(campaign_id)})
-    except Exception:
-        campaign = None
+    campaign = await _battle_root(campaign_id)
     if not campaign or campaign.get("combat_resolved_at"):
         raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
     doc = {
@@ -671,10 +672,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         if sibling:
             ids_to_resolve.append(sibling["_id"])
             recipient_tg_ids.add(sibling["tg_id"])
-        try:
-            campaign = await campaigns.find_one({"_id": ObjectId(r["campaign_id"])})
-        except Exception:
-            campaign = None
+        campaign = await _battle_root(r["campaign_id"])
         if campaign:
             recipient_tg_ids.add(campaign["tg_id"])
             if campaign.get("opponent_campaign_id"):
@@ -701,11 +699,11 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 await _apply_equipment_losses(opponent_campaign, body.defender_equipment_losses)
             elif defender:
                 await _apply_defender_losses(
-                    defender["tg_id"], campaign["target_castle"], str(campaign["_id"]), body.defender_losses,
+                    defender["tg_id"], campaign["target_castle"], r["campaign_id"], body.defender_losses,
                     campaign.get("battle_defender_army_ids"),
                 )
                 await _apply_defender_equipment_losses(
-                    defender["tg_id"], str(campaign["_id"]), body.defender_equipment_losses,
+                    defender["tg_id"], r["campaign_id"], body.defender_equipment_losses,
                     campaign.get("battle_defender_army_ids"),
                 )
 
@@ -719,9 +717,9 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     # قفل نتیجه روی خود لشکرکشی مانع دوباره‌شماری پیروزی با کلیک/درخواست تکراری می‌شود.
     if campaign and combat_outcome:
         outcome_guard = await campaigns.update_one(
-            {"_id": campaign["_id"], "medal_outcome_recorded": {"$ne": True}},
+            {"_id": campaign["_id"], "medal_outcome_battle_id": {"$ne": r.get("campaign_id")}},
             {"$set": {
-                "medal_outcome_recorded": True, "combat_outcome": combat_outcome,
+                "medal_outcome_recorded": True, "medal_outcome_battle_id": r.get("campaign_id"), "combat_outcome": combat_outcome,
                 "winner_tg_id": body.winner_tg_id, "combat_resolved_at": now(), "battle_open": False,
             }},
         )
@@ -745,8 +743,11 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
         # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
         await campaigns.update_many(
-            {"engagement_campaign_id": str(campaign["_id"])},
-            {"$set": {"engagement_locked": False}, "$unset": {"engagement_campaign_id": ""}},
+            {"engagement_campaign_id": r.get("campaign_id")},
+            {"$set": {"engagement_locked": False, "battle_open": False}, "$unset": {
+                "engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "",
+                "opponent_campaign_id": "", "opponent_tg_id": "",
+            }},
         )
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
