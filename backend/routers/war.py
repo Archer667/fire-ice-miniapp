@@ -692,6 +692,7 @@ async def detect_route_encounters():
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
                 "opponent_campaign_id": str(opponent["_id"]), "opponent_tg_id": opponent["tg_id"],
                 "battle_location": location, "battle_started_at": now(),
+                "battle_open": True,
                 "battle_attacker_snapshot": battle_army_snapshot(root),
                 "battle_defender_snapshot": [battle_army_snapshot(opponent)],
                 "battle_defender_tg_id": opponent["tg_id"],
@@ -761,6 +762,7 @@ async def notify_arrivals():
             engagement_update = {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
                 "battle_location": target, "battle_started_at": now(),
+                "battle_open": True,
                 "battle_attacker_snapshot": battle_army_snapshot(c),
                 "battle_defender_snapshot": [battle_army_snapshot(a) for a in defender_armies],
                 "battle_defender_army_ids": [str(a["_id"]) for a in defender_armies],
