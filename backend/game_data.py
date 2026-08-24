@@ -91,6 +91,18 @@ NAVAL_TROOPS = {
 }
 NAVAL_CAMP_BUILDING = "port"
 
+SIEGE_WORKSHOP_BUILDING = "siege_workshop"
+SIEGE_EQUIPMENT = {
+    "ladder":       {"name": "نردبان محاصره", "level": 1, "cost": {"gold": 30, "wood": 30}, "siege_power": 2, "slowdown": 0.005},
+    "mantlet":      {"name": "سپر متحرک", "level": 1, "cost": {"gold": 40, "wood": 40, "iron": 10}, "siege_power": 1, "slowdown": 0.006},
+    "battering_ram": {"name": "دژکوب", "level": 1, "cost": {"gold": 120, "wood": 100, "iron": 30}, "siege_power": 8, "slowdown": 0.02},
+    "catapult":     {"name": "منجنیق", "level": 2, "cost": {"gold": 200, "wood": 140, "stone": 50, "iron": 30}, "siege_power": 14, "slowdown": 0.035},
+    "ballista":     {"name": "بالیستا", "level": 2, "cost": {"gold": 180, "wood": 110, "iron": 50}, "siege_power": 10, "slowdown": 0.025},
+    "fire_barrel":  {"name": "بشکهٔ آتش", "level": 2, "cost": {"gold": 60, "wood": 20, "iron": 10, "wine": 20}, "siege_power": 7, "slowdown": 0.008},
+    "siege_tower":  {"name": "برج متحرک محاصره", "level": 3, "cost": {"gold": 350, "wood": 250, "iron": 80}, "siege_power": 20, "slowdown": 0.05},
+    "trebuchet":    {"name": "تربوشه", "level": 3, "cost": {"gold": 500, "wood": 300, "stone": 120, "iron": 80}, "siege_power": 28, "slowdown": 0.07},
+}
+
 # هر سطح پادگانِ یک یگان، توانِ همان یگان را وقتی از آن پادگان گسیل می‌شود بالا می‌برد —
 # نیروهای ویژه چون پادگان ندارند، همیشه توان پایه‌شان ثابت می‌ماند
 CAMP_POWER_STEP = 0.05
@@ -128,6 +140,7 @@ BUILDINGS = {
     "armory_archer": {"name": "کارگاه تسلیحات کمانداران",    "cost": {"gold": 160, "iron": 50,  "wood": 60}, "hours": 5,  "type": "armory", "unit": "archer",    "produces": {"weapon_archer": 6}},
     "armory_lcav":   {"name": "کارگاه تسلیحات سوارهٔ سبک",   "cost": {"gold": 280, "iron": 100, "wood": 50}, "hours": 8,  "type": "armory", "unit": "light_cav", "produces": {"weapon_lcav": 4}},
     "armory_hcav":   {"name": "کارگاه تسلیحات سوارهٔ سنگین", "cost": {"gold": 400, "iron": 180, "wood": 60}, "hours": 12, "type": "armory", "unit": "heavy_cav", "produces": {"weapon_hcav": 3}},
+    "siege_workshop": {"name": "کارگاه مهندسی ادوات", "cost": {"gold": 900, "stone": 350, "wood": 420, "iron": 180}, "hours": 18, "type": "armory", "max_level": 3},
 
     # --- دفاعی و زیرساخت ---
     "port":        {"name": "بندر",         "cost": {"gold": 600, "stone": 200, "wood": 260}, "hours": 12, "type": "defense", "requires_port": True},
@@ -202,7 +215,7 @@ UNIT_REQUIREMENTS = {}
 for _bid, _b in BUILDINGS.items():
     if _b.get("type") == "barracks":
         UNIT_REQUIREMENTS.setdefault(_b["unit"], {})["camp"] = _bid
-    elif _b.get("type") == "armory":
+    elif _b.get("type") == "armory" and _b.get("unit"):
         UNIT_REQUIREMENTS.setdefault(_b["unit"], {})["armory"] = _bid
 
 def unit_requirements(troop_id: str):
@@ -215,7 +228,7 @@ def unit_requirements(troop_id: str):
 # تسلیحاتی که هر یگان عمومی به‌ازای هر سرباز مصرف می‌کند — از روی id کارگاه تسلیحاتش مشتق می‌شود
 TROOP_WEAPON_KEY = {
     unit: bid.replace("armory_", "weapon_", 1)
-    for bid, b in BUILDINGS.items() if b.get("type") == "armory" for unit in [b["unit"]]
+    for bid, b in BUILDINGS.items() if b.get("type") == "armory" and b.get("unit") for unit in [b["unit"]]
 }
 WEAPON_PER_SOLDIER = 1   # هر سرباز عمومی، ۱ واحد تسلیحاتِ همان یگان مصرف می‌کند
 WEAPON_NAMES = {
