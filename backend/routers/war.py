@@ -814,6 +814,20 @@ async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:
             total[tid] = total.get(tid, 0) + n
     return total
 
+def defensive_infrastructure(player: dict | None, castle_name: str) -> list[dict]:
+    """snapshot زیرساخت دفاعی همان قلعه؛ فقط ساختمان‌های ساخته‌شده و سطح فعلی‌شان."""
+    if not player:
+        return []
+    levels = _building_levels(player, castle_name)
+    return [
+        {"id": bid, "name": meta["name"], "level": int(levels.get(bid, 0) or 0)}
+        for bid, meta in BUILDINGS.items()
+        if meta.get("type") == "defense" and int(levels.get(bid, 0) or 0) > 0
+    ]
+
+def infrastructure_summary(rows: list[dict]) -> str:
+    return "، ".join(f"{row['name']} سطح {row['level']}" for row in rows) if rows else "بدون زیرساخت دفاعی ساخته‌شده"
+
 def apply_automatic_losses(troops: dict, requested: int) -> tuple[dict, dict, int]:
     """تلفات را متناسب بین سربازها پخش می‌کند؛ کشتی‌ها هدفِ «نفرات» کمین نیستند."""
     current = {k: max(0, int(v or 0)) for k, v in troops.items()}
@@ -1030,6 +1044,7 @@ async def notify_arrivals():
                     "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
                     "arrival_at": {"$lte": now()},
                 })]
+            defense_infrastructure = defensive_infrastructure(battle_defender, target) if target_owner else []
             engagement_update = {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
                 "battle_root_campaign_id": str(c["_id"]), "battle_is_root": True,
@@ -1037,6 +1052,7 @@ async def notify_arrivals():
                 "battle_open": True,
                 "battle_attacker_snapshot": battle_army_snapshot(c),
                 "battle_defender_snapshot": [battle_army_snapshot(a) for a in defender_armies],
+                "battle_defense_infrastructure": defense_infrastructure,
                 "battle_defender_army_ids": [str(a["_id"]) for a in defender_armies],
                 "battle_defender_tg_id": battle_defender["tg_id"] if battle_defender else None,
                 "battle_defender_name": battle_defender["name"] if battle_defender else "بدون مدافع",
@@ -1079,7 +1095,8 @@ async def notify_arrivals():
             stats_text = (
                 f"آمار نبرد «{name}» در {target}:\n"
                 f"مهاجم ({c['player_name']}): {attacker_summary} — توان {attacker_power}\n"
-                f"طرف مقابل ({battle_defender['name']}): {defender_summary} — توان {defender_power}\n"
+                f"لشکر دفاعی قلعه ({battle_defender['name']}): {defender_summary} — توان {defender_power}\n"
+                f"زیرساخت‌های دفاعی {target}: {infrastructure_summary(defense_infrastructure)}\n"
                 f"ادوات مهاجم: {attacker_equipment_summary}\nادوات طرف مقابل: {defender_equipment_summary}\n"
                 f"هر دو طرف تا {ROLEPLAY_WINDOW_HOURS} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
             )
