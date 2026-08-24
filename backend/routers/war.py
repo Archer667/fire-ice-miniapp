@@ -938,6 +938,55 @@ async def detect_route_encounters():
         "active": True, "engagement_locked": {"$ne": True}, "arrival_at": {"$gt": now()},
         "route_path.1": {"$exists": True},
     }).sort("arrival_at", 1).limit(100)]
+    # لشکر تازه‌ای که وارد یالِ یک نبرد باز می‌شود، به همان پرونده می‌پیوندد؛
+    # نبرد مسیر هم مثل نبرد قلعه گروهی است و پروندهٔ موازی نمی‌سازد.
+    for army in list(moving):
+        path = army.get("route_path", [])
+        started, arrival = army.get("moved_at") or army.get("created_at"), army.get("arrival_at")
+        if not started or not arrival:
+            continue
+        joined = False
+        for i in range(len(path) - 1):
+            edge_start = started + (arrival - started) * (i / (len(path) - 1))
+            edge_end = started + (arrival - started) * ((i + 1) / (len(path) - 1))
+            if not (edge_start <= now() <= edge_end):
+                continue
+            locations = [f"مسیر {path[i]} — {path[i + 1]}", f"مسیر {path[i + 1]} — {path[i]}"]
+            root = await campaigns.find_one({"battle_is_root": True, "battle_open": True, "battle_location": {"$in": locations}})
+            if not root:
+                continue
+            battle_id, joined_at = root["engagement_campaign_id"], now()
+            snapshot = battle_army_snapshot(army)
+            joins_defender = bool(
+                root.get("battle_defender_tg_id")
+                and await players_are_friendly(army["tg_id"], root["battle_defender_tg_id"])
+            )
+            side = "defender" if joins_defender else "attacker"
+            await campaigns.update_one({"_id": army["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
+                "engagement_locked": True, "engagement_campaign_id": battle_id,
+                "battle_root_campaign_id": str(root["_id"]), "battle_is_root": False,
+                "battle_location": root["battle_location"], "battle_started_at": joined_at,
+            }})
+            join = {"campaign_id": str(army["_id"]), "tg_id": army["tg_id"], "player_name": army["player_name"], "side": side, "joined_at": joined_at}
+            pushes = {"battle_joins": join}
+            if joins_defender:
+                pushes.update({"battle_defender_snapshot": snapshot, "battle_defender_army_ids": str(army["_id"]), "battle_defender_joins": join})
+            else:
+                pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(army["_id"]), "battle_attacker_joins": join})
+            await campaigns.update_one({"_id": root["_id"], "battle_open": True}, {"$push": pushes})
+            side_name = "مدافعان" if joins_defender else "مهاجمان"
+            text = f"⚔️ لشکر {army['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {root['battle_location']} پیوست."
+            participant_ids = set(root.get("battle_participant_tg_ids") or []) | {root.get("tg_id"), root.get("battle_defender_tg_id"), army.get("tg_id")}
+            async for participant in players.find({"tg_id": {"$in": list(participant_ids - {None})}}):
+                await send_system_message(participant["tg_id"], participant["name"], text, kind="battle")
+            await campaigns.update_one({"_id": root["_id"]}, {"$addToSet": {"battle_participant_tg_ids": army["tg_id"]}})
+            await notify_admins("battle_attacker_joined", "⚔️ نیروی تازه وارد نبرد شد", text,
+                dedupe_key=f"battle-join:{battle_id}:{army['_id']}", priority="urgent", player_name=army["player_name"], player_tg_id=army["tg_id"], source_id=battle_id)
+            moving.remove(army)
+            joined = True
+            break
+        if joined:
+            continue
     for i, a in enumerate(moving):
         for b in moving[i + 1:]:
             if a["tg_id"] == b["tg_id"] or await players_are_friendly(a["tg_id"], b["tg_id"]):
@@ -971,7 +1020,17 @@ async def detect_route_encounters():
                 "battle_location": location, "battle_started_at": now(),
                 "battle_open": True,
                 "battle_attacker_snapshot": battle_army_snapshot(root),
+                "battle_attacker_snapshots": [battle_army_snapshot(root)],
+                "battle_attacker_army_ids": [str(root["_id"])],
+                "battle_attacker_joins": [{"campaign_id": str(root["_id"]), "tg_id": root["tg_id"], "player_name": root["player_name"], "side": "attacker", "joined_at": now()}],
                 "battle_defender_snapshot": [battle_army_snapshot(opponent)],
+                "battle_defender_army_ids": [str(opponent["_id"])],
+                "battle_defender_joins": [{"campaign_id": str(opponent["_id"]), "tg_id": opponent["tg_id"], "player_name": opponent["player_name"], "side": "defender", "joined_at": now()}],
+                "battle_joins": [
+                    {"campaign_id": str(root["_id"]), "tg_id": root["tg_id"], "player_name": root["player_name"], "side": "attacker", "joined_at": now()},
+                    {"campaign_id": str(opponent["_id"]), "tg_id": opponent["tg_id"], "player_name": opponent["player_name"], "side": "defender", "joined_at": now()},
+                ],
+                "battle_participant_tg_ids": [root["tg_id"], opponent["tg_id"]],
                 "battle_defender_tg_id": opponent["tg_id"],
                 "battle_defender_name": opponent.get("player_name", "طرف مقابل"),
             }})
@@ -1035,12 +1094,18 @@ async def notify_arrivals():
         # تا وقتی نتیجهٔ نبرد قلعه ثبت نشده، مهاجم تازه پروندهٔ جدا نمی‌سازد؛ با
         # snapshot و زمان ورود مستقل به همان نبرد باز اضافه و قفل می‌شود.
         open_battle = None
-        if creates_battle and c["op_type"] in DIRECT_ATTACK_OP_TYPES:
-            open_battle = await campaigns.find_one({
-                "battle_is_root": True, "battle_open": True, "battle_location": target,
-                "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False},
-                "_id": {"$ne": c["_id"]},
-            })
+        open_battle = await campaigns.find_one({
+            "battle_is_root": True, "battle_open": True, "battle_location": target,
+            "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False},
+            "_id": {"$ne": c["_id"]},
+        })
+        if open_battle:
+            friendly_to_attacker = await players_are_friendly(c["tg_id"], open_battle["tg_id"])
+            friendly_to_defender = bool(open_battle.get("battle_defender_tg_id") and await players_are_friendly(c["tg_id"], open_battle["battle_defender_tg_id"]))
+            # نیرویی که واقعاً وارد صحنه شده یا با یکی از طرفین هم‌پیمان است به
+            # پروندهٔ باز می‌پیوندد؛ عبور/جای‌گیری بی‌طرف، جنگ تصادفی نمی‌سازد.
+            if not (creates_battle or friendly_to_attacker or friendly_to_defender):
+                open_battle = None
         if open_battle:
             engagement_id = open_battle["engagement_campaign_id"]
             joined_at = now()
@@ -1050,15 +1115,19 @@ async def notify_arrivals():
                 "battle_root_campaign_id": str(open_battle["_id"]), "battle_is_root": False,
                 "battle_location": target, "battle_started_at": joined_at,
             }})
-            await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {
-                "$push": {
-                    "battle_attacker_snapshots": snapshot,
-                    "battle_attacker_army_ids": str(c["_id"]),
-                    "battle_attacker_joins": {"campaign_id": str(c["_id"]), "tg_id": c["tg_id"], "player_name": c["player_name"], "joined_at": joined_at},
-                }
-            })
-            join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به نبرد بازِ {target} اضافه شد: {troops_summary(c.get('troops', {}))}"
-            participant_ids = {x for x in [open_battle.get("tg_id"), open_battle.get("battle_defender_tg_id"), c.get("tg_id")] if x is not None}
+            joins_defender = bool(open_battle.get("battle_defender_tg_id") and await players_are_friendly(c["tg_id"], open_battle["battle_defender_tg_id"]))
+            side = "defender" if joins_defender else "attacker"
+            join = {"campaign_id": str(c["_id"]), "tg_id": c["tg_id"], "player_name": c["player_name"], "side": side, "joined_at": joined_at}
+            pushes = {"battle_joins": join}
+            if joins_defender:
+                pushes.update({"battle_defender_snapshot": snapshot, "battle_defender_army_ids": str(c["_id"]), "battle_defender_joins": join})
+            else:
+                pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(c["_id"]), "battle_attacker_joins": join})
+            await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {"$push": pushes, "$addToSet": {"battle_participant_tg_ids": c["tg_id"]}})
+            side_name = "مدافعان" if joins_defender else "مهاجمان"
+            join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد: {troops_summary(c.get('troops', {}))}"
+            participant_ids = set(open_battle.get("battle_participant_tg_ids") or []) | {open_battle.get("tg_id"), open_battle.get("battle_defender_tg_id"), c.get("tg_id")}
+            participant_ids.discard(None)
             async for participant in players.find({"tg_id": {"$in": list(participant_ids)}}):
                 await send_system_message(participant["tg_id"], participant["name"], join_text, kind="battle")
             await notify_admins(
@@ -1094,6 +1163,12 @@ async def notify_arrivals():
                 "battle_defender_snapshot": [battle_army_snapshot(a) for a in defender_armies],
                 "battle_defense_infrastructure": defense_infrastructure,
                 "battle_defender_army_ids": [str(a["_id"]) for a in defender_armies],
+                "battle_defender_joins": [{"campaign_id": str(a["_id"]), "tg_id": a["tg_id"], "player_name": a["player_name"], "side": "defender", "joined_at": now()} for a in defender_armies],
+                "battle_joins": [
+                    {"campaign_id": str(c["_id"]), "tg_id": c["tg_id"], "player_name": c["player_name"], "side": "attacker", "joined_at": now()},
+                    *[{"campaign_id": str(a["_id"]), "tg_id": a["tg_id"], "player_name": a["player_name"], "side": "defender", "joined_at": now()} for a in defender_armies],
+                ],
+                "battle_participant_tg_ids": list({c["tg_id"], *[a["tg_id"] for a in defender_armies], *([battle_defender["tg_id"]] if battle_defender else [])}),
                 "battle_defender_tg_id": battle_defender["tg_id"] if battle_defender else None,
                 "battle_defender_name": battle_defender["name"] if battle_defender else "بدون مدافع",
             }
