@@ -51,6 +51,7 @@ ROLEPLAY_CATEGORIES = {
     "economy":     "اقتصاد",
     "rebellion":   "شورش",
     "security":    "دفاعی (امنیتی)",
+    "sabotage":    "خرابکاری",
     "other":       "آزاد",
 }
 
@@ -895,3 +896,4 @@ def spy_travel_minutes(origin_castle: str, target_castle: str) -> int:
 TRADE_GOODS = ["wood", "stone", "iron", "food", "wine"]
 CARAVAN_GOODS = ["gold", *TRADE_GOODS]
 TRADE_GOOD_NAMES = {"gold": "سکه", "wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب"}
+
