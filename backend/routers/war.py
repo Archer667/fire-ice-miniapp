@@ -141,6 +141,24 @@ async def players_are_friendly(a_id: int, b_id: int) -> bool:
         return True
     return b_id in await allied_tg_ids(a_id)
 
+async def active_peace_pact(a_id: int, b_id: int):
+    return await alliances.find_one({
+        "status": "accepted", "type": {"$in": PASSAGE_ALLIANCE_TYPES},
+        "$or": [{"from_id": a_id, "to_id": b_id}, {"from_id": b_id, "to_id": a_id}],
+    })
+
+async def reject_hostile_order_during_pact(attacker_tg_id: int, target_castle: str, op_type: str):
+    """در عدم‌تجاوز و اتحاد کامل، فقط فرمان غیرخصمانهٔ جای‌گیری مجاز است."""
+    if op_type not in ATTACK_OP_TYPES:
+        return
+    target_player = await owner_of_castle(target_castle)
+    if not target_player or target_player["tg_id"] == attacker_tg_id:
+        return
+    pact = await active_peace_pact(attacker_tg_id, target_player["tg_id"])
+    if pact:
+        pact_name = "اتحاد کامل" if pact.get("type") == "full_alliance" else "پیمان عدم تجاوز"
+        raise HTTPException(403, f"با صاحب این قلعه {pact_name} داری؛ حمله، محاصره و غارت ممنوع است و فقط می‌توانی جای‌گیری کنی")
+
 async def owner_of_castle(castle: str) -> dict | None:
     """صاحبِ یک قلعه — چه قلعهٔ اصلی‌اش باشه چه یکی از قلعه‌های اضافه‌ای که فتح کرده"""
     return await players.find_one({"$or": [
@@ -321,6 +339,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     else:
         target_castle = body.origin_castle
 
+    await reject_hostile_order_during_pact(user["id"], target_castle, body.op_type)
+
     terrain = await all_castle_terrain()
     origin_is_port = terrain.get(body.origin_castle, "land") in ("coastal", "sea")
     origin_region = await region_of_castle(body.origin_castle) or p["region"]
@@ -365,29 +385,9 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     pay(p["resources"], {"gold": gold, **weapons})
     p["resources"]["men"] = p["resources"].get("men", 0) - men
 
-    # خیانت به پیمان عدم‌تجاوز: حمله/غارت/محاصره (نه جای‌گیری، چون آن برای حمله نیست)
-    # علیه کسی که چنین پیمانی باهاش داری — غرامت از طلایش کم می‌شود (اگر طلا کم بود
-    # از امتیازش)، و خودِ خاطی از همان پیمان اخراج می‌شود (پیمان باطل می‌شود)
+    # فرمان خصمانه علیه عدم‌تجاوز/اتحاد کامل بالاتر کاملاً مسدود شده است.
+    # این فیلد فقط برای سازگاری پاسخ با نسخه‌های قدیمی باقی می‌ماند.
     penalty_charged = 0
-    if body.op_type in ATTACK_OP_TYPES and not same_castle:
-        target_player = await owner_of_castle(target_castle)
-        if target_player:
-            pact = await has_non_aggression_pact(user["id"], target_player["tg_id"])
-            if pact:
-                penalty_charged = pact.get("penalty_gold", 0)
-                if penalty_charged > 0:
-                    gold_paid = min(p["resources"].get("gold", 0), penalty_charged)
-                    p["resources"]["gold"] -= gold_paid
-                    shortfall = penalty_charged - gold_paid
-                    if shortfall > 0:
-                        p["points"] = max(0, p.get("points", 0) - shortfall)
-                await alliances.update_one({"_id": pact["_id"]}, {"$set": {"status": "broken", "broken_by": user["id"]}})
-                await players.update_one({"tg_id": pact["from_id"]}, {"$inc": {"alliance_count": -1}})
-                await players.update_one({"tg_id": pact["to_id"]}, {"$inc": {"alliance_count": -1}})
-                await send_system_message(
-                    target_player["tg_id"], target_player["name"],
-                    f"لرد {p['name']} با وجود پیمان عدم‌تجاوز به تو حمله کرد — {penalty_charged:,} سکه غرامت پرداخت و از پیمان اخراج شد.",
-                )
 
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "points": p.get("points", 0)}})
 
@@ -476,6 +476,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
         raise HTTPException(400, "محاصره فقط برای قلعه‌های غیربندری است")
     if body.op_type == "naval_raid" and (origin not in ports or body.target_castle not in ports):
         raise HTTPException(400, "غارت دریایی باید از یک بندر به بندر دیگر باشد")
+    await reject_hostile_order_during_pact(user["id"], body.target_castle, body.op_type)
 
     # از قلعهٔ تحت حمله نمی‌شود لشکر مستقر را هم فراری داد؛ دفاع باید همان‌جا بماند.
     origin_owner = await owner_of_castle(origin)
@@ -530,6 +531,7 @@ async def order_siege_attack(campaign_id: str, user: dict = Depends(get_user)):
         raise HTTPException(400, "فقط لشکر محاصره‌ای که به مقصد رسیده می‌تواند دستور حمله بگیرد")
     if c.get("engagement_locked"):
         raise HTTPException(409, "این لشکر همین حالا درگیر نبرد است")
+    await reject_hostile_order_during_pact(user["id"], c["target_castle"], "attack")
     await campaigns.update_one({"_id": oid}, {"$set": {
         "op_type": "attack", "arrival_at": now(), "arrival_notified": False, "attack_ordered_at": now(),
     }})
