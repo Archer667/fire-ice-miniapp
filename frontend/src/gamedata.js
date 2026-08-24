@@ -744,6 +744,7 @@ export const OP_TYPES = [
   { id: 'naval_raid', name: 'غارت دریایی (برای اهداف بندری)',       needsTarget: true,  portOnly: true,  landOnly: false },
   { id: 'garrison',   name: 'جای‌گیری',                              needsTarget: true,  portOnly: false, landOnly: false },
   { id: 'defense',    name: 'دفاعی',                                needsTarget: false, portOnly: false, landOnly: false },
+  { id: 'ambush',     name: 'ساخت کمین در مسیر',                    needsTarget: true,  portOnly: false, landOnly: false },
 ];
 
 // نبردهای واقعی — بعد از رسیدن، هر دو طرف تا ROLEPLAY_WINDOW_HOURS ساعت فرصت دارند
