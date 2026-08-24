@@ -216,6 +216,8 @@ export default function War() {
   );
   const overSeaCapacity = originIsSeaOnly && seaLandMen > seaCapacity;
   const overSeaRoute = !!chosenRoute?.via_sea && seaLandMen > seaCapacity;
+  const targetPeacePact = ['non_aggression', 'full_alliance'].includes(target?.owner?.pact) ? target.owner.pact : null;
+  const hostileAgainstPact = !!targetPeacePact && ['attack', 'siege', 'naval_raid'].includes(opType);
   const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
     : movingLegion && !target ? 'مقصد را انتخاب کن'
     : movingLegion && target?.name === movingLegion.target ? 'مقصد جدید باید متفاوت باشد'
@@ -224,6 +226,7 @@ export default function War() {
     : overMen ? 'نفرات کافی نیست'
     : shortWeapon ? `${WEAPON_NAMES[shortWeapon[0]]} کافی نیست`
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
+    : hostileAgainstPact ? 'با صاحب این قلعه پیمان داری؛ فقط جای‌گیری مجاز است'
     : badPortTarget ? 'مقصد باید بندر باشد'
     : badOriginForNaval ? 'مبدا باید بندر باشد'
     : overSeaCapacity ? `مبدا کاملاً دریایی است — کشتی‌های این فرمان فقط ${seaCapacity.toLocaleString('fa-IR')} نفر را جابه‌جا می‌کنند`
@@ -558,6 +561,11 @@ export default function War() {
                 {c.engagement_locked && (
                   <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>
                     {c.waiting_for_result ? 'حمله رسیده — منتظر نتیجهٔ ادمین' : 'درگیر نبرد — تا ثبت نتیجه قفل است'}
+                  </div>
+                )}
+                {hostileAgainstPact && (
+                  <div className="page-sub" style={{ margin: '8px 4px 0', color: 'var(--danger)' }}>
+                    با صاحب این قلعه {targetPeacePact === 'full_alliance' ? 'اتحاد کامل' : 'پیمان عدم تجاوز'} داری؛ حمله، محاصره و غارت ممنوع است. نوع عملیات را روی «جای‌گیری» بگذار.
                   </div>
                 )}
                 {c.can_move && (
