@@ -825,21 +825,25 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
         already = await roleplays.find_one({"tg_id": user["id"], "campaign_id": canonical_id})
         if already:
             return None
+        actual_role = "attacker" if root.get("tg_id") == user["id"] else "defender"
         return {
-            "campaign_id": canonical_id, "role": role,
+            "campaign_id": canonical_id,
             "name": root.get("name") or OP_TYPES.get(root["op_type"], {}).get("name", root["op_type"]),
             "origin": root["origin_castle"], "target": root.get("battle_location") or root["target_castle"],
             "arrival_at": (root.get("battle_started_at") or root["arrival_at"]).isoformat(),
+            "role": actual_role,
         }
 
     out = []
+    seen_engagements = set()
     cur = campaigns.find({"tg_id": user["id"], "engagement_locked": True})
     async for c in cur:
         if (c.get("battle_started_at") or c.get("arrival_at")) < cutoff:
             continue
         row = await build(c, "attacker")
-        if row:
+        if row and row["campaign_id"] not in seen_engagements:
             out.append(row)
+            seen_engagements.add(row["campaign_id"])
 
     cur2 = campaigns.find({
         "tg_id": {"$ne": user["id"]}, "engagement_locked": True,
@@ -849,8 +853,9 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
         if (c.get("battle_started_at") or c.get("arrival_at")) < cutoff:
             continue
         row = await build(c, "defender")
-        if row:
+        if row and row["campaign_id"] not in seen_engagements:
             out.append(row)
+            seen_engagements.add(row["campaign_id"])
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
