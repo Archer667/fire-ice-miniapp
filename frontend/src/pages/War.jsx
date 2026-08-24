@@ -8,6 +8,7 @@ import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
   NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, WEAPON_NAMES, castleLabel,
+  SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING,
 } from '../gamedata.js';
 
 const TABS = [
@@ -131,6 +132,7 @@ export default function War() {
   ];
 
   const [counts, setCounts] = useState(Object.fromEntries(allTroops.map(t => [t.id, 0])));
+  const [equipmentCounts, setEquipmentCounts] = useState(Object.fromEntries(SIEGE_EQUIPMENT.map(e => [e.id, 0])));
 
   const op = OP_TYPES.find(o => o.id === opType);
 
@@ -146,6 +148,7 @@ export default function War() {
   // قبلی که ممکنه دیگه معتبر نباشه رو پاک می‌کنیم تا فرمانِ بعدی نیرویِ نامعتبر نداشته باشه
   useEffect(() => {
     setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
+    setEquipmentCounts(Object.fromEntries(SIEGE_EQUIPMENT.map(e => [e.id, 0])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [origin]);
 
@@ -169,7 +172,9 @@ export default function War() {
   }, [origin, targetName, sameCastle]);
 
   const chosenRoute = routeOptions && routeOptions[routeChoice];
-  const eta = sameCastle ? 0 : (chosenRoute ? chosenRoute.minutes : travelMinutes(sameCastle, origin, targetName));
+  const equipmentSlowdown = Math.min(1, SIEGE_EQUIPMENT.reduce((s, e) => s + (equipmentCounts[e.id] || 0) * e.slowdown, 0));
+  const baseEta = sameCastle ? 0 : (chosenRoute ? chosenRoute.minutes : travelMinutes(sameCastle, origin, targetName));
+  const eta = Math.round(baseEta * (1 + equipmentSlowdown));
 
   const unlocked = (troop) => {
     if (troop.naval) return builtLevels[NAVAL_CAMP_BUILDING] > 0;
@@ -183,6 +188,14 @@ export default function War() {
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * t.cost, 0),
     [counts]
   );
+  const equipmentCost = useMemo(() => {
+    const total = {};
+    for (const equipment of SIEGE_EQUIPMENT) {
+      const count = equipmentCounts[equipment.id] || 0;
+      for (const [resource, amount] of Object.entries(equipment.cost)) total[resource] = (total[resource] || 0) + amount * count;
+    }
+    return total;
+  }, [equipmentCounts]);
   const menCommitted = useMemo(
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0), 0),
     [counts]
@@ -203,7 +216,9 @@ export default function War() {
   }, [counts]);
   const shortWeapon = Object.entries(weaponsNeeded).find(([wkey, n]) => n > (me.resources[wkey] ?? 0));
   const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
-  const overGold = goldCost > gold;
+  const totalGoldCost = goldCost + (equipmentCost.gold || 0);
+  const overGold = totalGoldCost > gold;
+  const shortEquipmentResource = Object.entries(equipmentCost).find(([resource, amount]) => resource !== 'gold' && amount > (me.resources[resource] || 0));
   const overMen = menCommitted > men;
   const badPortTarget = op.portOnly && target && !target.port;
   const seaCapacity = useMemo(
@@ -225,6 +240,7 @@ export default function War() {
     : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
     : shortWeapon ? `${WEAPON_NAMES[shortWeapon[0]]} کافی نیست`
+    : shortEquipmentResource ? `${shortEquipmentResource[0]} کافی برای ساخت ادوات نداری`
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
     : hostileAgainstPact ? 'با صاحب این قلعه پیمان داری؛ فقط جای‌گیری مجاز است'
     : badPortTarget ? 'مقصد باید بندر باشد'
@@ -237,6 +253,7 @@ export default function War() {
   const resetForm = () => {
     setName(''); setTarget(null);
     setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
+    setEquipmentCounts(Object.fromEntries(SIEGE_EQUIPMENT.map(e => [e.id, 0])));
   };
 
   const send = async () => {
@@ -271,6 +288,7 @@ export default function War() {
         origin_castle: origin, op_type: opType,
         target_castle: op.needsTarget ? target.name : null,
         name: name.trim(), troops: counts,
+        equipment: equipmentCounts,
         via: chosenRoute ? chosenRoute.path : undefined,
       });
       haptic('medium');
@@ -279,7 +297,7 @@ export default function War() {
       );
       setMe({
         ...me,
-        resources: { ...me.resources, gold: gold - goldCost, men: men - menCommitted, ...weaponUpdates },
+        resources: Object.fromEntries(Object.entries({ ...me.resources, gold: gold - goldCost, men: men - menCommitted, ...weaponUpdates }).map(([k, v]) => [k, v - (equipmentCost[k] || 0)])),
         active_campaigns: (me.active_campaigns ?? 0) + 1,
       });
       toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
@@ -492,10 +510,28 @@ export default function War() {
                 </div>
               );
             })}
+            <div className="sect" style={{ margin: '16px 0 7px' }}>ادوات نظامی</div>
+            <div className="page-sub" style={{ marginBottom: 8 }}>
+              سطح کارگاه مهندسی ادوات این قلعه: {(builtLevels[SIEGE_WORKSHOP_BUILDING] || 0).toLocaleString('fa-IR')} از ۳ · ادوات نفرات مصرف نمی‌کنند اما سرعت لشکر را کم می‌کنند.
+            </div>
+            {SIEGE_EQUIPMENT.map(equipment => {
+              const unlockedEquipment = (builtLevels[SIEGE_WORKSHOP_BUILDING] || 0) >= equipment.level;
+              return (
+                <div className="troop" key={equipment.id}>
+                  <div className="tn">
+                    {equipment.name}<span className="troop-tag">سطح {equipment.level.toLocaleString('fa-IR')}</span>
+                    <small>توان محاصره {equipment.siege_power.toLocaleString('fa-IR')} · هزینه هر عدد: {Object.entries(equipment.cost).map(([k,v]) => `${v.toLocaleString('fa-IR')} ${k}`).join('، ')}</small>
+                    {!unlockedEquipment && <small className="troop-locked">نیاز به کارگاه مهندسی ادوات سطح {equipment.level.toLocaleString('fa-IR')}</small>}
+                  </div>
+                  <input type="number" min="0" max="100" value={equipmentCounts[equipment.id] || ''} disabled={!unlockedEquipment} placeholder="۰"
+                         onChange={ev => setEquipmentCounts({ ...equipmentCounts, [equipment.id]: Math.max(0, Math.min(100, parseInt(ev.target.value, 10) || 0)) })} />
+                </div>
+              );
+            })}
             <div className={`cost-grid ${overGold || overMen ? 'over' : ''}`}>
               <div className={`cost-item ${overGold ? 'over' : ''}`}>
                 <Coin s={16} />
-                <b>{goldCost.toLocaleString('fa-IR')}</b>
+                <b>{totalGoldCost.toLocaleString('fa-IR')}</b>
                 <small>طلا</small>
               </div>
               <div className={`cost-item ${overMen ? 'over' : ''}`}>
