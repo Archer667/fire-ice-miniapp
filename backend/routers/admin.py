@@ -488,6 +488,8 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "attacker_army": army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [army_row(a) for a in defender_armies],
             "attacker_armies": [army_row(a) for a in attacker_snapshots],
             "attacker_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_attacker_joins", [])],
+            "defender_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_defender_joins", [])],
+            "battle_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_joins", [])],
             "defense_infrastructure": root.get("battle_defense_infrastructure", []),
             "rolls": rolls, "started_at": root.get("battle_started_at", root.get("arrival_at")).isoformat() if (root.get("battle_started_at") or root.get("arrival_at")) else None,
             "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
@@ -516,6 +518,8 @@ class RoleplayResultBody(BaseModel):
     defender_equipment_losses: dict[str, int] = {}
     attacker_army_losses: dict[str, dict[str, int]] = {}
     attacker_army_equipment_losses: dict[str, dict[str, int]] = {}
+    defender_army_losses: dict[str, dict[str, int]] = {}
+    defender_army_equipment_losses: dict[str, dict[str, int]] = {}
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
 
@@ -709,12 +713,23 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 if army:
                     attacker_campaigns.append(army)
                     recipient_tg_ids.add(army["tg_id"])
-            valid_winners = {a["tg_id"] for a in attacker_campaigns} or {campaign["tg_id"]}
+            defender_campaigns = []
+            for army_id in campaign.get("battle_defender_army_ids") or []:
+                try:
+                    army = await campaigns.find_one({"_id": ObjectId(army_id)})
+                except Exception:
+                    army = None
+                if army:
+                    defender_campaigns.append(army)
+                    recipient_tg_ids.add(army["tg_id"])
+            attacker_tg_ids = {a["tg_id"] for a in attacker_campaigns} or {campaign["tg_id"]}
+            defender_tg_ids = {a["tg_id"] for a in defender_campaigns}
             if defender:
-                valid_winners.add(defender["tg_id"])
+                defender_tg_ids.add(defender["tg_id"])
+            valid_winners = attacker_tg_ids | defender_tg_ids
             if body.winner_tg_id not in valid_winners:
                 raise HTTPException(400, "برندهٔ نبرد را از بین مهاجم و مدافع انتخاب کن")
-            combat_outcome = "attacker" if body.winner_tg_id == campaign["tg_id"] else "defender"
+            combat_outcome = "attacker" if body.winner_tg_id in attacker_tg_ids else "defender"
 
             # تلفات دقیق همزمان با نتیجه ثبت می‌شود. برای مدافع، جمع هر نوع نیرو
             # میان همهٔ لشکرهای دفاعی حاضر در همان قلعه تقسیم می‌شود.
@@ -722,7 +737,12 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 aid = str(attacker_army["_id"])
                 await _apply_campaign_losses(attacker_army, body.attacker_army_losses.get(aid, body.attacker_losses if aid == str(campaign["_id"]) else {}))
                 await _apply_equipment_losses(attacker_army, body.attacker_army_equipment_losses.get(aid, body.attacker_equipment_losses if aid == str(campaign["_id"]) else {}))
-            if opponent_campaign:
+            if body.defender_army_losses or body.defender_army_equipment_losses:
+                for defender_army in defender_campaigns:
+                    did = str(defender_army["_id"])
+                    await _apply_campaign_losses(defender_army, body.defender_army_losses.get(did, {}))
+                    await _apply_equipment_losses(defender_army, body.defender_army_equipment_losses.get(did, {}))
+            elif opponent_campaign:
                 await _apply_campaign_losses(opponent_campaign, body.defender_losses)
                 await _apply_equipment_losses(opponent_campaign, body.defender_equipment_losses)
             elif defender:
