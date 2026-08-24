@@ -7,7 +7,7 @@ import PlayerPicker from '../components/PlayerPicker.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -108,6 +108,7 @@ export default function Admin() {
   const [warSubTab, setWarSubTab] = useState('campaigns'); // campaigns | battles | espionage | roleplay
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
+  const [campaignLosses, setCampaignLosses] = useState({});
   const [warWindow, setWarWindow] = useState(null);
   const [warWindowBusy, setWarWindowBusy] = useState(false);
   const [eventTitle, setEventTitle] = useState('');
@@ -117,6 +118,8 @@ export default function Admin() {
   const [botAudience, setBotAudience] = useState('all');
   const [botTargets, setBotTargets] = useState([]);
   const [botMessageBusy, setBotMessageBusy] = useState(false);
+  const [botViaBot, setBotViaBot] = useState(true);
+  const [botViaRaven, setBotViaRaven] = useState(false);
   const [medalTarget, setMedalTarget] = useState([]);
   const [medalTier, setMedalTier] = useState('bronze');
   const [medalReason, setMedalReason] = useState('');
@@ -192,6 +195,7 @@ export default function Admin() {
   const [spyBusyId, setSpyBusyId] = useState(null);
 
   const [roleplayPending, setRoleplayPending] = useState(null);
+  const [roleplayCategoryTab, setRoleplayCategoryTab] = useState('all');
   const [securityRoleplays, setSecurityRoleplays] = useState(null);
   const [securityQuery, setSecurityQuery] = useState('');
   const [securityPlayer, setSecurityPlayer] = useState([]);
@@ -528,6 +532,7 @@ export default function Admin() {
   const sendBotMessage = async () => {
     const text = botMessage.trim();
     if (!text) { toast('متن پیام را بنویس'); return; }
+    if (!botViaBot && !botViaRaven) { toast('بات، کلاغ یا هر دو را انتخاب کن'); return; }
     if (botAudience === 'selected' && botTargets.length === 0) { toast('حداقل یک بازیکن را انتخاب کن'); return; }
     setBotMessageBusy(true);
     try {
@@ -535,9 +540,11 @@ export default function Admin() {
         text,
         botAudience === 'all',
         botTargets.map(p => p.tg_id),
+        botViaBot,
+        botViaRaven,
       );
       haptic('medium');
-      toast(`پیام بات برای ${(res.sent_to ?? 0).toLocaleString('fa-IR')} بازیکن ارسال شد`);
+      toast(`پیام برای ${(res.sent_to ?? 0).toLocaleString('fa-IR')} بازیکن ارسال شد`);
       setBotMessage('');
       setBotTargets([]);
     } catch (e) { toast(e.message); }
@@ -597,7 +604,7 @@ export default function Admin() {
     try {
       await api.adminDisbandCampaign(id);
       haptic('medium');
-      toast('لشکر منحل شد و نفراتش به خانه برگشتند');
+      toast('لشکر منحل شد و تمام هزینه‌هایش برگشت');
       if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(() => {});
       loadCampaigns();
     } catch (e) { toast(e.message); }
@@ -655,6 +662,23 @@ export default function Admin() {
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
+  };
+
+  const reduceCampaign = async (campaign) => {
+    const troops = campaignLosses[campaign.id] || {};
+    if (!Object.values(troops).some(v => Number(v) > 0)) { toast('تلفات حداقل یک نیرو را وارد کن'); return; }
+    setDisbandBusyId(campaign.id);
+    try { await api.adminReduceCampaign(campaign.id, troops); toast('تلفات لشکر ثبت شد؛ چیزی به بازیکن برنگشت'); loadCampaigns(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
+    catch (e) { toast(e.message); }
+    setDisbandBusyId(null);
+  };
+
+  const destroyCampaign = async (id) => {
+    if (!window.confirm('این لشکر کامل منهدم شود؟ هیچ نفر، سکه، سلاح یا ادواتی برنمی‌گردد.')) return;
+    setDisbandBusyId(id);
+    try { await api.adminDestroyCampaign(id); toast('لشکر کاملاً منهدم شد'); loadCampaigns(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
+    catch (e) { toast(e.message); }
+    setDisbandBusyId(null);
   };
 
   const resetSeason = async () => {
@@ -1569,11 +1593,18 @@ export default function Admin() {
           <div className="page-sub up u3">
             سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
           </div>
+          <div className="tabs up u3" role="tablist" style={{ marginBottom: 10 }}>
+            {[['all', 'همه'], ...Object.entries(ROLEPLAY_CATEGORIES).filter(([key]) => key !== 'security')].map(([key, label]) => {
+              const count = (roleplayPending || []).filter(r => key === 'all' || r.category === key).length;
+              return <button type="button" key={key} className={`rbtn tab ${roleplayCategoryTab === key ? 'on' : ''}`}
+                onClick={() => setRoleplayCategoryTab(key)}>{label} ({count.toLocaleString('fa-IR')})</button>;
+            })}
+          </div>
           <div className="up u3">
-            {(!roleplayPending || roleplayPending.length === 0) && (
+            {(!roleplayPending || roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رول بررسی‌نشده‌ای نیست</div>
             )}
-            {roleplayPending && roleplayPending.map(r => (
+            {roleplayPending && roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).map(r => (
               <div className="card" key={r.id} style={{ marginBottom: 10 }}>
                 <div className="res">
                   <div className="ic"><Scroll s={16} /></div>
@@ -2303,16 +2334,27 @@ export default function Admin() {
                     <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
                       نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
                     </div>
+                    {c.active && <div style={{ padding: 10, border: '1px solid var(--line)', borderRadius: 12, marginBottom: 9 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 800, marginBottom: 6 }}>ثبت تلفات مستقیم (بدون بازپرداخت)</div>
+                      {c.troops.map(t => <div className="troop" key={t.id}>
+                        <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div>
+                        <input type="number" min="0" max={t.count} placeholder="تلفات" value={campaignLosses[c.id]?.[t.id] || ''}
+                          onChange={e => setCampaignLosses(prev => ({ ...prev, [c.id]: { ...(prev[c.id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } }))} />
+                      </div>)}
+                      <button className="btn ghost" disabled={disbandBusyId === c.id} onClick={() => reduceCampaign(c)}>ثبت کاهش نیرو</button>
+                    </div>}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ fontSize: 11, color: 'var(--low)' }}>
                         {c.active ? (c.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
                       </div>
-                      {c.active && (
-                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                      {c.active && (<div style={{ display: 'flex', gap: 7 }}>
+                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
                                 disabled={disbandBusyId === c.id} onClick={() => disbandCampaign(c.id)}>
                           {disbandBusyId === c.id ? 'در حال انحلال...' : 'منحل کن'}
                         </button>
-                      )}
+                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                          disabled={disbandBusyId === c.id} onClick={() => destroyCampaign(c.id)}>انهدام کامل</button>
+                      </div>)}
                     </div>
                   </div>
                 ))}
@@ -2596,9 +2638,9 @@ export default function Admin() {
 
       {tab === 'bot_messages' && (
         <>
-          <div className="sect up u2">ارسال پیام مستقیم از طرف بات تلگرام</div>
+          <div className="sect up u2">ارسال پیام به بازیکن‌ها</div>
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            پیام فقط در چت خصوصی تلگرام فرستاده می‌شود و داخل صندوق کلاغ‌های بازی ذخیره نمی‌شود.
+            مشخص کن پیام در چت خصوصی بات، اطلاعیه‌های کلاغ، یا هر دو دیده شود.
           </div>
           <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>گیرندگان</label>
@@ -2611,15 +2653,24 @@ export default function Admin() {
                 <PlayerPicker value={botTargets} onChange={setBotTargets} placeholder="نام لرد یا قلعه را جست‌وجو کن..." />
               </div>
             )}
-            <label className="f">متن پیام بات</label>
+            <label className="f">مسیر ارسال</label>
+            <div className="grid2">
+              <button type="button" className={`rbtn pick ${botViaBot ? 'sel' : ''}`} onClick={() => setBotViaBot(v => !v)}>
+                <div className="n">بات تلگرام</div><div className="c">پیام خصوصی داخل بات</div>
+              </button>
+              <button type="button" className={`rbtn pick ${botViaRaven ? 'sel' : ''}`} onClick={() => setBotViaRaven(v => !v)}>
+                <div className="n">کلاغ</div><div className="c">داخل اطلاعیه‌های بازی</div>
+              </button>
+            </div>
+            <label className="f">متن پیام</label>
             <textarea value={botMessage} onChange={e => setBotMessage(e.target.value)} maxLength={4000}
                       rows={6} placeholder="پیامی که بات مستقیماً برای بازیکن می‌فرستد..." />
             <button className="btn" style={{ marginTop: 14 }} disabled={botMessageBusy} onClick={sendBotMessage}>
               {botMessageBusy
                 ? 'در حال ارسال...'
                 : botAudience === 'all'
-                  ? 'ارسال پیام بات به همهٔ بازیکنان'
-                  : `ارسال پیام بات به ${botTargets.length.toLocaleString('fa-IR')} بازیکن`}
+                  ? 'ارسال پیام به همهٔ بازیکنان'
+                  : `ارسال پیام به ${botTargets.length.toLocaleString('fa-IR')} بازیکن`}
             </button>
           </div>
         </>
@@ -2732,3 +2783,4 @@ export default function Admin() {
     </>
   );
 }
+
