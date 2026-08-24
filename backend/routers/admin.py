@@ -481,6 +481,7 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "defender_tg_id": defender["tg_id"] if defender else None,
             "defender_name": defender["name"] if defender else root.get("battle_defender_name", "بدون مدافع"),
             "attacker_army": army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [army_row(a) for a in defender_armies],
+            "defense_infrastructure": root.get("battle_defense_infrastructure", []),
             "rolls": rolls, "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
         }
         out.append(battle_row)
