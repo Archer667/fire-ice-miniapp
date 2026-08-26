@@ -43,7 +43,9 @@ const TAB_GROUPS = [
     description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
     tabs: [
       { key: 'notifications', label: 'اعلان‌های ادمین', description: 'کارهای تازه و مهلت‌های نزدیک' },
-      { key: 'war',         label: 'جنگ و رول‌ها', description: 'داوری جاسوسی، جنگ و سناریوها' },
+      { key: 'war',         label: 'جنگ', description: 'لشکرکشی‌ها، کمین‌ها، نبردها و جاسوسی' },
+      { key: 'roleplays',   label: 'رول‌ها', description: 'بررسی و اعلام نتیجهٔ سناریوهای بازیکنان' },
+      { key: 'security_archive', label: 'آرشیو امنیتی', description: 'جست‌وجوی رول‌های دفاعی و امنیتی' },
       { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
       { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
       { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
@@ -106,7 +108,7 @@ export default function Admin() {
   const [addCastleBusyId, setAddCastleBusyId] = useState(null);
   const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
 
-  const [warSubTab, setWarSubTab] = useState('campaigns'); // campaigns | battles | espionage | roleplay
+  const [warSubTab, setWarSubTab] = useState('campaigns'); // campaigns | ambushes | battles | espionage
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
   const [campaignLosses, setCampaignLosses] = useState({});
@@ -192,8 +194,11 @@ export default function Admin() {
   const [resValues, setResValues] = useState(null);
   const [resCaps, setResCaps] = useState(null);
   const [resPoints, setResPoints] = useState(null);
+  const [resPopularity, setResPopularity] = useState(null);
   const [pointDelta, setPointDelta] = useState('');
   const [pointBusy, setPointBusy] = useState(false);
+  const [popularityDelta, setPopularityDelta] = useState('');
+  const [popularityBusy, setPopularityBusy] = useState(false);
   const [resBusy, setResBusy] = useState(false);
   const [resCampaigns, setResCampaigns] = useState(null);
 
@@ -365,13 +370,14 @@ export default function Admin() {
   }, [playerBuildingTarget]);
 
   useEffect(() => {
-    if (!resTarget.length) { setResValues(null); setResCaps(null); setResPoints(null); setResCampaigns(null); return; }
-    setResValues(null); setResCaps(null); setResPoints(null); setPointDelta(''); setResCampaigns(null);
+    if (!resTarget.length) { setResValues(null); setResCaps(null); setResPoints(null); setResPopularity(null); setResCampaigns(null); return; }
+    setResValues(null); setResCaps(null); setResPoints(null); setResPopularity(null); setPointDelta(''); setPopularityDelta(''); setResCampaigns(null);
     api.adminGetPlayerResources(resTarget[0].tg_id)
       .then(r => {
         setResValues(r.resources);
         setResCaps(r.resource_caps || {});
         setResPoints(r.points ?? 0);
+        setResPopularity(r.popularity ?? 50);
       })
       .catch(e => { toast(e.message); setResTarget([]); });
     api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message));
@@ -512,6 +518,19 @@ export default function Admin() {
       toast(`امتیاز «${resTarget[0].name}» به ${result.points.toLocaleString('fa-IR')} رسید`);
     } catch (e) { toast(e.message); }
     setPointBusy(false);
+  };
+
+  const adjustPopularity = async () => {
+    if (!resTarget.length) return;
+    const delta = Number(popularityDelta);
+    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش محبوبیت را وارد کن'); return; }
+    setPopularityBusy(true);
+    try {
+      const result = await api.adminAdjustPlayerPopularity(resTarget[0].tg_id, delta);
+      setResPopularity(result.popularity); setPopularityDelta(''); haptic('medium');
+      toast(`محبوبیت «${resTarget[0].name}» به ${result.popularity.toLocaleString('fa-IR')} رسید`);
+    } catch (e) { toast(e.message); }
+    setPopularityBusy(false);
   };
 
   const toggleWarWindow = async () => {
@@ -1112,7 +1131,8 @@ export default function Admin() {
   const tabBadge = (key) => {
     if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
     if (key === 'onboarding') return pendingPlayers?.length || 0;
-    if (key === 'war') return (spyPending?.length || 0) + (roleplayPending?.length || 0);
+    if (key === 'war') return (spyPending?.length || 0) + (battles?.length || 0) + (ambushesList?.filter(a => a.status === 'pending_score').length || 0);
+    if (key === 'roleplays') return roleplayPending?.length || 0;
     if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
     return 0;
   };
@@ -1431,14 +1451,12 @@ export default function Admin() {
 
       {tab === 'war' && (
         <>
-          <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ و رول‌ها">
+          <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ">
             {[
               { key: 'campaigns', label: 'لشکرکشی‌ها' },
               { key: 'ambushes', label: `کمین‌ها${ambushesList?.filter(a => a.status === 'pending_score').length ? ` (${ambushesList.filter(a => a.status === 'pending_score').length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'espionage', label: 'جاسوسی' },
-              { key: 'security', label: 'آرشیو امنیتی' },
-              { key: 'roleplay',  label: 'رول‌ها' },
             ].map(t => (
               <button type="button" key={t.key} role="tab" aria-selected={warSubTab === t.key}
                    className={`rbtn tab ${warSubTab === t.key ? 'on' : ''}`}
@@ -1616,7 +1634,10 @@ export default function Admin() {
           </>
           )}
 
-          {warSubTab === 'security' && (
+        </>
+      )}
+
+      {tab === 'security_archive' && (
           <div className="up u2">
             <div className="page-sub" style={{ marginBottom: 10 }}>
               رول‌های دفاعی و امنیتی نتیجه ندارند و همیشه در این آرشیو می‌مانند. با نام بازیکن یا بخشی از متن رول جست‌وجو کن.
@@ -1651,7 +1672,7 @@ export default function Admin() {
           </div>
           )}
 
-          {warSubTab === 'roleplay' && (
+      {tab === 'roleplays' && (
           <>
           <div className="page-sub up u3">
             سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
@@ -1770,9 +1791,6 @@ export default function Admin() {
           </div>
           </>
           )}
-        </>
-      )}
-
       {tab === 'alliances' && (
         <>
           <div className="sect up u2">اتحادهای بازی</div>
@@ -2343,6 +2361,19 @@ export default function Admin() {
                     </button>
                   </div>
                   <div className="page-sub" style={{ marginTop: 7 }}>عدد مثبت امتیاز اضافه می‌کند و عدد منفی از امتیاز کم می‌کند؛ امتیاز زیر صفر نمی‌رود.</div>
+                </div>
+                <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
+                  <div className="res" style={{ marginBottom: 8 }}>
+                    <div className="n">محبوبیت بازیکن<small>محبوبیت فعلی: {(resPopularity ?? 50).toLocaleString('fa-IR')} از ۱۰۰</small></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="number" value={popularityDelta} placeholder="مثلاً ۱۰ یا ۵-"
+                           style={{ margin: 0, flex: 1 }} onChange={e => setPopularityDelta(e.target.value)} />
+                    <button className="btn" style={{ width: 'auto', padding: '10px 16px' }} disabled={popularityBusy} onClick={adjustPopularity}>
+                      {popularityBusy ? '...' : 'اعمال'}
+                    </button>
+                  </div>
+                  <div className="page-sub" style={{ marginTop: 7 }}>مقدار مثبت محبوبیت را بیشتر و مقدار منفی آن را کمتر می‌کند؛ نتیجه همیشه بین صفر تا صد می‌ماند.</div>
                 </div>
                 <div className="page-sub" style={{ margin: '4px 4px 12px', lineHeight: 1.9 }}>
                   عددِ سمت راست موجودی فعلیه و زیرش سقف واقعی بازیکن نوشته شده؛ این سقف از ساختمان‌های همهٔ قلعه‌هاش حساب می‌شه.
