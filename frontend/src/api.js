@@ -836,7 +836,7 @@ const M = {
     const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
     if (!p) throw new Error('بازیکن پیدا نشد');
     if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
-    return { name: p.name, castle: p.castle, points: p.points || 0, resources: mockPlayerResources[tgId], resource_caps: { ...RESOURCE_CAPS } };
+    return { name: p.name, castle: p.castle, points: p.points || 0, popularity: p.popularity ?? 50, resources: mockPlayerResources[tgId], resource_caps: { ...RESOURCE_CAPS } };
   },
   adminAdjustPlayerPoints: (tgId, delta) => {
     const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
@@ -844,6 +844,13 @@ const M = {
     const old = p.points || 0;
     p.points = Math.max(0, old + Number(delta || 0));
     return { ok: true, old_points: old, points: p.points, applied_delta: p.points - old };
+  },
+  adminAdjustPlayerPopularity: (tgId, delta) => {
+    const p = MOCK_PLAYERS.find(x => x.tg_id === tgId);
+    if (!p) throw new Error('بازیکن پیدا نشد');
+    const old = p.popularity ?? 50;
+    p.popularity = Math.max(0, Math.min(100, old + Number(delta || 0)));
+    return { ok: true, old_popularity: old, popularity: p.popularity, applied_delta: p.popularity - old };
   },
   adminSetPlayerResources: (tgId, resources) => {
     if (!mockPlayerResources[tgId]) mockPlayerResources[tgId] = { ...DEFAULT_MOCK_PLAYER_RESOURCES };
@@ -1594,6 +1601,8 @@ export const api = {
     : req(`/api/admin/players/${tgId}/resources`, { method: 'POST', body: JSON.stringify({ resources }) }),
   adminAdjustPlayerPoints: (tgId, delta) => MOCK ? Promise.resolve(M.adminAdjustPlayerPoints(tgId, delta))
     : req(`/api/admin/players/${tgId}/points`, { method: 'POST', body: JSON.stringify({ delta }) }),
+  adminAdjustPlayerPopularity: (tgId, delta) => MOCK ? Promise.resolve(M.adminAdjustPlayerPopularity(tgId, delta))
+    : req(`/api/admin/players/${tgId}/popularity`, { method: 'POST', body: JSON.stringify({ delta }) }),
   leaderboard: () => MOCK ? Promise.resolve(M.leaderboard()) : req('/api/leaderboard'),
   weeklyLeaderboard: () => MOCK ? Promise.resolve(M.weeklyLeaderboard()) : req('/api/leaderboard/weekly'),
   dailyStatus: () => MOCK ? Promise.resolve(M.dailyStatus()) : req('/api/daily/status'),
