@@ -1414,11 +1414,15 @@ async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin
         "name": p["name"],
         "castle": p["castle"],
         "points": int(p.get("points", 0)),
+        "popularity": max(0, min(100, int(p.get("popularity", POPULARITY_START)))),
         "resources": res,
         "resource_caps": resource_caps,
     }
 
 class AdjustPlayerPointsBody(BaseModel):
+    delta: int
+
+class AdjustPlayerPopularityBody(BaseModel):
     delta: int
 
 @router.post("/players/{tg_id}/points")
@@ -1435,6 +1439,21 @@ async def admin_adjust_player_points(tg_id: int, body: AdjustPlayerPointsBody, u
     new_points = max(0, old_points + int(body.delta))
     await players.update_one({"tg_id": tg_id}, {"$set": {"points": new_points}})
     return {"ok": True, "old_points": old_points, "points": new_points, "applied_delta": new_points - old_points}
+
+@router.post("/players/{tg_id}/popularity")
+async def admin_adjust_player_popularity(tg_id: int, body: AdjustPlayerPopularityBody, user: dict = Depends(full_admin_user)):
+    """محبوبیت را مستقیم کم یا زیاد می‌کند و مقدار نهایی را در بازهٔ صفر تا صد نگه می‌دارد."""
+    if body.delta == 0:
+        raise HTTPException(400, "مقدار تغییر محبوبیت نباید صفر باشد")
+    if abs(body.delta) > 100:
+        raise HTTPException(400, "مقدار تغییر محبوبیت نمی‌تواند بیشتر از ۱۰۰ باشد")
+    p = await players.find_one({"tg_id": tg_id})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    old_popularity = max(0, min(100, int(p.get("popularity", POPULARITY_START))))
+    new_popularity = max(0, min(100, old_popularity + int(body.delta)))
+    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_popularity}})
+    return {"ok": True, "old_popularity": old_popularity, "popularity": new_popularity, "applied_delta": new_popularity - old_popularity}
 
 class SetPlayerResourcesBody(BaseModel):
     resources: dict
