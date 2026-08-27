@@ -25,6 +25,10 @@ from admin_notifications import notify_admins
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 MUSIC_SETTINGS_ID = "background_music"
 MAX_MUSIC_DATA_URL_CHARS = 10_000_000
+ROLEPLAY_RESOURCE_NAMES = {
+    "gold": "طلا", "wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب", "men": "نیروی انسانی",
+    "weapon_sword": "شمشیر", "weapon_spear": "نیزه", "weapon_archer": "کمان", "weapon_lcav": "تجهیزات سواره‌نظام سبک", "weapon_hcav": "تجهیزات سواره‌نظام سنگین",
+}
 
 class MusicSettingsBody(BaseModel):
     enabled: bool = False
@@ -334,11 +338,24 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
     out = []
     cur = roleplays.find({"resolved": False}).sort("created_at", -1).limit(50)
     async for r in cur:
+        actor = await players.find_one({"tg_id": r["tg_id"]})
+        target = await players.find_one({"tg_id": r.get("target_tg_id")}) if r.get("target_tg_id") else None
+        def player_state(player):
+            if not player:
+                return None
+            return {
+                "tg_id": player["tg_id"], "name": player["name"],
+                "popularity": max(0, min(100, int(player.get("popularity", POPULARITY_START)))),
+                "resources": {key: round(player.get("resources", {}).get(key, 0)) for key in PLAYER_RESOURCE_KEYS},
+            }
         row = {
             "id": str(r["_id"]), "player": r["player_name"], "tg_id": r["tg_id"], "castle": r["castle"],
             "category": r["category"], "category_name": ROLEPLAY_CATEGORIES.get(r["category"], r["category"]),
             "text": r["text"], "campaign_id": r.get("campaign_id"), "sibling": None,
             "created_at": r["created_at"].isoformat(), "war": None,
+            "actor_state": player_state(actor) if r["category"] in ("economy", "sabotage") else None,
+            "target_state": player_state(target) if r["category"] == "sabotage" else None,
+            "target_tg_id": r.get("target_tg_id"), "target_player_name": r.get("target_player_name"),
         }
         if r["category"] == "war" and r.get("campaign_id"):
             sib = await roleplays.find_one({"category": "war", "campaign_id": r["campaign_id"], "tg_id": {"$ne": r["tg_id"]}})
@@ -699,6 +716,10 @@ class RoleplayResultBody(BaseModel):
     attacker_army_equipment_losses: dict[str, dict[str, int]] = {}
     defender_army_losses: dict[str, dict[str, int]] = {}
     defender_army_equipment_losses: dict[str, dict[str, int]] = {}
+    actor_resource_deltas: dict[str, int] = {}
+    actor_popularity_delta: int = 0
+    target_resource_deltas: dict[str, int] = {}
+    target_popularity_delta: int = 0
                                         # چون سناریوی یک لرد ممکن است به چند لرد دیگر اشاره کند، نه فقط
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
 
@@ -841,6 +862,39 @@ def _sum_campaign_field(rows: list[dict], field: str) -> dict[str, int]:
             total[key] = total.get(key, 0) + max(0, int(value or 0))
     return total
 
+async def _apply_roleplay_player_adjustments(tg_id: int, resource_deltas: dict[str, int], popularity_delta: int) -> dict:
+    player = await players.find_one({"tg_id": tg_id})
+    if not player:
+        raise HTTPException(404, "بازیکن مربوط به رول پیدا نشد")
+    resources = dict(player.get("resources", {}))
+    applied_resources = {}
+    for key, raw in resource_deltas.items():
+        if key not in PLAYER_RESOURCE_KEYS:
+            raise HTTPException(400, f"منبع نامعتبر: {key}")
+        delta = int(raw or 0)
+        if abs(delta) > 1_000_000:
+            raise HTTPException(400, "تغییر منبع بیش از حد بزرگ است")
+        if delta:
+            before = int(resources.get(key, 0) or 0)
+            resources[key] = max(0, before + delta)
+            applied_resources[key] = resources[key] - before
+    pop_delta = int(popularity_delta or 0)
+    if abs(pop_delta) > 100:
+        raise HTTPException(400, "تغییر محبوبیت نمی‌تواند بیشتر از ۱۰۰ باشد")
+    old_popularity = max(0, min(100, int(player.get("popularity", POPULARITY_START))))
+    popularity = max(0, min(100, old_popularity + pop_delta))
+    await players.update_one({"tg_id": tg_id}, {"$set": {"resources": resources, "popularity": popularity}})
+    return {"tg_id": tg_id, "resources": applied_resources, "popularity": popularity - old_popularity}
+
+def _validate_roleplay_adjustments(resource_deltas: dict[str, int], popularity_delta: int):
+    for key, raw in resource_deltas.items():
+        if key not in PLAYER_RESOURCE_KEYS:
+            raise HTTPException(400, f"منبع نامعتبر: {key}")
+        if abs(int(raw or 0)) > 1_000_000:
+            raise HTTPException(400, "تغییر منبع بیش از حد بزرگ است")
+    if abs(int(popularity_delta or 0)) > 100:
+        raise HTTPException(400, "تغییر محبوبیت نمی‌تواند بیشتر از ۱۰۰ باشد")
+
 @router.post("/roleplay/{roleplay_id}/respond")
 async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
     """برای دستهٔ «جنگ»، نتیجه برای هر دو طرف نبرد فرستاده می‌شود — چه هر دو سناریو
@@ -979,6 +1033,27 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                     campaign.get("battle_defender_army_ids"),
                 )
 
+    adjustment_results = []
+    adjustments_requested = bool(
+        body.actor_resource_deltas or body.actor_popularity_delta
+        or body.target_resource_deltas or body.target_popularity_delta
+    )
+    if adjustments_requested and r["category"] not in ("economy", "sabotage"):
+        raise HTTPException(400, "تغییر منابع و محبوبیت فقط برای رول اقتصادی و خرابکاری مجاز است")
+    _validate_roleplay_adjustments(body.actor_resource_deltas, body.actor_popularity_delta)
+    _validate_roleplay_adjustments(body.target_resource_deltas, body.target_popularity_delta)
+    if r["category"] in ("economy", "sabotage"):
+        adjustment_results.append(await _apply_roleplay_player_adjustments(
+            r["tg_id"], body.actor_resource_deltas, body.actor_popularity_delta,
+        ))
+    if r["category"] == "sabotage":
+        target_tg_id = r.get("target_tg_id")
+        if target_tg_id:
+            recipient_tg_ids.add(target_tg_id)
+            adjustment_results.append(await _apply_roleplay_player_adjustments(
+                target_tg_id, body.target_resource_deltas, body.target_popularity_delta,
+            ))
+
     other_lord_names = []
     for tg_id in body.other_lords:
         lord = await players.find_one({"tg_id": tg_id})
@@ -1020,6 +1095,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
+        "admin_adjustments": adjustment_results,
         **({"winner_tg_id": winner_tg_ids[0], "winner_tg_ids": winner_tg_ids, "loser_tg_ids": loser_tg_ids, "combat_outcome": combat_outcome} if combat_outcome else {}),
     }})
 
@@ -1081,9 +1157,23 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         )
         battle_report_plain = f"⚔️ {battle_title}\n{battle_report_rest}"
         battle_report_bot = f"<b>⚔️ {html.escape(battle_title)}</b>\n{html.escape(battle_report_rest)}"
+    elif r["category"] == "sabotage" and r.get("target_player_name"):
+        parties_line = f"\nفرستندهٔ خرابکاری: {r['player_name']}\nهدف خرابکاری: {r['target_player_name']}"
     elif other_lord_names:
         all_names = list(dict.fromkeys([r["player_name"], *other_lord_names]))
         parties_line = f"\nطرف‌های این رول: {' و '.join(all_names)}"
+    adjustment_lines = []
+    for adjustment in adjustment_results:
+        adjusted_player = await players.find_one({"tg_id": adjustment["tg_id"]}, {"name": 1})
+        changes = [
+            f"{ROLEPLAY_RESOURCE_NAMES.get(key, key)} {delta:+,}"
+            for key, delta in adjustment["resources"].items() if delta
+        ]
+        if adjustment["popularity"]:
+            changes.append(f"محبوبیت {adjustment['popularity']:+}")
+        if changes:
+            adjustment_lines.append(f"{adjusted_player['name'] if adjusted_player else adjustment['tg_id']}: " + "، ".join(changes))
+    adjustment_line = ("\n\nتغییرات ثبت‌شده:\n" + "\n".join(adjustment_lines)) if adjustment_lines else ""
     for tg_id in recipient_tg_ids:
         player = await players.find_one({"tg_id": tg_id})
         if player:
@@ -1093,7 +1183,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                     bot_text=battle_report_bot, bot_parse_mode="HTML",
                 )
             else:
-                await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}")
+                await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}{adjustment_line}")
 
     return {"ok": True, "sent_to": len(recipient_tg_ids)}
 
