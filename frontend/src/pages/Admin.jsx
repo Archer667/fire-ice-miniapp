@@ -218,6 +218,7 @@ export default function Admin() {
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
   const [roleplayWinners, setRoleplayWinners] = useState({}); // battleId -> winner tg_id[]
   const [roleplayLosses, setRoleplayLosses] = useState({}); // roleplayId -> {attacker:{troopId:n}, defender:{troopId:n}}
+  const [roleplayAdjustments, setRoleplayAdjustments] = useState({}); // roleplayId -> actor/target resource and popularity deltas
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
   const [itemsList, setItemsList] = useState(null);
@@ -684,7 +685,7 @@ export default function Admin() {
     setRoleplayBusyId(roleplayId);
     try {
       const losses = roleplayLosses[roleplayId] || {};
-      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId, losses.attacker || {}, losses.defender || {});
+      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId, losses.attacker || {}, losses.defender || {}, roleplayAdjustments[roleplayId] || {});
       haptic('medium');
       toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
       setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
@@ -692,6 +693,7 @@ export default function Admin() {
       setRoleplayOtherLords(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayWinners(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       setRoleplayLosses(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayAdjustments(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
       loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
@@ -1728,6 +1730,30 @@ export default function Admin() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
+                {r.category === 'sabotage' && <div className="notice-guide" style={{ marginBottom: 10 }}><strong>هدف خرابکاری: {r.target_player_name || 'نامشخص'}</strong><span>نتیجه و تغییرات هر دو طرف را از همین پرونده ثبت کن.</span></div>}
+                {['economy', 'sabotage'].includes(r.category) && [
+                  ['actor', r.actor_state, r.category === 'economy' ? 'وضعیت اقتصادی صاحب رول' : 'وضعیت فرستندهٔ خرابکاری'],
+                  ...(r.category === 'sabotage' ? [['target', r.target_state, 'وضعیت لرد هدف']] : []),
+                ].map(([scope, state, label]) => state && (
+                  <div key={`${r.id}-${scope}`} style={{ margin: '10px 0', padding: 11, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.02)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>{label} — {state.name}</div>
+                    <div className="page-sub" style={{ margin: '0 0 9px' }}>موجودی فعلی کنار هر منبع نوشته شده؛ فقط مقدار تغییر را وارد کن. مثبت اضافه و منفی کم می‌کند.</div>
+                    <div className="grid2">
+                      {PLAYER_RES.map(({ key, label: resourceLabel }) => (
+                        <div key={`${scope}-${key}`}>
+                          <label className="f" style={{ marginTop: 6 }}>{resourceLabel} · فعلی {(state.resources?.[key] || 0).toLocaleString('fa-IR')}</label>
+                          <input type="number" placeholder="تغییر؛ مثلاً ۱۰۰ یا ۵۰-"
+                            value={roleplayAdjustments[r.id]?.[`${scope}Resources`]?.[key] ?? ''}
+                            onChange={e => setRoleplayAdjustments(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), [`${scope}Resources`]: { ...(prev[r.id]?.[`${scope}Resources`] || {}), [key]: e.target.value } } }))} />
+                        </div>
+                      ))}
+                    </div>
+                    <label className="f">محبوبیت · فعلی {state.popularity.toLocaleString('fa-IR')} از ۱۰۰</label>
+                    <input type="number" min="-100" max="100" placeholder="تغییر محبوبیت؛ مثلاً ۵ یا ۳-"
+                      value={roleplayAdjustments[r.id]?.[`${scope}Popularity`] ?? ''}
+                      onChange={e => setRoleplayAdjustments(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), [`${scope}Popularity`]: e.target.value } }))} />
+                  </div>
+                ))}
                 {r.category === 'war' && (
                   <div className="notice-guide" style={{ marginBottom: 10 }}>
                     <strong>داوری این رول در پروندهٔ نبرد انجام می‌شود</strong>
