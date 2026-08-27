@@ -50,6 +50,28 @@ def campaign_waiting_for_result(campaign: dict) -> bool:
         and campaign.get("status") not in ("cancelled", "disbanded", "destroyed", "battle_dismissed")
     )
 
+async def repair_stale_engagement_lock(campaign: dict) -> dict:
+    """قفل‌های یتیمِ ساخته‌شده پیش از اصلاح یکپارچگی را هنگام عملیات بازیکن ترمیم می‌کند."""
+    if not campaign.get("engagement_locked"):
+        return campaign
+    battle_id = campaign.get("engagement_campaign_id")
+    root = None
+    if battle_id:
+        root = await campaigns.find_one({"engagement_campaign_id": battle_id, "battle_is_root": True})
+    if not root and campaign.get("battle_root_campaign_id"):
+        try:
+            root = await campaigns.find_one({"_id": ObjectId(campaign["battle_root_campaign_id"])})
+        except Exception:
+            root = None
+    battle_is_open = bool(root and root.get("battle_open") and not root.get("combat_resolved_at") and not root.get("battle_cancelled_at"))
+    if battle_is_open:
+        return campaign
+    await campaigns.update_one({"_id": campaign["_id"]}, {
+        "$set": {"engagement_locked": False},
+        "$unset": {"engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "", "opponent_campaign_id": "", "opponent_tg_id": ""},
+    })
+    return {**campaign, "engagement_locked": False, "engagement_campaign_id": None, "battle_root_campaign_id": None}
+
 # ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
 REPORT_VISIBLE_HOURS = 24
 
@@ -535,6 +557,7 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         raise HTTPException(404, "لشکر پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
+    c = await repair_stale_engagement_lock(c)
     if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قابل لغو یا حرکت نیست")
 
@@ -585,6 +608,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     c = await campaigns.find_one({"_id": oid, "tg_id": user["id"], "active": True})
     if not c:
         raise HTTPException(404, "لشکر فعال پیدا نشد")
+    c = await repair_stale_engagement_lock(c)
     if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قفل می‌ماند")
     if c.get("arrival_at") and now() < c["arrival_at"]:
