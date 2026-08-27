@@ -630,11 +630,11 @@ export default function Admin() {
   const disbandCampaign = async (id) => {
     setDisbandBusyId(id);
     try {
-      await api.adminDisbandCampaign(id);
+      const res = await api.adminDisbandCampaign(id);
       haptic('medium');
-      toast('لشکر منحل شد و تمام هزینه‌هایش برگشت');
+      toast(res.battle_dismissed ? 'لشکر منحل و نبرد مرتبط بسته شد؛ دیگر لشکرها آزاد شدند' : 'لشکر منحل شد و تمام هزینه‌هایش برگشت');
       if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(() => {});
-      loadCampaigns();
+      loadCampaigns(); loadBattles(); loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setDisbandBusyId(null);
   };
@@ -674,6 +674,11 @@ export default function Admin() {
     const visibility = roleplayVisibility[roleplayId] || 'participants';
     const otherLords = (roleplayOtherLords[roleplayId] || []).map(p => p.tg_id);
     const roleplay = roleplayPending?.find(r => r.id === roleplayId);
+    if (roleplay?.category === 'war') {
+      setTab('war'); setWarSubTab('battles');
+      toast('نتیجه و تلفات جنگ فقط از پروندهٔ یکپارچهٔ نبرد ثبت می‌شود');
+      return;
+    }
     const winnerTgId = roleplayWinners[roleplayId] || null;
     if (roleplay?.category === 'war' && !winnerTgId) { toast('برندهٔ نبرد را مشخص کن'); return; }
     setRoleplayBusyId(roleplayId);
@@ -737,7 +742,7 @@ export default function Admin() {
   const destroyCampaign = async (id) => {
     if (!window.confirm('این لشکر کامل منهدم شود؟ هیچ نفر، سکه، سلاح یا ادواتی برنمی‌گردد.')) return;
     setDisbandBusyId(id);
-    try { await api.adminDestroyCampaign(id); toast('لشکر کاملاً منهدم شد'); loadCampaigns(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
+    try { const res = await api.adminDestroyCampaign(id); toast(res.battle_dismissed ? 'لشکر منهدم و نبرد مرتبط بسته شد؛ دیگر لشکرها آزاد شدند' : 'لشکر کاملاً منهدم شد'); loadCampaigns(); loadBattles(); loadRoleplayPending(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
     catch (e) { toast(e.message); }
     setDisbandBusyId(null);
   };
@@ -1699,6 +1704,13 @@ export default function Admin() {
                 </div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
                 {r.category === 'war' && (
+                  <div className="notice-guide" style={{ marginBottom: 10 }}>
+                    <strong>داوری این رول در پروندهٔ نبرد انجام می‌شود</strong>
+                    <span>برای جلوگیری از دو نتیجه و تلفات ناسازگار، نتیجهٔ جنگ از تب رول‌ها ثبت نمی‌شود.</span>
+                    <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => { setTab('war'); setWarSubTab('battles'); }}>رفتن به پرونده‌های نبرد</button>
+                  </div>
+                )}
+                {r.category === 'war' && (
                   r.sibling ? (
                     <div style={{ margin: '0 0 10px', padding: 10, borderRadius: 12, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(96,178,255,0.2)' }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--az2)', marginBottom: 4 }}>سناریوی طرف مقابل ({r.sibling.player})</div>
@@ -1709,7 +1721,7 @@ export default function Admin() {
                   )
                 )}
                 {r.category === 'war' && r.war && (
-                  <>
+                  <div style={{ display: 'none' }} aria-hidden="true">
                     <div style={{ margin: '10px 0', padding: 10, borderRadius: 12, border: '1px solid var(--line)' }}>
                       <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>نیروهای درگیر و ثبت تلفات</div>
                       <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 8 }}>
@@ -1759,9 +1771,10 @@ export default function Admin() {
                         <div className="c">مدافع — دفاع موفق از {castleLabel(r.war.target_castle)}</div>
                       </button>
                     </div>
-                  </>
+                  </div>
                 )}
-                <label className="f" style={{ marginTop: r.category === 'war' ? 12 : 0 }}>نتیجه</label>
+                <div style={{ display: r.category === 'war' ? 'none' : 'block' }}>
+                <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
                           placeholder="نتیجهٔ این رول چه شد..." />
@@ -1786,6 +1799,7 @@ export default function Admin() {
                 <button className="btn" style={{ marginTop: 14 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
                   {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
                 </button>
+                </div>
               </div>
             ))}
           </div>
