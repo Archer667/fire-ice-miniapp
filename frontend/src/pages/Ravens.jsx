@@ -147,10 +147,13 @@ export default function Ravens() {
         {thread.map((m, i) => {
           if (openWith?.tg_id === SYSTEM_TG_ID) {
             const meta = noticeMeta(m);
+            const [noticeTitle, ...noticeBody] = (m.text || '').split('\n');
             return (
               <article key={i} className="notice-message">
                 <header><span>{meta.icon}</span><strong>{meta.label}</strong>{m.at && <time>{timeAgo(m.at)}</time>}</header>
-                <div>{m.text}</div>
+                {m.kind === 'battle' ? (
+                  <div><strong style={{ display: 'block', color: 'var(--text)', marginBottom: 7 }}>{noticeTitle}</strong>{noticeBody.join('\n')}</div>
+                ) : <div>{m.text}</div>}
               </article>
             );
           }
@@ -292,3 +295,4 @@ export default function Ravens() {
     </>
   );
 }
+
