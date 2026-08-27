@@ -216,7 +216,7 @@ export default function Admin() {
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
-  const [roleplayWinners, setRoleplayWinners] = useState({}); // roleplayId -> winner tg_id
+  const [roleplayWinners, setRoleplayWinners] = useState({}); // battleId -> winner tg_id[]
   const [roleplayLosses, setRoleplayLosses] = useState({}); // roleplayId -> {attacker:{troopId:n}, defender:{troopId:n}}
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
 
@@ -632,7 +632,7 @@ export default function Admin() {
     try {
       const res = await api.adminDisbandCampaign(id);
       haptic('medium');
-      toast(res.battle_dismissed ? 'لشکر منحل و نبرد مرتبط بسته شد؛ دیگر لشکرها آزاد شدند' : 'لشکر منحل شد و تمام هزینه‌هایش برگشت');
+      toast(res.battle_closed ? 'لشکر منحل شد و چون یک سمت خالی ماند، نبرد هم بسته شد' : res.battle_member_removed ? 'لشکر منحل و فقط همان عضو از نبرد خارج شد' : 'لشکر منحل شد و تمام هزینه‌هایش برگشت');
       if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(() => {});
       loadCampaigns(); loadBattles(); loadRoleplayPending();
     } catch (e) { toast(e.message); }
@@ -742,7 +742,7 @@ export default function Admin() {
   const destroyCampaign = async (id) => {
     if (!window.confirm('این لشکر کامل منهدم شود؟ هیچ نفر، سکه، سلاح یا ادواتی برنمی‌گردد.')) return;
     setDisbandBusyId(id);
-    try { const res = await api.adminDestroyCampaign(id); toast(res.battle_dismissed ? 'لشکر منهدم و نبرد مرتبط بسته شد؛ دیگر لشکرها آزاد شدند' : 'لشکر کاملاً منهدم شد'); loadCampaigns(); loadBattles(); loadRoleplayPending(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
+    try { const res = await api.adminDestroyCampaign(id); toast(res.battle_closed ? 'لشکر منهدم شد و چون یک سمت خالی ماند، نبرد هم بسته شد' : res.battle_member_removed ? 'لشکر منهدم و فقط همان عضو از نبرد خارج شد' : 'لشکر کاملاً منهدم شد'); loadCampaigns(); loadBattles(); loadRoleplayPending(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
     catch (e) { toast(e.message); }
     setDisbandBusyId(null);
   };
@@ -774,17 +774,33 @@ export default function Admin() {
   const resolveBattle = async (battle) => {
     const id = battle.campaign_id;
     const result = (roleplayResults[id] || '').trim();
-    const winner = roleplayWinners[id];
+    const winners = roleplayWinners[id] || [];
     if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
-    if (!winner) { toast('برندهٔ نبرد را مشخص کن'); return; }
+    if (!winners.length) { toast('حداقل یک برندهٔ نبرد را مشخص کن'); return; }
     setRoleplayBusyId(id);
     try {
       const losses = roleplayLosses[id] || {};
-      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winner, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {});
+      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {});
       toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
       loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
+  };
+
+  const toggleBattleWinner = (battleId, tgId, side) => {
+    setRoleplayWinners(prev => {
+      const current = prev[battleId] || [];
+      const selected = current.includes(tgId);
+      if (selected) return { ...prev, [battleId]: current.filter(id => id !== tgId) };
+      const battle = battles?.find(row => row.campaign_id === battleId);
+      const attackerIds = new Set((battle?.attacker_armies || []).map(a => a.tg_id));
+      const currentSide = current.length ? (attackerIds.has(current[0]) ? 'attacker' : 'defender') : side;
+      if (current.length && currentSide !== side) {
+        toast('تمام برنده‌ها باید از یک سمت نبرد باشند؛ اول انتخاب سمت دیگر را بردار');
+        return prev;
+      }
+      return { ...prev, [battleId]: [...current, tgId] };
+    });
   };
 
   const dismissBattle = async (battle) => {
@@ -1559,9 +1575,18 @@ export default function Admin() {
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
                 </div>)}
-                <label className="f">برنده</label><div className="grid2">{[...(b.attacker_armies || []).map(a => [a.tg_id, a.player_name]),...(b.defender_armies || []).map(a => [a.tg_id, a.player_name]),[b.defender_tg_id,b.defender_name]].filter(x => x[0]).filter((x,i,a) => a.findIndex(y => y[0] === x[0]) === i).map(([id,name]) => <button type="button" key={id} className={`rbtn pick ${roleplayWinners[b.campaign_id] === id ? 'sel' : ''}`} onClick={() => setRoleplayWinners(p => ({...p,[b.campaign_id]:id}))}><div className="n">{name}</div></button>)}</div>
+                <label className="f">برنده‌ها</label>
+                <div className="page-sub" style={{ margin: '0 0 8px' }}>می‌توانی چند لرد از یک سمت را انتخاب کنی؛ همهٔ برنده‌ها امتیاز پیروزی و محبوبیت می‌گیرند.</div>
+                <div className="grid2">{[
+                  ...(b.attacker_armies || []).map(a => [a.tg_id, a.player_name, 'attacker']),
+                  ...(b.defender_armies || []).map(a => [a.tg_id, a.player_name, 'defender']),
+                  [b.defender_tg_id, b.defender_name, 'defender'],
+                ].filter(x => x[0]).filter((x,i,a) => a.findIndex(y => y[0] === x[0]) === i).map(([id,name,side]) => {
+                  const selected = (roleplayWinners[b.campaign_id] || []).includes(id);
+                  return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id, side)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
+                })}</div>
                 <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
-                <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام طرفین، برنده، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
+                <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
                 <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
                 <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
               </div>;
