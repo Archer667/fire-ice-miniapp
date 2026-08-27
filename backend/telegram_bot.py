@@ -22,10 +22,12 @@ _background_tasks: set[asyncio.Task] = set()
 # و تلگرام همان را در هر آپدیت واقعی برمی‌گرداند — جلوی جعل درخواست به آدرس webhook را می‌گیرد
 WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:32] if BOT_TOKEN else ""
 
-async def _post_message(chat_id: int, text: str, reply_markup: dict | None = None):
+async def _post_message(chat_id: int, text: str, reply_markup: dict | None = None, parse_mode: str | None = None):
     payload = {"chat_id": chat_id, "text": text[:4000]}
     if reply_markup:
         payload["reply_markup"] = reply_markup
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             resp = await client.post(_SEND_MESSAGE_API.format(token=BOT_TOKEN), json=payload)
@@ -34,12 +36,12 @@ async def _post_message(chat_id: int, text: str, reply_markup: dict | None = Non
     except Exception:
         logger.exception("telegram push errored for chat_id=%s", chat_id)
 
-def push(chat_id: int, text: str, reply_markup: dict | None = None):
+def push(chat_id: int, text: str, reply_markup: dict | None = None, parse_mode: str | None = None):
     """فرستادن fire-and-forget — نباید جلوی جواب API را بگیرد یا اگر کاربر بات را
     بلاک کرده باشد کل اکشن (لشکرکشی، جنگ، ...) را خراب کند"""
     if DEV_MODE or not BOT_TOKEN:
         return
-    task = asyncio.create_task(_post_message(chat_id, text, reply_markup))
+    task = asyncio.create_task(_post_message(chat_id, text, reply_markup, parse_mode))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
@@ -61,3 +63,4 @@ async def register_webhook():
                 logger.info("telegram webhook registered at %s", PUBLIC_BASE_URL + TELEGRAM_WEBHOOK_PATH)
     except Exception:
         logger.exception("telegram setWebhook errored")
+
