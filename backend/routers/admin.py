@@ -1,5 +1,6 @@
 import random
 import re
+import html
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -1030,6 +1031,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
     prefix = "اعلامیهٔ عمومی" if body.visibility == "all" or (campaign and combat_outcome) else f"نتیجهٔ رول «{cat_name}»{'ِ نبرد' if r['category'] == 'war' else ''}"
     parties_line = ""
+    battle_report_plain = None
+    battle_report_bot = None
     if campaign and combat_outcome:
         attacker_player = await players.find_one({"tg_id": campaign["tg_id"]})
         winner_players = await players.find({"tg_id": {"$in": winner_tg_ids}}, {"tg_id": 1, "name": 1}).to_list(None)
@@ -1060,27 +1063,37 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             parts = [f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}: {int(count):,}" for eid, count in values.items() if int(count or 0) > 0]
             return "، ".join(parts) if parts else empty_text
         location = campaign.get("battle_location") or campaign.get("target_castle", "محل نامشخص")
-        parties_line = (
-            f"\n⚔️ طرفین: لرد {attacker_name} در برابر لرد {defender_name}"
-            f"\n📍 محل نبرد: {location}"
-            f"\n🏆 برنده‌ها: {'، '.join('لرد ' + name for name in winner_names)}"
-            f"\n🏳️ بازنده‌ها: {('، '.join('لرد ' + name for name in loser_names) if loser_names else 'ندارد')}"
-            f"\nتلفات {attacker_name}: {count_line(attacker_report_losses)}"
-            f"\nنیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}"
-            f"\nتلفات {defender_name}: {count_line(defender_report_losses)}"
-            f"\nنیروهای باقی‌مانده {defender_name}: {count_line(defender_after, 'هیچ نیرویی باقی نمانده')}"
-            f"\nادوات منهدم‌شده {attacker_name}: {equipment_line(attacker_report_equipment_losses, 'هیچ‌کدام')}"
-            f"\nادوات منهدم‌شده {defender_name}: {equipment_line(defender_report_equipment_losses, 'هیچ‌کدام')}"
-            f"\nادوات باقی‌مانده {attacker_name}: {equipment_line(attacker_equipment_after, 'ندارد')}"
-            f"\nادوات باقی‌مانده {defender_name}: {equipment_line(defender_equipment_after, 'ندارد')}"
+        battle_title = campaign.get("name") or "نتیجهٔ نبرد"
+        battle_report_rest = (
+            f"⚔️ طرفین: لرد {attacker_name} در برابر لرد {defender_name}\n"
+            f"📍 محل نبرد: {location}\n\n"
+            f"📜 نتیجهٔ داوری\n{result}\n\n"
+            f"🏆 برنده‌ها: {'، '.join('لرد ' + name for name in winner_names)}\n"
+            f"🏳️ بازنده‌ها: {('، '.join('لرد ' + name for name in loser_names) if loser_names else 'ندارد')}\n\n"
+            f"🩸 تلفات {attacker_name}: {count_line(attacker_report_losses)}\n"
+            f"🛡️ نیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}\n"
+            f"🩸 تلفات {defender_name}: {count_line(defender_report_losses)}\n"
+            f"🛡️ نیروهای باقی‌مانده {defender_name}: {count_line(defender_after, 'هیچ نیرویی باقی نمانده')}\n\n"
+            f"💥 ادوات منهدم‌شده {attacker_name}: {equipment_line(attacker_report_equipment_losses, 'هیچ‌کدام')}\n"
+            f"💥 ادوات منهدم‌شده {defender_name}: {equipment_line(defender_report_equipment_losses, 'هیچ‌کدام')}\n"
+            f"🏗️ ادوات باقی‌مانده {attacker_name}: {equipment_line(attacker_equipment_after, 'ندارد')}\n"
+            f"🏗️ ادوات باقی‌مانده {defender_name}: {equipment_line(defender_equipment_after, 'ندارد')}"
         )
+        battle_report_plain = f"⚔️ {battle_title}\n{battle_report_rest}"
+        battle_report_bot = f"<b>⚔️ {html.escape(battle_title)}</b>\n{html.escape(battle_report_rest)}"
     elif other_lord_names:
         all_names = list(dict.fromkeys([r["player_name"], *other_lord_names]))
         parties_line = f"\nطرف‌های این رول: {' و '.join(all_names)}"
     for tg_id in recipient_tg_ids:
         player = await players.find_one({"tg_id": tg_id})
         if player:
-            await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}")
+            if battle_report_plain:
+                await send_system_message(
+                    player["tg_id"], player["name"], battle_report_plain, kind="battle",
+                    bot_text=battle_report_bot, bot_parse_mode="HTML",
+                )
+            else:
+                await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}")
 
     return {"ok": True, "sent_to": len(recipient_tg_ids)}
 
