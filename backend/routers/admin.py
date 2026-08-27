@@ -458,6 +458,83 @@ async def _battle_root(battle_id: str):
     except Exception:
         return None
 
+def _battle_member_ids(root: dict) -> list[ObjectId]:
+    """تمام شناسه‌هایی که ممکن است عضو پرونده باشند؛ برای داده‌های جدید و قدیمی."""
+    raw_ids = [
+        str(root["_id"]), root.get("opponent_campaign_id"),
+        *(root.get("battle_attacker_army_ids") or []),
+        *(root.get("battle_defender_army_ids") or []),
+    ]
+    out = []
+    for raw_id in raw_ids:
+        if not raw_id:
+            continue
+        try:
+            oid = ObjectId(raw_id)
+        except Exception:
+            continue
+        if oid not in out:
+            out.append(oid)
+    return out
+
+def _battle_members_query(root: dict, battle_id: str) -> dict:
+    root_id = str(root["_id"])
+    return {"$or": [
+        {"_id": {"$in": _battle_member_ids(root)}},
+        {"engagement_campaign_id": battle_id},
+        {"battle_root_campaign_id": root_id},
+    ]}
+
+async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False):
+    """پرونده را برای همهٔ اعضا یک‌جا می‌بندد تا هیچ قفل یا ریشهٔ یتیمی باقی نماند."""
+    timestamp = now()
+    state = {
+        "engagement_locked": False, "battle_open": False,
+        "battle_cancelled_at" if cancelled else "combat_resolved_at": timestamp,
+    }
+    return await campaigns.update_many(
+        _battle_members_query(root, battle_id),
+        {"$set": state, "$unset": {
+            "engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "",
+            "opponent_campaign_id": "", "opponent_tg_id": "",
+        }},
+    )
+
+async def _dismiss_battle_record(root: dict, battle_id: str, message: str):
+    """انحلال واحد و مشترک برای دکمهٔ نبرد و عملیات مستقیم روی لشکر."""
+    member_query = _battle_members_query(root, battle_id)
+    members = await campaigns.find(member_query, {"tg_id": 1}).to_list(None)
+    changed = await _close_battle_state(root, battle_id, cancelled=True)
+    await roleplays.update_many({"category": "war", "campaign_id": battle_id, "resolved": False}, {"$set": {
+        "resolved": True, "resolved_at": now(), "result": message,
+    }})
+    recipients = {m.get("tg_id") for m in members} | {
+        root.get("tg_id"), root.get("battle_defender_tg_id"), root.get("opponent_tg_id"),
+        *(root.get("battle_participant_tg_ids") or []),
+    }
+    recipients.discard(None)
+    async for participant in players.find({"tg_id": {"$in": list(recipients)}}):
+        await send_system_message(participant["tg_id"], participant["name"], message)
+    return changed
+
+async def _dismiss_battle_for_campaign(campaign: dict, reason: str) -> bool:
+    battle_id = campaign.get("engagement_campaign_id")
+    if not battle_id and campaign.get("battle_is_root") and campaign.get("battle_open"):
+        battle_id = str(campaign["_id"])
+    if not battle_id:
+        return False
+    root = await _battle_root(battle_id)
+    if not root:
+        raw_root_id = campaign.get("battle_root_campaign_id")
+        try:
+            root = await campaigns.find_one({"_id": ObjectId(raw_root_id)}) if raw_root_id else None
+        except Exception:
+            root = None
+    if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
+        return False
+    await _dismiss_battle_record(root, battle_id, reason)
+    return True
+
 @router.get("/battles")
 async def list_open_battles(user: dict = Depends(admin_user)):
     """پرونده‌های نبرد مستقل از رول؛ بنابراین حتی با صفر رول هم قابل داوری‌اند."""
@@ -569,29 +646,7 @@ async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
     if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
         raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
 
-    participant_ids = [root["_id"]]
-    for raw_id in [root.get("opponent_campaign_id"), *(root.get("battle_defender_army_ids") or [])]:
-        if raw_id:
-            try:
-                participant_ids.append(ObjectId(raw_id))
-            except Exception:
-                pass
-    unlocked = await campaigns.update_many({
-        "$or": [
-            {"_id": {"$in": participant_ids}},
-            {"engagement_campaign_id": campaign_id},
-        ]
-    }, {
-        "$set": {"engagement_locked": False, "battle_open": False, "battle_cancelled_at": now()},
-        "$unset": {"engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "", "opponent_campaign_id": "", "opponent_tg_id": ""},
-    })
-    await roleplays.update_many({"category": "war", "campaign_id": campaign_id, "resolved": False}, {"$set": {
-        "resolved": True, "resolved_at": now(), "result": "این نبرد توسط ادمین منحل شد و نتیجه‌ای نداشت.",
-    }})
-
-    recipients = {root.get("tg_id"), root.get("battle_defender_tg_id"), root.get("opponent_tg_id")} - {None}
-    async for participant in players.find({"tg_id": {"$in": list(recipients)}}):
-        await send_system_message(participant["tg_id"], participant["name"], "این نبرد توسط ادمین منحل شد و لشکرهای درگیر آزاد شدند.")
+    unlocked = await _dismiss_battle_record(root, campaign_id, "این نبرد توسط ادمین منحل شد و لشکرهای درگیر آزاد شدند.")
     return {"ok": True, "armies_unlocked": unlocked.modified_count}
 
 @router.post("/battles/{campaign_id}/resolve")
@@ -634,6 +689,13 @@ async def _apply_campaign_losses(campaign: dict, losses: dict[str, int]):
         update.update({"active": False, "status": "destroyed", "engagement_locked": False})
     await campaigns.update_one({"_id": campaign["_id"]}, {"$set": update})
 
+def _validate_campaign_losses(campaign: dict, losses: dict[str, int]):
+    troops = campaign.get("troops", {})
+    for tid, raw in losses.items():
+        loss = int(raw or 0)
+        if loss < 0 or (tid not in troops and loss) or loss > int(troops.get(tid, 0) or 0):
+            raise HTTPException(400, f"تلفات {tid} از تعداد حاضر در لشکر بیشتر است")
+
 async def _apply_equipment_losses(campaign: dict, losses: dict[str, int]):
     equipment = dict(campaign.get("equipment", {}))
     for eid, raw in losses.items():
@@ -643,6 +705,13 @@ async def _apply_equipment_losses(campaign: dict, losses: dict[str, int]):
         equipment[eid] = int(equipment.get(eid, 0)) - loss
     equipment_power = sum(SIEGE_EQUIPMENT.get(eid, {}).get("siege_power", 0) * count for eid, count in equipment.items())
     await campaigns.update_one({"_id": campaign["_id"]}, {"$set": {"equipment": equipment, "equipment_power": equipment_power}})
+
+def _validate_equipment_losses(campaign: dict, losses: dict[str, int]):
+    equipment = campaign.get("equipment", {})
+    for eid, raw in losses.items():
+        loss = int(raw or 0)
+        if loss < 0 or loss > int(equipment.get(eid, 0) or 0):
+            raise HTTPException(400, f"تلفات ادوات {eid} از تعداد حاضر بیشتر است")
 
 async def _apply_defender_losses(defender_tg_id: int, target_castle: str, engagement_id: str, losses: dict[str, int], army_ids: list[str] | None = None):
     """تلفات تجمیعی مدافع را میان لشکرهای دفاعی همان قلعه پخش می‌کند."""
@@ -693,6 +762,22 @@ async def _apply_defender_equipment_losses(defender_tg_id: int, engagement_id: s
                 remaining[eid] -= take
         await _apply_equipment_losses(army, share)
 
+def _sum_nested_counts(flat: dict[str, int], nested: dict[str, dict[str, int]]) -> dict[str, int]:
+    """فرمت قدیمیِ تجمیعی و فرمت جدیدِ تلفات هر لشکر را برای گزارش یکی می‌کند."""
+    # اگر فرمت جدید حاضر است، flat فقط fallback سازگاری است و نباید دوباره جمع شود.
+    total = {} if nested else {key: max(0, int(value or 0)) for key, value in (flat or {}).items()}
+    for values in (nested or {}).values():
+        for key, value in values.items():
+            total[key] = total.get(key, 0) + max(0, int(value or 0))
+    return total
+
+def _sum_campaign_field(rows: list[dict], field: str) -> dict[str, int]:
+    total = {}
+    for row in rows:
+        for key, value in (row.get(field) or {}).items():
+            total[key] = total.get(key, 0) + max(0, int(value or 0))
+    return total
+
 @router.post("/roleplay/{roleplay_id}/respond")
 async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dict = Depends(admin_user)):
     """برای دستهٔ «جنگ»، نتیجه برای هر دو طرف نبرد فرستاده می‌شود — چه هر دو سناریو
@@ -722,6 +807,16 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     defender = None
     combat_outcome = None
     opponent_campaign = None
+    attacker_campaigns = []
+    defender_campaigns = []
+    attacker_before = {}
+    defender_before = {}
+    attacker_equipment_before = {}
+    defender_equipment_before = {}
+    attacker_report_losses = _sum_nested_counts(body.attacker_losses, body.attacker_army_losses)
+    defender_report_losses = _sum_nested_counts(body.defender_losses, body.defender_army_losses)
+    attacker_report_equipment_losses = _sum_nested_counts(body.attacker_equipment_losses, body.attacker_army_equipment_losses)
+    defender_report_equipment_losses = _sum_nested_counts(body.defender_equipment_losses, body.defender_army_equipment_losses)
 
     if r["category"] == "war" and r.get("campaign_id"):
         siblings = await roleplays.find({
@@ -743,7 +838,6 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             if defender:
                 recipient_tg_ids.add(defender["tg_id"])
             attacker_ids = campaign.get("battle_attacker_army_ids") or [str(campaign["_id"])]
-            attacker_campaigns = []
             for army_id in attacker_ids:
                 try:
                     army = await campaigns.find_one({"_id": ObjectId(army_id)})
@@ -752,7 +846,6 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 if army:
                     attacker_campaigns.append(army)
                     recipient_tg_ids.add(army["tg_id"])
-            defender_campaigns = []
             for army_id in campaign.get("battle_defender_army_ids") or []:
                 try:
                     army = await campaigns.find_one({"_id": ObjectId(army_id)})
@@ -770,8 +863,31 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 raise HTTPException(400, "برندهٔ نبرد را از بین مهاجم و مدافع انتخاب کن")
             combat_outcome = "attacker" if body.winner_tg_id in attacker_tg_ids else "defender"
 
+            attacker_before = _sum_campaign_field(attacker_campaigns or [campaign], "troops")
+            attacker_equipment_before = _sum_campaign_field(attacker_campaigns or [campaign], "equipment")
+            if defender_campaigns:
+                defender_before = _sum_campaign_field(defender_campaigns, "troops")
+                defender_equipment_before = _sum_campaign_field(defender_campaigns, "equipment")
+            else:
+                defender_before = _sum_campaign_field(campaign.get("battle_defender_snapshot", []), "troops")
+                defender_equipment_before = _sum_campaign_field(campaign.get("battle_defender_snapshot", []), "equipment")
+
             # تلفات دقیق همزمان با نتیجه ثبت می‌شود. برای مدافع، جمع هر نوع نیرو
             # میان همهٔ لشکرهای دفاعی حاضر در همان قلعه تقسیم می‌شود.
+            # همهٔ ورودی‌ها قبل از اولین write اعتبارسنجی می‌شوند تا خطای یک ارتش
+            # باعث ثبت نصفه‌ونیمهٔ تلفات روی ارتش قبلی نشود.
+            for attacker_army in attacker_campaigns or [campaign]:
+                aid = str(attacker_army["_id"])
+                _validate_campaign_losses(attacker_army, body.attacker_army_losses.get(aid, body.attacker_losses if aid == str(campaign["_id"]) else {}))
+                _validate_equipment_losses(attacker_army, body.attacker_army_equipment_losses.get(aid, body.attacker_equipment_losses if aid == str(campaign["_id"]) else {}))
+            if body.defender_army_losses or body.defender_army_equipment_losses:
+                for defender_army in defender_campaigns:
+                    did = str(defender_army["_id"])
+                    _validate_campaign_losses(defender_army, body.defender_army_losses.get(did, {}))
+                    _validate_equipment_losses(defender_army, body.defender_army_equipment_losses.get(did, {}))
+            elif opponent_campaign:
+                _validate_campaign_losses(opponent_campaign, body.defender_losses)
+                _validate_equipment_losses(opponent_campaign, body.defender_equipment_losses)
             for attacker_army in attacker_campaigns or [campaign]:
                 aid = str(attacker_army["_id"])
                 await _apply_campaign_losses(attacker_army, body.attacker_army_losses.get(aid, body.attacker_losses if aid == str(campaign["_id"]) else {}))
@@ -829,13 +945,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
         # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
         # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
-        await campaigns.update_many(
-            {"engagement_campaign_id": r.get("campaign_id")},
-            {"$set": {"engagement_locked": False, "battle_open": False}, "$unset": {
-                "engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "",
-                "opponent_campaign_id": "", "opponent_tg_id": "",
-            }},
-        )
+        await _close_battle_state(campaign, r.get("campaign_id"), cancelled=False)
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
@@ -853,8 +963,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     if campaign and combat_outcome:
         attacker_player = await players.find_one({"tg_id": campaign["tg_id"]})
         winner_player = await players.find_one({"tg_id": body.winner_tg_id})
-        attacker_name = attacker_player["name"] if attacker_player else campaign.get("player_name", "مهاجم")
-        defender_name = defender["name"] if defender else campaign.get("battle_defender_name", "مدافع")
+        attacker_names = list(dict.fromkeys(a.get("player_name") for a in attacker_campaigns if a.get("player_name")))
+        defender_names = list(dict.fromkeys(a.get("player_name") for a in defender_campaigns if a.get("player_name")))
+        attacker_name = " و ".join(attacker_names) or (attacker_player["name"] if attacker_player else campaign.get("player_name", "مهاجم"))
+        defender_name = " و ".join(defender_names) or (defender["name"] if defender else campaign.get("battle_defender_name", "مدافع"))
 
         def count_line(values: dict, empty_text: str = "بدون تلفات") -> str:
             parts = []
@@ -864,24 +976,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                     parts.append(f"{COMMON_TROOPS.get(tid, {}).get('name', tid)}: {count:,}")
             return "، ".join(parts) if parts else empty_text
 
-        attacker_before = {k: int(v or 0) for k, v in campaign.get("troops", {}).items()}
-        defender_before = {}
-        if opponent_campaign:
-            defender_before = {k: int(v or 0) for k, v in opponent_campaign.get("troops", {}).items()}
-        else:
-            for army in campaign.get("battle_defender_snapshot", []):
-                for tid, count in army.get("troops", {}).items():
-                    defender_before[tid] = defender_before.get(tid, 0) + int(count or 0)
-        attacker_after = {tid: max(0, n - int(body.attacker_losses.get(tid, 0) or 0)) for tid, n in attacker_before.items()}
-        defender_after = {tid: max(0, n - int(body.defender_losses.get(tid, 0) or 0)) for tid, n in defender_before.items()}
-        attacker_equipment_before = dict(campaign.get("equipment", {}))
-        defender_equipment_before = dict(opponent_campaign.get("equipment", {})) if opponent_campaign else {}
-        if not opponent_campaign:
-            for army in campaign.get("battle_defender_snapshot", []):
-                for eid, count in army.get("equipment", {}).items():
-                    defender_equipment_before[eid] = defender_equipment_before.get(eid, 0) + int(count or 0)
-        attacker_equipment_after = {eid: max(0, int(count or 0) - int(body.attacker_equipment_losses.get(eid, 0) or 0)) for eid, count in attacker_equipment_before.items()}
-        defender_equipment_after = {eid: max(0, int(count or 0) - int(body.defender_equipment_losses.get(eid, 0) or 0)) for eid, count in defender_equipment_before.items()}
+        attacker_after = {tid: max(0, n - int(attacker_report_losses.get(tid, 0) or 0)) for tid, n in attacker_before.items()}
+        defender_after = {tid: max(0, n - int(defender_report_losses.get(tid, 0) or 0)) for tid, n in defender_before.items()}
+        attacker_equipment_after = {eid: max(0, int(count or 0) - int(attacker_report_equipment_losses.get(eid, 0) or 0)) for eid, count in attacker_equipment_before.items()}
+        defender_equipment_after = {eid: max(0, int(count or 0) - int(defender_report_equipment_losses.get(eid, 0) or 0)) for eid, count in defender_equipment_before.items()}
 
         def equipment_line(values: dict, empty_text: str) -> str:
             parts = [f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}: {int(count):,}" for eid, count in values.items() if int(count or 0) > 0]
@@ -891,12 +989,12 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             f"\n⚔️ طرفین: لرد {attacker_name} در برابر لرد {defender_name}"
             f"\n📍 محل نبرد: {location}"
             f"\n🏆 برنده: لرد {winner_player['name'] if winner_player else 'نامشخص'}"
-            f"\nتلفات {attacker_name}: {count_line(body.attacker_losses)}"
+            f"\nتلفات {attacker_name}: {count_line(attacker_report_losses)}"
             f"\nنیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}"
-            f"\nتلفات {defender_name}: {count_line(body.defender_losses)}"
+            f"\nتلفات {defender_name}: {count_line(defender_report_losses)}"
             f"\nنیروهای باقی‌مانده {defender_name}: {count_line(defender_after, 'هیچ نیرویی باقی نمانده')}"
-            f"\nادوات منهدم‌شده {attacker_name}: {equipment_line(body.attacker_equipment_losses, 'هیچ‌کدام')}"
-            f"\nادوات منهدم‌شده {defender_name}: {equipment_line(body.defender_equipment_losses, 'هیچ‌کدام')}"
+            f"\nادوات منهدم‌شده {attacker_name}: {equipment_line(attacker_report_equipment_losses, 'هیچ‌کدام')}"
+            f"\nادوات منهدم‌شده {defender_name}: {equipment_line(defender_report_equipment_losses, 'هیچ‌کدام')}"
             f"\nادوات باقی‌مانده {attacker_name}: {equipment_line(attacker_equipment_after, 'ندارد')}"
             f"\nادوات باقی‌مانده {defender_name}: {equipment_line(defender_equipment_after, 'ندارد')}"
         )
@@ -1513,6 +1611,9 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
         raise HTTPException(404, "این لشکرکشی پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکرکشی دیگر فعال نیست")
+    battle_dismissed = await _dismiss_battle_for_campaign(
+        c, f"نبرد به‌دلیل انحلال لشکر «{c.get('name', 'بی‌نام')}» توسط ادمین بسته شد و دیگر لشکرهای درگیر آزاد شدند.",
+    )
     changed = await campaigns.update_one({"_id": oid, "active": True}, {"$set": {"active": False, "status": "disbanded"}})
     if not changed.matched_count:
         raise HTTPException(409, "وضعیت لشکر همین الان تغییر کرد")
@@ -1523,15 +1624,18 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
             weapon = TROOP_WEAPON_KEY.get(troop_id)
             if weapon:
                 refund[weapon] = refund.get(weapon, 0) + int(count or 0) * WEAPON_PER_SOLDIER
-        for resource, amount in c.get("equipment_cost", {}).items():
-            refund[resource] = refund.get(resource, 0) + int(amount or 0)
+        # فقط ادواتی که واقعاً هنوز در لشکر مانده‌اند برمی‌گردند؛ بازگرداندن
+        # equipment_cost اولیه، ادوات منهدم‌شده در نبرد را دوباره زنده می‌کرد.
+        for equipment_id, count in c.get("equipment", {}).items():
+            for resource, unit_cost in SIEGE_EQUIPMENT.get(equipment_id, {}).get("cost", {}).items():
+                refund[resource] = refund.get(resource, 0) + int(count or 0) * int(unit_cost or 0)
         add_resources(owner, refund)
         await players.update_one({"tg_id": c["tg_id"]}, {"$set": {"resources": owner["resources"]}})
         await send_system_message(
             owner["tg_id"], owner["name"],
             f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و تمام هزینه‌های باقی‌مانده‌اش برگشت.",
         )
-    return {"ok": True}
+    return {"ok": True, "battle_dismissed": battle_dismissed}
 
 @router.post("/campaigns/{campaign_id}/destroy")
 async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_admin_user)):
@@ -1543,6 +1647,9 @@ async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_adm
     c = await campaigns.find_one({"_id": oid, "active": True})
     if not c:
         raise HTTPException(404, "لشکر فعال پیدا نشد")
+    battle_dismissed = await _dismiss_battle_for_campaign(
+        c, f"نبرد به‌دلیل انهدام کامل لشکر «{c.get('name', 'بی‌نام')}» توسط ادمین بسته شد و دیگر لشکرهای درگیر آزاد شدند.",
+    )
     result = await campaigns.update_one(
         {"_id": oid, "active": True},
         {"$set": {"active": False, "status": "destroyed", "troops": {}, "men_committed": 0, "power": 0, "destroyed_at": now()}},
@@ -1552,7 +1659,7 @@ async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_adm
     owner = await players.find_one({"tg_id": c["tg_id"]}, {"tg_id": 1, "name": 1})
     if owner:
         await send_system_message(owner["tg_id"], owner["name"], f"لشکر «{c.get('name', 'بی‌نام')}» به فرمان ادمین کاملاً منهدم شد؛ هیچ هزینه‌ای برنگشت.")
-    return {"ok": True}
+    return {"ok": True, "battle_dismissed": battle_dismissed}
 
 class ReduceCampaignBody(BaseModel):
     troops: dict[str, int]
@@ -1567,6 +1674,8 @@ async def admin_reduce_campaign(campaign_id: str, body: ReduceCampaignBody, user
     c = await campaigns.find_one({"_id": oid, "active": True})
     if not c:
         raise HTTPException(404, "لشکر فعال پیدا نشد")
+    if c.get("engagement_locked") or c.get("engagement_campaign_id"):
+        raise HTTPException(409, "این لشکر داخل نبرد باز است؛ تلفاتش را از همان پروندهٔ نبرد ثبت کن")
     current = dict(c.get("troops", {}))
     removed = {}
     for troop_id, raw in body.troops.items():
@@ -1580,11 +1689,19 @@ async def admin_reduce_campaign(campaign_id: str, body: ReduceCampaignBody, user
         raise HTTPException(400, "حداقل یک تلفات وارد کن")
     old_men = max(1, int(c.get("men_committed", 0) or 0))
     men = sum(int(v or 0) for v in current.values())
-    await campaigns.update_one({"_id": oid, "active": True}, {"$set": {
+    campaign_update = {
         "troops": current, "men_committed": men,
         "power": round(float(c.get("power", 0)) * men / old_men, 2), "admin_losses_at": now(),
-    }})
-    return {"ok": True, "removed": removed, "men_remaining": men}
+    }
+    if men == 0:
+        campaign_update.update({"active": False, "status": "destroyed", "destroyed_at": now()})
+    result = await campaigns.update_one(
+        {"_id": oid, "active": True},
+        {"$set": campaign_update},
+    )
+    if not result.matched_count:
+        raise HTTPException(409, "وضعیت لشکر همین الان تغییر کرد")
+    return {"ok": True, "removed": removed, "men_remaining": men, "destroyed": men == 0}
 
 @router.get("/war-window")
 async def admin_get_war_window(user: dict = Depends(admin_user)):
