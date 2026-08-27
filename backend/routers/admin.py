@@ -535,6 +535,55 @@ async def _dismiss_battle_for_campaign(campaign: dict, reason: str) -> bool:
     await _dismiss_battle_record(root, battle_id, reason)
     return True
 
+async def _remove_campaign_from_battle(campaign: dict, reason: str) -> dict:
+    """فقط یک لشکر را از پروندهٔ گروهی جدا می‌کند؛ اگر یک سمت خالی شد پرونده پایان می‌یابد."""
+    battle_id = campaign.get("engagement_campaign_id")
+    if not battle_id:
+        return {"removed": False, "battle_closed": False}
+    root = await _battle_root(battle_id)
+    if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
+        return {"removed": False, "battle_closed": False}
+    campaign_id = str(campaign["_id"])
+    side = "defender" if campaign_id in (root.get("battle_defender_army_ids") or []) else "attacker"
+    await campaigns.update_one({"_id": root["_id"]}, {
+        "$pull": {
+            "battle_attacker_army_ids": campaign_id, "battle_defender_army_ids": campaign_id,
+            "battle_attacker_snapshots": {"campaign_id": campaign_id}, "battle_defender_snapshot": {"campaign_id": campaign_id},
+            "battle_attacker_joins": {"campaign_id": campaign_id}, "battle_defender_joins": {"campaign_id": campaign_id},
+            "battle_joins": {"campaign_id": campaign_id},
+        },
+    })
+    member_set = {"engagement_locked": False, "battle_left_at": now(), "battle_left_reason": reason}
+    member_unset = {"battle_root_campaign_id": "", "opponent_campaign_id": "", "opponent_tg_id": ""}
+    # سند ریشه هم پروندهٔ نبرد است هم یک لشکر. اگر همان لشکر خارج شد، هویت پرونده
+    # را تا پایان داوری نگه می‌داریم ولی دیگر عضو/قفل‌شده حسابش نمی‌کنیم.
+    if not campaign.get("battle_is_root"):
+        member_set["battle_open"] = False
+        member_unset.update({"engagement_campaign_id": "", "battle_is_root": ""})
+    await campaigns.update_one({"_id": campaign["_id"]}, {"$set": member_set, "$unset": member_unset})
+    root = await campaigns.find_one({"_id": root["_id"]})
+    attacker_ids = root.get("battle_attacker_army_ids") or []
+    defender_ids = root.get("battle_defender_army_ids") or []
+    active_attackers = await campaigns.count_documents({"_id": {"$in": [ObjectId(x) for x in attacker_ids]}, "active": True}) if attacker_ids else 0
+    active_defenders = await campaigns.count_documents({"_id": {"$in": [ObjectId(x) for x in defender_ids]}, "active": True}) if defender_ids else 0
+    castle_owner = await owner_of_castle(root.get("battle_location") or root.get("target_castle"))
+    if castle_owner and castle_owner.get("tg_id") == root.get("battle_defender_tg_id"):
+        # صاحب قلعه حتی بدون لشکر جداگانه با زیرساخت دفاعی طرف نبرد باقی می‌ماند.
+        active_defenders = max(1, active_defenders)
+    remaining = await campaigns.find({"engagement_campaign_id": battle_id, "active": True}, {"tg_id": 1}).to_list(None)
+    remaining_tg_ids = list({row["tg_id"] for row in remaining})
+    await campaigns.update_one({"_id": root["_id"]}, {"$set": {"battle_participant_tg_ids": remaining_tg_ids}})
+    battle_closed = active_attackers == 0 or active_defenders == 0
+    message = f"لشکر «{campaign.get('name', 'بی‌نام')}» از نبرد خارج شد. {reason}"
+    if battle_closed:
+        message += " چون یکی از طرفین دیگر لشکر فعالی نداشت، پروندهٔ نبرد بدون نتیجه بسته شد."
+        await _dismiss_battle_record(root, battle_id, message)
+    else:
+        recipients = set(remaining_tg_ids) | {campaign.get("tg_id")}
+        async for participant in players.find({"tg_id": {"$in": list(recipients)}}):
+            await send_system_message(participant["tg_id"], participant["name"], message, kind="battle")
+    return {"removed": True, "battle_closed": battle_closed, "side": side}
+
 @router.get("/battles")
 async def list_open_battles(user: dict = Depends(admin_user)):
     """پرونده‌های نبرد مستقل از رول؛ بنابراین حتی با صفر رول هم قابل داوری‌اند."""
@@ -570,7 +619,13 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             defender = await players.find_one({"tg_id": root["battle_defender_tg_id"]})
         if not defender:
             defender = await owner_of_castle(root["target_castle"])
-        if root.get("battle_defender_snapshot") is not None:
+        defender_ids = root.get("battle_defender_army_ids") or []
+        if defender_ids:
+            defender_armies = [a async for a in campaigns.find({
+                "_id": {"$in": [ObjectId(x) for x in defender_ids]}, "active": True,
+                "engagement_locked": True, "engagement_campaign_id": engagement_id,
+            })]
+        elif "battle_defender_army_ids" not in root and root.get("battle_defender_snapshot") is not None:
             defender_armies = root.get("battle_defender_snapshot", [])
         elif defender and not defender_armies:
             defender_armies = [d async for d in campaigns.find({
@@ -591,10 +646,16 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
             "equipment": [{"id": eid, "name": SIEGE_EQUIPMENT.get(eid, {}).get("name", eid), "count": n} for eid, n in a.get("equipment", {}).items() if n and n > 0],
         }
-        attacker_snapshots = list(root.get("battle_attacker_snapshots") or [])
-        root_snapshot = root.get("battle_attacker_snapshot") or battle_army_snapshot(root)
-        if not any(a.get("campaign_id") == str(root["_id"]) for a in attacker_snapshots):
-            attacker_snapshots.insert(0, root_snapshot)
+        attacker_ids = root.get("battle_attacker_army_ids") or []
+        attacker_snapshots = [a async for a in campaigns.find({
+            "_id": {"$in": [ObjectId(x) for x in attacker_ids]}, "active": True,
+            "engagement_locked": True, "engagement_campaign_id": engagement_id,
+        })] if attacker_ids else []
+        if not attacker_snapshots and not root.get("battle_attacker_army_ids"):
+            attacker_snapshots = list(root.get("battle_attacker_snapshots") or [])
+            root_snapshot = root.get("battle_attacker_snapshot") or battle_army_snapshot(root)
+            if not any(a.get("campaign_id") == str(root["_id"]) for a in attacker_snapshots):
+                attacker_snapshots.insert(0, root_snapshot)
         battle_row = {
             "campaign_id": engagement_id, "name": root.get("name", "نبرد"),
             "location": root.get("battle_location") or root["target_castle"],
@@ -628,6 +689,7 @@ class RoleplayResultBody(BaseModel):
     visibility: str = "participants"   # "participants" | "all" — چه کسی نتیجه را کلاغ می‌گیرد
     other_lords: list[int] = []
     winner_tg_id: int | None = None        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
+    winner_tg_ids: list[int] = []
     attacker_losses: dict[str, int] = {}
     defender_losses: dict[str, int] = {}
     attacker_equipment_losses: dict[str, int] = {}
@@ -817,6 +879,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     defender_report_losses = _sum_nested_counts(body.defender_losses, body.defender_army_losses)
     attacker_report_equipment_losses = _sum_nested_counts(body.attacker_equipment_losses, body.attacker_army_equipment_losses)
     defender_report_equipment_losses = _sum_nested_counts(body.defender_equipment_losses, body.defender_army_equipment_losses)
+    winner_tg_ids = list(dict.fromkeys(body.winner_tg_ids or ([body.winner_tg_id] if body.winner_tg_id else [])))
+    loser_tg_ids = []
 
     if r["category"] == "war" and r.get("campaign_id"):
         siblings = await roleplays.find({
@@ -840,7 +904,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             attacker_ids = campaign.get("battle_attacker_army_ids") or [str(campaign["_id"])]
             for army_id in attacker_ids:
                 try:
-                    army = await campaigns.find_one({"_id": ObjectId(army_id)})
+                    army = await campaigns.find_one({"_id": ObjectId(army_id), "active": True, "engagement_locked": True})
                 except Exception:
                     army = None
                 if army:
@@ -848,7 +912,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                     recipient_tg_ids.add(army["tg_id"])
             for army_id in campaign.get("battle_defender_army_ids") or []:
                 try:
-                    army = await campaigns.find_one({"_id": ObjectId(army_id)})
+                    army = await campaigns.find_one({"_id": ObjectId(army_id), "active": True, "engagement_locked": True})
                 except Exception:
                     army = None
                 if army:
@@ -859,9 +923,13 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             if defender:
                 defender_tg_ids.add(defender["tg_id"])
             valid_winners = attacker_tg_ids | defender_tg_ids
-            if body.winner_tg_id not in valid_winners:
-                raise HTTPException(400, "برندهٔ نبرد را از بین مهاجم و مدافع انتخاب کن")
-            combat_outcome = "attacker" if body.winner_tg_id in attacker_tg_ids else "defender"
+            if not winner_tg_ids or not set(winner_tg_ids).issubset(valid_winners):
+                raise HTTPException(400, "برنده‌های نبرد را از بین لردهای درگیر انتخاب کن")
+            winner_sides = {"attacker" if tg_id in attacker_tg_ids else "defender" for tg_id in winner_tg_ids}
+            if len(winner_sides) != 1:
+                raise HTTPException(400, "برنده‌ها باید همگی از یک سمت نبرد باشند")
+            combat_outcome = winner_sides.pop()
+            loser_tg_ids = sorted((attacker_tg_ids | defender_tg_ids) - set(winner_tg_ids))
 
             attacker_before = _sum_campaign_field(attacker_campaigns or [campaign], "troops")
             attacker_equipment_before = _sum_campaign_field(attacker_campaigns or [campaign], "equipment")
@@ -923,25 +991,27 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             {"_id": campaign["_id"], "medal_outcome_battle_id": {"$ne": r.get("campaign_id")}},
             {"$set": {
                 "medal_outcome_recorded": True, "medal_outcome_battle_id": r.get("campaign_id"), "combat_outcome": combat_outcome,
-                "winner_tg_id": body.winner_tg_id, "combat_resolved_at": now(), "battle_open": False,
+                "winner_tg_id": winner_tg_ids[0], "winner_tg_ids": winner_tg_ids,
+                "loser_tg_ids": loser_tg_ids, "combat_resolved_at": now(), "battle_open": False,
             }},
         )
         if outcome_guard.modified_count:
-            await bump_player_stat(
-                body.winner_tg_id,
-                "attack_wins" if combat_outcome == "attacker" else "defense_wins",
-            )
             rebellion_settings = await get_rebellion_settings()
             war_pop = rebellion_settings["war_popularity"]
-            attacker = await players.find_one({"tg_id": campaign["tg_id"]})
-            if attacker:
-                attacker_delta = war_pop["attack_win"] if combat_outcome == "attacker" else war_pop["attack_loss"]
-                attacker_pop = max(0, min(100, int(attacker.get("popularity", 50)) + int(attacker_delta)))
-                await players.update_one({"tg_id": attacker["tg_id"]}, {"$set": {"popularity": attacker_pop}})
-            if defender:
-                defender_delta = war_pop["defense_win"] if combat_outcome == "defender" else war_pop["defense_loss"]
-                defender_pop = max(0, min(100, int(defender.get("popularity", 50)) + int(defender_delta)))
-                await players.update_one({"tg_id": defender["tg_id"]}, {"$set": {"popularity": defender_pop}})
+            winner_delta = int(war_pop["attack_win"] if combat_outcome == "attacker" else war_pop["defense_win"])
+            loser_delta = int(war_pop["defense_loss"] if combat_outcome == "attacker" else war_pop["attack_loss"])
+            win_stat = "attack_wins" if combat_outcome == "attacker" else "defense_wins"
+            for tg_id in winner_tg_ids:
+                await bump_player_stat(tg_id, win_stat)
+                lord = await players.find_one({"tg_id": tg_id})
+                if lord:
+                    new_pop = max(0, min(100, int(lord.get("popularity", 50)) + winner_delta))
+                    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}})
+            for tg_id in loser_tg_ids:
+                lord = await players.find_one({"tg_id": tg_id})
+                if lord:
+                    new_pop = max(0, min(100, int(lord.get("popularity", 50)) + loser_delta))
+                    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}})
 
         # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
         # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
@@ -949,7 +1019,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
-        **({"winner_tg_id": body.winner_tg_id, "combat_outcome": combat_outcome} if combat_outcome else {}),
+        **({"winner_tg_id": winner_tg_ids[0], "winner_tg_ids": winner_tg_ids, "loser_tg_ids": loser_tg_ids, "combat_outcome": combat_outcome} if combat_outcome else {}),
     }})
 
     # شروع و پایان جنگ رویداد عمومی‌اند؛ گزینهٔ visibility برای رول‌های غیرجنگی
@@ -962,7 +1032,12 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     parties_line = ""
     if campaign and combat_outcome:
         attacker_player = await players.find_one({"tg_id": campaign["tg_id"]})
-        winner_player = await players.find_one({"tg_id": body.winner_tg_id})
+        winner_players = await players.find({"tg_id": {"$in": winner_tg_ids}}, {"tg_id": 1, "name": 1}).to_list(None)
+        loser_players = await players.find({"tg_id": {"$in": loser_tg_ids}}, {"tg_id": 1, "name": 1}).to_list(None)
+        winner_name_map = {p["tg_id"]: p["name"] for p in winner_players}
+        loser_name_map = {p["tg_id"]: p["name"] for p in loser_players}
+        winner_names = [winner_name_map.get(tg_id, str(tg_id)) for tg_id in winner_tg_ids]
+        loser_names = [loser_name_map.get(tg_id, str(tg_id)) for tg_id in loser_tg_ids]
         attacker_names = list(dict.fromkeys(a.get("player_name") for a in attacker_campaigns if a.get("player_name")))
         defender_names = list(dict.fromkeys(a.get("player_name") for a in defender_campaigns if a.get("player_name")))
         attacker_name = " و ".join(attacker_names) or (attacker_player["name"] if attacker_player else campaign.get("player_name", "مهاجم"))
@@ -988,7 +1063,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         parties_line = (
             f"\n⚔️ طرفین: لرد {attacker_name} در برابر لرد {defender_name}"
             f"\n📍 محل نبرد: {location}"
-            f"\n🏆 برنده: لرد {winner_player['name'] if winner_player else 'نامشخص'}"
+            f"\n🏆 برنده‌ها: {'، '.join('لرد ' + name for name in winner_names)}"
+            f"\n🏳️ بازنده‌ها: {('، '.join('لرد ' + name for name in loser_names) if loser_names else 'ندارد')}"
             f"\nتلفات {attacker_name}: {count_line(attacker_report_losses)}"
             f"\nنیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}"
             f"\nتلفات {defender_name}: {count_line(defender_report_losses)}"
@@ -1611,9 +1687,7 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
         raise HTTPException(404, "این لشکرکشی پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکرکشی دیگر فعال نیست")
-    battle_dismissed = await _dismiss_battle_for_campaign(
-        c, f"نبرد به‌دلیل انحلال لشکر «{c.get('name', 'بی‌نام')}» توسط ادمین بسته شد و دیگر لشکرهای درگیر آزاد شدند.",
-    )
+    battle_change = await _remove_campaign_from_battle(c, "این لشکر به فرمان ادمین منحل شد.")
     changed = await campaigns.update_one({"_id": oid, "active": True}, {"$set": {"active": False, "status": "disbanded"}})
     if not changed.matched_count:
         raise HTTPException(409, "وضعیت لشکر همین الان تغییر کرد")
@@ -1635,7 +1709,7 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
             owner["tg_id"], owner["name"],
             f"لشکر «{c.get('name') or OP_TYPES.get(c['op_type'], {}).get('name', c['op_type'])}» به فرمان ادمین منحل شد و تمام هزینه‌های باقی‌مانده‌اش برگشت.",
         )
-    return {"ok": True, "battle_dismissed": battle_dismissed}
+    return {"ok": True, "battle_member_removed": battle_change["removed"], "battle_closed": battle_change["battle_closed"]}
 
 @router.post("/campaigns/{campaign_id}/destroy")
 async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_admin_user)):
@@ -1647,9 +1721,7 @@ async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_adm
     c = await campaigns.find_one({"_id": oid, "active": True})
     if not c:
         raise HTTPException(404, "لشکر فعال پیدا نشد")
-    battle_dismissed = await _dismiss_battle_for_campaign(
-        c, f"نبرد به‌دلیل انهدام کامل لشکر «{c.get('name', 'بی‌نام')}» توسط ادمین بسته شد و دیگر لشکرهای درگیر آزاد شدند.",
-    )
+    battle_change = await _remove_campaign_from_battle(c, "این لشکر به فرمان ادمین کاملاً منهدم شد.")
     result = await campaigns.update_one(
         {"_id": oid, "active": True},
         {"$set": {"active": False, "status": "destroyed", "troops": {}, "men_committed": 0, "power": 0, "destroyed_at": now()}},
@@ -1659,7 +1731,7 @@ async def admin_destroy_campaign(campaign_id: str, user: dict = Depends(full_adm
     owner = await players.find_one({"tg_id": c["tg_id"]}, {"tg_id": 1, "name": 1})
     if owner:
         await send_system_message(owner["tg_id"], owner["name"], f"لشکر «{c.get('name', 'بی‌نام')}» به فرمان ادمین کاملاً منهدم شد؛ هیچ هزینه‌ای برنگشت.")
-    return {"ok": True, "battle_dismissed": battle_dismissed}
+    return {"ok": True, "battle_member_removed": battle_change["removed"], "battle_closed": battle_change["battle_closed"]}
 
 class ReduceCampaignBody(BaseModel):
     troops: dict[str, int]
