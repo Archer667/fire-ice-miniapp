@@ -46,6 +46,8 @@ def campaign_waiting_for_result(campaign: dict) -> bool:
         and campaign.get("op_type") in DIRECT_ATTACK_OP_TYPES
         and (not arrival_at or now() >= arrival_at)
         and not campaign.get("combat_resolved_at")
+        and not campaign.get("battle_cancelled_at")
+        and campaign.get("status") not in ("cancelled", "disbanded", "destroyed", "battle_dismissed")
     )
 
 # ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
