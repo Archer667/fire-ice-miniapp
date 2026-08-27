@@ -786,6 +786,40 @@ def battle_army_snapshot(campaign: dict) -> dict:
         "equipment_power": int(campaign.get("equipment_power", 0) or 0),
     }
 
+def battle_army_stats_line(army: dict) -> str:
+    equipment = "، ".join(
+        f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}"
+        for eid, count in army.get("equipment", {}).items() if count
+    ) or "بدون ادوات"
+    men = int(army.get("men_committed", sum(army.get("troops", {}).values())) or 0)
+    return (
+        f"لرد {army.get('player_name', 'نامشخص')} · «{army.get('name', 'لشکر')}» · {men} نفر\n"
+        f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}"
+    )
+
+async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str:
+    """ترکیب زندهٔ تمام لشکرهای دو سمت؛ فقط برای خود شرکت‌کنندگان نبرد ارسال می‌شود."""
+    refreshed = await campaigns.find_one({"_id": root["_id"]}) or root
+    async def load(ids: list[str]):
+        object_ids = []
+        for raw in ids:
+            try:
+                object_ids.append(ObjectId(raw))
+            except Exception:
+                continue
+        if not object_ids:
+            return []
+        return await campaigns.find({
+            # شناسه‌های آرایهٔ پرونده منبع عضویت‌اند؛ قفل‌های ناقص داده‌های قدیمی
+            # نباید باعث جاافتادن آمار یکی از لشکرها در پیام ترکیب کامل شوند.
+            "_id": {"$in": object_ids}, "active": True,
+        }).to_list(None)
+    attackers = await load(refreshed.get("battle_attacker_army_ids") or [])
+    defenders = await load(refreshed.get("battle_defender_army_ids") or [])
+    attacker_text = "\n\n".join(battle_army_stats_line(a) for a in attackers) or "لشکر فعالی ثبت نشده"
+    defender_text = "\n\n".join(battle_army_stats_line(a) for a in defenders) or "لشکر دفاعی مستقلی ثبت نشده"
+    return f"{intro}\n\n🔴 مهاجمان\n{attacker_text}\n\n🔵 مدافعان\n{defender_text}"
+
 async def notify_battle_admins(engagement_id: str, location: str, attacker: dict, defender: dict, defender_troops: dict):
     """همان لحظهٔ تشکیل پروندهٔ نبرد، آمار دو طرف را در بات و پنل همهٔ ادمین‌ها می‌فرستد."""
     attacker_troops = dict(attacker.get("troops", {}))
@@ -999,13 +1033,15 @@ async def detect_route_encounters():
                 pushes.update({"battle_defender_snapshot": snapshot, "battle_defender_army_ids": str(army["_id"]), "battle_defender_joins": join})
             else:
                 pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(army["_id"]), "battle_attacker_joins": join})
-            await campaigns.update_one({"_id": root["_id"], "battle_open": True}, {"$push": pushes})
+            await campaigns.update_one({"_id": root["_id"], "battle_open": True}, {
+                "$push": pushes, "$addToSet": {"battle_participant_tg_ids": army["tg_id"]},
+            })
             side_name = "مدافعان" if joins_defender else "مهاجمان"
             text = f"⚔️ لشکر {army['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {root['battle_location']} پیوست."
+            roster_text = await battle_full_roster_text(root, battle_id, text)
             participant_ids = set(root.get("battle_participant_tg_ids") or []) | {root.get("tg_id"), root.get("battle_defender_tg_id"), army.get("tg_id")}
             async for participant in players.find({"tg_id": {"$in": list(participant_ids - {None})}}):
-                await send_system_message(participant["tg_id"], participant["name"], text, kind="battle")
-            await campaigns.update_one({"_id": root["_id"]}, {"$addToSet": {"battle_participant_tg_ids": army["tg_id"]}})
+                await send_system_message(participant["tg_id"], participant["name"], roster_text, kind="battle")
             await notify_admins("battle_attacker_joined", "⚔️ نیروی تازه وارد نبرد شد", text,
                 dedupe_key=f"battle-join:{battle_id}:{army['_id']}", priority="urgent", player_name=army["player_name"], player_tg_id=army["tg_id"], source_id=battle_id)
             moving.remove(army)
@@ -1152,10 +1188,11 @@ async def notify_arrivals():
             await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {"$push": pushes, "$addToSet": {"battle_participant_tg_ids": c["tg_id"]}})
             side_name = "مدافعان" if joins_defender else "مهاجمان"
             join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد: {troops_summary(c.get('troops', {}))}"
+            roster_text = await battle_full_roster_text(open_battle, engagement_id, join_text)
             participant_ids = set(open_battle.get("battle_participant_tg_ids") or []) | {open_battle.get("tg_id"), open_battle.get("battle_defender_tg_id"), c.get("tg_id")}
             participant_ids.discard(None)
             async for participant in players.find({"tg_id": {"$in": list(participant_ids)}}):
-                await send_system_message(participant["tg_id"], participant["name"], join_text, kind="battle")
+                await send_system_message(participant["tg_id"], participant["name"], roster_text, kind="battle")
             await notify_admins(
                 "battle_attacker_joined", "⚔️ مهاجم تازه به نبرد اضافه شد", join_text,
                 dedupe_key=f"battle-join:{engagement_id}:{c['_id']}", priority="urgent",
