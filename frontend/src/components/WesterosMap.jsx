@@ -231,6 +231,10 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
   const [activeRegion, setActiveRegion] = useState(null);
   const [pinFilter, setPinFilter] = useState('all');
   const [colorMode, setColorMode] = useState('region');
+  const [showArmies, setShowArmies] = useState(() => {
+    try { return localStorage.getItem('valyria.map.showArmies') !== '0'; }
+    catch { return true; }
+  });
   const mapRef = useRef(null);
 
   // meCastles همهٔ قلعه‌های خودت رو می‌گیره (خونه + هرچی با فتح/تصمیم ادمین گرفتی)؛
@@ -326,6 +330,14 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
     setActiveRegion(null);
     mapRef.current?.flyToPoint(x, y, 2.2);
   };
+  const toggleArmies = () => {
+    haptic();
+    setShowArmies(current => {
+      const next = !current;
+      try { localStorage.setItem('valyria.map.showArmies', next ? '1' : '0'); } catch { /* WebView خصوصی */ }
+      return next;
+    });
+  };
 
   return (
     <div className="mapview">
@@ -340,17 +352,20 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
           ))}
         </div>
       )}
-      {mapped.length > 3 && (
-        <div className="map-region-tabs map-pin-filter">
-          {PIN_FILTERS.map(f => (
+      <div className="map-region-tabs map-pin-filter">
+          {mapped.length > 3 && PIN_FILTERS.map(f => (
             <button type="button" key={f.key}
                     className={`map-region-tab ${pinFilter === f.key ? 'on' : ''}`}
                     onClick={() => { haptic(); setPinFilter(f.key); }}>
               {f.label}
             </button>
           ))}
-        </div>
-      )}
+          <button type="button" role="switch" aria-checked={showArmies}
+                  className={`map-region-tab ${showArmies ? 'on' : ''}`}
+                  onClick={toggleArmies}>
+            <Swords s={11} /> لشکرها: {showArmies ? 'روشن' : 'خاموش'}
+          </button>
+      </div>
       <div className="mapview-frame">
         <span className="map-frame-corner tl" /><span className="map-frame-corner tr" />
         <span className="map-frame-corner bl" /><span className="map-frame-corner br" />
@@ -359,7 +374,7 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
                     onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
                     onSelectTarget={onSelectTarget} pickLabel={pickLabel}
                     colorMode={colorMode} routeSegments={routeSegments} seaLaneSegments={seaLaneSegments}
-                    campaigns={(data.campaigns || []).filter(c => !c.arrived)} />
+                    campaigns={showArmies ? (data.campaigns || []).filter(c => !c.arrived) : []} />
         </ZoomPanMap>
         {mapped.length > 6 && <MiniMap pins={mapped} view={view} onJump={jumpFromMiniMap} />}
         {myPin && (
@@ -390,3 +405,4 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
     </div>
   );
 }
+
