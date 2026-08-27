@@ -12,6 +12,7 @@ async def send_system_message(
     to_tg_id: int, to_name: str, text: str, kind: str = "general",
     image_url: str | None = None, starts_at=None, ends_at=None,
     via_raven: bool = True, via_bot: bool = True,
+    bot_text: str | None = None, bot_parse_mode: str | None = None,
 ):
     """پیام سیستمی داخل کلاغ و تلگرام؛ ایونت می‌تواند تصویر و بازهٔ زمانی هم داشته باشد."""
     doc = {
@@ -28,7 +29,7 @@ async def send_system_message(
     if via_raven:
         await messages.insert_one(doc)
     if via_bot:
-        telegram_bot.push(to_tg_id, f"{SYSTEM_SENDER_NAME}: {text}")
+        telegram_bot.push(to_tg_id, bot_text or f"{SYSTEM_SENDER_NAME}: {text}", parse_mode=bot_parse_mode)
 
 class SendBody(BaseModel):
     to_tg_ids: list[int]
