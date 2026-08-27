@@ -1744,8 +1744,8 @@ export const api = {
     : req(`/api/admin/espionage/${missionId}/score`, { method: 'POST', body: JSON.stringify({ score }) }),
 
   /* ---------- رول‌ها ---------- */
-  sendRoleplay: (category, text, campaignId) => MOCK ? Promise.resolve(M.sendRoleplay(category, text, campaignId))
-    : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId }) }),
+  sendRoleplay: (category, text, campaignId, targetTgId = null) => MOCK ? Promise.resolve(M.sendRoleplay(category, text, campaignId))
+    : req('/api/roleplay/send', { method: 'POST', body: JSON.stringify({ category, text, campaign_id: campaignId, target_tg_id: targetTgId }) }),
   roleplayMine: () => MOCK ? Promise.resolve(M.roleplayMine()) : req('/api/roleplay/mine'),
   adminRoleplayPending: () => MOCK ? Promise.resolve(M.adminRoleplayPending()) : req('/api/admin/roleplay'),
   adminSecurityRoleplays: (query = '', tgId = null) => MOCK ? Promise.resolve([])
@@ -1755,8 +1755,8 @@ export const api = {
     : req(`/api/admin/battles/${campaignId}/resolve`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', winner_tg_ids: winnerTgIds, winner_tg_id: winnerTgIds?.[0] || null, attacker_losses: attackerLosses, defender_losses: defenderLosses, attacker_equipment_losses: attackerEquipmentLosses, defender_equipment_losses: defenderEquipmentLosses, attacker_army_losses: attackerArmyLosses, attacker_army_equipment_losses: attackerArmyEquipmentLosses, defender_army_losses: defenderArmyLosses, defender_army_equipment_losses: defenderArmyEquipmentLosses }) }),
   adminDismissBattle: (campaignId) => MOCK ? Promise.resolve({ ok: true })
     : req(`/api/admin/battles/${campaignId}/dismiss`, { method: 'POST' }),
-  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null, attackerLosses = {}, defenderLosses = {}) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
-    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords, winner_tg_id: winnerTgId, attacker_losses: attackerLosses, defender_losses: defenderLosses }) }),
+  adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null, attackerLosses = {}, defenderLosses = {}, adjustments = {}) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
+    : req(`/api/admin/roleplay/${roleplayId}/respond`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', other_lords: otherLords, winner_tg_id: winnerTgId, attacker_losses: attackerLosses, defender_losses: defenderLosses, actor_resource_deltas: adjustments.actorResources || {}, actor_popularity_delta: Number(adjustments.actorPopularity || 0), target_resource_deltas: adjustments.targetResources || {}, target_popularity_delta: Number(adjustments.targetPopularity || 0) }) }),
   warRoleplayEligible: () => MOCK ? Promise.resolve(M.warRoleplayEligible()) : req('/api/war/roleplay-eligible'),
 
   adminSetOverlord: (region, tgId) => MOCK ? Promise.resolve(M.adminSetOverlord())
