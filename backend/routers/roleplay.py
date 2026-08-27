@@ -17,6 +17,7 @@ class RoleplayBody(BaseModel):
     category: str
     text: str
     campaign_id: str | None = None
+    target_tg_id: int | None = None
 
 @router.post("/send")
 async def send(body: RoleplayBody, user: dict = Depends(get_user)):
@@ -30,6 +31,15 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         raise HTTPException(400, "رول خیلی کوتاه است — کمی بیشتر بنویس")
 
     campaign_id = None
+    target_player = None
+    if body.category == "sabotage":
+        if not body.target_tg_id:
+            raise HTTPException(400, "برای رول خرابکاری باید لرد هدف را مشخص کنی")
+        if body.target_tg_id == user["id"]:
+            raise HTTPException(400, "نمی‌توانی خودت را هدف خرابکاری قرار بدهی")
+        target_player = await players.find_one({"tg_id": body.target_tg_id})
+        if not target_player:
+            raise HTTPException(404, "لرد هدف پیدا نشد")
     if body.category == "war":
         if not body.campaign_id:
             raise HTTPException(400, "برای دستهٔ جنگ باید نبردت را انتخاب کنی")
@@ -58,6 +68,8 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "castle": p["castle"],
         "category": body.category, "text": text[:4000], "campaign_id": campaign_id,
+        "target_tg_id": target_player["tg_id"] if target_player else None,
+        "target_player_name": target_player["name"] if target_player else None,
         "result": None, "resolved": not result_required,
         "result_required": result_required,
         "created_at": now(),
@@ -85,7 +97,8 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         await notify_admins(
             "roleplay",
             "📜 رول تازه منتظر داوری است",
-            f"{p['name']} یک رول در دستهٔ «{ROLEPLAY_CATEGORIES[body.category]}» فرستاد.",
+            f"{p['name']} یک رول در دستهٔ «{ROLEPLAY_CATEGORIES[body.category]}» فرستاد."
+            + (f" هدف خرابکاری: {target_player['name']}." if target_player else ""),
             dedupe_key=f"roleplay:{res.inserted_id}",
             player_name=p["name"],
             player_tg_id=user["id"],
@@ -106,6 +119,8 @@ async def mine(user: dict = Depends(get_user)):
             "text": r["text"], "resolved": r["resolved"], "result": r["result"],
             "result_required": r.get("result_required", r.get("category") != "security"),
             "campaign_id": r.get("campaign_id"),
+            "target_tg_id": r.get("target_tg_id"), "target_player_name": r.get("target_player_name"),
             "created_at": r["created_at"].isoformat(),
         })
     return out
+
