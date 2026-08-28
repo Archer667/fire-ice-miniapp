@@ -1,0 +1,19 @@
+{$APP_HOST} {
+    encode zstd gzip
+
+    @telegram_web_app path /telegram-web-app.js
+    redir @telegram_web_app https://telegram.org/js/telegram-web-app.js 302
+
+    @api path /api /api/*
+    reverse_proxy @api backend:8080
+
+    reverse_proxy frontend:80
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+}
