@@ -21,7 +21,7 @@ async def send_system_message(
         "text": text[:2000], "kind": kind, "read": False, "created_at": now(),
     }
     if image_url:
-        doc["image_url"] = image_url[:1000]
+        doc["image_url"] = image_url[:3_500_000]
     if starts_at:
         doc["starts_at"] = starts_at
     if ends_at:
@@ -29,7 +29,9 @@ async def send_system_message(
     if via_raven:
         await messages.insert_one(doc)
     if via_bot:
-        telegram_bot.push(to_tg_id, bot_text or f"{SYSTEM_SENDER_NAME}: {text}", parse_mode=bot_parse_mode)
+        caption = bot_text or f"{SYSTEM_SENDER_NAME}: {text}"
+        if image_url: telegram_bot.push_photo(to_tg_id, image_url, caption, parse_mode=bot_parse_mode)
+        else: telegram_bot.push(to_tg_id, caption, parse_mode=bot_parse_mode)
 
 class SendBody(BaseModel):
     to_tg_ids: list[int]
@@ -72,12 +74,15 @@ async def unread(user: dict = Depends(get_user)):
     if player and player.get("rumors_last_seen_at"):
         rumor_filter["created_at"] = {"$gt": player["rumors_last_seen_at"]}
     rumor_count = await rumors.count_documents(rumor_filter)
+    latest_rumor = await rumors.find_one(rumor_filter, sort=[("created_at", -1)]) if rumor_count else None
 
     return {
         "count": announcements + personal + rumor_count,
         "announcements": announcements,
         "messages": personal,
         "rumors": rumor_count,
+        "latest_rumor_target": latest_rumor.get("target_name") if latest_rumor else None,
+        "latest_rumor_id": str(latest_rumor["_id"]) if latest_rumor else None,
     }
 
 @router.get("/inbox")
@@ -123,4 +128,3 @@ async def thread(other_tg_id: int, user: dict = Depends(get_user)):
             "ends_at": m["ends_at"].isoformat() if m.get("ends_at") else None,
         })
     return out
-

@@ -7,7 +7,7 @@ from game import (
     now, apply_production, can_afford, pay, normalize_building_state, resolve_building_upgrades,
     owned_castles, castle_building_state,
 )
-from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours, building_produces, building_cap_bonus
+from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours, building_produces, building_cap_bonus, building_max_level
 from routers.war import all_castle_terrain
 from routers.ravens import send_system_message
 
@@ -44,7 +44,7 @@ async def list_buildings(castle: str | None = None, user: dict = Depends(get_use
     for bid, meta in BUILDINGS.items():
         st = state.get(bid, EMPTY_STATE)
         level = st["level"]
-        max_level = int(meta.get("max_level", MAX_BUILDING_LEVEL))
+        max_level = building_max_level(bid)
         target = st["upgrade_to"] or (level + 1 if level < max_level else None)
         per_level_produces = building_produces(bid)
         per_level_cap = building_cap_bonus(bid)
@@ -93,7 +93,7 @@ async def _start_upgrade(building_id: str, castle: str | None, user: dict, requi
         raise HTTPException(400, "اول این ساختمان را بنا کن")
     if not require_built and st["level"] > 0:
         raise HTTPException(400, "این ساختمان قبلاً بنا شده — آن را ارتقا بده")
-    max_level = int(BUILDINGS[building_id].get("max_level", MAX_BUILDING_LEVEL))
+    max_level = building_max_level(building_id)
     if st["level"] >= max_level:
         raise HTTPException(400, "این ساختمان به بیشینهٔ سطح رسیده")
     if not require_built and BUILDINGS[building_id].get("requires_port") and not is_port:

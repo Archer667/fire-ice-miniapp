@@ -109,4 +109,3 @@ async def notify_admin_deadlines():
             source_id=battle_id,
             deadline=deadline,
         )
-

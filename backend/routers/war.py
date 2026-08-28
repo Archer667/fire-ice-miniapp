@@ -11,6 +11,7 @@ from game_data import (
     _dijkstra_path, DEFAULT_SEA_CASTLES, SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING, TRAVEL_GRAPH, is_sea_edge,
 )
 from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
+import game_data
 from routers.ravens import send_system_message
 from admin_notifications import notify_admins
 
@@ -104,6 +105,7 @@ class CampaignBody(BaseModel):
     troops: dict            # {troop_id: count}
     equipment: dict = {}    # {equipment_id: count}
     via: list[str] | None = None   # مسیرِ انتخابیِ بازیکن (اگر چند گزینهٔ مسیر بود) — از /war/routes
+    commander_present: bool = False
 
 class MoveCampaignBody(BaseModel):
     target_castle: str
@@ -262,9 +264,9 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
                     raise HTTPException(400, f"برای گسیل {COMMON_TROOPS[tid]['name']} باید {BUILDINGS[camp_id]['name']} را ساخته باشی")
             weapon_key = TROOP_WEAPON_KEY.get(tid)
             if weapon_key:
-                weapons[weapon_key] = weapons.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
+                weapons[weapon_key] = weapons.get(weapon_key, 0) + n * int(game_data.GAME_RULES["weapon_per_soldier"])
             gold += COMMON_TROOPS[tid]["cost"] * n
-            food += FOOD_COST_REGULAR * n
+            food += float(COMMON_TROOPS[tid].get("food", game_data.GAME_RULES["food_cost_regular"])) * n
         elif tid in NAVAL_TROOPS:
             if not is_port:
                 raise HTTPException(400, "فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند کشتی بسازند")
@@ -272,10 +274,10 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
             if port_level <= 0:
                 raise HTTPException(400, f"برای ساخت {NAVAL_TROOPS[tid]['name']} باید {BUILDINGS[NAVAL_CAMP_BUILDING]['name']} را بنا کرده باشی")
             gold += NAVAL_TROOPS[tid]["cost"] * n
-            food += FOOD_COST_SPECIAL * n
+            food += float(NAVAL_TROOPS[tid].get("food", game_data.GAME_RULES["food_cost_special"])) * n
         elif tid in specials:
-            gold += SPECIAL_TROOP_COST * n
-            food += FOOD_COST_SPECIAL * n
+            gold += float(game_data.GAME_RULES["special_troop_cost"]) * n
+            food += float(game_data.GAME_RULES["food_cost_special"]) * n
         else:
             raise HTTPException(400, f"نیروی نامعتبر: {tid}")
         men += n
@@ -299,7 +301,7 @@ def equipment_cost_and_effect(equipment: dict, buildings: dict):
             cost[resource] = cost.get(resource, 0) + amount * count
         siege_power += meta["siege_power"] * count
         slowdown += meta["slowdown"] * count
-    return cost, siege_power, min(1.0, slowdown)
+    return cost, siege_power, min(float(game_data.GAME_RULES["equipment_slowdown_cap"]), slowdown)
 
 async def stationed_origins(tg_id: int) -> set:
     """قلعه‌هایی که لشکر فعلی این بازیکن با عملیات «جای‌گیری» در آن‌ها مستقر است —
@@ -517,8 +519,12 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
             raise HTTPException(400, f"این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
         travel, route_path = chosen["minutes"], chosen["path"]
     travel = max(travel, round(travel * (1 + equipment_slowdown)))
+    if body.commander_present:
+        travel = max(0, round(travel * (1 - float(game_data.GAME_RULES["commander_speed_bonus"]))))
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p, body.origin_castle))
+    if body.commander_present:
+        power = round(power * (1 + float(game_data.GAME_RULES["commander_power_bonus"])))
 
     pay(p["resources"], combined_cost)
     p["resources"]["men"] = p["resources"].get("men", 0) - men
@@ -539,6 +545,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "equipment_cost": equipment_cost, "equipment_power": equipment_power,
         "travel_minutes": travel, "arrival_at": arrival_at, "route_path": route_path,
         "penalty_charged": penalty_charged,
+        "commander_present": body.commander_present,
         "active": True, "arrival_notified": False,
         "created_at": now(), "last_food_tick": now(),
     }
@@ -575,7 +582,7 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
             continue
         weapon_key = TROOP_WEAPON_KEY.get(tid)
         if weapon_key:
-            weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
+            weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * int(game_data.GAME_RULES["weapon_per_soldier"])
 
     grace_started_at = c.get("moved_at") or c.get("created_at") or now()
     penalty_applied = (now() - grace_started_at) > timedelta(minutes=5)
@@ -654,7 +661,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     if chosen.get("via_sea") and land_men > naval_capacity:
         raise HTTPException(400, f"کشتی‌های این لشکر فقط ظرفیت جابه‌جایی {naval_capacity} نیروی زمینی را دارند")
 
-    move_slowdown = min(1.0, sum(SIEGE_EQUIPMENT.get(eid, {}).get("slowdown", 0) * int(count or 0) for eid, count in c.get("equipment", {}).items()))
+    move_slowdown = min(float(game_data.GAME_RULES["equipment_slowdown_cap"]), sum(SIEGE_EQUIPMENT.get(eid, {}).get("slowdown", 0) * int(count or 0) for eid, count in c.get("equipment", {}).items()))
     move_minutes = max(chosen["minutes"], round(chosen["minutes"] * (1 + move_slowdown)))
     arrival_at = now() + timedelta(minutes=move_minutes)
     await campaigns.update_one({"_id": oid}, {
@@ -957,12 +964,12 @@ async def process_route_ambushes():
                 elif tid in NAVAL_TROOPS:
                     surviving_gold += NAVAL_TROOPS[tid]["cost"] * count
                 else:
-                    surviving_gold += SPECIAL_TROOP_COST * count
+                    surviving_gold += float(game_data.GAME_RULES["special_troop_cost"]) * count
             refund = {"men": surviving_total, "gold": surviving_gold}
             for tid, count in surviving_troops.items():
                 weapon_key = TROOP_WEAPON_KEY.get(tid)
                 if weapon_key and count:
-                    refund[weapon_key] = refund.get(weapon_key, 0) + count * WEAPON_PER_SOLDIER
+                    refund[weapon_key] = refund.get(weapon_key, 0) + count * int(game_data.GAME_RULES["weapon_per_soldier"])
             ambusher = await players.find_one({"tg_id": ambush["tg_id"]})
             if ambusher:
                 add_resources(ambusher, refund)
@@ -1339,4 +1346,3 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
-

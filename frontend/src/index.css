@@ -1032,6 +1032,7 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   box-shadow: 0 16px 40px rgba(0,0,0,0.6);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.tweet-alert{position:fixed;top:10px;left:50%;z-index:120;transform:translate(-50%,-140%);opacity:0;width:min(92%,420px);padding:13px 18px;border-radius:14px;background:linear-gradient(135deg,#147a45,#22a965);color:#fff;font-weight:800;box-shadow:0 12px 35px rgba(10,80,43,.45);transition:transform .42s cubic-bezier(.22,1,.36,1),opacity .3s;pointer-events:none;text-align:right}.tweet-alert.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}.tweet-alert small{display:block;font-size:9px;font-weight:500;opacity:.78;margin-top:4px}
 
 .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--mid); font-size: 13px; }
 .back { display: inline-flex; align-items: center; gap: 6px; color: var(--mid); font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 12px; }
@@ -1192,4 +1193,3 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .music-toggle.playing { color: var(--gold); border-color: rgba(233,193,118,.48); }
 .music-toggle.playing span { animation: music-pulse 2.2s ease-in-out infinite; }
 @keyframes music-pulse { 50% { transform: scale(1.13); opacity: .78; } }
-

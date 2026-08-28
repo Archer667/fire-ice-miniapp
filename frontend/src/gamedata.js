@@ -44,23 +44,23 @@ export const REGION_COLORS = {
 };
 
 export const COMMON_TROOPS = [
-  { id: 'heavy_cav', name: 'سواره‌نظام سنگین', cost: 3, power: 6 },
-  { id: 'infantry',  name: 'پیاده‌نظام',       cost: 2, power: 4 },
-  { id: 'light_cav', name: 'سواره‌نظام سبک',   cost: 2, power: 4 },
-  { id: 'archer',    name: 'کماندار',           cost: 1, power: 3 },
-  { id: 'spearman',  name: 'نیزه‌دار',          cost: 1, power: 2 },
+  { id: 'heavy_cav', name: 'سواره‌نظام سنگین', cost: 3, power: 6, food: 1 },
+  { id: 'infantry',  name: 'پیاده‌نظام',       cost: 2, power: 4, food: 1 },
+  { id: 'light_cav', name: 'سواره‌نظام سبک',   cost: 2, power: 4, food: 1 },
+  { id: 'archer',    name: 'کماندار',           cost: 1, power: 3, food: 1 },
+  { id: 'spearman',  name: 'نیزه‌دار',          cost: 1, power: 2, food: 1 },
 ];
-export const SPECIAL_COST = 4;
-export const SPECIAL_POWER = 5;       // نیروهای ویژه پادگان ندارند، پس توانشان ثابت است
-export const CAMP_POWER_STEP = 0.05;  // هر سطح پادگانِ یک یگان، توان همان یگان را ۵٪ بالا می‌برد
+export let SPECIAL_COST = 4;
+export let SPECIAL_POWER = 5;       // نیروهای ویژه پادگان ندارند، پس توانشان ثابت است
+export let CAMP_POWER_STEP = 0.05;  // هر سطح پادگانِ یک یگان، توان همان یگان را ۵٪ بالا می‌برد
 
 // دو نوع کشتی — فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند بسازندشان؛
 // «بندر» به‌جای پادگان+کارگاه تسلیحات پیش‌نیازشان است و سطح بندر مثل سطح پادگان توانشان
 // را بالا می‌برد. «capacity» یعنی هر کشتی چند سرباز را می‌تواند حمل کند — برای قلعه‌های
 // کاملاً دریایی (بدون راه خشکی) الزامی است (نگاه کن به mapCoords/War.jsx)
 export const NAVAL_TROOPS = [
-  { id: 'ship',       name: 'کشتی جنگی',       cost: 5, power: 10, capacity: 250 },
-  { id: 'cargo_ship', name: 'کشتی سادهٔ چوبی', cost: 3, power: 0,  capacity: 100 },
+  { id: 'ship',       name: 'کشتی جنگی',       cost: 5, power: 10, capacity: 250, food: 2 },
+  { id: 'cargo_ship', name: 'کشتی سادهٔ چوبی', cost: 3, power: 0,  capacity: 100, food: 2 },
 ];
 export const NAVAL_TROOP_IDS = NAVAL_TROOPS.map(t => t.id);
 export const NAVAL_CAMP_BUILDING = 'port';
@@ -82,8 +82,8 @@ export const MAP_TERRAINS = [
   { key: 'coastal', label: 'خشکی‌دریایی' },
   { key: 'sea',     label: 'کاملاً دریایی' },
 ];
-export const FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
-export const FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
+export let FOOD_COST_REGULAR = 1;   // غله در روز، به‌ازای هر سرباز عادی
+export let FOOD_COST_SPECIAL = 2;   // غله در روز، به‌ازای هر نیروی ویژه
 
 // پیش‌نیاز اعزام هر نیروی عمومی: فقط پادگانِ همان یگان باید ساخته شده باشد — کارگاه
 // تسلیحات دیگر پیش‌نیاز نیست، فقط منبع تسلیحاتی‌ست که موقع اعزام مصرف می‌شود (weapon کلید زیر)
@@ -94,7 +94,7 @@ export const TROOP_UNIT_BUILDINGS = {
   archer:    { camp: 'camp_archer', armory: 'armory_archer', weapon: 'weapon_archer' },
   spearman:  { camp: 'camp_spear',  armory: 'armory_spear',  weapon: 'weapon_spear' },
 };
-export const WEAPON_PER_SOLDIER = 1;
+export let WEAPON_PER_SOLDIER = 1;
 export const WEAPON_NAMES = {
   weapon_sword:  'سلاح پیاده‌نظام',
   weapon_spear:  'سلاح نیزه‌داران',
@@ -789,20 +789,21 @@ export const BUILDINGS_STATIC = {
   watchtower:  { name: 'برج نگهبانی', cost: { gold: 250, stone: 120, wood: 70 }, hours: 7,  type: 'defense' },
 };
 
-export const MAX_BUILDING_LEVEL = 30;
+export let MAX_BUILDING_LEVEL = 30;
 const LEVEL_COST_STEP = 0.15;
 // قبلاً ۰٫۱۲ بود — یعنی جمع ساعتِ ۳۰ سطح برای ساختمان‌های سنگین (پایه ≥۱۲ساعت) از
 // ۷۲۰ ساعتِ یک دورهٔ ۳۰روزه رد می‌شد و رساندنشان به سطح ۳۰ ریاضاً غیرممکن بود
-const LEVEL_HOURS_STEP = 0.06;
+let LEVEL_HOURS_STEP = 0.06;
 
 export function buildingCost(id, level) {
-  const base = BUILDINGS_STATIC[id].cost;
-  const mult = 1 + (level - 1) * LEVEL_COST_STEP;
+  const override = BUILDING_OVERRIDES[id] || {};
+  const base = override.cost || BUILDINGS_STATIC[id].cost;
+  const mult = 1 + (level - 1) * Number(override.cost_step ?? LEVEL_COST_STEP);
   return Object.fromEntries(Object.entries(base).filter(([, v]) => v).map(([k, v]) => [k, Math.max(1, Math.round(v * mult))]));
 }
 
 export function buildingHours(id, level) {
-  const base = BUILDINGS_STATIC[id].hours;
+  const base = Number(BUILDING_OVERRIDES[id]?.hours ?? BUILDINGS_STATIC[id].hours);
   const mult = 1 + (level - 1) * LEVEL_HOURS_STEP;
   return Math.round(base * mult * 10) / 10;
 }
@@ -822,6 +823,32 @@ export function buildingCapBonus(id) {
   const override = BUILDING_OVERRIDES[id];
   if (override && override.cap_bonus) return override.cap_bonus;
   return BUILDINGS_STATIC[id].cap_bonus || {};
+}
+
+// داده‌های زنده‌ای که بک‌اند از تنظیمات پنل ادمین می‌فرستد. آرایه‌ها و آبجکت‌ها
+// درجا تغییر می‌کنند تا تمام صفحه‌هایی که قبلاً آن‌ها را import کرده‌اند مقدار تازه را ببینند.
+export function applyRuntimeGamedata(data) {
+  if (!data) return;
+  if (data.troops) {
+    COMMON_TROOPS.splice(0, COMMON_TROOPS.length, ...Object.entries(data.troops).map(([id, meta]) => ({ id, ...meta })));
+  }
+  if (data.naval_troops) {
+    NAVAL_TROOPS.splice(0, NAVAL_TROOPS.length, ...Object.entries(data.naval_troops).map(([id, meta]) => ({ id, ...meta })));
+    NAVAL_TROOP_IDS.splice(0, NAVAL_TROOP_IDS.length, ...NAVAL_TROOPS.map(t => t.id));
+  }
+  if (data.siege_equipment) {
+    SIEGE_EQUIPMENT.splice(0, SIEGE_EQUIPMENT.length, ...Object.entries(data.siege_equipment).map(([id, meta]) => ({ id, ...meta })));
+  }
+  Object.assign(BUILDING_OVERRIDES, data.building_overrides || {});
+  const rules = data.game_rules || {};
+  SPECIAL_COST = Number(rules.special_troop_cost ?? SPECIAL_COST);
+  SPECIAL_POWER = Number(rules.special_troop_power ?? SPECIAL_POWER);
+  CAMP_POWER_STEP = Number(rules.camp_power_step ?? CAMP_POWER_STEP);
+  FOOD_COST_REGULAR = Number(rules.food_cost_regular ?? FOOD_COST_REGULAR);
+  FOOD_COST_SPECIAL = Number(rules.food_cost_special ?? FOOD_COST_SPECIAL);
+  WEAPON_PER_SOLDIER = Number(rules.weapon_per_soldier ?? WEAPON_PER_SOLDIER);
+  LEVEL_HOURS_STEP = Number(rules.level_hours_step ?? LEVEL_HOURS_STEP);
+  MAX_BUILDING_LEVEL = Number(rules.default_max_building_level ?? MAX_BUILDING_LEVEL);
 }
 
 // بازدهیِ فعلیِ یک ساختمان — تولید روزانه و افزایش سقفِ ذخیره‌سازی، به‌نسبت سطح فعلی‌اش
@@ -920,4 +947,3 @@ export function taxYieldMultiplier(popularity) {
 export const TRADE_GOODS = ['wood', 'stone', 'iron', 'food', 'wine'];
 export const CARAVAN_GOODS = ['gold', ...TRADE_GOODS];
 export const TRADE_GOOD_NAMES = { gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
-

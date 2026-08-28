@@ -108,6 +108,7 @@ export default function War() {
   const [opType, setOpType] = useState(OP_TYPES[0].id);
   const [target, setTarget] = useState(null); // { name, region, ... } | null
   const [name, setName] = useState('');
+  const [commanderPresent, setCommanderPresent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cancelBusyId, setCancelBusyId] = useState(null);
   const [movingLegion, setMovingLegion] = useState(null);
@@ -205,7 +206,7 @@ export default function War() {
     [counts]
   );
   const foodPerDay = useMemo(
-    () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR), 0),
+    () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * (t.food ?? ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR)), 0),
     [counts]
   );
   const weaponsNeeded = useMemo(() => {
@@ -257,7 +258,7 @@ export default function War() {
     : null;
 
   const resetForm = () => {
-    setName(''); setTarget(null);
+    setName(''); setTarget(null); setCommanderPresent(false);
     setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
     setEquipmentCounts(Object.fromEntries(SIEGE_EQUIPMENT.map(e => [e.id, 0])));
   };
@@ -300,6 +301,7 @@ export default function War() {
         target_castle: op.needsTarget ? target.name : null,
         name: name.trim(), troops: counts,
         equipment: equipmentCounts,
+        commander_present: commanderPresent,
         via: chosenRoute ? chosenRoute.path : undefined,
       });
       haptic('medium');
@@ -405,6 +407,10 @@ export default function War() {
             )}
             <label className="f" style={{ marginTop: 0 }}>نام لشکر</label>
             <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
+            {!movingLegion && <button type="button" className={`rbtn pick ${commanderPresent ? 'sel' : ''}`} style={{ marginTop: 10, width: '100%', textAlign: 'right' }} onClick={() => setCommanderPresent(v => !v)}>
+              <div className="n">{commanderPresent ? 'فرمانده همراه لشکر می‌رود' : 'فرمانده در قلعه می‌ماند'}</div>
+              <div className="c">حضور کاراکتر: ۱۰٪ قدرت بیشتر و ۵٪ حرکت سریع‌تر؛ این ضرایب در پنل ادمین قابل تغییرند.</div>
+            </button>}
 
             <label className="f">مبدا</label>
             <select value={origin} disabled={!!movingLegion} onChange={e => setOrigin(e.target.value)}>
@@ -505,7 +511,7 @@ export default function War() {
                     {t.special && <span className="troop-tag">ویژهٔ اقلیم</span>}
                     {t.naval && <span className="troop-tag">ویژهٔ بندر</span>}
                     <small>
-                      {t.cost.toLocaleString('fa-IR')} طلا/نفر · {((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
+                      {t.cost.toLocaleString('fa-IR')} طلا/نفر · {(t.food ?? ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR)).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
                       {weaponKey && ok && ` · ${weaponStock.toLocaleString('fa-IR')} ${WEAPON_NAMES[weaponKey]} موجود`}
                     </small>
                     {!ok && weaponKey && <small className="troop-locked">نیاز به پادگانِ این یگان</small>}
@@ -673,4 +679,3 @@ export default function War() {
     </>
   );
 }
-

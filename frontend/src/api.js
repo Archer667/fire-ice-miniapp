@@ -25,13 +25,13 @@ import {
   REGIONS_STATIC, BUILDINGS_STATIC, MAX_BUILDING_LEVEL, buildingCost, buildingHours,
   DEFAULT_TITLE, POPULARITY_START, POPULARITY_MAX, TAX_RATE_DEFAULT,
   FEAST_COST, FEAST_POPULARITY_GAIN, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, PACT_PRIORITY, WARDEN_GROUPS,
-  COMMON_TROOPS, SPECIAL_COST, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea, DEFAULT_SEA_CASTLES,
+  COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, CAMP_POWER_STEP, OP_TYPES, TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, travelRoutes, pathUsesSea, DEFAULT_SEA_CASTLES,
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
   ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield, buildingProduces, buildingCapBonus, BUILDING_OVERRIDES,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
-  WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES, MAP_TERRAINS,
+  WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES, MAP_TERRAINS, SIEGE_EQUIPMENT,
   DAILY_PRODUCTION, RESOURCE_CAPS, taxYieldMultiplier,
 } from './gamedata.js';
 
@@ -328,6 +328,7 @@ const M = {
       admin_role: 'full', // حالت mock تک‌بازیکنه — خودت همیشه ادمینی تا بتونی خاندان خودت رو تخصیص بدی
       is_owner: true,
       requested_castles: (b.requested_castles || []).slice(0, 5),
+      backstory: b.backstory || '', profile_image: b.profile_image || null,
       last_tick: new Date().toISOString(),
     });
     return { ok: true };
@@ -563,14 +564,14 @@ const M = {
           if (req.weapon) weapons[req.weapon] = (weapons[req.weapon] || 0) + n * WEAPON_PER_SOLDIER;
         }
         gold += common.cost * n;
-        food += FOOD_COST_REGULAR * n;
+        food += (common.food ?? FOOD_COST_REGULAR) * n;
       } else if (NAVAL_TROOP_IDS.includes(tid)) {
         const naval = NAVAL_TROOPS.find(t => t.id === tid);
         if (!originIsPort) throw new Error('فقط قلعه/شهرهای خشکی‌دریایی یا کاملاً دریایی می‌توانند کشتی بسازند');
         const portLevel = originBuildings[NAVAL_CAMP_BUILDING]?.level || 0;
         if (portLevel <= 0) throw new Error(`برای ساخت ${naval.name} باید ${BUILDINGS_STATIC[NAVAL_CAMP_BUILDING].name} را بنا کرده باشی`);
         gold += naval.cost * n;
-        food += FOOD_COST_SPECIAL * n;
+        food += (naval.food ?? FOOD_COST_SPECIAL) * n;
       } else if (specials.includes(tid)) {
         gold += SPECIAL_COST * n;
         food += FOOD_COST_SPECIAL * n;
@@ -1226,9 +1227,12 @@ const M = {
   },
   adminGetBuildingBalance: () => {
     return Object.entries(BUILDINGS_STATIC)
-      .filter(([, meta]) => (meta.produces && Object.keys(meta.produces).length) || (meta.cap_bonus && Object.keys(meta.cap_bonus).length))
       .map(([id, meta]) => ({
         id, name: meta.name, type: meta.type,
+        base_cost: meta.cost || {}, cost: BUILDING_OVERRIDES[id]?.cost || meta.cost || {},
+        base_cost_step_percent: 15, cost_step_percent: (BUILDING_OVERRIDES[id]?.cost_step ?? .15) * 100,
+        base_hours: meta.hours, hours: BUILDING_OVERRIDES[id]?.hours ?? meta.hours,
+        base_max_level: meta.max_level || MAX_BUILDING_LEVEL, max_level: BUILDING_OVERRIDES[id]?.max_level || meta.max_level || MAX_BUILDING_LEVEL,
         base_produces: meta.produces || {}, base_cap_bonus: meta.cap_bonus || {},
         overridden: !!BUILDING_OVERRIDES[id],
         produces: buildingProduces(id), cap_bonus: buildingCapBonus(id),
@@ -1245,7 +1249,7 @@ const M = {
       throw new Error('این ساختمان چنین منبعی تولید/ذخیره نمی‌کند');
     }
     if ([...Object.values(produces), ...Object.values(capBonus)].some(v => v < 0)) throw new Error('مقدار نمی‌تواند منفی باشد');
-    const override = {};
+    const override = { cost: body.cost || meta.cost || {}, cost_step: Number(body.cost_step_percent || 0) / 100, hours: Number(body.hours), max_level: Number(body.max_level) };
     if (Object.keys(produces).length) override.produces = produces;
     if (Object.keys(capBonus).length) override.cap_bonus = capBonus;
     if (Object.keys(override).length) BUILDING_OVERRIDES[body.building_id] = override;
@@ -1256,6 +1260,14 @@ const M = {
     delete BUILDING_OVERRIDES[id];
     return { ok: true };
   },
+  adminGetGameplayBalance: () => ({
+    rules: { camp_power_step_percent: CAMP_POWER_STEP * 100, special_troop_cost: SPECIAL_COST, special_troop_power: SPECIAL_POWER, food_cost_regular: FOOD_COST_REGULAR, food_cost_special: FOOD_COST_SPECIAL, weapon_per_soldier: WEAPON_PER_SOLDIER, level_hours_step_percent: 6, default_max_building_level: MAX_BUILDING_LEVEL, equipment_slowdown_cap_percent: 100, commander_power_bonus_percent: 10, commander_speed_bonus_percent: 5 },
+    common_troops: COMMON_TROOPS.map(t => ({ ...t })),
+    naval_troops: NAVAL_TROOPS.map(t => ({ ...t })),
+    equipment: SIEGE_EQUIPMENT.map(e => ({ ...e, cost: { ...e.cost }, slowdown_percent: e.slowdown * 100 })),
+  }),
+  adminSetGameplayBalance: (body) => body,
+  adminResetGameplayBalance: () => M.adminGetGameplayBalance(),
   adminGrantItem: (itemId, tgId, color) => {
     const tpl = mockItems.find(t => t.id === itemId);
     if (!tpl) throw new Error('این آیتم پیدا نشد');
@@ -1536,6 +1548,7 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  gamedata: () => MOCK ? Promise.resolve(null) : req('/api/gamedata'),
   gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
   me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
   musicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/players/music'),
@@ -1548,14 +1561,14 @@ export const api = {
   warWindow: () => MOCK ? Promise.resolve(M.warWindow()) : req('/api/war/window'),
   adminGetWarWindow: () => MOCK ? Promise.resolve(M.adminGetWarWindow()) : req('/api/admin/war-window'),
   adminSetWarWindow: (open) => MOCK ? Promise.resolve(M.adminSetWarWindow(open)) : req('/api/admin/war-window', { method: 'POST', body: JSON.stringify({ open }) }),
-  adminAnnounceEvent: (title, description) => MOCK ? Promise.resolve(M.adminAnnounceEvent(title, description))
-    : req('/api/admin/announce-event', { method: 'POST', body: JSON.stringify({ title, description }) }),
+  adminAnnounceEvent: (title, description, imageUrl = null) => MOCK ? Promise.resolve(M.adminAnnounceEvent(title, description))
+    : req('/api/admin/announce-event', { method: 'POST', body: JSON.stringify({ title, description, image_url: imageUrl }) }),
   adminAwardStoryteller: (tgId, tier, reason = '') => MOCK ? Promise.resolve(M.adminAwardStoryteller(tgId, tier, reason))
     : req(`/api/admin/players/${tgId}/medals/realm-storyteller`, { method: 'POST', body: JSON.stringify({ tier, reason }) }),
   adminAwardSpecialMedal: (tgId, medal) => MOCK ? Promise.resolve(M.adminAwardSpecialMedal(tgId, medal))
     : req(`/api/admin/players/${tgId}/medals/special`, { method: 'POST', body: JSON.stringify(medal) }),
-  adminSendBotMessage: (text, sendToAll, toTgIds = [], viaBot = true, viaRaven = false) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
-    : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds, via_bot: viaBot, via_raven: viaRaven }) }),
+  adminSendBotMessage: (text, sendToAll, toTgIds = [], viaBot = true, viaRaven = false, imageUrl = null) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
+    : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds, via_bot: viaBot, via_raven: viaRaven, image_url: imageUrl }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
   warRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
     : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
@@ -1651,6 +1664,9 @@ export const api = {
     : req('/api/admin/building-balance', { method: 'POST', body: JSON.stringify(b) }),
   adminResetBuildingBalance: (id) => MOCK ? Promise.resolve(M.adminResetBuildingBalance(id))
     : req(`/api/admin/building-balance/${id}/reset`, { method: 'POST' }),
+  adminGetGameplayBalance: () => MOCK ? Promise.resolve(M.adminGetGameplayBalance()) : req('/api/admin/gameplay-balance'),
+  adminSetGameplayBalance: (b) => MOCK ? Promise.resolve(M.adminSetGameplayBalance(b)) : req('/api/admin/gameplay-balance', { method: 'POST', body: JSON.stringify(b) }),
+  adminResetGameplayBalance: () => MOCK ? Promise.resolve(M.adminResetGameplayBalance()) : req('/api/admin/gameplay-balance/reset', { method: 'POST' }),
   adminPlayerBuildings: (tgId) => MOCK ? Promise.resolve({ castles: [], max_level: 30 })
     : req(`/api/admin/players/${tgId}/buildings`),
   adminSetPlayerBuilding: (tgId, buildingId, castle, level) => MOCK ? Promise.resolve({ ok: true })
@@ -1751,8 +1767,8 @@ export const api = {
   adminSecurityRoleplays: (query = '', tgId = null) => MOCK ? Promise.resolve([])
     : req(`/api/admin/roleplay/security?q=${encodeURIComponent(query)}${tgId ? `&tg_id=${tgId}` : ''}`),
   adminBattles: () => MOCK ? Promise.resolve([]) : req('/api/admin/battles'),
-  adminResolveBattle: (campaignId, result, visibility, winnerTgIds, attackerLosses = {}, defenderLosses = {}, attackerEquipmentLosses = {}, defenderEquipmentLosses = {}, attackerArmyLosses = {}, attackerArmyEquipmentLosses = {}, defenderArmyLosses = {}, defenderArmyEquipmentLosses = {}) => MOCK ? Promise.resolve({ ok: true })
-    : req(`/api/admin/battles/${campaignId}/resolve`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', winner_tg_ids: winnerTgIds, winner_tg_id: winnerTgIds?.[0] || null, attacker_losses: attackerLosses, defender_losses: defenderLosses, attacker_equipment_losses: attackerEquipmentLosses, defender_equipment_losses: defenderEquipmentLosses, attacker_army_losses: attackerArmyLosses, attacker_army_equipment_losses: attackerArmyEquipmentLosses, defender_army_losses: defenderArmyLosses, defender_army_equipment_losses: defenderArmyEquipmentLosses }) }),
+  adminResolveBattle: (campaignId, result, visibility, winnerTgIds, attackerLosses = {}, defenderLosses = {}, attackerEquipmentLosses = {}, defenderEquipmentLosses = {}, attackerArmyLosses = {}, attackerArmyEquipmentLosses = {}, defenderArmyLosses = {}, defenderArmyEquipmentLosses = {}, imageUrl = null) => MOCK ? Promise.resolve({ ok: true })
+    : req(`/api/admin/battles/${campaignId}/resolve`, { method: 'POST', body: JSON.stringify({ result, visibility: visibility || 'participants', winner_tg_ids: winnerTgIds, winner_tg_id: winnerTgIds?.[0] || null, attacker_losses: attackerLosses, defender_losses: defenderLosses, attacker_equipment_losses: attackerEquipmentLosses, defender_equipment_losses: defenderEquipmentLosses, attacker_army_losses: attackerArmyLosses, attacker_army_equipment_losses: attackerArmyEquipmentLosses, defender_army_losses: defenderArmyLosses, defender_army_equipment_losses: defenderArmyEquipmentLosses, image_url: imageUrl }) }),
   adminDismissBattle: (campaignId) => MOCK ? Promise.resolve({ ok: true })
     : req(`/api/admin/battles/${campaignId}/dismiss`, { method: 'POST' }),
   adminRespondRoleplay: (roleplayId, result, visibility, otherLords = [], winnerTgId = null, attackerLosses = {}, defenderLosses = {}, adjustments = {}) => MOCK ? Promise.resolve(M.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId))
@@ -1772,8 +1788,8 @@ export const api = {
   adminClosePoll: (id) => MOCK ? Promise.resolve(M.adminClosePoll()) : req(`/api/polls/admin/${id}/close`, { method: 'POST' }),
   adminDeletePoll: (id) => MOCK ? Promise.resolve(M.adminDeletePoll()) : req(`/api/polls/admin/${id}`, { method: 'DELETE' }),
   adminListAdmins: () => MOCK ? Promise.resolve(M.adminListAdmins()) : req('/api/admin/admins'),
-  adminAddAdmin: (tgId) => MOCK ? Promise.resolve(M.adminAddAdmin())
-    : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),
+  adminAddAdmin: (tgId, role = 'limited') => MOCK ? Promise.resolve(M.adminAddAdmin())
+    : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId, role }) }),
   adminRemoveAdmin: (tgId) => MOCK ? Promise.resolve(M.adminRemoveAdmin())
     : req(`/api/admin/admins/${tgId}`, { method: 'DELETE' }),
   adminResetGamePreview: () => MOCK ? Promise.resolve(M.adminResetGamePreview()) : req('/api/admin/reset-game/preview'),
@@ -1784,4 +1800,3 @@ export const api = {
   adminResetScoreboard: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
     : req('/api/admin/reset-scoreboard', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
-

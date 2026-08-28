@@ -35,6 +35,8 @@ class RegisterBody(BaseModel):
     name: str
     gender: str   # "lord" | "lady"
     requested_castles: list[str] = []   # اولویتِ خودِ بازیکن — چون ممکنه اولی‌ها قبلاً اشغال شده باشن
+    backstory: str
+    profile_image: str | None = None
 
 @router.post("/register")
 async def register(body: RegisterBody, user: dict = Depends(get_user)):
@@ -44,6 +46,13 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         raise HTTPException(400, "جنسیت نامعتبر")
     if not body.name.strip():
         raise HTTPException(400, "نام نمی‌تواند خالی باشد")
+    if len(body.backstory.strip()) < 40 or len(body.backstory.strip()) > 2000:
+        raise HTTPException(400, "بک‌استوری باید بین ۴۰ تا ۲۰۰۰ نویسه باشد")
+    if body.profile_image:
+        if not body.profile_image.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")):
+            raise HTTPException(400, "عکس پروفایل باید JPG، PNG یا WebP باشد")
+        if len(body.profile_image) > 3_500_000:
+            raise HTTPException(400, "حجم عکس پروفایل باید حداکثر ۲٫۵ مگابایت باشد")
     if await players.find_one({"tg_id": user["id"]}):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
 
@@ -63,6 +72,8 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "castle": None,
         "is_port": False,
         "requested_castles": requested,
+        "backstory": body.backstory.strip(),
+        "profile_image": body.profile_image,
         "resources": dict(STARTING_RESOURCES),
         "troops": {},
         "buildings": {},
@@ -92,8 +103,13 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
 @router.get("/me")
 async def me(user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
+    admin_role = await get_admin_role(user)
     if not p:
+        if admin_role:
+            return {"registered": True, "pending": True, "name": user.get("first_name", "ادمین"), "gender": "lord", "title": "ادمین", "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID}
         return {"registered": False}
+    if admin_role:
+        return {"registered": True, "pending": True, "name": p.get("name", user.get("first_name", "ادمین")), "gender": p.get("gender", "lord"), "title": "ادمین", "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID, "profile_image": p.get("profile_image")}
     if not p.get("region") or not p.get("castle"):
         return {
             "registered": True, "pending": True,
@@ -149,12 +165,12 @@ async def me(user: dict = Depends(get_user)):
             break
 
     popularity = p.get("popularity", POPULARITY_START)
-    admin_role = await get_admin_role(user)
     active_campaigns = await campaigns.count_documents({"tg_id": user["id"], "active": True})
     return {
         "registered": True,
         "pending": False,
         "name": p["name"],
+        "backstory": p.get("backstory", ""), "profile_image": p.get("profile_image"),
         "admin_role": admin_role,
         "is_owner": user["id"] == OWNER_ID,
         "gender": p.get("gender", "lord"),
@@ -225,4 +241,3 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
         {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"],
                   "stats": normalize_stats(p), "medals": sync_medals(p)}})
     return {"ok": True, "tax_rate": body.rate}
-

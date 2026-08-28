@@ -72,11 +72,11 @@ SMALL_COUNCIL_SEATS = {
 }
 
 COMMON_TROOPS = {
-    "infantry":  {"name": "پیاده‌نظام",       "cost": 2, "power": 4},
-    "spearman":  {"name": "نیزه‌دار",          "cost": 1, "power": 2},
-    "archer":    {"name": "کماندار",           "cost": 1, "power": 3},
-    "light_cav": {"name": "سواره‌نظام سبک",   "cost": 2, "power": 4},
-    "heavy_cav": {"name": "سواره‌نظام سنگین", "cost": 3, "power": 6},
+    "infantry":  {"name": "پیاده‌نظام",       "cost": 2, "power": 4, "food": 1},
+    "spearman":  {"name": "نیزه‌دار",          "cost": 1, "power": 2, "food": 1},
+    "archer":    {"name": "کماندار",           "cost": 1, "power": 3, "food": 1},
+    "light_cav": {"name": "سواره‌نظام سبک",   "cost": 2, "power": 4, "food": 1},
+    "heavy_cav": {"name": "سواره‌نظام سنگین", "cost": 3, "power": 6, "food": 1},
 }
 SPECIAL_TROOP_COST = 4
 SPECIAL_TROOP_POWER = 5   # نیروهای ویژهٔ اقلیمی پادگان ندارند، پس توانشان ثابت است
@@ -87,8 +87,8 @@ SPECIAL_TROOP_POWER = 5   # نیروهای ویژهٔ اقلیمی پادگان 
 # برای قلعه‌های کاملاً دریایی (بدون راه خشکی) الزامی است: کل نیروی غیردریاییِ هر فرمان
 # باید زیرِ مجموعِ ظرفیتِ کشتی‌های همان فرمان بماند
 NAVAL_TROOPS = {
-    "ship":       {"name": "کشتی جنگی",       "cost": 5, "power": 10, "capacity": 250},
-    "cargo_ship": {"name": "کشتی سادهٔ چوبی", "cost": 3, "power": 0,  "capacity": 100},
+    "ship":       {"name": "کشتی جنگی",       "cost": 5, "power": 10, "capacity": 250, "food": 2},
+    "cargo_ship": {"name": "کشتی سادهٔ چوبی", "cost": 3, "power": 0,  "capacity": 100, "food": 2},
 }
 NAVAL_CAMP_BUILDING = "port"
 
@@ -149,6 +149,30 @@ BUILDINGS = {
     "watchtower":  {"name": "برج نگهبانی", "cost": {"gold": 250, "stone": 120, "wood": 70},  "hours": 7,  "type": "defense"},
 }
 
+# تنظیمات عددی سراسری بازی. این مقادیر در زمان اجرا از دیتابیس بازنویسی می‌شوند.
+# دیکشنری‌ها عمداً mutable هستند تا ماژول‌هایی که آن‌ها را import کرده‌اند نیز همان
+# مقادیر تازه را ببینند.
+GAME_RULES = {
+    "camp_power_step": CAMP_POWER_STEP,
+    "special_troop_cost": SPECIAL_TROOP_COST,
+    "special_troop_power": SPECIAL_TROOP_POWER,
+    "food_cost_regular": 1,
+    "food_cost_special": 2,
+    "weapon_per_soldier": 1,
+    "level_hours_step": 0.06,
+    "default_max_building_level": 30,
+    "equipment_slowdown_cap": 1.0,
+    "commander_power_bonus": 0.10,
+    "commander_speed_bonus": 0.05,
+}
+
+# نسخه‌های دست‌نخورده برای «بازگشت به پیش‌فرض» پنل ادمین.
+import copy as _copy
+DEFAULT_COMMON_TROOPS = _copy.deepcopy(COMMON_TROOPS)
+DEFAULT_NAVAL_TROOPS = _copy.deepcopy(NAVAL_TROOPS)
+DEFAULT_SIEGE_EQUIPMENT = _copy.deepcopy(SIEGE_EQUIPMENT)
+DEFAULT_GAME_RULES = _copy.deepcopy(GAME_RULES)
+
 # ---- بازدهی/سقفِ سراسریِ ساختمان‌ها — ادمینِ کامل می‌تونه از پنل (تب «تعادل بازی»)
 # مقادیرِ produces/cap_bonus بالا رو برای همهٔ بازیکن‌ها بازنویسی کنه، بدون دیپلوی کد.
 # این دیکشنری در حافظه نگه داشته می‌شه (نه در BUILDINGS، که ثابت و مرجع می‌مونه) و
@@ -179,6 +203,10 @@ def building_cost_step(building_id: str) -> float:
     override = BUILDING_OVERRIDES.get(building_id, {})
     return float(override.get("cost_step", LEVEL_COST_STEP))
 
+def building_max_level(building_id: str) -> int:
+    override = BUILDING_OVERRIDES.get(building_id, {})
+    return int(override.get("max_level", BUILDINGS.get(building_id, {}).get("max_level", GAME_RULES["default_max_building_level"])))
+
 # ---- قراردادهای سیاسی — شراب نقشی در بستن هر پیمان دارد ----
 ALLIANCE_TYPES = {
     "non_aggression": {"name": "پیمان عدم‌تجاوز", "wine_cost": 20},
@@ -204,8 +232,9 @@ def building_cost(building_id: str, level: int) -> dict:
     return {k: max(1, round(v * mult)) for k, v in base.items() if v}
 
 def building_hours(building_id: str, level: int) -> float:
-    base = BUILDINGS[building_id]["hours"]
-    mult = 1 + (level - 1) * LEVEL_HOURS_STEP
+    override = BUILDING_OVERRIDES.get(building_id, {})
+    base = float(override.get("hours", BUILDINGS[building_id]["hours"]))
+    mult = 1 + (level - 1) * float(GAME_RULES["level_hours_step"])
     return round(base * mult, 1)
 
 # ---- پیش‌نیاز اعزام هر نیروی عمومی: فقط پادگان همان یگان ----
@@ -231,7 +260,7 @@ TROOP_WEAPON_KEY = {
     unit: bid.replace("armory_", "weapon_", 1)
     for bid, b in BUILDINGS.items() if b.get("type") == "armory" and b.get("unit") for unit in [b["unit"]]
 }
-WEAPON_PER_SOLDIER = 1   # هر سرباز عمومی، ۱ واحد تسلیحاتِ همان یگان مصرف می‌کند
+WEAPON_PER_SOLDIER = 1   # مقدار اجرایی از GAME_RULES خوانده می‌شود
 WEAPON_NAMES = {
     "weapon_sword":  "سلاح پیاده‌نظام",
     "weapon_spear":  "سلاح نیزه‌داران",
@@ -247,12 +276,12 @@ def unit_power(troop_id: str, building_levels: dict) -> float:
     if common:
         req = UNIT_REQUIREMENTS.get(troop_id, {})
         camp_level = building_levels.get(req.get("camp"), 0)
-        return common["power"] * (1 + camp_level * CAMP_POWER_STEP)
+        return common["power"] * (1 + camp_level * float(GAME_RULES["camp_power_step"]))
     naval = NAVAL_TROOPS.get(troop_id)
     if naval:
         port_level = building_levels.get(NAVAL_CAMP_BUILDING, 0)
-        return naval["power"] * (1 + port_level * CAMP_POWER_STEP)
-    return SPECIAL_TROOP_POWER
+        return naval["power"] * (1 + port_level * float(GAME_RULES["camp_power_step"]))
+    return float(GAME_RULES["special_troop_power"])
 
 def campaign_power(troops: dict, building_levels: dict) -> int:
     """توان کل یک لشکر — مجموع (تعداد × توان تک‌بهٔ هر یگان) روی سطح پادگان‌های *الان*"""
@@ -896,4 +925,3 @@ def spy_travel_minutes(origin_castle: str, target_castle: str) -> int:
 TRADE_GOODS = ["wood", "stone", "iron", "food", "wine"]
 CARAVAN_GOODS = ["gold", *TRADE_GOODS]
 TRADE_GOOD_NAMES = {"gold": "سکه", "wood": "چوب", "stone": "سنگ", "iron": "آهن", "food": "غذا", "wine": "شراب"}
-

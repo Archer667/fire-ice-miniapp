@@ -11,6 +11,12 @@ import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_
 
 const NEW_CASTLE = '__new__';
 
+function readAdminImage(file, setter, toast) {
+  if (!file) { setter(null); return; }
+  if (file.size > 2.5 * 1024 * 1024) { toast('حجم تصویر باید حداکثر ۲٫۵ مگابایت باشد'); return; }
+  const reader = new FileReader(); reader.onload = () => setter(reader.result); reader.readAsDataURL(file);
+}
+
 const SPECIAL_MEDAL_PRESETS = [
   { key: 'season_champion', name: 'قهرمان فصل', icon: '🏆' },
   { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🪽' },
@@ -120,10 +126,12 @@ export default function Admin() {
   const [warWindowBusy, setWarWindowBusy] = useState(false);
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [eventImage, setEventImage] = useState(null);
   const [eventBusy, setEventBusy] = useState(false);
   const [musicSettings, setMusicSettings] = useState(null);
   const [musicBusy, setMusicBusy] = useState(false);
   const [botMessage, setBotMessage] = useState('');
+  const [botMessageImage, setBotMessageImage] = useState(null);
   const [botAudience, setBotAudience] = useState('all');
   const [botTargets, setBotTargets] = useState([]);
   const [botMessageBusy, setBotMessageBusy] = useState(false);
@@ -156,6 +164,7 @@ export default function Admin() {
   const [pollEligible, setPollEligible] = useState([]);
   const [polls, setPolls] = useState(null);
   const [admins, setAdmins] = useState(null);
+  const [newAdminRole, setNewAdminRole] = useState('limited');
   const [newAdminTarget, setNewAdminTarget] = useState([]);
   const [resetPreview, setResetPreview] = useState(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
@@ -214,6 +223,7 @@ export default function Admin() {
   const [securitySearching, setSecuritySearching] = useState(false);
   const [battles, setBattles] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
+  const [battleResultImages, setBattleResultImages] = useState({});
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
   const [roleplayWinners, setRoleplayWinners] = useState({}); // battleId -> winner tg_id[]
@@ -236,6 +246,8 @@ export default function Admin() {
   const [balanceList, setBalanceList] = useState(null);
   const [balanceDrafts, setBalanceDrafts] = useState({});
   const [balanceBusyId, setBalanceBusyId] = useState(null);
+  const [gameplayBalance, setGameplayBalance] = useState(null);
+  const [gameplayBalanceBusy, setGameplayBalanceBusy] = useState(false);
   const [buildingAdminMode, setBuildingAdminMode] = useState('global');
   const [playerBuildingTarget, setPlayerBuildingTarget] = useState([]);
   const [playerBuildingData, setPlayerBuildingData] = useState(null);
@@ -284,10 +296,13 @@ export default function Admin() {
     setBalanceDrafts(Object.fromEntries(list.map(b => [b.id, {
       cost: Object.fromEntries(Object.keys(b.base_cost || {}).map(k => [k, String(b.cost?.[k] ?? b.base_cost[k])])),
       cost_step_percent: String(b.cost_step_percent ?? b.base_cost_step_percent ?? 15),
+      hours: String(b.hours ?? b.base_hours ?? 1),
+      max_level: String(b.max_level ?? b.base_max_level ?? 30),
       produces: Object.fromEntries(Object.keys(b.base_produces || {}).map(k => [k, String(b.produces?.[k] ?? b.base_produces[k])])),
       cap_bonus: Object.fromEntries(Object.keys(b.base_cap_bonus || {}).map(k => [k, String(b.cap_bonus?.[k] ?? b.base_cap_bonus[k])])),
     }])));
   }).catch(e => toast(e.message));
+  const loadGameplayBalance = () => api.adminGetGameplayBalance().then(setGameplayBalance).catch(e => toast(e.message));
 
   const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
   const loadAdminRumors = () => api.adminRumors().then(setAdminRumors).catch(e => toast(e.message));
@@ -319,6 +334,7 @@ export default function Admin() {
         food_delta: Number(draft.food_delta || 0),
         men_delta: Number(draft.men_delta || 0),
         outcome: draft.outcome || 'resolved',
+        image_url: draft.image_url || null,
       });
       toast('نتیجه شورش ثبت و برای بازیکن ارسال شد');
       loadRebellions();
@@ -344,7 +360,7 @@ export default function Admin() {
     loadRebellions();
     loadRebellionSettings();
     loadMapData();
-    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message)); }
+    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance(); api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message)); }
     if (me.is_owner) loadResetPreview();
   }, []);
 
@@ -550,10 +566,10 @@ export default function Admin() {
     if (!eventTitle.trim() || !eventDescription.trim()) { toast('عنوان و توضیحِ رویداد را بنویس'); return; }
     setEventBusy(true);
     try {
-      await api.adminAnnounceEvent(eventTitle.trim(), eventDescription.trim());
+      await api.adminAnnounceEvent(eventTitle.trim(), eventDescription.trim(), eventImage);
       haptic('medium');
       toast('رویداد برای همهٔ بازیکنان با کلاغ فرستاده شد');
-      setEventTitle(''); setEventDescription('');
+      setEventTitle(''); setEventDescription(''); setEventImage(null);
     } catch (e) { toast(e.message); }
     setEventBusy(false);
   };
@@ -571,10 +587,11 @@ export default function Admin() {
         botTargets.map(p => p.tg_id),
         botViaBot,
         botViaRaven,
+        botMessageImage,
       );
       haptic('medium');
       toast(`پیام برای ${(res.sent_to ?? 0).toLocaleString('fa-IR')} بازیکن ارسال شد`);
-      setBotMessage('');
+      setBotMessage(''); setBotMessageImage(null);
       setBotTargets([]);
     } catch (e) { toast(e.message); }
     setBotMessageBusy(false);
@@ -782,7 +799,7 @@ export default function Admin() {
     setRoleplayBusyId(id);
     try {
       const losses = roleplayLosses[id] || {};
-      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {});
+      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {}, battleResultImages[id] || null);
       toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
       loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
@@ -883,9 +900,9 @@ export default function Admin() {
   const addAdmin = async () => {
     if (!newAdminTarget.length) { toast('یک لرد را انتخاب کن'); return; }
     try {
-      await api.adminAddAdmin(newAdminTarget[0].tg_id);
+      await api.adminAddAdmin(newAdminTarget[0].tg_id, newAdminRole);
       haptic('medium');
-      toast('ادمین محدود اضافه شد');
+      toast(newAdminRole === 'full' ? 'ادمین کامل اضافه شد' : 'ادمین محدود اضافه شد');
       setNewAdminTarget([]);
       loadAdmins();
     } catch (e) { toast(e.message); }
@@ -1050,9 +1067,13 @@ export default function Admin() {
         building_id: b.id,
         cost: parseBalanceMap(draft.cost, 'هزینه‌ها باید عدد صحیح و غیرمنفی باشند'),
         cost_step_percent: step,
+        hours: Number(draft.hours),
+        max_level: parseInt(draft.max_level, 10),
         produces: parseBalanceMap(draft.produces, 'مقدار تولید باید عدد صحیح و غیرمنفی باشد'),
         cap_bonus: parseBalanceMap(draft.cap_bonus, 'افزایش سقف باید عدد صحیح و غیرمنفی باشد'),
       };
+      if (!Number.isFinite(payload.hours) || payload.hours <= 0) throw new Error('زمان پایه باید بیشتر از صفر باشد');
+      if (!Number.isInteger(payload.max_level) || payload.max_level < 1 || payload.max_level > 100) throw new Error('سقف سطح باید بین ۱ تا ۱۰۰ باشد');
     } catch (e) { toast(e.message); return; }
     setBalanceBusyId(b.id);
     try {
@@ -1073,6 +1094,32 @@ export default function Admin() {
       loadBalance();
     } catch (e) { toast(e.message); }
     setBalanceBusyId(null);
+  };
+
+  const setGameplayRule = (key, value) => setGameplayBalance(prev => ({ ...prev, rules: { ...prev.rules, [key]: value } }));
+  const setGameplayRow = (section, id, key, value) => setGameplayBalance(prev => ({
+    ...prev,
+    [section]: prev[section].map(row => row.id === id ? { ...row, [key]: value } : row),
+  }));
+  const setEquipmentCost = (id, key, value) => setGameplayBalance(prev => ({
+    ...prev,
+    equipment: prev.equipment.map(row => row.id === id ? { ...row, cost: { ...row.cost, [key]: value } } : row),
+  }));
+  const saveGameplayBalance = async () => {
+    setGameplayBalanceBusy(true);
+    try {
+      const saved = await api.adminSetGameplayBalance(gameplayBalance);
+      setGameplayBalance(saved); haptic('medium'); toast('تعادل نیروها و ادوات ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setGameplayBalanceBusy(false);
+  };
+  const resetGameplayBalance = async () => {
+    setGameplayBalanceBusy(true);
+    try {
+      const saved = await api.adminResetGameplayBalance();
+      setGameplayBalance(saved); haptic(); toast('تعادل نیروها و ادوات به پیش‌فرض برگشت');
+    } catch (e) { toast(e.message); }
+    setGameplayBalanceBusy(false);
   };
 
   const savePlayerBuilding = async (row) => {
@@ -1588,6 +1635,7 @@ export default function Admin() {
                   return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id, side)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
                 })}</div>
                 <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
+                <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setBattleResultImages(p => ({ ...p, [b.campaign_id]: image })), toast)} />
                 <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
                 <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
                 <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
@@ -2178,6 +2226,9 @@ export default function Admin() {
             <button type="button" role="tab" aria-selected={buildingAdminMode === 'player'}
                     className={`rbtn tab ${buildingAdminMode === 'player' ? 'on' : ''}`}
                     onClick={() => setBuildingAdminMode('player')}>ساختمان‌های بازیکن</button>
+            <button type="button" role="tab" aria-selected={buildingAdminMode === 'military'}
+                    className={`rbtn tab ${buildingAdminMode === 'military' ? 'on' : ''}`}
+                    onClick={() => setBuildingAdminMode('military')}>نیروها و ادوات</button>
           </div>
 
           {buildingAdminMode === 'global' && (
@@ -2222,6 +2273,14 @@ export default function Admin() {
                         <label className="f" style={{ marginTop: 0 }}>رشد هزینه در هر سطح <small style={{ color: 'var(--low)' }}>(درصد)</small></label>
                         <input type="number" min="0" max="500" step="0.5" value={draft.cost_step_percent ?? ''}
                                onChange={e => setBalanceDraft(b.id, 'cost_step_percent', null, e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>زمان پایه ساخت سطح ۱ <small style={{ color: 'var(--low)' }}>(ساعت)</small></label>
+                        <input type="number" min="0.1" step="0.1" value={draft.hours ?? ''} onChange={e => setBalanceDraft(b.id, 'hours', null, e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>حداکثر سطح این ساختمان</label>
+                        <input type="number" min="1" max="100" value={draft.max_level ?? ''} onChange={e => setBalanceDraft(b.id, 'max_level', null, e.target.value)} />
                       </div>
                     </div>
                     <div className="notice-guide" style={{ marginTop: 9 }}>
@@ -2270,6 +2329,75 @@ export default function Admin() {
                   </div>
                 );
               })}
+            </>
+          )}
+
+          {buildingAdminMode === 'military' && (
+            <>
+              <div className="sect up u2">تعادل نیروها، کشتی‌ها و ادوات</div>
+              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
+                تمام اعداد این بخش سراسری‌اند و بلافاصله در محاسبات واقعی بک‌اند استفاده می‌شوند. درصد کندی برای هر یک عدد ادوات است.
+              </div>
+              {!gameplayBalance && <div className="loading">در حال بارگذاری...</div>}
+              {gameplayBalance && <>
+                <div className="card up u2" style={{ marginBottom: 12 }}>
+                  <div className="sect" style={{ marginTop: 0 }}>قواعد مشترک</div>
+                  <div className="grid2">
+                    {[
+                      ['camp_power_step_percent','افزایش قدرت به‌ازای هر سطح پادگان','٪'],
+                      ['level_hours_step_percent','افزایش زمان ساخت به‌ازای هر سطح','٪'],
+                      ['default_max_building_level','سقف سطح عمومی ساختمان‌ها','سطح'],
+                      ['food_cost_regular','غذای روزانه هر سرباز عادی','غذا'],
+                      ['food_cost_special','غذای روزانه نیروی ویژه و کشتی','غذا'],
+                      ['weapon_per_soldier','تسلیحات لازم برای هر سرباز عادی','عدد'],
+                      ['special_troop_cost','هزینه هر نیروی ویژه','طلا'],
+                      ['special_troop_power','قدرت هر نیروی ویژه','قدرت'],
+                      ['equipment_slowdown_cap_percent','حداکثر کندی مجموع ادوات','٪'],
+                      ['commander_power_bonus_percent','افزایش قدرت با حضور فرمانده','٪'],
+                      ['commander_speed_bonus_percent','افزایش سرعت با حضور فرمانده','٪'],
+                    ].map(([key,label,unit]) => <div key={key}>
+                      <label className="f" style={{ marginTop: 0 }}>{label} <small style={{ color: 'var(--low)' }}>({unit})</small></label>
+                      <input type="number" min="0" step="0.1" value={gameplayBalance.rules[key]} onChange={e => setGameplayRule(key, e.target.value)} />
+                    </div>)}
+                  </div>
+                </div>
+
+                <div className="sect up u2">سربازهای عادی</div>
+                {gameplayBalance.common_troops.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
+                  <div className="res"><div className="n">{row.name}<small>هزینه و قدرت هر یک سرباز</small></div></div>
+                  <div className="grid2">
+                    <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('common_troops', row.id, 'cost', e.target.value)} /></div>
+                    <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('common_troops', row.id, 'power', e.target.value)} /></div>
+                    <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('common_troops', row.id, 'food', e.target.value)} /></div>
+                  </div>
+                </div>)}
+
+                <div className="sect up u2">کشتی‌ها</div>
+                {gameplayBalance.naval_troops.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
+                  <div className="res"><div className="n">{row.name}<small>هزینه، قدرت و ظرفیت حمل هر کشتی</small></div></div>
+                  <div className="grid2">
+                    <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('naval_troops', row.id, 'cost', e.target.value)} /></div>
+                    <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('naval_troops', row.id, 'power', e.target.value)} /></div>
+                    <div><label className="f">ظرفیت حمل سرباز</label><input type="number" min="0" value={row.capacity} onChange={e => setGameplayRow('naval_troops', row.id, 'capacity', e.target.value)} /></div>
+                    <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('naval_troops', row.id, 'food', e.target.value)} /></div>
+                  </div>
+                </div>)}
+
+                <div className="sect up u2">ادوات محاصره</div>
+                {gameplayBalance.equipment.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
+                  <div className="res"><div className="n">{row.name}<small>همه مقادیر برای ساخت یک عدد است</small></div></div>
+                  <div className="grid2">
+                    <div><label className="f">سطح کارگاه موردنیاز</label><input type="number" min="1" value={row.level} onChange={e => setGameplayRow('equipment', row.id, 'level', e.target.value)} /></div>
+                    <div><label className="f">قدرت محاصره</label><input type="number" min="0" value={row.siege_power} onChange={e => setGameplayRow('equipment', row.id, 'siege_power', e.target.value)} /></div>
+                    <div><label className="f">کندی حرکت هر عدد (درصد)</label><input type="number" min="0" step="0.1" value={row.slowdown_percent} onChange={e => setGameplayRow('equipment', row.id, 'slowdown_percent', e.target.value)} /></div>
+                    {Object.entries(row.cost || {}).map(([key,value]) => <div key={key}><label className="f">هزینه {RES_LABEL[key] || key}</label><input type="number" min="0" value={value} onChange={e => setEquipmentCost(row.id, key, e.target.value)} /></div>)}
+                  </div>
+                </div>)}
+                <div style={{ display: 'flex', gap: 7, position: 'sticky', bottom: 8, zIndex: 3, padding: 8, background: 'var(--bg)' }}>
+                  <button className="btn" disabled={gameplayBalanceBusy} onClick={saveGameplayBalance}>{gameplayBalanceBusy ? 'در حال ذخیره...' : 'ذخیره همه تغییرات'}</button>
+                  <button className="btn ghost" disabled={gameplayBalanceBusy} onClick={resetGameplayBalance}>بازگشت به پیش‌فرض</button>
+                </div>
+              </>}
             </>
           )}
 
@@ -2600,6 +2728,7 @@ export default function Admin() {
                     <label className="f">نتیجه شورش</label>
                     <textarea rows={4} value={d.result || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, result: e.target.value } }))}
                               placeholder="نتیجه داوری و اتفاقی که در قلمرو افتاد..." />
+                    <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setRebellionDrafts(p => ({ ...p, [row.id]: { ...(p[row.id] || {}), image_url: image } })), toast)} />
                     <div className="grid2">
                       <div><label className="f">تغییر محبوبیت (+ پاداش / − جریمه)</label><input type="number" value={d.popularity_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, popularity_delta: e.target.value } }))} /></div>
                       <div><label className="f">تغییر سکهٔ خزانه</label><input type="number" value={d.gold_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, gold_delta: e.target.value } }))} /></div>
@@ -2709,6 +2838,9 @@ export default function Admin() {
             <label className="f">توضیحات</label>
             <textarea value={eventDescription} onChange={e => setEventDescription(e.target.value)} maxLength={1500}
                       rows={5} placeholder="شرح رویداد، قوانین و زمان آن..." />
+            <label className="f">تصویر رویداد (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], setEventImage, toast)} />
+            {eventImage && <img src={eventImage} alt="" style={{ width: '100%', maxHeight: 190, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
             <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
               {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
             </button>
@@ -2855,6 +2987,9 @@ export default function Admin() {
             <label className="f">متن پیام</label>
             <textarea value={botMessage} onChange={e => setBotMessage(e.target.value)} maxLength={4000}
                       rows={6} placeholder="پیامی که بات مستقیماً برای بازیکن می‌فرستد..." />
+            <label className="f">تصویر پیام (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], setBotMessageImage, toast)} />
+            {botMessageImage && <img src={botMessageImage} alt="" style={{ width: '100%', maxHeight: 190, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
             <button className="btn" style={{ marginTop: 14 }} disabled={botMessageBusy} onClick={sendBotMessage}>
               {botMessageBusy
                 ? 'در حال ارسال...'
@@ -2870,8 +3005,13 @@ export default function Admin() {
         <>
           <div className="sect up u2">مدیریت ادمین‌ها</div>
           <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین محدود (داوری، بازیکن‌ها، نقشه، مدال و پیام‌رسانی)</label>
+            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین — فقط مالک اصلی بازی اجازه دارد</label>
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
+            <label className="f">سطح دسترسی</label>
+            <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}>
+              <option value="limited">محدود — داوری و عملیات روزمره</option>
+              <option value="full">کامل — تنظیمات و مدیریت کامل بازی</option>
+            </select>
             <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>افزودن ادمین</button>
           </div>
           <div className="card up u2">
@@ -2973,4 +3113,3 @@ export default function Admin() {
     </>
   );
 }
-

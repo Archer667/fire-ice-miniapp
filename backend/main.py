@@ -178,6 +178,7 @@ async def _ensure_indexes():
         logger.exception("ensuring secondary indexes failed")
 
 BUILDING_OVERRIDES_DOC_ID = "building_overrides"
+GAMEPLAY_BALANCE_DOC_ID = "gameplay_balance"
 
 async def _load_building_overrides():
     """مقادیرِ بازدهی/سقفِ سراسری‌ای که ادمین از تب «تعادل بازی» بازنویسی کرده رو موقع
@@ -200,6 +201,32 @@ async def _load_building_overrides():
             game_data.BUILDING_OVERRIDES[bid] = clean
     except Exception:
         logger.exception("loading building overrides failed")
+
+async def _load_gameplay_balance():
+    """تعادل نیروها/ادوات/قواعد را پیش از شروع watcherها از دیتابیس اعمال می‌کند."""
+    try:
+        doc = await game_settings.find_one({"_id": GAMEPLAY_BALANCE_DOC_ID}) or {}
+        if doc.get("rules"):
+            game_data.GAME_RULES.update(doc["rules"])
+        for field, target, defaults in (
+            ("common_troops", game_data.COMMON_TROOPS, game_data.DEFAULT_COMMON_TROOPS),
+            ("naval_troops", game_data.NAVAL_TROOPS, game_data.DEFAULT_NAVAL_TROOPS),
+            ("equipment", game_data.SIEGE_EQUIPMENT, game_data.DEFAULT_SIEGE_EQUIPMENT),
+        ):
+            saved = doc.get(field)
+            if saved and set(saved) == set(defaults):
+                target.clear(); target.update(saved)
+    except Exception:
+        logger.exception("loading gameplay balance failed")
+
+async def _detach_admin_players():
+    """ادمین‌ها داور بازی‌اند و نباید مالک قلعه یا حاضر در جدول بازی باشند."""
+    ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
+    if ids:
+        await players_col.update_many({"tg_id": {"$in": list(ids)}}, {"$set": {
+            "region": None, "castle": None, "is_port": False, "house": None,
+            "castles": [], "castle_buildings": {}, "buildings": {},
+        }})
 
 CASTLE_ROSTER_V2_MARKER_ID = "castle_roster_v2_migrated"
 
@@ -243,6 +270,8 @@ async def start_background_watchers():
     await _ensure_indexes()
     await _migrate_castle_roster_v2()
     await _load_building_overrides()
+    await _load_gameplay_balance()
+    await _detach_admin_players()
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
@@ -256,7 +285,10 @@ async def gamedata():
     """دیتای ثابت برای Frontend — اقلیم‌ها، نیروها، ساختمان‌ها، والی‌نشین‌ها، پیمان‌ها"""
     return {
         "regions": REGIONS, "troops": COMMON_TROOPS, "buildings": BUILDINGS,
-        "max_building_level": MAX_BUILDING_LEVEL, "warden_groups": WARDEN_GROUPS,
+        "max_building_level": game_data.GAME_RULES["default_max_building_level"], "warden_groups": WARDEN_GROUPS,
         "alliance_types": ALLIANCE_TYPES,
+        "naval_troops": game_data.NAVAL_TROOPS,
+        "siege_equipment": game_data.SIEGE_EQUIPMENT,
+        "game_rules": game_data.GAME_RULES,
+        "building_overrides": game_data.BUILDING_OVERRIDES,
     }
-

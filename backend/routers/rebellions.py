@@ -224,6 +224,7 @@ class ResolveBody(BaseModel):
     food_delta: int = 0
     men_delta: int = 0
     outcome: str = "resolved"
+    image_url: str | None = None
 
 @router.get("/status")
 async def status(user: dict = Depends(get_user)):
@@ -354,5 +355,6 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
         "resolved": True, "status": body.outcome, "result": result_text[:4000],
         "resolved_at": now(), "resolved_by": user["id"],
     }})
-    await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}")
+    image = body.image_url if body.image_url and body.image_url.startswith(("https://", "data:image/")) and len(body.image_url) <= 3_500_000 else None
+    await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}", image_url=image)
     return {"ok": True, "popularity": popularity, "resources": resources}

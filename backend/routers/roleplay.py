@@ -123,4 +123,3 @@ async def mine(user: dict = Depends(get_user)):
             "created_at": r["created_at"].isoformat(),
         })
     return out
-

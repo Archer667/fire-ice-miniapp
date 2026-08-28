@@ -204,4 +204,3 @@ async def drift_market_prices():
         noise = price * random.uniform(-0.05, 0.05)
         new_price = max(1, round(price + revert + noise))
         await market_listings.update_one({"_id": m["_id"]}, {"$set": {"prev_price": price, "price": new_price}})
-

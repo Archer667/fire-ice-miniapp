@@ -23,6 +23,7 @@ async def leaderboard(user: dict = Depends(get_user)):
         p = row["player"]
         out.append({
             "rank": i + 1, "name": p["name"], "title": p.get("title"),
+            "profile_image": p.get("profile_image"),
             "castle": p["castle"], "region": REGIONS[p["region"]]["name"],
             "points": row["score"],
             "stats": normalize_stats(p), "medals": medal_rows(p),
@@ -40,6 +41,7 @@ async def weekly_leaderboard(user: dict = Depends(get_user)):
         p = row["player"]
         out.append({
             "rank": i + 1, "name": p["name"], "title": p.get("title"),
+            "profile_image": p.get("profile_image"),
             "castle": p["castle"], "region": REGIONS[p["region"]]["name"],
             "points": row["weekly_score"],
             "stats": normalize_stats(p), "medals": medal_rows(p),

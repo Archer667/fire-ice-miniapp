@@ -15,7 +15,7 @@ import game_data
 import telegram_bot
 from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades, owned_castles, castle_building_state, normalize_building_state
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows, normalize_stats
-from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power, SIEGE_EQUIPMENT
+from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, building_max_level, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power, SIEGE_EQUIPMENT
 from config import ADMIN_IDS, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
 from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle, battle_army_snapshot
 from routers.ravens import send_system_message
@@ -708,6 +708,7 @@ class RoleplayResultBody(BaseModel):
     other_lords: list[int] = []
     winner_tg_id: int | None = None        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
     winner_tg_ids: list[int] = []
+    image_url: str | None = None
     attacker_losses: dict[str, int] = {}
     defender_losses: dict[str, int] = {}
     attacker_equipment_losses: dict[str, int] = {}
@@ -1147,7 +1148,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             f"🏆 برنده‌ها: {'، '.join('لرد ' + name for name in winner_names)}\n"
             f"🏳️ بازنده‌ها: {('، '.join('لرد ' + name for name in loser_names) if loser_names else 'ندارد')}\n\n"
             f"🩸 تلفات {attacker_name}: {count_line(attacker_report_losses)}\n"
-            f"🛡️ نیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}\n"
+            f"🛡️ نیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}\n\n"
             f"🩸 تلفات {defender_name}: {count_line(defender_report_losses)}\n"
             f"🛡️ نیروهای باقی‌مانده {defender_name}: {count_line(defender_after, 'هیچ نیرویی باقی نمانده')}\n\n"
             f"💥 ادوات منهدم‌شده {attacker_name}: {equipment_line(attacker_report_equipment_losses, 'هیچ‌کدام')}\n"
@@ -1155,8 +1156,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             f"🏗️ ادوات باقی‌مانده {attacker_name}: {equipment_line(attacker_equipment_after, 'ندارد')}\n"
             f"🏗️ ادوات باقی‌مانده {defender_name}: {equipment_line(defender_equipment_after, 'ندارد')}"
         )
-        battle_report_plain = f"⚔️ {battle_title}\n{battle_report_rest}"
-        battle_report_bot = f"<b>⚔️ {html.escape(battle_title)}</b>\n{html.escape(battle_report_rest)}"
+        battle_report_plain = f"⚔️ {battle_title}\n\n{battle_report_rest}"
+        battle_report_bot = f"<b>⚔️ {html.escape(battle_title)}</b>\n\n{html.escape(battle_report_rest)}"
     elif r["category"] == "sabotage" and r.get("target_player_name"):
         parties_line = f"\nفرستندهٔ خرابکاری: {r['player_name']}\nهدف خرابکاری: {r['target_player_name']}"
     elif other_lord_names:
@@ -1180,10 +1181,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             if battle_report_plain:
                 await send_system_message(
                     player["tg_id"], player["name"], battle_report_plain, kind="battle",
-                    bot_text=battle_report_bot, bot_parse_mode="HTML",
+                    bot_text=battle_report_bot, bot_parse_mode="HTML", image_url=_validated_message_image(body.image_url),
                 )
             else:
-                await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}{adjustment_line}")
+                await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}{adjustment_line}", image_url=_validated_message_image(body.image_url))
 
     return {"ok": True, "sent_to": len(recipient_tg_ids)}
 
@@ -1486,22 +1487,30 @@ async def list_admins(user: dict = Depends(full_admin_user)):
 
 class AddAdminBody(BaseModel):
     tg_id: int
+    role: str = "limited"
 
 @router.post("/admins")
-async def add_admin(body: AddAdminBody, user: dict = Depends(full_admin_user)):
+async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
+    if body.role not in ("limited", "full"):
+        raise HTTPException(400, "سطح دسترسی ادمین نامعتبر است")
     if body.tg_id in ADMIN_IDS:
         raise HTTPException(400, "این کاربر از قبل ادمین کامل است")
     if not await players.find_one({"tg_id": body.tg_id}):
         raise HTTPException(404, "این کاربر هنوز ثبت‌نام نکرده")
     await admin_roles.update_one(
         {"tg_id": body.tg_id},
-        {"$set": {"tg_id": body.tg_id, "role": "limited", "added_by": user["id"], "created_at": now()}},
+        {"$set": {"tg_id": body.tg_id, "role": body.role, "added_by": user["id"], "created_at": now()}},
         upsert=True,
     )
+    # ادمین عضو بازی نیست؛ قلعه/اقلیم و پیشرفت قلمرویی‌اش فوراً آزاد می‌شود.
+    await players.update_one({"tg_id": body.tg_id}, {"$set": {
+        "region": None, "castle": None, "is_port": False, "house": None,
+        "castles": [], "castle_buildings": {}, "buildings": {},
+    }})
     return {"ok": True}
 
 @router.delete("/admins/{tg_id}")
-async def remove_admin(tg_id: int, user: dict = Depends(full_admin_user)):
+async def remove_admin(tg_id: int, user: dict = Depends(owner_user)):
     if tg_id in ADMIN_IDS:
         raise HTTPException(400, "ادمین کامل از env مدیریت می‌شود، نه از اینجا")
     res = await admin_roles.delete_one({"tg_id": tg_id})
@@ -1800,7 +1809,7 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
         for troop_id, count in c.get("troops", {}).items():
             weapon = TROOP_WEAPON_KEY.get(troop_id)
             if weapon:
-                refund[weapon] = refund.get(weapon, 0) + int(count or 0) * WEAPON_PER_SOLDIER
+                refund[weapon] = refund.get(weapon, 0) + int(count or 0) * int(game_data.GAME_RULES["weapon_per_soldier"])
         # فقط ادواتی که واقعاً هنوز در لشکر مانده‌اند برمی‌گردند؛ بازگرداندن
         # equipment_cost اولیه، ادوات منهدم‌شده در نبرد را دوباره زنده می‌کرد.
         for equipment_id, count in c.get("equipment", {}).items():
@@ -1891,6 +1900,7 @@ async def admin_get_war_window(user: dict = Depends(admin_user)):
 class AnnounceEventBody(BaseModel):
     title: str
     description: str
+    image_url: str | None = None
 
 @router.post("/announce-event")
 async def announce_event(body: AnnounceEventBody, user: dict = Depends(admin_user)):
@@ -1900,9 +1910,10 @@ async def announce_event(body: AnnounceEventBody, user: dict = Depends(admin_use
     description = body.description.strip()[:1500]
     if not title or not description:
         raise HTTPException(400, "عنوان و توضیحِ رویداد نمی‌توانند خالی باشند")
+    image_url = _validated_message_image(body.image_url)
     text = f"🎉 رویداد: {title}\n\n{description}"
     async for p in players.find({}, {"tg_id": 1, "name": 1}):
-        await send_system_message(p["tg_id"], p["name"], text)
+        await send_system_message(p["tg_id"], p["name"], text, kind="event", image_url=image_url)
     return {"ok": True}
 
 class SendBotMessageBody(BaseModel):
@@ -1911,6 +1922,14 @@ class SendBotMessageBody(BaseModel):
     to_tg_ids: list[int] | None = None
     via_bot: bool = True
     via_raven: bool = False
+    image_url: str | None = None
+
+def _validated_message_image(value: str | None):
+    if not value: return None
+    if not value.startswith(("https://", "data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")):
+        raise HTTPException(400, "تصویر باید لینک HTTPS یا فایل JPG/PNG/WebP باشد")
+    if len(value) > 3_500_000: raise HTTPException(400, "حجم تصویر باید حداکثر ۲٫۵ مگابایت باشد")
+    return value
 
 @router.post("/send-bot-message")
 async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_user)):
@@ -1920,6 +1939,7 @@ async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_
         raise HTTPException(400, "متن پیام نمی‌تواند خالی باشد")
     if not body.via_bot and not body.via_raven:
         raise HTTPException(400, "حداقل یکی از مسیرهای بات یا کلاغ را انتخاب کن")
+    image_url = _validated_message_image(body.image_url)
 
     if body.send_to_all:
         targets = await players.find({}, {"tg_id": 1, "name": 1}).to_list(None)
@@ -1938,6 +1958,7 @@ async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_
         await send_system_message(
             target["tg_id"], target["name"], text,
             via_bot=body.via_bot, via_raven=body.via_raven,
+            image_url=image_url,
         )
     return {"ok": True, "sent_to": len(targets), "via_bot": body.via_bot, "via_raven": body.via_raven}
 
@@ -2100,7 +2121,7 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
                     continue
                 weapon_key = TROOP_WEAPON_KEY.get(tid)
                 if weapon_key:
-                    weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * WEAPON_PER_SOLDIER
+                    weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * int(game_data.GAME_RULES["weapon_per_soldier"])
             refunds = {"men": c["men_committed"], "gold": c["gold_cost"], **weapons_refund}
             for resource, amount in c.get("equipment_cost", {}).items():
                 refunds[resource] = refunds.get(resource, 0) + amount
@@ -2131,6 +2152,9 @@ async def get_building_balance(user: dict = Depends(full_admin_user)):
             "base_cost": base_cost, "cost": building_base_cost(bid),
             "base_cost_step_percent": round(game_data.LEVEL_COST_STEP * 100, 2),
             "cost_step_percent": round(building_cost_step(bid) * 100, 2),
+            "base_hours": meta.get("hours", 0), "hours": override.get("hours", meta.get("hours", 0)),
+            "base_max_level": int(meta.get("max_level", game_data.MAX_BUILDING_LEVEL)),
+            "max_level": building_max_level(bid),
             "base_produces": base_produces, "base_cap_bonus": base_cap_bonus,
             "overridden": bool(override),
             "produces": building_produces(bid), "cap_bonus": building_cap_bonus(bid),
@@ -2148,6 +2172,8 @@ class BuildingBalanceBody(BaseModel):
     cost_step_percent: float = 15
     produces: dict[str, int] = {}
     cap_bonus: dict[str, int] = {}
+    hours: float = 0
+    max_level: int = 30
 
 @router.post("/building-balance")
 async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(full_admin_user)):
@@ -2167,10 +2193,13 @@ async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(f
         raise HTTPException(400, "مقدار نمی‌تواند منفی باشد")
     if not 0 <= float(body.cost_step_percent) <= 500:
         raise HTTPException(400, "درصد رشد هزینه باید بین صفر تا ۵۰۰ باشد")
+    if body.hours < 0.1 or not 1 <= body.max_level <= 100:
+        raise HTTPException(400, "زمان پایه باید مثبت و سقف سطح بین ۱ تا ۱۰۰ باشد")
 
     override = {
         "cost": body.cost,
         "cost_step": float(body.cost_step_percent) / 100,
+        "hours": float(body.hours), "max_level": int(body.max_level),
     }
     if body.produces:
         override["produces"] = body.produces
@@ -2194,6 +2223,131 @@ async def reset_building_balance(building_id: str, user: dict = Depends(full_adm
         {"_id": BUILDING_OVERRIDES_DOC_ID}, {"$unset": {f"overrides.{building_id}": ""}}, upsert=True,
     )
     return {"ok": True}
+
+
+# ---- تعادل کامل نیروها، کشتی‌ها، ادوات و قواعد مشترک
+GAMEPLAY_BALANCE_DOC_ID = "gameplay_balance"
+
+def _gameplay_balance_payload():
+    rules = dict(game_data.GAME_RULES)
+    return {
+        "rules": {
+            "camp_power_step_percent": round(float(rules["camp_power_step"]) * 100, 3),
+            "special_troop_cost": rules["special_troop_cost"],
+            "special_troop_power": rules["special_troop_power"],
+            "food_cost_regular": rules["food_cost_regular"],
+            "food_cost_special": rules["food_cost_special"],
+            "weapon_per_soldier": rules["weapon_per_soldier"],
+            "level_hours_step_percent": round(float(rules["level_hours_step"]) * 100, 3),
+            "default_max_building_level": rules["default_max_building_level"],
+            "equipment_slowdown_cap_percent": round(float(rules["equipment_slowdown_cap"]) * 100, 3),
+            "commander_power_bonus_percent": round(float(rules["commander_power_bonus"]) * 100, 3),
+            "commander_speed_bonus_percent": round(float(rules["commander_speed_bonus"]) * 100, 3),
+        },
+        "common_troops": [{"id": tid, **meta} for tid, meta in game_data.COMMON_TROOPS.items()],
+        "naval_troops": [{"id": tid, **meta} for tid, meta in game_data.NAVAL_TROOPS.items()],
+        "equipment": [{**meta, "id": eid, "slowdown_percent": round(float(meta.get("slowdown", 0)) * 100, 3)} for eid, meta in game_data.SIEGE_EQUIPMENT.items()],
+    }
+
+@router.get("/gameplay-balance")
+async def get_gameplay_balance(user: dict = Depends(full_admin_user)):
+    return _gameplay_balance_payload()
+
+class GameplayBalanceBody(BaseModel):
+    rules: dict = {}
+    common_troops: list[dict] = []
+    naval_troops: list[dict] = []
+    equipment: list[dict] = []
+
+def _num(value, name: str, minimum=0, maximum=1_000_000):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise HTTPException(400, f"{name} باید عدد باشد")
+    if not minimum <= number <= maximum:
+        raise HTTPException(400, f"{name} باید بین {minimum} و {maximum} باشد")
+    return number
+
+@router.post("/gameplay-balance")
+async def set_gameplay_balance(body: GameplayBalanceBody, user: dict = Depends(full_admin_user)):
+    r = body.rules
+    clean_rules = {
+        "camp_power_step": _num(r.get("camp_power_step_percent"), "رشد قدرت پادگان", 0, 500) / 100,
+        "special_troop_cost": _num(r.get("special_troop_cost"), "هزینه نیروی ویژه"),
+        "special_troop_power": _num(r.get("special_troop_power"), "قدرت نیروی ویژه"),
+        "food_cost_regular": _num(r.get("food_cost_regular"), "مصرف غذای نیروی عادی"),
+        "food_cost_special": _num(r.get("food_cost_special"), "مصرف غذای نیروی ویژه"),
+        "weapon_per_soldier": int(_num(r.get("weapon_per_soldier"), "تسلیحات هر سرباز", 0, 100)),
+        "level_hours_step": _num(r.get("level_hours_step_percent"), "رشد زمان ارتقا", 0, 500) / 100,
+        "default_max_building_level": int(_num(r.get("default_max_building_level"), "سقف عمومی سطح", 1, 100)),
+        "equipment_slowdown_cap": _num(r.get("equipment_slowdown_cap_percent"), "سقف کندی ادوات", 0, 1000) / 100,
+        "commander_power_bonus": _num(r.get("commander_power_bonus_percent"), "امتیاز قدرت فرمانده", 0, 500) / 100,
+        "commander_speed_bonus": _num(r.get("commander_speed_bonus_percent"), "امتیاز سرعت فرمانده", 0, 100) / 100,
+    }
+
+    common = {}
+    for row in body.common_troops:
+        tid = row.get("id")
+        if tid not in game_data.DEFAULT_COMMON_TROOPS:
+            raise HTTPException(400, "نوع سرباز نامعتبر است")
+        common[tid] = {
+            "name": game_data.DEFAULT_COMMON_TROOPS[tid]["name"],
+            "cost": _num(row.get("cost"), f"هزینه {tid}"),
+            "power": _num(row.get("power"), f"قدرت {tid}"),
+            "food": _num(row.get("food"), f"مصرف غذای {tid}"),
+        }
+
+    naval = {}
+    for row in body.naval_troops:
+        tid = row.get("id")
+        if tid not in game_data.DEFAULT_NAVAL_TROOPS:
+            raise HTTPException(400, "نوع کشتی نامعتبر است")
+        naval[tid] = {
+            "name": game_data.DEFAULT_NAVAL_TROOPS[tid]["name"],
+            "cost": _num(row.get("cost"), f"هزینه {tid}"),
+            "power": _num(row.get("power"), f"قدرت {tid}"),
+            "capacity": int(_num(row.get("capacity"), f"ظرفیت {tid}", 0, 100000)),
+            "food": _num(row.get("food"), f"مصرف غذای {tid}"),
+        }
+
+    equipment = {}
+    for row in body.equipment:
+        eid = row.get("id")
+        default = game_data.DEFAULT_SIEGE_EQUIPMENT.get(eid)
+        if not default:
+            raise HTTPException(400, "نوع ادوات نامعتبر است")
+        raw_cost = row.get("cost") or {}
+        if not set(raw_cost).issubset({"gold", "wood", "stone", "iron", "food", "wine"}):
+            raise HTTPException(400, "منبع هزینه ادوات نامعتبر است")
+        equipment[eid] = {
+            "name": default["name"],
+            "level": int(_num(row.get("level"), f"سطح {eid}", 1, 100)),
+            "cost": {k: int(_num(v, f"هزینه {eid}")) for k, v in raw_cost.items()},
+            "siege_power": _num(row.get("siege_power"), f"قدرت {eid}"),
+            "slowdown": _num(row.get("slowdown_percent"), f"کندی {eid}", 0, 1000) / 100,
+        }
+
+    if set(common) != set(game_data.DEFAULT_COMMON_TROOPS) or set(naval) != set(game_data.DEFAULT_NAVAL_TROOPS) or set(equipment) != set(game_data.DEFAULT_SIEGE_EQUIPMENT):
+        raise HTTPException(400, "فهرست کامل نیروها و ادوات باید ارسال شود")
+    game_data.GAME_RULES.clear(); game_data.GAME_RULES.update(clean_rules)
+    game_data.COMMON_TROOPS.clear(); game_data.COMMON_TROOPS.update(common)
+    game_data.NAVAL_TROOPS.clear(); game_data.NAVAL_TROOPS.update(naval)
+    game_data.SIEGE_EQUIPMENT.clear(); game_data.SIEGE_EQUIPMENT.update(equipment)
+    await game_settings.update_one(
+        {"_id": GAMEPLAY_BALANCE_DOC_ID},
+        {"$set": {"rules": clean_rules, "common_troops": common, "naval_troops": naval, "equipment": equipment}},
+        upsert=True,
+    )
+    return _gameplay_balance_payload()
+
+@router.post("/gameplay-balance/reset")
+async def reset_gameplay_balance(user: dict = Depends(full_admin_user)):
+    game_data.GAME_RULES.clear(); game_data.GAME_RULES.update(game_data.DEFAULT_GAME_RULES)
+    game_data.COMMON_TROOPS.clear(); game_data.COMMON_TROOPS.update(game_data._copy.deepcopy(game_data.DEFAULT_COMMON_TROOPS))
+    game_data.NAVAL_TROOPS.clear(); game_data.NAVAL_TROOPS.update(game_data._copy.deepcopy(game_data.DEFAULT_NAVAL_TROOPS))
+    game_data.SIEGE_EQUIPMENT.clear(); game_data.SIEGE_EQUIPMENT.update(game_data._copy.deepcopy(game_data.DEFAULT_SIEGE_EQUIPMENT))
+    await game_settings.delete_one({"_id": GAMEPLAY_BALANCE_DOC_ID})
+    return _gameplay_balance_payload()
 
 
 class AdminPlayerBuildingBody(BaseModel):
@@ -2221,7 +2375,7 @@ async def admin_player_buildings(tg_id: int, user: dict = Depends(full_admin_use
                 "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
                 "requires_port": bool(meta.get("requires_port")),
                 "level": int(st.get("level", 0)),
-                "max_level": int(meta.get("max_level", game_data.MAX_BUILDING_LEVEL)),
+                "max_level": building_max_level(bid),
                 "upgrade_to": st.get("upgrade_to"),
                 "ready_at": st.get("ready_at").isoformat() if st.get("ready_at") else None,
             })
@@ -2236,7 +2390,7 @@ async def admin_set_player_building(
     """سطح ساختمان را مستقیم تعیین می‌کند؛ صفر یعنی حذف و ثبت سطح، ساختِ درحال‌انجام را لغو می‌کند."""
     if building_id not in BUILDINGS:
         raise HTTPException(400, "ساختمان نامعتبر")
-    max_level = int(BUILDINGS[building_id].get("max_level", game_data.MAX_BUILDING_LEVEL))
+    max_level = building_max_level(building_id)
     if not 0 <= body.level <= max_level:
         raise HTTPException(400, f"سطح باید بین صفر تا {max_level} باشد")
     player = await players.find_one({"tg_id": tg_id})
@@ -2312,4 +2466,4 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     await players.update_one({"tg_id": tg_id}, {"$set": {"medals": medals}})
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
-
+    image_url = _validated_message_image(body.image_url)

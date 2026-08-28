@@ -156,7 +156,7 @@ export default function Dashboard({ goTo }) {
 
       <div className="card up u1">
         <div className="me-row">
-          <div className="ava">{me.name.charAt(0)}</div>
+          <div className="ava">{me.profile_image ? <img src={me.profile_image} alt="" style={{ width: '100%', height: '100%', borderRadius: 'inherit', objectFit: 'cover' }} /> : me.name.charAt(0)}</div>
           <div>
             <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">

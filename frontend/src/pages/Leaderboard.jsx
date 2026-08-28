@@ -84,7 +84,7 @@ export default function Leaderboard() {
           <div className="up u2">
             {lordRows.map(r => (
               <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
-                <div className="rk">{MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR')}</div>
+                <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
                 <div className="n">
                   {r.name}{r.me ? ' — تو' : ''}
                   {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
@@ -108,7 +108,7 @@ export default function Leaderboard() {
             <div className="up u2">
               {weeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
-                  <div className="rk">{MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR')}</div>
+                  <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
                   <div className="n">
                     {r.name}{r.me ? ' — تو' : ''}
                     {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
