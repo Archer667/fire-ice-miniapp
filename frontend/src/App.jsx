@@ -37,6 +37,13 @@ export default function App() {
     api.me().then(setMe).catch(e => { toast(e.message); setMe({ registered: false }); });
   }, []);
 
+  // ادمین‌ها بازیکن نیستند و عمداً قلعه/اقلیم ندارند. بک‌اند برای جلوگیری از
+  // ورودشان به صفحات بازیکنی pending برمی‌گرداند؛ پس به‌جای نمایش صفحهٔ
+  // «منتظر تأیید»، مستقیماً پنل مدیریت را باز می‌کنیم.
+  useEffect(() => {
+    if (me?.admin_role && me?.pending) setTab(ADMIN_INDEX);
+  }, [me?.admin_role, me?.pending]);
+
   if (me === null) {
     return <div className="shell"><div className="loading">کلاغ‌ها در راه‌اند...</div></div>;
   }

@@ -28,14 +28,16 @@ export default function Pending({ goTo }) {
     <div className="view view-noheader">
       <div className="hero up">
         <div className="mark"><Keep s={40} /></div>
-        <h1>{me.gender === 'lady' ? 'لیدی' : 'لرد'} {me.name}</h1>
-        <p>ثبت‌نامت انجام شد — منتظر بمان تا ادمین بازی خاندان (اقلیم) و قلعه‌ات را برایت مشخص کند</p>
+        <h1>{me.admin_role ? 'مدیر' : (me.gender === 'lady' ? 'لیدی' : 'لرد')} {me.name}</h1>
+        <p>{me.admin_role
+          ? 'حساب مدیریت فعال است؛ برای ادامه وارد پنل ادمین شو'
+          : 'ثبت‌نامت انجام شد — منتظر بمان تا ادمین بازی خاندان (اقلیم) و قلعه‌ات را برایت مشخص کند'}</p>
       </div>
-      <div className="up u1">
+      {!me.admin_role && <div className="up u1">
         <button className="btn ghost" disabled={checking} onClick={checkNow}>
           {checking ? 'در حال بررسی...' : 'بررسی دوباره'}
         </button>
-      </div>
+      </div>}
       {me.admin_role && (
         <div className="up u2" style={{ marginTop: 10 }}>
           <button className="btn" onClick={() => goTo(6)}>پنل ادمین — تخصیص خاندان به بازیکن‌ها</button>
