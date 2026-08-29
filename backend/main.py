@@ -4,7 +4,7 @@ import re
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from config import CORS_ORIGINS, CORS_ORIGIN_REGEX
+from config import ADMIN_IDS, CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game import now
 import game_data
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
