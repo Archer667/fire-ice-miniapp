@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { createContext, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 const MAX_ZOOM = 4;
 const STEP = 0.6;
@@ -42,15 +42,40 @@ const ZoomPanMap = forwardRef(function ZoomPanMap({ children, className = '', on
   const [flying, setFlying] = useState(false);
   const gesture = useRef(null);
   const flyTimer = useRef(null);
+  const fittedOnce = useRef(false);
 
-  // اولین بار که ابعادِ واقعی در دسترسه، زومِ fit-all رو حساب و به‌عنوانِ نمای پیش‌فرض تنظیم می‌کنه
-  useEffect(() => {
+  // تصویر نقشه ممکنه در WebView تلگرام بعد از mount رمزگشایی بشه. در آن حالت
+  // اندازه‌گیریِ یک‌باره ارتفاع صفر می‌دید و نقشه تا رفرش بعدی ناپدید می‌ماند.
+  const fitToViewport = useCallback(() => {
     const { vW, vH, cW, cH } = measure(wrapRef.current, contentRef.current);
     if (!vW || !vH || !cW || !cH) return;
     const fz = clamp(Math.min(vW / cW, vH / cH), 0.1, 1);
     setMinZoom(fz);
-    setZoom(fz);
+    if (!fittedOnce.current) {
+      fittedOnce.current = true;
+      setZoom(fz);
+      setPan({ x: 0, y: 0 });
+    }
   }, []);
+
+  // پس از لود تصویر و هر تغییر اندازهٔ واقعی دوباره محاسبه می‌شود.
+  useEffect(() => {
+    fitToViewport();
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(fitToViewport)
+      : null;
+    if (wrapRef.current) observer?.observe(wrapRef.current);
+    if (contentRef.current) observer?.observe(contentRef.current);
+    const image = contentRef.current?.querySelector('img');
+    image?.addEventListener('load', fitToViewport);
+    if (image?.complete) fitToViewport();
+    window.addEventListener('resize', fitToViewport);
+    return () => {
+      observer?.disconnect();
+      image?.removeEventListener('load', fitToViewport);
+      window.removeEventListener('resize', fitToViewport);
+    };
+  }, [fitToViewport]);
 
   // به والد اطلاع می‌ده الان دقیقاً کدوم محدودهٔ درصدیِ تصویر تو دیده — برای مینی‌مپ
   useEffect(() => {
