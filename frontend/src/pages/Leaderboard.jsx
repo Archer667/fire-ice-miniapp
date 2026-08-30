@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { castleLabel } from '../gamedata.js';
+import ProfileImageModal from '../components/ProfileImageModal.jsx';
 
 const TABS = [
   { id: 'regions', label: 'اقلیم‌ها' },
@@ -46,6 +47,15 @@ export default function Leaderboard() {
   const [lordRows, setLordRows] = useState(null);
   const [weeklyRows, setWeeklyRows] = useState(null);
   const [selectedMedal, setSelectedMedal] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+
+  const playerPicture = r => r.profile_image ? (
+    <button type="button" className="leader-profile-trigger"
+            aria-label={`نمایش تصویر پروفایل ${r.name}`}
+            onClick={() => { haptic(); setSelectedProfile({ image: r.profile_image, name: r.name }); }}>
+      <img src={r.profile_image} alt="" loading="lazy" decoding="async" />
+    </button>
+  ) : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'));
 
   useEffect(() => {
     // هر جدول فقط وقتی تب خودش باز می‌شود دریافت می‌شود. قبلاً هر سه جدول با
@@ -93,7 +103,7 @@ export default function Leaderboard() {
           <div className="up u2">
             {lordRows.map(r => (
               <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
-                <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" loading="lazy" decoding="async" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
+                <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
                 <div className="n">
                   {r.name}{r.me ? ' — تو' : ''}
                   {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
@@ -119,7 +129,7 @@ export default function Leaderboard() {
             <div className="up u2">
               {weeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
-                  <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" loading="lazy" decoding="async" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
+                  <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
                   <div className="n">
                     {r.name}{r.me ? ' — تو' : ''}
                     {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
@@ -156,6 +166,8 @@ export default function Leaderboard() {
           </div>
         </div>
       )}
+      <ProfileImageModal image={selectedProfile?.image} name={selectedProfile?.name || ''}
+                         onClose={() => setSelectedProfile(null)} />
     </>
   );
 }

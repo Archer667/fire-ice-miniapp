@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake, Gift } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
 import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
+import ProfileImageModal from '../components/ProfileImageModal.jsx';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
 
@@ -33,6 +34,7 @@ export default function Dashboard({ goTo }) {
   const dayPct = Math.round((me.day / me.season_length) * 100);
   const C = 2 * Math.PI * 19;
   const [taxBusy, setTaxBusy] = useState(false);
+  const [profileImageOpen, setProfileImageOpen] = useState(false);
   const season = seasonOf(me.day);
   const { name: seasonName, from: seasonFrom, to: seasonTo } = SEASONS[season];
   const SeasonIcon = SEASON_ICON[season];
@@ -156,7 +158,13 @@ export default function Dashboard({ goTo }) {
 
       <div className="card up u1">
         <div className="me-row">
-          <div className="ava">{me.profile_image ? <img src={me.profile_image} alt="" style={{ width: '100%', height: '100%', borderRadius: 'inherit', objectFit: 'cover' }} /> : me.name.charAt(0)}</div>
+          {me.profile_image ? (
+            <button type="button" className="ava profile-image-trigger"
+                    aria-label={`نمایش تصویر پروفایل ${me.name}`}
+                    onClick={() => { haptic(); setProfileImageOpen(true); }}>
+              <img src={me.profile_image} alt="" />
+            </button>
+          ) : <div className="ava">{me.name.charAt(0)}</div>}
           <div>
             <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">
@@ -177,6 +185,9 @@ export default function Dashboard({ goTo }) {
           <div className="st"><div className="v">{(me.alliance_count ?? 0).toLocaleString('fa-IR')}</div><div className="k">اتحاد</div></div>
         </div>
       </div>
+
+      <ProfileImageModal image={profileImageOpen ? me.profile_image : null} name={me.name}
+                         onClose={() => setProfileImageOpen(false)} />
 
       <div className="sect up u2">مدال‌ها و افتخارات</div>
       <div className="medal-showcase card up u2">

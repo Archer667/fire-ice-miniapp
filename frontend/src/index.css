@@ -833,6 +833,47 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .lbr.me { border-color: var(--gold); background: linear-gradient(150deg, rgba(233,193,118,0.13), rgba(139,0,0,0.04)); }
 .lbr.me .n, .lbr.me .p { color: var(--az); }
 
+/* تصویر کامل پروفایل — صفحه قلمرو و جدول امتیازات */
+.profile-image-trigger, .leader-profile-trigger {
+  appearance: none; padding: 0; cursor: pointer; overflow: hidden;
+  border: 1px solid rgba(233,193,118,.42); background: rgba(0,0,0,.35);
+}
+.profile-image-trigger img, .leader-profile-trigger img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+}
+.profile-image-trigger:active, .leader-profile-trigger:active { transform: scale(.94); }
+.profile-image-trigger:focus-visible, .leader-profile-trigger:focus-visible,
+.profile-image-close:focus-visible { outline: 2px solid var(--az2); outline-offset: 2px; }
+.leader-profile-trigger { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; }
+.lbr .rk.profile-rk { width: 38px; height: 38px; border: 0; background: transparent; overflow: visible; }
+
+.profile-image-backdrop {
+  position: fixed; inset: 0; z-index: 1200; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  display: grid; place-items: center; background: rgba(0,0,0,.88); backdrop-filter: blur(7px);
+  animation: profile-backdrop-in .18s ease-out both;
+}
+.profile-image-modal {
+  position: relative; width: min(92vw, 620px); display: flex; flex-direction: column; align-items: center;
+  animation: profile-modal-in .22s cubic-bezier(.2,.8,.2,1) both;
+}
+.profile-image-modal img {
+  display: block; max-width: 90vw; max-height: 75vh; width: auto; height: auto; object-fit: contain;
+  border-radius: 10px; border: 1px solid rgba(233,193,118,.48);
+  box-shadow: 0 18px 60px rgba(0,0,0,.72), 0 0 24px rgba(233,193,118,.08);
+}
+.profile-image-name { margin-top: 13px; color: var(--hi); font-size: 15px; font-weight: 800; text-align: center; }
+.profile-image-close {
+  position: absolute; top: -15px; inset-inline-end: -9px; z-index: 2; width: 38px; height: 38px;
+  display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(233,193,118,.5);
+  background: rgba(20,15,14,.94); color: var(--az2); font: 300 28px/1 sans-serif; cursor: pointer;
+  box-shadow: 0 5px 18px rgba(0,0,0,.55);
+}
+@keyframes profile-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes profile-modal-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .profile-image-backdrop, .profile-image-modal { animation: none; }
+}
+
 /* ravens */
 .mailrow {
   display: flex; align-items: center; gap: 13px;
