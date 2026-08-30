@@ -305,8 +305,6 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
     return true;
   }), [mapped, pinFilter]);
 
-  if (mapped.length === 0) return null;
-
   const ownedRegions = [...new Set(mapped.filter(c => c.owner?.region).map(c => c.owner.region))];
   const pactTypesPresent = colorMode === 'pact'
     ? PACT_LEGEND_ORDER.filter(t => mapped.some(c => c.owner && !c.mine && (c.owner.pact || 'none') === t))
