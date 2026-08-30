@@ -1,7 +1,10 @@
 import { getInitData } from './telegram.js';
 
+// در production نبودن VITE_API_URL یعنی API از همان origin و از مسیر /api
+// سرو می‌شود (مثلاً rewrite ورسل). حالت mock فقط باید صریحاً فعال شود؛ وگرنه
+// دیپلوی same-origin ناخواسته وارد دیتای نمایشی می‌شد.
 const BASE = import.meta.env.VITE_API_URL || '';
-export const MOCK = !BASE;
+export const MOCK = import.meta.env.VITE_MOCK === 'true' || (import.meta.env.DEV && !BASE);
 
 async function req(path, opts = {}) {
   const res = await fetch(BASE + path, {
