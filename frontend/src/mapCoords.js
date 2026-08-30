@@ -4,4 +4,4 @@
 // ازقبل‌ثبت‌شده جابه‌جا به‌نظر می‌رسند تا از پنل ادمین دوباره دقیق گذاشته شوند
 // نسخهٔ query باعث می‌شود WebView تلگرام پس از تعویض/اصلاح فایل، نسخهٔ قدیمیِ
 // immutable را از کش هفت‌روزه برنگرداند.
-export const MAP_IMAGE = '/maps/westros2.webp?v=20260830';
+export const MAP_IMAGE = '/maps/westros2-mobile.webp?v=20260830b';
