@@ -5,6 +5,30 @@ import { haptic, getTgUser } from '../telegram.js';
 import { Keep } from '../components/Icons.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
 
+function optimizeProfileImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('خواندن عکس ممکن نشد'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('فرمت عکس قابل‌خواندن نیست'));
+      image.onload = () => {
+        const maxSide = 512;
+        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const width = Math.max(1, Math.round(image.naturalWidth * scale));
+        const height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/webp', 0.78));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Onboarding() {
   const { setMe, toast } = useGame();
   const [name, setName] = useState(getTgUser()?.first_name || '');
@@ -54,11 +78,16 @@ export default function Onboarding() {
       </div>
       <div className="up u1" style={{ marginTop: 12 }}>
         <label className="f">عکس پروفایل کاراکتر (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
-        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={async e => {
           const file = e.target.files?.[0];
           if (!file) { setProfileImage(null); return; }
           if (file.size > 2.5 * 1024 * 1024) { toast('حجم عکس بیشتر از ۲٫۵ مگابایت است'); e.target.value = ''; return; }
-          const reader = new FileReader(); reader.onload = () => setProfileImage(reader.result); reader.readAsDataURL(file);
+          try {
+            setProfileImage(await optimizeProfileImage(file));
+          } catch (error) {
+            toast(error.message);
+            e.target.value = '';
+          }
         }} />
         {profileImage && <img src={profileImage} alt="پیش‌نمایش عکس کاراکتر" style={{ width: 86, height: 86, borderRadius: '50%', objectFit: 'cover', marginTop: 9, border: '2px solid var(--az2)' }} />}
       </div>

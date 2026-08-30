@@ -48,10 +48,17 @@ export default function Leaderboard() {
   const [selectedMedal, setSelectedMedal] = useState(null);
 
   useEffect(() => {
-    api.regionLeaderboard().then(setRegionRows).catch(e => toast(e.message));
-    api.leaderboard().then(setLordRows).catch(e => toast(e.message));
-    api.weeklyLeaderboard().then(setWeeklyRows).catch(e => toast(e.message));
-  }, []);
+    // هر جدول فقط وقتی تب خودش باز می‌شود دریافت می‌شود. قبلاً هر سه جدول با
+    // ورود به صفحه هم‌زمان محاسبه و دانلود می‌شدند و روی WebView موبایل مکث
+    // محسوسی ایجاد می‌کردند.
+    if (tab === 'regions' && regionRows === null) {
+      api.regionLeaderboard().then(setRegionRows).catch(e => { setRegionRows([]); toast(e.message); });
+    } else if (tab === 'lords' && lordRows === null) {
+      api.leaderboard().then(setLordRows).catch(e => { setLordRows([]); toast(e.message); });
+    } else if (tab === 'weekly' && weeklyRows === null) {
+      api.weeklyLeaderboard().then(setWeeklyRows).catch(e => { setWeeklyRows([]); toast(e.message); });
+    }
+  }, [tab, regionRows, lordRows, weeklyRows, toast]);
 
   return (
     <>
@@ -80,11 +87,13 @@ export default function Leaderboard() {
       )}
 
       {tab === 'lords' && (
-        !lordRows ? <div className="loading">شمارش تاج‌ها...</div> : (
+        lordRows === null ? <div className="loading">شمارش تاج‌ها...</div> : lordRows.length === 0 ? (
+          <div className="empty up u2">هنوز لرد تأییدشده‌ای وارد جدول امتیازات نشده است.</div>
+        ) : (
           <div className="up u2">
             {lordRows.map(r => (
               <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
-                <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
+                <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" loading="lazy" decoding="async" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
                 <div className="n">
                   {r.name}{r.me ? ' — تو' : ''}
                   {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
@@ -102,13 +111,15 @@ export default function Leaderboard() {
       )}
 
       {tab === 'weekly' && (
-        !weeklyRows ? <div className="loading">شمارش این‌هفته...</div> : (
+        weeklyRows === null ? <div className="loading">شمارش این‌هفته...</div> : weeklyRows.length === 0 ? (
+          <div className="empty up u2">هنوز امتیازی برای این هفته ثبت نشده است.</div>
+        ) : (
           <>
             <div className="page-sub up u2" style={{ marginTop: -6 }}>امتیازی که هرکس فقط از اول همین هفته کسب کرده — رقابت تازه، بدون انباشت کل بازی</div>
             <div className="up u2">
               {weeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
-                  <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
+                  <div className="rk">{r.profile_image ? <img src={r.profile_image} alt="" loading="lazy" decoding="async" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} /> : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'))}</div>
                   <div className="n">
                     {r.name}{r.me ? ' — تو' : ''}
                     {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
