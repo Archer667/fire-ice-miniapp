@@ -3,7 +3,10 @@ import { getInitData } from './telegram.js';
 // در production نبودن VITE_API_URL یعنی API از همان origin و از مسیر /api
 // سرو می‌شود (مثلاً rewrite ورسل). حالت mock فقط باید صریحاً فعال شود؛ وگرنه
 // دیپلوی same-origin ناخواسته وارد دیتای نمایشی می‌شد.
-const BASE = import.meta.env.VITE_API_URL || '';
+// همهٔ دیپلوی‌های production، چه Vercel و چه VPS، API را از همان origin و
+// مسیر /api می‌خوانند. این کار مانع می‌شود یک Environment Variable قدیمی
+// (مثلاً آدرس Railway) داخل bundle باقی بماند و احراز هویت را دور بزند.
+const BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || '');
 export const MOCK = import.meta.env.VITE_MOCK === 'true' || (import.meta.env.DEV && !BASE);
 
 async function req(path, opts = {}) {
