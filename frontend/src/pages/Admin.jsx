@@ -1383,6 +1383,10 @@ export default function Admin() {
                     <div className="ic"><Shield s={16} /></div>
                     <div className="n">{p.name}<small>{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'}</small></div>
                   </div>
+                  <div className="admin-telegram-id">
+                    <span>آیدی عددی تلگرام</span>
+                    <b dir="ltr">{String(p.tg_id)}</b>
+                  </div>
                   {p.requested_castles && p.requested_castles.length > 0 && (
                     <div style={{ margin: '2px 0 12px' }}>
                       <div className="page-sub" style={{ margin: '0 4px 6px' }}>درخواستِ خودِ بازیکن (به‌ترتیب اولویت):</div>
@@ -1450,6 +1454,10 @@ export default function Admin() {
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
                     <div className="n">{p.name}<small>{p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''}</small></div>
+                  </div>
+                  <div className="admin-telegram-id">
+                    <span>آیدی عددی تلگرام</span>
+                    <b dir="ltr">{String(p.tg_id)}</b>
                   </div>
                   {p.castles && p.castles.length > 0 && (
                     <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>

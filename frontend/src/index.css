@@ -900,6 +900,17 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .notice-guide strong { color: var(--hi); font-size: 11.5px; }
 .notice-guide span { color: var(--mid); font-size: 9.5px; line-height: 1.9; }
 
+.admin-telegram-id {
+  width: fit-content; max-width: 100%; margin: 7px 0 12px; padding: 6px 9px;
+  display: flex; align-items: center; gap: 8px; border-radius: 5px;
+  background: rgba(160,195,255,.055); border: 1px solid rgba(160,195,255,.13);
+  color: var(--mid); font-size: 10.5px; user-select: text;
+}
+.admin-telegram-id b {
+  color: var(--az2); font: 700 11.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: .2px; user-select: all;
+}
+
 .notice-message {
   width: 100%; padding: 12px 14px; border-radius: 5px;
   background: linear-gradient(145deg, rgba(160,195,255,0.075), rgba(0,0,0,0.12));
