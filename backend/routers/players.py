@@ -65,6 +65,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
 
     doc = {
         "tg_id": user["id"],
+        "telegram_username": user.get("username"),
         "name": body.name.strip()[:40],
         "gender": body.gender,
         "title": DEFAULT_TITLE[body.gender],
@@ -108,6 +109,15 @@ async def me(user: dict = Depends(get_user)):
         if admin_role:
             return {"registered": True, "pending": True, "name": user.get("first_name", "ادمین"), "gender": "lord", "title": "ادمین", "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID}
         return {"registered": False}
+    # username بدون فرم و دخالت بازیکن از initData معتبر تلگرام تازه نگه داشته می‌شود.
+    # اگر کاربر username خود را عوض یا حذف کند، پنل ادمین نیز با ورود بعدی او اصلاح می‌شود.
+    current_username = (user.get("username") or "").strip().lstrip("@") or None
+    if p.get("telegram_username") != current_username:
+        if current_username:
+            await players.update_one({"tg_id": user["id"]}, {"$set": {"telegram_username": current_username}})
+        else:
+            await players.update_one({"tg_id": user["id"]}, {"$unset": {"telegram_username": ""}})
+        p["telegram_username"] = current_username
     if admin_role:
         return {"registered": True, "pending": True, "name": p.get("name", user.get("first_name", "ادمین")), "gender": p.get("gender", "lord"), "title": "ادمین", "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID, "profile_image": p.get("profile_image")}
     if not p.get("region") or not p.get("castle"):

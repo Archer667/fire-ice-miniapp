@@ -108,6 +108,7 @@ export default function Admin() {
   const [assignBusyId, setAssignBusyId] = useState(null);
   const [unassignBusyId, setUnassignBusyId] = useState(null);
   const [deletePendingBusyId, setDeletePendingBusyId] = useState(null);
+  const [telegramSyncBusy, setTelegramSyncBusy] = useState(false);
   const [reassignOpenId, setReassignOpenId] = useState(null);
   const [addCastleOpenId, setAddCastleOpenId] = useState(null);
   const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
@@ -269,6 +270,16 @@ export default function Admin() {
 
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
+  const syncTelegramUsernames = async () => {
+    setTelegramSyncBusy(true);
+    try {
+      const result = await api.adminSyncTelegramUsernames();
+      await Promise.all([api.adminListPendingPlayers().then(setPendingPlayers), api.adminListRoster().then(setRoster)]);
+      haptic('medium');
+      toast(`${result.found.toLocaleString('fa-IR')} نام کاربری دریافت شد${result.unavailable ? ` · ${result.unavailable.toLocaleString('fa-IR')} حساب در دسترس بات نبود` : ''}`);
+    } catch (e) { toast(e.message); }
+    setTelegramSyncBusy(false);
+  };
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadAmbushes = () => api.adminAmbushes().then(setAmbushesList).catch(e => toast(e.message));
   const loadWarWindow = () => api.adminGetWarWindow().then(setWarWindow).catch(e => toast(e.message));
@@ -1369,6 +1380,10 @@ export default function Admin() {
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
             این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
           </div>
+          <button type="button" className="btn ghost up u2" disabled={telegramSyncBusy}
+                  style={{ width: 'auto', margin: '0 0 12px' }} onClick={syncTelegramUsernames}>
+            {telegramSyncBusy ? 'در حال دریافت از تلگرام...' : 'بازیابی username پلیرهای قبلی'}
+          </button>
           <div className="up u2">
             {(!pendingPlayers || pendingPlayers.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کسی منتظر نیست</div>
@@ -1384,8 +1399,8 @@ export default function Admin() {
                     <div className="n">{p.name}<small>{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'}</small></div>
                   </div>
                   <div className="admin-telegram-id">
-                    <span>آیدی عددی تلگرام</span>
-                    <b dir="ltr">{String(p.tg_id)}</b>
+                    <span>نام کاربری تلگرام</span>
+                    {p.telegram_username ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a> : <em>هنوز دریافت نشده یا username ندارد</em>}
                   </div>
                   {p.requested_castles && p.requested_castles.length > 0 && (
                     <div style={{ margin: '2px 0 12px' }}>
@@ -1456,8 +1471,8 @@ export default function Admin() {
                     <div className="n">{p.name}<small>{p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''}</small></div>
                   </div>
                   <div className="admin-telegram-id">
-                    <span>آیدی عددی تلگرام</span>
-                    <b dir="ltr">{String(p.tg_id)}</b>
+                    <span>نام کاربری تلگرام</span>
+                    {p.telegram_username ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a> : <em>هنوز دریافت نشده یا username ندارد</em>}
                   </div>
                   {p.castles && p.castles.length > 0 && (
                     <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>

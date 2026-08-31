@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Header, Request
 from config import MINI_APP_URL
 import telegram_bot
+from db import players
 
 router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
@@ -22,6 +23,17 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
     message = update.get("message") or {}
     text = (message.get("text") or "").strip()
     chat_id = (message.get("chat") or {}).get("id")
+    sender = message.get("from") or {}
+
+    # برای بازیکن‌های قدیمی هم هر پیام تازه به بات، username فعلی را بی‌سروصدا
+    # در پرونده‌شان به‌روز می‌کند؛ هیچ کاری داخل اپ از آن‌ها خواسته نمی‌شود.
+    sender_id = sender.get("id")
+    if sender_id:
+        username = (sender.get("username") or "").strip().lstrip("@") or None
+        if username:
+            await players.update_one({"tg_id": sender_id}, {"$set": {"telegram_username": username}})
+        else:
+            await players.update_one({"tg_id": sender_id}, {"$unset": {"telegram_username": ""}})
 
     if chat_id and text.startswith("/start"):
         reply_markup = (

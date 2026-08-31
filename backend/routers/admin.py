@@ -1,3 +1,4 @@
+import asyncio
 import random
 import re
 import html
@@ -1212,6 +1213,7 @@ async def list_pending_players(user: dict = Depends(admin_user)):
         ]
         out.append({
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
+            "telegram_username": p.get("telegram_username"),
             "gender": p.get("gender"), "created_at": p["created_at"].isoformat(),
             "requested_castles": requested,
         })
@@ -1225,12 +1227,41 @@ async def list_roster(user: dict = Depends(admin_user)):
     async for p in cur:
         out.append({
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
+            "telegram_username": p.get("telegram_username"),
             "region": p["region"], "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
             "castle": p["castle"], "is_port": p.get("is_port", False),
             "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
             "castles": list(p.get("castle_buildings", {}).keys()),
         })
     return out
+
+@router.post("/players/sync-telegram-usernames")
+async def sync_telegram_usernames(user: dict = Depends(admin_user)):
+    """username حساب‌های قبلی را، تا جایی که بات به چت خصوصی‌شان دسترسی دارد،
+    از Bot API بازیابی می‌کند. نبودن username یا بلاک‌بودن بات خطای پنل نیست."""
+    rows = await players.find({}, {"tg_id": 1, "telegram_username": 1}).to_list(None)
+    semaphore = asyncio.Semaphore(8)
+
+    async def sync_one(row: dict) -> str:
+        async with semaphore:
+            profile = await telegram_bot.get_chat_profile(row["tg_id"])
+        if profile is None:
+            return "unavailable"
+        username = (profile.get("username") or "").strip().lstrip("@") or None
+        if username:
+            await players.update_one({"tg_id": row["tg_id"]}, {"$set": {"telegram_username": username}})
+            return "found"
+        await players.update_one({"tg_id": row["tg_id"]}, {"$unset": {"telegram_username": ""}})
+        return "no_username"
+
+    results = await asyncio.gather(*(sync_one(row) for row in rows))
+    return {
+        "ok": True,
+        "total": len(rows),
+        "found": results.count("found"),
+        "no_username": results.count("no_username"),
+        "unavailable": results.count("unavailable"),
+    }
 
 class AssignHouseBody(BaseModel):
     region: str

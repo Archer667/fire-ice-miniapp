@@ -906,10 +906,11 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   background: rgba(160,195,255,.055); border: 1px solid rgba(160,195,255,.13);
   color: var(--mid); font-size: 10.5px; user-select: text;
 }
-.admin-telegram-id b {
+.admin-telegram-id a {
   color: var(--az2); font: 700 11.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
-  letter-spacing: .2px; user-select: all;
+  letter-spacing: .2px; user-select: all; text-decoration: none;
 }
+.admin-telegram-id em { color: var(--low); font-size: 10px; font-style: normal; }
 
 .notice-message {
   width: 100%; padding: 12px 14px; border-radius: 5px;

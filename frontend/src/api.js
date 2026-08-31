@@ -1649,6 +1649,8 @@ export const api = {
   adminReadAllNotifications: () => MOCK ? Promise.resolve({ ok: true }) : req('/api/admin/notifications/read-all', { method: 'POST' }),
   adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
   adminListRoster: () => MOCK ? Promise.resolve(M.adminListRoster()) : req('/api/admin/players/roster'),
+  adminSyncTelegramUsernames: () => MOCK ? Promise.resolve({ ok: true, total: 1, found: 1, no_username: 0, unavailable: 0 })
+    : req('/api/admin/players/sync-telegram-usernames', { method: 'POST' }),
   adminUnassignHouse: (tgId) => MOCK ? Promise.resolve(M.adminUnassignHouse(tgId)) : req(`/api/admin/players/${tgId}/unassign`, { method: 'POST' }),
   adminDeletePendingPlayer: (tgId) => MOCK ? Promise.resolve(M.adminDeletePendingPlayer(tgId)) : req(`/api/admin/players/${tgId}/pending`, { method: 'DELETE' }),
   adminAssignHouse: (tgId, region, castle) => MOCK ? Promise.resolve(M.adminAssignHouse(tgId, region, castle))
