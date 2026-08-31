@@ -5,3 +5,4 @@ dist/
 .env.server
 __pycache__/
 *.pyc
+.gcm/
