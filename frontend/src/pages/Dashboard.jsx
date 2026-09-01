@@ -168,7 +168,9 @@ export default function Dashboard({ goTo }) {
           <div>
             <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">
-              {castleLabel(me.castle)}{me.castles?.length ? ` + ${me.castles.length.toLocaleString('fa-IR')} قلعهٔ دیگر` : ''} · {me.region_name}{me.is_port ? ' · بندر' : ''}
+              {me.admin_spectator
+                ? 'حالت نظارت ادمین · بدون قلعه و اقلیم'
+                : <>{castleLabel(me.castle)}{me.castles?.length ? ` + ${me.castles.length.toLocaleString('fa-IR')} قلعهٔ دیگر` : ''} · {me.region_name}{me.is_port ? ' · بندر' : ''}</>}
             </div>
             {me.rank != null ? (
               <div className="rk">
@@ -181,7 +183,7 @@ export default function Dashboard({ goTo }) {
         <div className="stats">
           <div className="st"><div className="v">{(me.active_campaigns ?? 0).toLocaleString('fa-IR')}</div><div className="k">لشکر در میدان</div></div>
           <div className="st"><div className="v">{me.points.toLocaleString('fa-IR')}</div><div className="k">امتیاز</div></div>
-          <div className="st"><div className="v">{(1 + (me.castles?.length ?? 0)).toLocaleString('fa-IR')}</div><div className="k">قلعه</div></div>
+          <div className="st"><div className="v">{(me.admin_spectator ? 0 : 1 + (me.castles?.length ?? 0)).toLocaleString('fa-IR')}</div><div className="k">قلعه</div></div>
           <div className="st"><div className="v">{(me.alliance_count ?? 0).toLocaleString('fa-IR')}</div><div className="k">اتحاد</div></div>
         </div>
       </div>

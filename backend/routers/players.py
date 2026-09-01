@@ -123,9 +123,25 @@ async def get_registration_options(user: dict = Depends(get_user)):
 async def me(user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     admin_role = await get_admin_role(user)
+    if admin_role:
+        # ادمین عضو رقابت نیست و قلعه ندارد، اما یک مدل نمایشی کامل می‌گیرد تا
+        # بتواند همهٔ صفحات معمول اپ را برای نظارت باز کند.
+        profile = p or {}
+        return {
+            "registered": True, "pending": False, "admin_spectator": True,
+            "name": profile.get("name", user.get("first_name", "ادمین")),
+            "backstory": profile.get("backstory", ""), "profile_image": profile.get("profile_image"),
+            "gender": profile.get("gender", "lord"), "title": "ادمین",
+            "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID,
+            "rank_label": None, "region": None, "region_name": "بدون اقلیم",
+            "castle": None, "castles": [], "house": None, "is_port": False,
+            "resources": {key: 0 for key in STARTING_RESOURCES}, "resource_caps": {},
+            "active_campaigns": 0, "points": 0, "alliance_count": 0,
+            "popularity": 0, "medals": [], "stats": normalize_stats({}),
+            "tax_rate": 0, "rank": None, "total_players": len(await scored_players()),
+            "day": 1, "season_length": SEASON_LENGTH_DAYS,
+        }
     if not p:
-        if admin_role:
-            return {"registered": True, "pending": True, "name": user.get("first_name", "ادمین"), "gender": "lord", "title": "ادمین", "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID}
         return {"registered": False}
     # username بدون فرم و دخالت بازیکن از initData معتبر تلگرام تازه نگه داشته می‌شود.
     # اگر کاربر username خود را عوض یا حذف کند، پنل ادمین نیز با ورود بعدی او اصلاح می‌شود.
@@ -136,8 +152,6 @@ async def me(user: dict = Depends(get_user)):
         else:
             await players.update_one({"tg_id": user["id"]}, {"$unset": {"telegram_username": ""}})
         p["telegram_username"] = current_username
-    if admin_role:
-        return {"registered": True, "pending": True, "name": p.get("name", user.get("first_name", "ادمین")), "gender": p.get("gender", "lord"), "title": "ادمین", "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID, "profile_image": p.get("profile_image")}
     if not p.get("region") or not p.get("castle"):
         return {
             "registered": True, "pending": True,

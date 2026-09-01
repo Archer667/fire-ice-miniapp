@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, messages, rumors
+from db import players, messages, rumors, rumor_views
 from game import now
 from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
 import telegram_bot
@@ -70,9 +70,11 @@ async def unread(user: dict = Depends(get_user)):
     personal = await messages.count_documents(personal_filter)
 
     player = await players.find_one({"tg_id": user["id"]}, {"rumors_last_seen_at": 1})
+    view = await rumor_views.find_one({"tg_id": user["id"]}, {"seen_at": 1})
     rumor_filter = {"author_tg_id": {"$ne": user["id"]}}
-    if player and player.get("rumors_last_seen_at"):
-        rumor_filter["created_at"] = {"$gt": player["rumors_last_seen_at"]}
+    seen_at = view.get("seen_at") if view else (player or {}).get("rumors_last_seen_at")
+    if seen_at:
+        rumor_filter["created_at"] = {"$gt": seen_at}
     rumor_count = await rumors.count_documents(rumor_filter)
     latest_rumor = await rumors.find_one(rumor_filter, sort=[("created_at", -1)]) if rumor_count else None
 

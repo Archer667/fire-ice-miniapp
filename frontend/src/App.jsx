@@ -57,7 +57,7 @@ export default function App() {
         <>
           <Header onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
           <div className="view" key={tab}>
-            {me.pending && tab !== ADMIN_INDEX ? <Pending goTo={setTab} /> : <Page goTo={setTab} />}
+            {me.pending && !me.admin_role && tab !== ADMIN_INDEX ? <Pending goTo={setTab} /> : <Page goTo={setTab} />}
           </div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />

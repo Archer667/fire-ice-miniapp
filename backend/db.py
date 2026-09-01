@@ -25,5 +25,6 @@ rebellion_checks = db.rebellion_checks
 items      = db.items
 item_grants = db.item_grants
 rumors     = db.rumors
+rumor_views = db.rumor_views
 game_settings = db.game_settings
 tributes   = db.tributes

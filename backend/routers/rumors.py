@@ -3,7 +3,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, rumors
+from db import players, rumors, rumor_views
 from game import now, apply_production, can_afford, pay
 from config import RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, POPULARITY_START
 from routers.ravens import send_system_message
@@ -75,12 +75,16 @@ def _rumor_brief(r: dict, user_id: int) -> dict:
 
 @router.post("/seen")
 async def mark_rumors_seen(user: dict = Depends(get_user)):
-    result = await players.update_one(
+    seen_at = now()
+    await rumor_views.update_one(
         {"tg_id": user["id"]},
-        {"$set": {"rumors_last_seen_at": now()}},
+        {"$set": {"tg_id": user["id"], "seen_at": seen_at}},
+        upsert=True,
     )
-    if not result.matched_count:
-        raise HTTPException(403, "اول ثبت‌نام کن")
+    await players.update_one(
+        {"tg_id": user["id"]},
+        {"$set": {"rumors_last_seen_at": seen_at}},
+    )
     return {"ok": True}
 
 

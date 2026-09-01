@@ -1225,10 +1225,14 @@ async def _castle_region_map() -> dict:
 @router.get("/players/pending")
 async def list_pending_players(user: dict = Depends(admin_user)):
     """بازیکن‌هایی که فقط اسم‌نویسی کرده‌اند و هنوز خاندان (اقلیم) و قلعه‌شان تعیین نشده"""
+    admin_ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
     castle_region = await _castle_region_map()
     occupied = {p["castle"] async for p in players.find({"castle": {"$ne": None}}, {"castle": 1})}
     out = []
-    cur = players.find({"$or": [{"region": None}, {"castle": None}]}).sort("created_at", 1)
+    cur = players.find({
+        "tg_id": {"$nin": list(admin_ids)},
+        "$or": [{"region": None}, {"castle": None}],
+    }).sort("created_at", 1)
     async for p in cur:
         requested = [
             {"name": c, "region": castle_region.get(c), "occupied": c in occupied}
@@ -1552,8 +1556,10 @@ async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
         raise HTTPException(400, "سطح دسترسی ادمین نامعتبر است")
     if body.tg_id in ADMIN_IDS:
         raise HTTPException(400, "این کاربر از قبل ادمین کامل است")
-    if not await players.find_one({"tg_id": body.tg_id}):
+    target = await players.find_one({"tg_id": body.tg_id})
+    if not target:
         raise HTTPException(404, "این کاربر هنوز ثبت‌نام نکرده")
+    released_castles = owned_castles(target)
     await admin_roles.update_one(
         {"tg_id": body.tg_id},
         {"$set": {"tg_id": body.tg_id, "role": body.role, "added_by": user["id"], "created_at": now()}},
@@ -1562,9 +1568,9 @@ async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
     # ادمین عضو بازی نیست؛ قلعه/اقلیم و پیشرفت قلمرویی‌اش فوراً آزاد می‌شود.
     await players.update_one({"tg_id": body.tg_id}, {"$set": {
         "region": None, "castle": None, "is_port": False, "house": None,
-        "castles": [], "castle_buildings": {}, "buildings": {},
+        "castles": [], "castle_buildings": {}, "buildings": {}, "requested_castles": [],
     }})
-    return {"ok": True}
+    return {"ok": True, "released_castles": released_castles}
 
 @router.delete("/admins/{tg_id}")
 async def remove_admin(tg_id: int, user: dict = Depends(owner_user)):

@@ -15,7 +15,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 from db import (
     players as players_col, map_castles, admin_roles, game_settings,
     campaigns, ambushes, caravans, spy_missions, messages, alliances, roleplays, tributes,
-    rebellion_checks, rebellions, admin_notifications,
+    rebellion_checks, rebellions, admin_notifications, rumor_views,
 )
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
@@ -163,6 +163,7 @@ async def _ensure_indexes():
         await spy_missions.create_index("tg_id")
         await messages.create_index("from_id")
         await messages.create_index("to_id")
+        await rumor_views.create_index("tg_id", unique=True)
         await alliances.create_index("from_id")
         await alliances.create_index("to_id")
         await alliances.create_index("status")
