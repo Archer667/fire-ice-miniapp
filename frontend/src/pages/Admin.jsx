@@ -414,10 +414,9 @@ export default function Admin() {
 
   const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
   const loadAdminRumors = () => api.adminRumors().then(setAdminRumors).catch(e => toast(e.message));
-  const loadCleanupPreview = () => { if (isFull) api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message)); };
+  const loadCleanupPreview = () => api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message));
   const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
   const loadRebellionSettings = () => {
-    if (!isFull) return;
     api.adminRebellionSettings().then(setRebellionSettings).catch(e => toast(e.message));
   };
   const setRebellionNumber = (key, value) => setRebellionSettings(prev => ({ ...prev, [key]: Number(value) }));
@@ -469,7 +468,9 @@ export default function Admin() {
     loadRebellions();
     loadRebellionSettings();
     loadMapData();
-    if (isFull) { loadPolls(); loadAdmins(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance(); api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message)); }
+    loadPolls(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance();
+    api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
+    if (isFull) loadAdmins();
     if (me.is_owner) loadResetPreview();
   }, []);
 
@@ -1298,8 +1299,8 @@ export default function Admin() {
 
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
-    if (target?.fullOnly && !isFull) {
-      toast('این بخش فقط برای ادمین کامل باز است');
+    if (key === 'admins' && !isFull) {
+      toast('مدیریت ادمین‌ها فقط برای ادمین اصلی باز است');
       return;
     }
     haptic();
@@ -1333,7 +1334,7 @@ export default function Admin() {
           <strong>{isFull ? 'ادمین کامل' : 'ادمین محدود'}</strong>
           <small>{isFull
             ? 'به تنظیمات سراسری و ابزارهای حساس دسترسی داری.'
-            : 'به داوری‌ها، بازیکن‌ها، نقشه، مدال و پیام‌رسانی دسترسی داری؛ تنظیمات حساس قفل‌اند.'}</small>
+            : 'به تمام ابزارهای اجرایی پنل دسترسی داری؛ فقط مدیریت ادمین‌ها برای ادمین اصلی است.'}</small>
         </div>
         <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
       </div>
@@ -1346,8 +1347,8 @@ export default function Admin() {
               <div className="tabs-group-description">{g.description}</div>
             </div>
             <div className="tabs admin-tabs up u1" role="tablist" aria-label={g.label}>
-              {g.tabs.map(t => {
-                const locked = t.fullOnly && !isFull;
+              {g.tabs.filter(t => isFull || t.key !== 'admins').map(t => {
+                const locked = t.key === 'admins' && !isFull;
                 const count = tabBadge(t.key);
                 return (
                   <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
@@ -1355,7 +1356,7 @@ export default function Admin() {
                        className={`rbtn tab admin-tab ${tab === t.key ? 'on' : ''} ${locked ? 'locked' : ''}`}
                        onClick={() => openTab(t.key)}>
                     <span>{t.label}{locked ? ' 🔒' : ''}</span>
-                    <small>{locked ? 'فقط ادمین کامل' : t.description}</small>
+                    <small>{locked ? 'فقط ادمین اصلی' : t.description}</small>
                     {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
                   </button>
                 );
@@ -1512,14 +1513,13 @@ export default function Admin() {
                 <label key={region.id} className={`registration-capacity ${region.full ? 'full' : ''}`}>
                   <span><strong>{region.name}</strong><small>{region.assigned.toLocaleString('fa-IR')} بازیکن تخصیص داده شده</small></span>
                   <input type="number" min="0" max="250" value={region.capacity}
-                         disabled={!isFull}
                          onChange={e => setRegistrationSettings(prev => ({ ...prev, regions: prev.regions.map(r => r.id === region.id ? { ...r, capacity: e.target.value } : r) }))} />
                 </label>
               ))}
             </div>
-            {isFull && <button className="btn" style={{ marginTop: 12 }} disabled={!registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
+            <button className="btn" style={{ marginTop: 12 }} disabled={!registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
               {registrationSettingsBusy ? 'در حال ذخیره...' : 'ذخیره ظرفیت اقلیم‌ها'}
-            </button>}
+            </button>
           </div>
 
           <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
@@ -1750,7 +1750,7 @@ export default function Admin() {
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
                   </div>
-                  {s.active && isFull && (
+                  {s.active && (
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
                             disabled={disbandBusyId === s.id} onClick={() => disbandCampaign(s.id)}>
                       {disbandBusyId === s.id ? 'در حال انحلال...' : 'منحل کن'}
@@ -2103,7 +2103,7 @@ export default function Admin() {
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {{ pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده' }[a.status] || a.status}
                   </div>
-                  {a.status === 'accepted' && isFull && (
+                  {a.status === 'accepted' && (
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
                             disabled={dissolveBusyId === a.id} onClick={() => dissolveAlliance(a.id)}>
                       {dissolveBusyId === a.id ? 'در حال انحلال...' : 'منحل کن'}
@@ -2315,7 +2315,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'items' && isFull && (
+      {tab === 'items' && (
         <>
           <div className="sect up u2">ساخت آیتم تازه</div>
           <div className="card up u2">
@@ -2393,7 +2393,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'balance' && isFull && (
+      {tab === 'balance' && (
         <>
           <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
             <button type="button" role="tab" aria-selected={buildingAdminMode === 'global'}
@@ -2647,7 +2647,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'market' && isFull && (
+      {tab === 'market' && (
         <>
           <div className="sect up u2">بازار وستروس</div>
           <div className="card up u2">
@@ -2707,7 +2707,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'resources' && isFull && (
+      {tab === 'resources' && (
         <>
           <div className="sect up u2">ویرایش منابع بازیکن</div>
           <div className="card up u2">
@@ -2827,7 +2827,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'polls' && isFull && (
+      {tab === 'polls' && (
         <>
           <div className="sect up u2">رای‌گیری تازه</div>
           <div className="card up u2">
@@ -2927,7 +2927,7 @@ export default function Admin() {
             );
           })}
 
-          {isFull && rebellionSettings && (
+          {rebellionSettings && (
             <>
               <div className="sect up u2">تنظیمات سراسری شورش</div>
               <div className="card up u2">
@@ -3024,7 +3024,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'music' && isFull && (
+      {tab === 'music' && (
         <>
           <div className="sect up u2">موسیقی پس‌زمینهٔ بازی</div>
           <div className="page-sub up u2" style={{ marginTop: -10, lineHeight: 1.9 }}>

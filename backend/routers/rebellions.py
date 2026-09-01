@@ -3,7 +3,7 @@ from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth import get_user, get_admin, get_full_admin
+from auth import get_user, get_admin
 from config import POPULARITY_START, tax_yield_multiplier
 from db import players, rebellions, rebellion_checks, game_settings
 from game import now
@@ -205,9 +205,6 @@ async def evaluate_rebellions():
 async def admin_user(user: dict = Depends(get_user)):
     return await get_admin(user)
 
-async def full_admin_user(user: dict = Depends(get_user)):
-    return await get_full_admin(user)
-
 class RationBody(BaseModel):
     level: str
 
@@ -306,11 +303,11 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
     return {"ok": True}
 
 @router.get("/admin/settings")
-async def admin_settings(user: dict = Depends(full_admin_user)):
+async def admin_settings(user: dict = Depends(admin_user)):
     return await get_settings()
 
 @router.post("/admin/settings")
-async def update_settings(body: SettingsBody, user: dict = Depends(full_admin_user)):
+async def update_settings(body: SettingsBody, user: dict = Depends(admin_user)):
     merged = _merge_settings(body.settings)
     if not (0 <= int(merged["guaranteed_popularity"]) < int(merged["high_risk_popularity"]) < int(merged["safe_popularity"]) <= 100):
         raise HTTPException(400, "ترتیب حدها باید قطعی < خطر زیاد < امن و بین صفر تا صد باشد")

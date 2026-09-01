@@ -50,7 +50,7 @@ async def admin_registration_settings(user: dict = Depends(get_user)):
 
 @router.post("/registration/settings")
 async def save_admin_registration_settings(body: RegistrationCapacityBody, user: dict = Depends(get_user)):
-    user = await get_full_admin(user)
+    user = await get_admin(user)
     allowed = set(REGIONS)
     capacities = {key: max(0, min(250, int(value))) for key, value in body.capacities.items() if key in allowed}
     if set(capacities) != allowed:
@@ -64,7 +64,7 @@ async def save_admin_registration_settings(body: RegistrationCapacityBody, user:
 
 @router.get("/music")
 async def admin_music_settings(user: dict = Depends(get_user)):
-    user = await get_full_admin(user)
+    user = await get_admin(user)
     doc = await game_settings.find_one({"_id": MUSIC_SETTINGS_ID}) or {}
     return {
         "enabled": bool(doc.get("enabled", False)), "title": doc.get("title", "موسیقی والریا"),
@@ -74,7 +74,7 @@ async def admin_music_settings(user: dict = Depends(get_user)):
 
 @router.post("/music")
 async def save_admin_music_settings(body: MusicSettingsBody, user: dict = Depends(get_user)):
-    user = await get_full_admin(user)
+    user = await get_admin(user)
     source = body.audio_url.strip()
     if source and not (source.startswith("data:audio/") or source.startswith("https://")):
         raise HTTPException(400, "فایل صوتی یا لینک امن https وارد کن")
@@ -96,7 +96,11 @@ async def admin_user(user: dict = Depends(get_user)):
     return await get_admin(user)
 
 async def full_admin_user(user: dict = Depends(get_user)):
-    """فقط ادمین کامل — برای مدیریت ادمین‌ها"""
+    """همهٔ ادمین‌های اجرایی — برای ابزارهای عملیاتی پنل"""
+    return await get_admin(user)
+
+async def management_admin_user(user: dict = Depends(get_user)):
+    """فقط ادمین کامل — برای دیدن و مدیریت فهرست ادمین‌ها"""
     return await get_full_admin(user)
 
 async def owner_user(user: dict = Depends(get_user)):
@@ -1534,7 +1538,7 @@ async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depen
     return {"ok": True}
 
 @router.get("/admins")
-async def list_admins(user: dict = Depends(full_admin_user)):
+async def list_admins(user: dict = Depends(management_admin_user)):
     """همهٔ ادمین‌ها — کامل (از env) و محدود (از دیتابیس)"""
     tg_ids = list(ADMIN_IDS) + [a["tg_id"] async for a in admin_roles.find({})]
     names = {}
