@@ -10,6 +10,7 @@ from game_data import REGIONS, CASTLE_HOUSES
 from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, OWNER_ID
 from ranks import scored_players
 from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
+from registration import castle_region_map, registration_state
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -57,11 +58,23 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
 
     requested = list(dict.fromkeys(c.strip() for c in body.requested_castles if c.strip()))[:MAX_REQUESTED_CASTLES]
-    if requested:
-        names, _ports = await all_castle_names_and_ports()
-        bad = [c for c in requested if c not in names]
-        if bad:
-            raise HTTPException(400, f"این‌ها قلعه/شهرِ شناخته‌شده‌ای در بازی نیستند: {'، '.join(bad)}")
+    if not requested:
+        raise HTTPException(400, "انتخاب دست‌کم یک قلعه الزامی است")
+    names, _ports = await all_castle_names_and_ports()
+    bad = [c for c in requested if c not in names]
+    if bad:
+        raise HTTPException(400, f"این‌ها قلعه/شهرِ شناخته‌شده‌ای در بازی نیستند: {'، '.join(bad)}")
+    occupied = set()
+    async for row in players.find({}, {"castle": 1, "castle_buildings": 1}):
+        if row.get("castle"):
+            occupied.add(row["castle"])
+        occupied.update((row.get("castle_buildings") or {}).keys())
+    if any(castle in occupied for castle in requested):
+        raise HTTPException(409, "یکی از قلعه‌های انتخاب‌شده قبلاً گرفته شده؛ فهرست را تازه کن")
+    state = await registration_state()
+    region_by_castle = await castle_region_map()
+    if any(state.get(region_by_castle.get(castle), {}).get("full") for castle in requested):
+        raise HTTPException(409, "ظرفیت ثبت‌نام یکی از اقلیم‌های انتخاب‌شده تکمیل شده است")
 
     doc = {
         "tg_id": user["id"],
@@ -97,9 +110,14 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         priority="normal",
         player_name=doc["name"],
         player_tg_id=user["id"],
-        action="از پنل ادمین ← خاندان‌ها، اقلیم و قلعه را مشخص کن.",
+        action="از پنل ادمین ← ثبت‌نام، اقلیم و قلعه را مشخص کن.",
     )
     return {"ok": True}
+
+
+@router.get("/registration-options")
+async def get_registration_options(user: dict = Depends(get_user)):
+    return {"regions": list((await registration_state()).values())}
 
 @router.get("/me")
 async def me(user: dict = Depends(get_user)):

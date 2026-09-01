@@ -8,7 +8,7 @@ import { castleLabel, CASTLE_EN_NAMES } from '../gamedata.js';
  * درخواستِ خاندان موقع ثبت‌نام، چون خاندانِ اول‌اولویتِ بازیکن ممکنه از قبل
  * اشغال شده باشه و ادمین لازمه بدونه بعدی‌هاش چی‌ان. جست‌وجو هم می‌شه کرد، ولی
  * بدونِ تایپ‌کردن هم همهٔ قلعه‌ها (با اسمِ خاندانشون) دیده می‌شن. */
-export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...' }) {
+export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...', regionStates = [] }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(null);
@@ -18,7 +18,7 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
       const list = [];
       for (const r of data.regions) {
         for (const c of r.castles) {
-          list.push({ name: c.name, region_name: r.name, occupied: !!c.owner, house: c.house || null });
+          list.push({ name: c.name, region_id: r.id, region_name: r.name, occupied: !!c.owner, house: c.house || null });
         }
       }
       list.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
@@ -31,10 +31,11 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
     .filter(c => !value.includes(c.name))
     .filter(c => q.length === 0 || c.name.includes(q) || (CASTLE_EN_NAMES[c.name] || '').toLowerCase().includes(q));
 
-  const pick = (name) => {
-    if (value.length >= max) return;
+  const stateByRegion = Object.fromEntries(regionStates.map(r => [r.id, r]));
+  const pick = (castle) => {
+    if (value.length >= max || castle.occupied || stateByRegion[castle.region_id]?.full) return;
     haptic();
-    onChange([...value, name]);
+    onChange([...value, castle.name]);
     setQuery('');
     setOpen(false);
   };
@@ -42,6 +43,16 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
 
   return (
     <div className="ppicker">
+      {regionStates.length > 0 && (
+        <div className="registration-regions">
+          {regionStates.map(region => (
+            <div key={region.id} className={`registration-region ${region.full ? 'full' : ''}`}>
+              <strong>{region.name}</strong>
+              <small>{region.full ? 'ظرفیت این اقلیم تکمیل شده' : `${region.remaining.toLocaleString('fa-IR')} جای خالی`}</small>
+            </div>
+          ))}
+        </div>
+      )}
       {value.length > 0 && (
         <div className="ppicker-chips">
           {value.map((name, i) => (
@@ -64,12 +75,15 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
             <div className="ppicker-results">
               {results.length === 0 ? (
                 <div className="ppicker-empty">موردی پیدا نشد</div>
-              ) : results.map(c => (
-                <button type="button" className="rbtn ppicker-row" key={c.name} onClick={() => pick(c.name)}>
+              ) : results.map(c => {
+                const regionFull = stateByRegion[c.region_id]?.full;
+                const disabled = c.occupied || regionFull;
+                return (
+                <button type="button" disabled={disabled} className={`rbtn ppicker-row ${disabled ? 'disabled' : ''}`} key={c.name} onClick={() => pick(c)}>
                   <span>{castleLabel(c.name)}{c.house ? ` · خاندان ${c.house}` : ''}</span>
-                  <small>{c.region_name}{c.occupied ? ' · قبلاً گرفته شده' : ''}</small>
+                  <small>{c.region_name}{c.occupied ? ' · قبلاً گرفته شده' : regionFull ? ' · ظرفیت اقلیم تکمیل شده' : ''}</small>
                 </button>
-              ))}
+              )})}
             </div>
           )}
         </>

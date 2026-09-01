@@ -69,7 +69,8 @@ const TAB_GROUPS = [
     description: 'ورود بازیکن، منابع و مدیریت دسترسی‌ها',
     tabs: [
       { key: 'overview',   label: 'راهنمای پنل', description: 'کارهای روزانه و مسیر پیشنهادی' },
-      { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن و مدیریت قلعه‌ها' },
+      { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
+      { key: 'onboarding', label: 'خاندان‌ها', description: 'مدیریت بازیکن‌های پذیرفته‌شده و قلعه‌ها' },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'ویرایش منابع و توقف لشکر', fullOnly: true },
       { key: 'admins',     label: 'ادمین‌ها', description: 'افزودن یا حذف ادمین محدود', fullOnly: true },
     ],
@@ -141,6 +142,8 @@ export default function Admin() {
   const [telegramSyncBusy, setTelegramSyncBusy] = useState(false);
   const [castleReportBusy, setCastleReportBusy] = useState(false);
   const [castleReport, setCastleReport] = useState('');
+  const [registrationSettings, setRegistrationSettings] = useState(null);
+  const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
   const [reassignOpenId, setReassignOpenId] = useState(null);
   const [addCastleOpenId, setAddCastleOpenId] = useState(null);
   const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
@@ -302,6 +305,17 @@ export default function Admin() {
 
   const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
   const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
+  const loadRegistrationSettings = () => api.adminRegistrationSettings().then(setRegistrationSettings).catch(e => toast(e.message));
+  const saveRegistrationSettings = async () => {
+    setRegistrationSettingsBusy(true);
+    try {
+      const capacities = Object.fromEntries((registrationSettings?.regions || []).map(r => [r.id, Number(r.capacity)]));
+      const saved = await api.adminSaveRegistrationSettings(capacities);
+      setRegistrationSettings(saved);
+      toast('ظرفیت اقلیم‌ها ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setRegistrationSettingsBusy(false);
+  };
   const syncTelegramUsernames = async () => {
     setTelegramSyncBusy(true);
     try {
@@ -441,6 +455,7 @@ export default function Admin() {
     loadAdminRumors();
     loadCleanupPreview();
     loadPendingPlayers();
+    loadRegistrationSettings();
     loadRoster();
     loadCampaigns();
     loadAmbushes();
@@ -1019,7 +1034,7 @@ export default function Admin() {
       toast(res.moved ? 'خاندان و قلعه جابه‌جا شد — کلاغی برایش رفت' : 'خاندان و قلعه تعیین شد — کلاغی برایش رفت');
       setAssignCastle(prev => { const n = { ...prev }; delete n[tgId]; return n; });
       setReassignOpenId(null);
-      loadPendingPlayers(); loadRoster(); loadMapData();
+      loadPendingPlayers(); loadRoster(); loadMapData(); loadRegistrationSettings();
     } catch (e) { toast(e.message); }
     setAssignBusyId(null);
   };
@@ -1030,7 +1045,7 @@ export default function Admin() {
       await api.adminUnassignHouse(tgId);
       haptic('medium');
       toast('خاندان و قلعه از این بازیکن گرفته شد');
-      loadPendingPlayers(); loadRoster(); loadMapData();
+      loadPendingPlayers(); loadRoster(); loadMapData(); loadRegistrationSettings();
     } catch (e) { toast(e.message); }
     setUnassignBusyId(null);
   };
@@ -1294,7 +1309,7 @@ export default function Admin() {
 
   const tabBadge = (key) => {
     if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
-    if (key === 'onboarding') return pendingPlayers?.length || 0;
+    if (key === 'registration') return pendingPlayers?.length || 0;
     if (key === 'war') return (spyPending?.length || 0) + (battles?.length || 0) + (ambushesList?.filter(a => a.status === 'pending_score').length || 0);
     if (key === 'roleplays') return roleplayPending?.length || 0;
     if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
@@ -1482,6 +1497,31 @@ export default function Admin() {
             )}
           </div>
 
+        </>
+      )}
+
+      {tab === 'registration' && (
+        <>
+          <div className="sect up u1">ظرفیت ثبت‌نام اقلیم‌ها</div>
+          <div className="page-sub up u1" style={{ marginTop: -10 }}>
+            وقتی تعداد بازیکن‌های تخصیص‌داده‌شده به سقف برسد، تمام قلعه‌های آن اقلیم در فرم ثبت‌نام قفل می‌شوند.
+          </div>
+          <div className="card up u1" style={{ marginBottom: 14 }}>
+            <div className="registration-capacity-grid">
+              {(registrationSettings?.regions || []).map(region => (
+                <label key={region.id} className={`registration-capacity ${region.full ? 'full' : ''}`}>
+                  <span><strong>{region.name}</strong><small>{region.assigned.toLocaleString('fa-IR')} بازیکن تخصیص داده شده</small></span>
+                  <input type="number" min="0" max="250" value={region.capacity}
+                         disabled={!isFull}
+                         onChange={e => setRegistrationSettings(prev => ({ ...prev, regions: prev.regions.map(r => r.id === region.id ? { ...r, capacity: e.target.value } : r) }))} />
+                </label>
+              ))}
+            </div>
+            {isFull && <button className="btn" style={{ marginTop: 12 }} disabled={!registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
+              {registrationSettingsBusy ? 'در حال ذخیره...' : 'ذخیره ظرفیت اقلیم‌ها'}
+            </button>}
+          </div>
+
           <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
             این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
@@ -1559,6 +1599,11 @@ export default function Admin() {
             })}
           </div>
 
+        </>
+      )}
+
+      {tab === 'onboarding' && (
+        <>
           <div className="sect up u3">خاندان‌های موجود در بازی</div>
           <div className="page-sub up u3" style={{ marginTop: -10 }}>
             هر بازیکنِ خاندان‌دار — می‌توانی از خاندانش خارجش کنی یا به خاندان/قلعهٔ دیگری منتقلش کنی

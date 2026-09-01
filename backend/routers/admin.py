@@ -22,6 +22,7 @@ from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_I
 from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
 from admin_notifications import notify_admins
+from registration import SETTINGS_ID as REGISTRATION_SETTINGS_ID, registration_state
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 MUSIC_SETTINGS_ID = "background_music"
@@ -38,6 +39,28 @@ class MusicSettingsBody(BaseModel):
     volume: int = 35
     loop: bool = True
     autoplay: bool = True
+
+class RegistrationCapacityBody(BaseModel):
+    capacities: dict[str, int]
+
+@router.get("/registration/settings")
+async def admin_registration_settings(user: dict = Depends(get_user)):
+    await get_admin(user)
+    return {"regions": list((await registration_state()).values())}
+
+@router.post("/registration/settings")
+async def save_admin_registration_settings(body: RegistrationCapacityBody, user: dict = Depends(get_user)):
+    user = await get_full_admin(user)
+    allowed = set(REGIONS)
+    capacities = {key: max(0, min(250, int(value))) for key, value in body.capacities.items() if key in allowed}
+    if set(capacities) != allowed:
+        raise HTTPException(400, "ظرفیت همهٔ اقلیم‌ها را مشخص کن")
+    await game_settings.update_one(
+        {"_id": REGISTRATION_SETTINGS_ID},
+        {"$set": {"capacities": capacities, "updated_at": now(), "updated_by": user["id"]}},
+        upsert=True,
+    )
+    return {"regions": list((await registration_state()).values())}
 
 @router.get("/music")
 async def admin_music_settings(user: dict = Depends(get_user)):
@@ -1284,6 +1307,9 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
         raise HTTPException(409, "این قلعه صاحب دارد — یکی دیگر برگزین")
 
     was_assigned = bool(target.get("region") and target.get("castle"))
+    capacities = await registration_state()
+    if target.get("region") != body.region and capacities[body.region]["full"]:
+        raise HTTPException(409, "ظرفیت این اقلیم تکمیل شده؛ ابتدا سقف را بیشتر کن یا یک بازیکن را جابه‌جا کن")
     old_castle = target.get("castle")
     extra_castles = dict(target.get("castle_buildings", {}))
     # انتقال خاندان یعنی قلعهٔ قبلی واقعاً آزاد می‌شود. ساختمان‌های قلعهٔ مقصد فقط

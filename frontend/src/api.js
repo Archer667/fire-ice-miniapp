@@ -1561,6 +1561,7 @@ export const api = {
   adminMusicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/admin/music'),
   adminSaveMusicSettings: (settings) => MOCK ? Promise.resolve(settings) : req('/api/admin/music', { method: 'POST', body: JSON.stringify(settings) }),
   register:  (b) => MOCK ? Promise.resolve(M.register(b)) : req('/api/players/register', { method: 'POST', body: JSON.stringify(b) }),
+  registrationOptions: () => MOCK ? Promise.resolve({ regions: Object.entries(REGIONS_STATIC).map(([id, r]) => ({ id, name: r.name, capacity: 5, assigned: 0, remaining: 5, full: false })) }) : req('/api/players/registration-options'),
   map:       () => MOCK ? Promise.resolve(M.map()) : req(`/api/map?_=${Date.now()}`, { cache: 'no-store' }),
   warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
   legions:   () => MOCK ? Promise.resolve(M.legions()) : req('/api/war/legions'),
@@ -1648,6 +1649,8 @@ export const api = {
   adminReadNotification: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/notifications/${id}/read`, { method: 'POST' }),
   adminReadAllNotifications: () => MOCK ? Promise.resolve({ ok: true }) : req('/api/admin/notifications/read-all', { method: 'POST' }),
   adminListPendingPlayers: () => MOCK ? Promise.resolve(M.adminListPendingPlayers()) : req('/api/admin/players/pending'),
+  adminRegistrationSettings: () => MOCK ? Promise.resolve({ regions: Object.entries(REGIONS_STATIC).map(([id, r]) => ({ id, name: r.name, capacity: 5, assigned: 0, remaining: 5, full: false })) }) : req('/api/admin/registration/settings'),
+  adminSaveRegistrationSettings: (capacities) => MOCK ? Promise.resolve({ regions: Object.entries(REGIONS_STATIC).map(([id, r]) => ({ id, name: r.name, capacity: capacities[id], assigned: 0, remaining: capacities[id], full: capacities[id] === 0 })) }) : req('/api/admin/registration/settings', { method: 'POST', body: JSON.stringify({ capacities }) }),
   adminListRoster: () => MOCK ? Promise.resolve(M.adminListRoster()) : req('/api/admin/players/roster'),
   adminSyncTelegramUsernames: () => MOCK ? Promise.resolve({ ok: true, total: 1, found: 1, no_username: 0, unavailable: 0 })
     : req('/api/admin/players/sync-telegram-usernames', { method: 'POST' }),

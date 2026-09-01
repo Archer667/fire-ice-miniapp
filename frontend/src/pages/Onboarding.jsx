@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { api } from '../api.js';
 import { haptic, getTgUser } from '../telegram.js';
@@ -37,10 +37,17 @@ export default function Onboarding() {
   const [backstory, setBackstory] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [registrationRegions, setRegistrationRegions] = useState([]);
+
+  useEffect(() => {
+    api.registrationOptions().then(data => setRegistrationRegions(data.regions || [])).catch(e => toast(e.message));
+  }, []);
 
   const enter = async () => {
     if (!name.trim()) { toast('نامت را بنویس، لرد بی‌نام'); return; }
+    if (!gender) { toast('عنوان کاراکتر را انتخاب کن'); return; }
     if (backstory.trim().length < 40) { toast('بک‌استوری کاراکترت باید حداقل ۴۰ نویسه باشد'); return; }
+    if (requestedCastles.length === 0) { toast('دست‌کم یک قلعه را به‌عنوان اولویت انتخاب کن'); return; }
     setBusy(true);
     try {
       await api.register({ name: name.trim(), gender, requested_castles: requestedCastles, backstory: backstory.trim(), profile_image: profileImage });
@@ -61,7 +68,7 @@ export default function Onboarding() {
       </div>
       <div className="up u1">
         <label className="f">نام کاراکتر</label>
-        <input value={name} onChange={e => setName(e.target.value)} placeholder="جان اسنو" />
+        <input required value={name} onChange={e => setName(e.target.value)} placeholder="جان اسنو" />
       </div>
       <div className="up u1">
         <label className="f">عنوان</label>
@@ -93,15 +100,14 @@ export default function Onboarding() {
       </div>
       <div className="up u1" style={{ marginTop: 12 }}>
         <label className="f">بک‌استوری کاراکتر</label>
-        <textarea value={backstory} onChange={e => setBackstory(e.target.value)} minLength={40} maxLength={2000} placeholder="گذشته، انگیزه‌ها، خلق‌وخو و هدف کاراکترت را بنویس..." />
+        <textarea required value={backstory} onChange={e => setBackstory(e.target.value)} minLength={40} maxLength={2000} placeholder="گذشته، انگیزه‌ها، خلق‌وخو و هدف کاراکترت را بنویس..." />
         <div className="page-sub" style={{ marginTop: 5 }}>{backstory.length.toLocaleString('fa-IR')} از ۲۰۰۰ نویسه</div>
       </div>
       <div className="up u1" style={{ marginTop: 12 }}>
-        <label className="f">خاندان‌های درخواستی (اختیاری، به‌ترتیب اولویت)</label>
-        <CastlePicker value={requestedCastles} onChange={setRequestedCastles} />
+        <label className="f">قلعه‌های درخواستی (اجباری، به‌ترتیب اولویت)</label>
+        <CastlePicker value={requestedCastles} onChange={setRequestedCastles} regionStates={registrationRegions} />
         <div className="page-sub" style={{ margin: '6px 4px 0' }}>
-          چون ممکنه اولی‌ها قبلاً اشغال شده باشن، چندتا اسم به‌ترتیبِ علاقه‌ات بده — ادمین با
-          توجه به همین لیست خاندان و قلعه‌ات را نهایی می‌کند
+          دست‌کم یک قلعه انتخاب کن. بهتره بیش از یک قلعه را از اقلیم‌های مختلف و به‌ترتیب اولویتت قرار بدی؛ ادمین با توجه به همین فهرست انتخاب نهایی را انجام می‌دهد.
         </div>
       </div>
       <div className="page-sub up u2" style={{ margin: '4px 4px 0' }}>
