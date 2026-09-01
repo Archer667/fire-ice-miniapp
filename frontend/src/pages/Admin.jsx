@@ -1396,11 +1396,12 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}<small>{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'}</small></div>
-                  </div>
-                  <div className="admin-telegram-id">
-                    <span>نام کاربری تلگرام</span>
-                    {p.telegram_username ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a> : <em>هنوز دریافت نشده یا username ندارد</em>}
+                    <div className="n">{p.name}<small>
+                      {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
+                      {p.telegram_username
+                        ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
+                        : <span>username ثبت نشده</span>}
+                    </small></div>
                   </div>
                   {p.requested_castles && p.requested_castles.length > 0 && (
                     <div style={{ margin: '2px 0 12px' }}>
@@ -1468,11 +1469,12 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}<small>{p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''}</small></div>
-                  </div>
-                  <div className="admin-telegram-id">
-                    <span>نام کاربری تلگرام</span>
-                    {p.telegram_username ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a> : <em>هنوز دریافت نشده یا username ندارد</em>}
+                    <div className="n">{p.name}<small>
+                      {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
+                      {p.telegram_username
+                        ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
+                        : <span>username ثبت نشده</span>}
+                    </small></div>
                   </div>
                   {p.castles && p.castles.length > 0 && (
                     <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
