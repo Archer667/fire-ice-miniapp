@@ -17,6 +17,36 @@ function readAdminImage(file, setter, toast) {
   const reader = new FileReader(); reader.onload = () => setter(reader.result); reader.readAsDataURL(file);
 }
 
+async function copyPlainText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(area);
+    return copied;
+  }
+}
+
+const CASTLE_REPORT_REGIONS = {
+  north: { icon: '❄️', name: 'شمال' },
+  iron:  { icon: '⚓️', name: 'جزایر آهنین' },
+  river: { icon: '🌊', name: 'ریورلندز' },
+  west:  { icon: '🦁', name: 'وسترلندز' },
+  reach: { icon: '🌹', name: 'ریچ' },
+  vale:  { icon: '🦅', name: 'درهٔ ویل' },
+  storm: { icon: '⚡️', name: 'استورملندز' },
+  dorne: { icon: '☀️', name: 'دورن' },
+  crown: { icon: '👑', name: 'کرون‌لندز' },
+};
+
 const SPECIAL_MEDAL_PRESETS = [
   { key: 'season_champion', name: 'قهرمان فصل', icon: '🏆' },
   { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🪽' },
@@ -109,6 +139,8 @@ export default function Admin() {
   const [unassignBusyId, setUnassignBusyId] = useState(null);
   const [deletePendingBusyId, setDeletePendingBusyId] = useState(null);
   const [telegramSyncBusy, setTelegramSyncBusy] = useState(false);
+  const [castleReportBusy, setCastleReportBusy] = useState(false);
+  const [castleReport, setCastleReport] = useState('');
   const [reassignOpenId, setReassignOpenId] = useState(null);
   const [addCastleOpenId, setAddCastleOpenId] = useState(null);
   const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
@@ -279,6 +311,57 @@ export default function Admin() {
       toast(`${result.found.toLocaleString('fa-IR')} نام کاربری دریافت شد${result.unavailable ? ` · ${result.unavailable.toLocaleString('fa-IR')} حساب در دسترس بات نبود` : ''}`);
     } catch (e) { toast(e.message); }
     setTelegramSyncBusy(false);
+  };
+  const buildCastleReport = async () => {
+    setCastleReportBusy(true);
+    try {
+      // هر بار خروجی از API تازه ساخته می‌شود؛ به state قبلی پنل تکیه نمی‌کنیم.
+      const freshRoster = await api.adminListRoster();
+      setRoster(freshRoster);
+      const ownerByCastle = new Map();
+      freshRoster.forEach(player => {
+        if (player.castle) ownerByCastle.set(player.castle, player);
+        (player.castles || []).forEach(castle => ownerByCastle.set(castle, player));
+      });
+
+      const lines = [
+        '🔴 گرفته‌شده',
+        '⚪️ آزاد',
+        '⚓️ بندر یا قلعهٔ دریایی',
+        '',
+        '🏰 وضعیت قلعه‌های والریا',
+        '',
+      ];
+      const regions = Object.entries(REGIONS_STATIC);
+      regions.forEach(([regionId, region], regionIndex) => {
+        const meta = CASTLE_REPORT_REGIONS[regionId] || { icon: '🏰', name: region.name };
+        const castles = [
+          ...region.castles.map(name => ({ name, port: false })),
+          ...region.ports.map(name => ({ name, port: true })),
+        ];
+        const occupied = castles.filter(c => ownerByCastle.has(c.name)).length;
+        lines.push(`${meta.icon} ${meta.name} — ${occupied.toLocaleString('fa-IR')} گرفته‌شده، ${(castles.length - occupied).toLocaleString('fa-IR')} آزاد`);
+        lines.push('');
+        castles.forEach(castle => {
+          const owner = ownerByCastle.get(castle.name);
+          const port = castle.port ? ' ⚓️' : '';
+          if (!owner) {
+            lines.push(`⚪️ ${castleLabel(castle.name)}${port} — آزاد`);
+            return;
+          }
+          const username = owner.telegram_username ? `@${owner.telegram_username.replace(/^@/, '')}` : 'بدون username';
+          lines.push(`🔴 ${castleLabel(castle.name)}${port} — ${owner.name} | ${username}`);
+        });
+        if (regionIndex < regions.length - 1) lines.push('', '━━━━━━━━━━━━━━', '');
+      });
+
+      const report = lines.join('\n');
+      setCastleReport(report);
+      const copied = await copyPlainText(report);
+      haptic('medium');
+      toast(copied ? 'فهرست به‌روز قلعه‌ها برای تلگرام کپی شد' : 'فهرست ساخته شد؛ از کادر پایین دستی کپی کن');
+    } catch (e) { toast(e.message); }
+    setCastleReportBusy(false);
   };
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadAmbushes = () => api.adminAmbushes().then(setAmbushesList).catch(e => toast(e.message));
@@ -1376,6 +1459,29 @@ export default function Admin() {
 
       {tab === 'onboarding' && (
         <>
+          <div className="card up u2" style={{ marginBottom: 14 }}>
+            <div className="res" style={{ marginBottom: 8 }}>
+              <div className="ic"><Scroll s={16} /></div>
+              <div className="n">خروجی وضعیت قلعه‌ها<small>فهرست آمادهٔ تلگرام؛ همراه مالک، username، بندر و شمارندهٔ هر اقلیم</small></div>
+            </div>
+            <button type="button" className="btn" disabled={castleReportBusy} onClick={buildCastleReport}>
+              {castleReportBusy ? 'در حال ساخت فهرست تازه...' : 'ساخت و کپی فهرست به‌روز قلعه‌ها'}
+            </button>
+            {castleReport && (
+              <>
+                <textarea readOnly dir="rtl" value={castleReport} rows={10}
+                          style={{ marginTop: 10, fontSize: 11, lineHeight: 1.9, userSelect: 'text' }} />
+                <button type="button" className="btn ghost" style={{ marginTop: 8 }}
+                        onClick={async () => {
+                          const copied = await copyPlainText(castleReport);
+                          toast(copied ? 'فهرست دوباره کپی شد' : 'کپی خودکار ممکن نبود؛ متن کادر را انتخاب کن');
+                        }}>
+                  کپی دوباره
+                </button>
+              </>
+            )}
+          </div>
+
           <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
             این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
