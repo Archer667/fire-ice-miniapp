@@ -1545,7 +1545,7 @@ export default function Admin() {
                     <div className="n">{p.name}<small>
                       {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
                       {p.telegram_username
-                        ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
+                        ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
                         : <span>username ثبت نشده</span>}
                     </small></div>
                   </div>
@@ -1623,7 +1623,7 @@ export default function Admin() {
                     <div className="n">{p.name}<small>
                       {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
                       {p.telegram_username
-                        ? <a dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
+                        ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
                         : <span>username ثبت نشده</span>}
                     </small></div>
                   </div>
