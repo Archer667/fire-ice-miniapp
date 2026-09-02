@@ -2278,11 +2278,11 @@ async def get_building_balance(user: dict = Depends(full_admin_user)):
 class BuildingBalanceBody(BaseModel):
     building_id: str
     cost: dict[str, int] = {}
-    cost_step_percent: float = 15
+    cost_step_percent: float = 10
     produces: dict[str, int] = {}
     cap_bonus: dict[str, int] = {}
     hours: float = 0
-    max_level: int = 30
+    max_level: int = 8
 
 @router.post("/building-balance")
 async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(full_admin_user)):

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players
 from game import (
-    now, apply_production, can_afford, pay, normalize_building_state,
+    now, apply_production, can_afford, pay, normalize_building_state, normalize_datetime,
     owned_castles, castle_building_state, production_fields,
 )
 from game_data import BUILDINGS, building_cost, building_hours, building_produces, building_cap_bonus, building_max_level
@@ -16,6 +16,12 @@ router = APIRouter(prefix="/api/buildings", tags=["buildings"])
 
 EMPTY_STATE = {"level": 0, "upgrade_to": None, "ready_at": None, "notice_pending": None}
 _upgrade_locks: dict[int, asyncio.Lock] = {}
+
+def _utc_iso(value) -> str | None:
+    """Mongo زمان را UTC بدون timezone برمی‌گرداند؛ افزودن Z جلوی تفسیر آن به‌عنوان
+    ساعت محلی موبایل و اختلاف چندساعتهٔ تایمر با سرور را می‌گیرد."""
+    value = normalize_datetime(value)
+    return value.isoformat(timespec="milliseconds") + "Z" if value else None
 
 def _resolve_castle(p: dict, castle: str | None) -> str:
     """قلعه‌ای که این درخواست برایش است — پیش‌فرض قلعهٔ اصلی؛ اگر castle داده شده
@@ -52,7 +58,7 @@ async def list_buildings(castle: str | None = None, user: dict = Depends(get_use
             "unit": meta.get("unit"), "requires_port": meta.get("requires_port", False),
             "level": level, "max_level": max_level,
             "upgrading": bool(st["upgrade_to"]),
-            "ready_at": st["ready_at"].isoformat() if st.get("ready_at") else None,
+            "ready_at": _utc_iso(st.get("ready_at")),
             "next_level": target,
             "next_cost": building_cost(bid, target) if target else None,
             "next_hours": building_hours(bid, target) if target else None,
@@ -111,7 +117,7 @@ async def _start_upgrade_unlocked(building_id: str, castle: str | None, user: di
     return {
         "ok": True, "target_level": target, "cost": cost,
         "resources": {k: round(v) if isinstance(v, (int, float)) else v for k, v in p["resources"].items()},
-        "ready_at": st["ready_at"].isoformat(),
+        "ready_at": _utc_iso(st["ready_at"]),
     }
 
 async def _start_upgrade(building_id: str, castle: str | None, user: dict, require_built: bool):

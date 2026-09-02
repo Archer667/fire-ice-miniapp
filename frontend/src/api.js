@@ -1237,7 +1237,7 @@ const M = {
       .map(([id, meta]) => ({
         id, name: meta.name, type: meta.type,
         base_cost: meta.cost || {}, cost: BUILDING_OVERRIDES[id]?.cost || meta.cost || {},
-        base_cost_step_percent: 15, cost_step_percent: (BUILDING_OVERRIDES[id]?.cost_step ?? .15) * 100,
+        base_cost_step_percent: 10, cost_step_percent: (BUILDING_OVERRIDES[id]?.cost_step ?? .10) * 100,
         base_hours: meta.hours, hours: BUILDING_OVERRIDES[id]?.hours ?? meta.hours,
         base_max_level: meta.max_level || MAX_BUILDING_LEVEL, max_level: BUILDING_OVERRIDES[id]?.max_level || meta.max_level || MAX_BUILDING_LEVEL,
         base_produces: meta.produces || {}, base_cap_bonus: meta.cap_bonus || {},
@@ -1268,7 +1268,7 @@ const M = {
     return { ok: true };
   },
   adminGetGameplayBalance: () => ({
-    rules: { camp_power_step_percent: CAMP_POWER_STEP * 100, special_troop_cost: SPECIAL_COST, special_troop_power: SPECIAL_POWER, food_cost_regular: FOOD_COST_REGULAR, food_cost_special: FOOD_COST_SPECIAL, weapon_per_soldier: WEAPON_PER_SOLDIER, level_hours_step_percent: 6, default_max_building_level: MAX_BUILDING_LEVEL, equipment_slowdown_cap_percent: 100, commander_power_bonus_percent: 10, commander_speed_bonus_percent: 5 },
+    rules: { camp_power_step_percent: CAMP_POWER_STEP * 100, special_troop_cost: SPECIAL_COST, special_troop_power: SPECIAL_POWER, food_cost_regular: FOOD_COST_REGULAR, food_cost_special: FOOD_COST_SPECIAL, weapon_per_soldier: WEAPON_PER_SOLDIER, level_hours_step_percent: 15, default_max_building_level: MAX_BUILDING_LEVEL, equipment_slowdown_cap_percent: 100, commander_power_bonus_percent: 10, commander_speed_bonus_percent: 5 },
     common_troops: COMMON_TROOPS.map(t => ({ ...t })),
     naval_troops: NAVAL_TROOPS.map(t => ({ ...t })),
     equipment: SIEGE_EQUIPMENT.map(e => ({ ...e, cost: { ...e.cost }, slowdown_percent: e.slowdown * 100 })),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -23,10 +23,10 @@ const GROUPS = [
   { key: 'defense',  label: 'دفاعی و زیرساخت',       hint: '' },
 ];
 
-function fmtRemaining(readyAt) {
-  const ms = new Date(readyAt).getTime() - Date.now();
-  if (ms <= 0) return 'به‌زودی';
-  const totalMin = Math.round(ms / 60000);
+function fmtRemaining(readyAt, clock) {
+  const ms = new Date(readyAt).getTime() - clock;
+  if (ms <= 0) return 'در حال نهایی‌شدن';
+  const totalMin = Math.ceil(ms / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return h > 0 ? `${h.toLocaleString('fa-IR')} س ${m.toLocaleString('fa-IR')} د` : `${m.toLocaleString('fa-IR')} د`;
@@ -38,9 +38,31 @@ export default function Buildings() {
   const [castle, setCastle] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [tab, setTab] = useState(GROUPS[0].key);
+  const [clock, setClock] = useState(Date.now());
 
-  const load = (c) => api.buildings(c).then(d => { setData(d); setCastle(d.castle); }).catch(e => toast(e.message));
-  useEffect(() => { load(castle); }, []);
+  const load = useCallback((c) => api.buildings(c).then(d => {
+    setData(d);
+    setCastle(d.castle);
+    setClock(Date.now());
+  }).catch(e => toast(e.message)), [toast]);
+  useEffect(() => { load(null); }, [load]);
+
+  // شمارش روی صفحه زنده می‌ماند؛ نزدیک‌ترین ارتقا هم دقیقاً پس از ready_at از
+  // بک‌اند دوباره خوانده می‌شود تا level و بازدهی همان لحظه نهایی شوند.
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const deadlines = (data?.buildings || [])
+      .filter(row => row.upgrading && row.ready_at)
+      .map(row => new Date(row.ready_at).getTime())
+      .filter(Number.isFinite);
+    if (!deadlines.length) return undefined;
+    const delay = Math.max(0, Math.min(...deadlines) - Date.now()) + 350;
+    const timer = setTimeout(() => load(data.castle), Math.min(delay, 2_147_000_000));
+    return () => clearTimeout(timer);
+  }, [data, load]);
 
   const switchCastle = (c) => {
     if (c === castle) return;
@@ -98,7 +120,7 @@ export default function Buildings() {
 
       <div className="card up u2">
         {items.map(row => (
-          <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={data.is_port} onAct={() => act(row)} />
+          <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={data.is_port} clock={clock} onAct={() => act(row)} />
         ))}
       </div>
     </>
@@ -111,7 +133,7 @@ function subtractCost(resources, cost) {
   return out;
 }
 
-function BuildingRow({ row, busy, isPort, onAct }) {
+function BuildingRow({ row, busy, isPort, clock, onAct }) {
   const pct = Math.round((row.level / row.max_level) * 100);
   const locked = row.requires_port && row.level === 0 && !isPort;
   const canUpgrade = !locked && !row.upgrading && row.next_level;
@@ -153,7 +175,7 @@ function BuildingRow({ row, busy, isPort, onAct }) {
       {locked ? (
         <div className="bld-status">فقط قلعه/شهرهای دریایی و بندری می‌تونن این رو بسازن</div>
       ) : row.upgrading ? (
-        <div className="bld-status">در حال ساخت به سطح {row.next_level.toLocaleString('fa-IR')} — آماده تا {fmtRemaining(row.ready_at)} دیگر</div>
+        <div className="bld-status">در حال ساخت به سطح {row.next_level.toLocaleString('fa-IR')} — آماده تا {fmtRemaining(row.ready_at, clock)} دیگر</div>
       ) : canUpgrade ? (
         <>
           <div className="bld-cost">

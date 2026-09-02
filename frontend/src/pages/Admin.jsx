@@ -2470,6 +2470,10 @@ export default function Admin() {
                 تغییرات این بخش سراسری است و روی ساخت‌های بعدیِ همهٔ بازیکن‌ها اثر می‌گذارد. هزینهٔ پایه برای سطح ۱ است؛
                 درصد رشد تعیین می‌کند هزینهٔ هر سطح نسبت به سطح قبلی چقدر بیشتر شود. تولید و سقف هم به‌ازای هر سطح حساب می‌شوند.
               </div>
+              <div className="notice-guide up u2" style={{ marginBottom: 12 }}>
+                <strong>هدف پیش‌فرض فصل ۳۰روزه</strong>
+                <span>سقف ساختمان‌های عادی ۸ و کارگاه ادوات ۳ است. بازیکن فعال با یک نوبت رسیدگی روزانه و خرج متعارف جنگ، حدود روز ۲۹ می‌تواند ساختمان‌های یک قلعه را کامل کند.</span>
+              </div>
               {!balanceList && <div className="loading">در حال بارگذاری...</div>}
               {balanceList && balanceList.map(b => {
                 const draft = balanceDrafts[b.id] || {};
@@ -2517,7 +2521,7 @@ export default function Admin() {
                     </div>
                     <div className="notice-guide" style={{ marginTop: 9 }}>
                       <strong>پیش‌نمایش هزینه با عددهای فعلی</strong>
-                      <span>سطح ۱: {preview(1) || 'بدون هزینه'}<br />سطح ۲: {preview(2) || 'بدون هزینه'}<br />سطح ۱۰: {preview(10) || 'بدون هزینه'}</span>
+                      <span>سطح ۱: {preview(1) || 'بدون هزینه'}<br />سطح ۲: {preview(2) || 'بدون هزینه'}<br />سطح آخر ({Number(draft.max_level || b.max_level).toLocaleString('fa-IR')}): {preview(Number(draft.max_level || b.max_level)) || 'بدون هزینه'}</span>
                     </div>
 
                     <div className="sect" style={{ margin: '16px 0 4px' }}>۲. بازدهی هر سطح</div>

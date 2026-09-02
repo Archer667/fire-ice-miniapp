@@ -789,11 +789,44 @@ export const BUILDINGS_STATIC = {
   watchtower:  { name: 'برج نگهبانی', cost: { gold: 250, stone: 120, wood: 70 }, hours: 7,  type: 'defense' },
 };
 
-export let MAX_BUILDING_LEVEL = 30;
-const LEVEL_COST_STEP = 0.15;
-// قبلاً ۰٫۱۲ بود — یعنی جمع ساعتِ ۳۰ سطح برای ساختمان‌های سنگین (پایه ≥۱۲ساعت) از
-// ۷۲۰ ساعتِ یک دورهٔ ۳۰روزه رد می‌شد و رساندنشان به سطح ۳۰ ریاضاً غیرممکن بود
-let LEVEL_HOURS_STEP = 0.06;
+// آینهٔ دقیق پیش‌فرض فصل ۳۰روزه در بک‌اند. دادهٔ زندهٔ پنل ادمین می‌تواند بعداً
+// هر کدام از این مقدارها را از طریق BUILDING_OVERRIDES بازنویسی کند.
+const SEASON_30_BUILDING_BALANCE = {
+  lumber_mill: { cost: { gold: 20, stone: 5 }, produces: { wood: 14 } },
+  stone_mine: { cost: { gold: 25, wood: 10 }, produces: { stone: 12 } },
+  iron_mine: { cost: { gold: 30, wood: 12 }, produces: { iron: 9 } },
+  gold_mine: { cost: { gold: 60, stone: 15, wood: 15 }, produces: { gold: 24 } },
+  market: { cost: { gold: 40, wood: 10 }, produces: { gold: 8 } },
+  village: { cost: { gold: 45, stone: 25, iron: 6 } },
+  farm: { cost: { gold: 15, wood: 8 }, produces: { food: 20 } },
+  ranch: { cost: { gold: 25, wood: 10 }, produces: { food: 12 } },
+  winery: { cost: { gold: 35, food: 10, wood: 10 }, produces: { wine: 6 } },
+  warehouse: { cost: { gold: 35, stone: 10, wood: 10 } },
+  goods_warehouse: { cost: { gold: 45, stone: 15, wood: 12 } },
+  treasury: { cost: { gold: 55, stone: 15, wood: 12 } },
+  weapon_warehouse: { cost: { gold: 60, stone: 20, wood: 15, iron: 8 } },
+  camp_sword: { cost: { gold: 40, iron: 8, wood: 15 } },
+  camp_spear: { cost: { gold: 30, iron: 5, wood: 10 } },
+  camp_archer: { cost: { gold: 30, iron: 3, wood: 12 } },
+  camp_lcav: { cost: { gold: 55, iron: 10, wood: 18 } },
+  camp_hcav: { cost: { gold: 75, iron: 18, wood: 22 } },
+  armory_sword: { cost: { gold: 30, iron: 12, wood: 6 }, produces: { weapon_sword: 8 } },
+  armory_spear: { cost: { gold: 25, iron: 9, wood: 6 }, produces: { weapon_spear: 8 } },
+  armory_archer: { cost: { gold: 25, iron: 8, wood: 10 }, produces: { weapon_archer: 8 } },
+  armory_lcav: { cost: { gold: 45, iron: 15, wood: 8 }, produces: { weapon_lcav: 6 } },
+  armory_hcav: { cost: { gold: 60, iron: 27, wood: 10 }, produces: { weapon_hcav: 5 } },
+  siege_workshop: { cost: { gold: 135, stone: 55, wood: 65, iron: 27 } },
+  port: { cost: { gold: 90, stone: 30, wood: 40 } },
+  wall: { cost: { gold: 60, stone: 45, iron: 10 } },
+  watchtower: { cost: { gold: 40, stone: 18, wood: 10 } },
+};
+for (const [id, balance] of Object.entries(SEASON_30_BUILDING_BALANCE)) {
+  Object.assign(BUILDINGS_STATIC[id], balance);
+}
+
+export let MAX_BUILDING_LEVEL = 8;
+const LEVEL_COST_STEP = 0.10;
+let LEVEL_HOURS_STEP = 0.15;
 
 export function buildingCost(id, level) {
   const override = BUILDING_OVERRIDES[id] || {};

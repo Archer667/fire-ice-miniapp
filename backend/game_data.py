@@ -152,6 +152,41 @@ BUILDINGS = {
 # تنظیمات عددی سراسری بازی. این مقادیر در زمان اجرا از دیتابیس بازنویسی می‌شوند.
 # دیکشنری‌ها عمداً mutable هستند تا ماژول‌هایی که آن‌ها را import کرده‌اند نیز همان
 # مقادیر تازه را ببینند.
+# پیش‌فرض بالانس فصل ۳۰روزه. جدا نگه‌داشتن این جدول باعث می‌شود همهٔ هزینه‌ها و
+# بازدهی‌های بازطراحی‌شده یک‌جا قابل بازبینی باشند و پنل ادمین همچنان بتواند
+# هر مورد را در دیتابیس بازنویسی کند.
+SEASON_30_BUILDING_BALANCE = {
+    "lumber_mill": {"cost": {"gold": 20, "stone": 5}, "produces": {"wood": 14}},
+    "stone_mine": {"cost": {"gold": 25, "wood": 10}, "produces": {"stone": 12}},
+    "iron_mine": {"cost": {"gold": 30, "wood": 12}, "produces": {"iron": 9}},
+    "gold_mine": {"cost": {"gold": 60, "stone": 15, "wood": 15}, "produces": {"gold": 24}},
+    "market": {"cost": {"gold": 40, "wood": 10}, "produces": {"gold": 8}},
+    "village": {"cost": {"gold": 45, "stone": 25, "iron": 6}},
+    "farm": {"cost": {"gold": 15, "wood": 8}, "produces": {"food": 20}},
+    "ranch": {"cost": {"gold": 25, "wood": 10}, "produces": {"food": 12}},
+    "winery": {"cost": {"gold": 35, "food": 10, "wood": 10}, "produces": {"wine": 6}},
+    "warehouse": {"cost": {"gold": 35, "stone": 10, "wood": 10}},
+    "goods_warehouse": {"cost": {"gold": 45, "stone": 15, "wood": 12}},
+    "treasury": {"cost": {"gold": 55, "stone": 15, "wood": 12}},
+    "weapon_warehouse": {"cost": {"gold": 60, "stone": 20, "wood": 15, "iron": 8}},
+    "camp_sword": {"cost": {"gold": 40, "iron": 8, "wood": 15}},
+    "camp_spear": {"cost": {"gold": 30, "iron": 5, "wood": 10}},
+    "camp_archer": {"cost": {"gold": 30, "iron": 3, "wood": 12}},
+    "camp_lcav": {"cost": {"gold": 55, "iron": 10, "wood": 18}},
+    "camp_hcav": {"cost": {"gold": 75, "iron": 18, "wood": 22}},
+    "armory_sword": {"cost": {"gold": 30, "iron": 12, "wood": 6}, "produces": {"weapon_sword": 8}},
+    "armory_spear": {"cost": {"gold": 25, "iron": 9, "wood": 6}, "produces": {"weapon_spear": 8}},
+    "armory_archer": {"cost": {"gold": 25, "iron": 8, "wood": 10}, "produces": {"weapon_archer": 8}},
+    "armory_lcav": {"cost": {"gold": 45, "iron": 15, "wood": 8}, "produces": {"weapon_lcav": 6}},
+    "armory_hcav": {"cost": {"gold": 60, "iron": 27, "wood": 10}, "produces": {"weapon_hcav": 5}},
+    "siege_workshop": {"cost": {"gold": 135, "stone": 55, "wood": 65, "iron": 27}},
+    "port": {"cost": {"gold": 90, "stone": 30, "wood": 40}},
+    "wall": {"cost": {"gold": 60, "stone": 45, "iron": 10}},
+    "watchtower": {"cost": {"gold": 40, "stone": 18, "wood": 10}},
+}
+for _building_id, _balance in SEASON_30_BUILDING_BALANCE.items():
+    BUILDINGS[_building_id].update(_balance)
+
 GAME_RULES = {
     "camp_power_step": CAMP_POWER_STEP,
     "special_troop_cost": SPECIAL_TROOP_COST,
@@ -159,8 +194,8 @@ GAME_RULES = {
     "food_cost_regular": 1,
     "food_cost_special": 2,
     "weapon_per_soldier": 1,
-    "level_hours_step": 0.06,
-    "default_max_building_level": 30,
+    "level_hours_step": 0.15,
+    "default_max_building_level": 8,
     "equipment_slowdown_cap": 1.0,
     "commander_power_bonus": 0.10,
     "commander_speed_bonus": 0.05,
@@ -215,15 +250,13 @@ ALLIANCE_TYPES = {
 }
 
 # ---- سیستم ارتقای ساختمان‌ها ----
-# دورهٔ بازی ۳۰ روزه است؛ هر ساختمان تا ۳۰ سطح ارتقا می‌خورد و هر سطح بالاتر
-# هزینه و زمان بیشتری نسبت به سطح پایه می‌طلبد تا ارتقای کامل در طول یک دوره
-# چالش‌برانگیز اما ممکن باشد.
-# (LEVEL_HOURS_STEP=0.12 قبلاً یعنی جمع ساعتِ ۳۰ سطح ≈ ۸۲.۲× ساعت پایه — برای
-# ساختمان‌های سنگین (پایه ≥۱۲ساعت) این از ۷۲۰ ساعتِ یک دورهٔ ۳۰روزه رد می‌شد و
-# رساندن آن‌ها به سطح ۳۰ در یک دوره ریاضاً غیرممکن بود، برخلاف همین کامنت بالا)
-MAX_BUILDING_LEVEL = 30
-LEVEL_COST_STEP = 0.15   # هر سطح ~۱۵٪ هزینهٔ پایه اضافه می‌شود
-LEVEL_HOURS_STEP = 0.06  # هر سطح ~۶٪ زمان پایه اضافه می‌شود
+# دورهٔ بازی ۳۰روزه است. ساختمان‌های عادی هشت سطح و کارگاه مهندسی سه سطح دارد؛
+# بازیکنی که روزی یک‌بار ساخت‌ها را پیگیری کند و هم‌زمان خرج متعارف جنگ داشته باشد
+# در شبیه‌سازی نزدیک روز ۲۹ به سقف می‌رسد. بنابراین انتخاب اقتصادی هنوز تا پایان
+# فصل مهم می‌ماند، بدون آن‌که فول‌کردن برای بازیکن فعال ناممکن باشد.
+MAX_BUILDING_LEVEL = 8
+LEVEL_COST_STEP = 0.10   # رشد ملایم هزینه؛ مجموع فول یک قلعه حدود ۱۲هزار طلا
+LEVEL_HOURS_STEP = 0.15  # سطح‌های پایانی ساختمان‌های سنگین نزدیک یک روز زمان می‌برند
 
 def building_cost(building_id: str, level: int) -> dict:
     """هزینهٔ ساخت/ارتقا به «level» (سطح ۱ = ساخت اولیه، هزینه = هزینهٔ پایه)."""
