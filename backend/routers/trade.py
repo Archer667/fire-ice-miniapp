@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, caravans, alliances
-from game import now, can_afford, pay, add_resources, owned_castles, apply_production
+from game import now, can_afford, pay, add_resources, owned_castles, apply_production, production_fields
 from game_data import CARAVAN_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
 from routers.war import blocked_castles_for
@@ -66,7 +66,7 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
         raise HTTPException(400, "مسیر این کاروان از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری")
 
     pay(p["resources"], cost)
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
 
     arrival_at = now() + timedelta(minutes=travel)
 

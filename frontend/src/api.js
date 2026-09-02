@@ -35,7 +35,7 @@ import {
   SPY_GOLD_COST, SPY_MEN_COST, spyTravelMinutes, TRADE_GOODS, TRADE_GOOD_NAMES, SMALL_COUNCIL_SEATS,
   ROLEPLAY_CATEGORIES, ATTACK_OP_TYPES, DEFENSE_OP_TYPES, ROLEPLAY_WINDOW_HOURS,
   campaignPower, REPORT_VISIBLE_HOURS, NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING,
-  ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield, buildingProduces, buildingCapBonus, BUILDING_OVERRIDES,
+  ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, buildingYield, buildingProduces, buildingCapBonus, buildingMaxLevel, BUILDING_OVERRIDES,
   RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, DAILY_REWARDS,
   WEAPON_NAMES, WEAPON_PER_SOLDIER, CASTLE_HOUSES, MAP_TERRAINS, SIEGE_EQUIPMENT,
   DAILY_PRODUCTION, RESOURCE_CAPS, taxYieldMultiplier,
@@ -1118,12 +1118,13 @@ const M = {
     const isPort = mockCastleTerrain(targetCastle) !== 'land';
     const rows = Object.entries(BUILDINGS_STATIC).map(([id, meta]) => {
       const st = state[id] || { level: 0, upgrade_to: null, ready_at: null };
-      const next = st.upgrade_to || (st.level < MAX_BUILDING_LEVEL ? st.level + 1 : null);
+      const maxLevel = buildingMaxLevel(id);
+      const next = st.upgrade_to || (st.level < maxLevel ? st.level + 1 : null);
       const perLevelProduces = buildingProduces(id);
       const perLevelCap = buildingCapBonus(id);
       return {
         id, name: meta.name, type: meta.type, unit: meta.unit, requires_port: !!meta.requires_port,
-        level: st.level, max_level: MAX_BUILDING_LEVEL,
+        level: st.level, max_level: maxLevel,
         upgrading: !!st.upgrade_to, ready_at: st.ready_at,
         next_level: next,
         next_cost: next ? buildingCost(id, next) : null,
@@ -1146,7 +1147,7 @@ const M = {
     if (st.upgrade_to) throw new Error('این ساختمان هم‌اکنون در حال ساخت است');
     if (requireBuilt && st.level === 0) throw new Error('اول این ساختمان را بنا کن');
     if (!requireBuilt && st.level > 0) throw new Error('این ساختمان قبلاً بنا شده — آن را ارتقا بده');
-    if (st.level >= MAX_BUILDING_LEVEL) throw new Error('این ساختمان به بیشینهٔ سطح رسیده');
+    if (st.level >= buildingMaxLevel(id)) throw new Error('این ساختمان به بیشینهٔ سطح رسیده');
     if (!requireBuilt && BUILDINGS_STATIC[id]?.requires_port && !isPort) {
       throw new Error('این ساختمان فقط در قلعه/شهرهای دریایی و بندری ساخته می‌شود');
     }
@@ -1554,7 +1555,6 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
-  gamedata: () => MOCK ? Promise.resolve(null) : req('/api/gamedata'),
   gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
   me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
   musicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/players/music'),

@@ -14,7 +14,7 @@ from db import (
 )
 import game_data
 import telegram_bot
-from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades, owned_castles, castle_building_state, normalize_building_state
+from game import now, add_resources, apply_production, production_fields, building_levels_for, effective_caps, owned_castles, castle_building_state, normalize_building_state
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows, normalize_stats
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, building_max_level, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power, SIEGE_EQUIPMENT
 from config import ADMIN_IDS, OWNER_ID, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
@@ -1774,7 +1774,8 @@ async def admin_get_player_resources(tg_id: int, user: dict = Depends(full_admin
         raise HTTPException(404, "بازیکن پیدا نشد")
     # سقف دقیق همین بازیکن: پایه + بونوس ساختمان‌های قلعهٔ اصلی و همهٔ قلعه‌های اضافه.
     # ارتقاهای تمام‌شده را اول resolve می‌کنیم تا عددی که ادمین می‌بیند با تولید واقعی یکی باشد.
-    resolve_building_upgrades(p)
+    p = apply_production(p)
+    await players.update_one({"tg_id": tg_id}, {"$set": production_fields(p)})
     res = {k: round(p.get("resources", {}).get(k, 0)) for k in PLAYER_RESOURCE_KEYS}
     caps = effective_caps(p)
     resource_caps = {k: round(caps.get(k, 0)) for k in PLAYER_RESOURCE_KEYS}
@@ -2223,6 +2224,12 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
 # ---- تعادل بازی — هزینه، رشد ارتقا، بازدهی و سقفِ سراسریِ ساختمان‌ها
 BUILDING_OVERRIDES_DOC_ID = "building_overrides"
 
+async def _settle_all_building_production():
+    """پیش از تغییر بازدهی/سقف، تولید همه را با تنظیمات قبلی تا همین لحظه تسویه می‌کند."""
+    async for player in players.find({"resources": {"$exists": True}, "created_at": {"$exists": True}}):
+        player = apply_production(player)
+        await players.update_one({"_id": player["_id"]}, {"$set": production_fields(player)})
+
 @router.get("/building-balance")
 async def get_building_balance(user: dict = Depends(full_admin_user)):
     out = []
@@ -2268,10 +2275,10 @@ async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(f
     allowed_cost = set(meta.get("cost", {}).keys())
     allowed_produces = set(meta.get("produces", {}).keys())
     allowed_cap = set(meta.get("cap_bonus", {}).keys())
-    if not set(body.cost).issubset(allowed_cost):
-        raise HTTPException(400, "این ساختمان چنین منبعی در هزینهٔ ساخت ندارد")
-    if not set(body.produces).issubset(allowed_produces) or not set(body.cap_bonus).issubset(allowed_cap):
-        raise HTTPException(400, "این ساختمان چنین منبعی تولید/ذخیره نمی‌کند")
+    if set(body.cost) != allowed_cost:
+        raise HTTPException(400, "تمام اجزای هزینهٔ پایهٔ این ساختمان باید ارسال شوند")
+    if set(body.produces) != allowed_produces or set(body.cap_bonus) != allowed_cap:
+        raise HTTPException(400, "تمام فیلدهای تولید و سقف این ساختمان باید ارسال شوند")
     values = list(body.cost.values()) + list(body.produces.values()) + list(body.cap_bonus.values())
     if any(v < 0 for v in values):
         raise HTTPException(400, "مقدار نمی‌تواند منفی باشد")
@@ -2280,14 +2287,17 @@ async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(f
     if body.hours < 0.1 or not 1 <= body.max_level <= 100:
         raise HTTPException(400, "زمان پایه باید مثبت و سقف سطح بین ۱ تا ۱۰۰ باشد")
 
+    await _settle_all_building_production()
     override = {
         "cost": body.cost,
         "cost_step": float(body.cost_step_percent) / 100,
         "hours": float(body.hours), "max_level": int(body.max_level),
     }
-    if body.produces:
+    # دیکشنریِ دارای مقدار صفر هم override معتبر است؛ ادمین باید بتواند بازدهی را
+    # واقعاً صفر کند. برای ساختمان‌های بدون بازدهی، کلید اضافی ذخیره نمی‌کنیم.
+    if allowed_produces:
         override["produces"] = body.produces
-    if body.cap_bonus:
+    if allowed_cap:
         override["cap_bonus"] = body.cap_bonus
 
     game_data.BUILDING_OVERRIDES[body.building_id] = override
@@ -2302,6 +2312,7 @@ async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(f
 async def reset_building_balance(building_id: str, user: dict = Depends(full_admin_user)):
     if building_id not in BUILDINGS:
         raise HTTPException(400, "ساختمان نامعتبر")
+    await _settle_all_building_production()
     game_data.BUILDING_OVERRIDES.pop(building_id, None)
     await game_settings.update_one(
         {"_id": BUILDING_OVERRIDES_DOC_ID}, {"$unset": {f"overrides.{building_id}": ""}}, upsert=True,
@@ -2444,11 +2455,8 @@ async def admin_player_buildings(tg_id: int, user: dict = Depends(full_admin_use
     player = await players.find_one({"tg_id": tg_id})
     if not player:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    resolve_building_upgrades(player)
-    await players.update_one({"tg_id": tg_id}, {"$set": {
-        "buildings": player.get("buildings", {}),
-        "castle_buildings": player.get("castle_buildings", {}),
-    }})
+    player = apply_production(player)
+    await players.update_one({"tg_id": tg_id}, {"$set": production_fields(player)})
     castles = []
     for castle in owned_castles(player):
         state = castle_building_state(player, castle)
@@ -2482,15 +2490,19 @@ async def admin_set_player_building(
         raise HTTPException(404, "بازیکن پیدا نشد")
     if body.castle not in owned_castles(player):
         raise HTTPException(400, "این قلعه متعلق به بازیکن نیست")
+    if body.level > 0 and BUILDINGS[building_id].get("requires_port"):
+        terrain = await all_castle_terrain()
+        if terrain.get(body.castle, "land") not in ("coastal", "sea"):
+            raise HTTPException(400, "ساختمان بندر را نمی‌شود برای قلعهٔ خشکی ثبت کرد")
+    # تولید تا همین لحظه با سطح قبلی تسویه می‌شود تا تغییر دستی، تولید گذشته را
+    # با سطح تازه دوباره حساب نکند.
+    player = apply_production(player)
     state = castle_building_state(player, body.castle)
     if body.level == 0:
         state.pop(building_id, None)
     else:
         state[building_id] = {"level": body.level, "upgrade_to": None, "ready_at": None}
-    await players.update_one({"tg_id": tg_id}, {"$set": {
-        "buildings": player.get("buildings", {}),
-        "castle_buildings": player.get("castle_buildings", {}),
-    }})
+    await players.update_one({"tg_id": tg_id}, {"$set": production_fields(player)})
     return {"ok": True, "building_id": building_id, "castle": body.castle, "level": body.level}
 
 

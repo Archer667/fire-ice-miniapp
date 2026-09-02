@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns, alliances, game_settings
-from game import now, apply_production, effective_caps, owned_castles, resolve_building_upgrades
+from game import now, apply_production, effective_caps, owned_castles, production_fields
 from medals import medal_rows, normalize_stats, sync_medals
 from admin_notifications import notify_admins
 from game_data import REGIONS, CASTLE_HOUSES
@@ -181,13 +181,9 @@ async def me(user: dict = Depends(get_user)):
     # ارتقاهایی که مهلتشون تمام شده رو اول نهایی می‌کنیم — وگرنه بازیکنی که فقط سر
     # می‌زنه بدون رفتن به تبِ ساختمان‌ها، تولید/سقفش رو با سطح قدیمی (پیش‌از-ارتقا)
     # می‌بینه، شاید تا خیلی بعد
-    p = resolve_building_upgrades(p)
     p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
-    await players.update_one({"tg_id": user["id"]}, {"$set": {
-        "resources": p["resources"], "last_tick": p["last_tick"],
-        "buildings": p["buildings"], "castle_buildings": p.get("castle_buildings", {}),
-    }})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
     season_start = p.get("season_started_at") or p["created_at"]
     day = min(SEASON_LENGTH_DAYS, (((now() - season_start).days % SEASON_LENGTH_DAYS) + 1))
     # موجودیِ واقعی تو دیتابیس اعشاریه (تا تولیدِ کم‌مقدار بینِ چک‌ها گم نشه) — برای
@@ -279,7 +275,7 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
     if not (0 <= body.rate <= 100):
         raise HTTPException(400, "نرخ مالیات باید بین ۰ تا ۱۰۰ درصد باشد")
-    await players.update_one({"tg_id": user["id"]},
-        {"$set": {"tax_rate": body.rate, "resources": p["resources"], "last_tick": p["last_tick"],
-                  "stats": normalize_stats(p), "medals": sync_medals(p)}})
+    fields = production_fields(p)
+    fields.update({"tax_rate": body.rate, "stats": normalize_stats(p), "medals": sync_medals(p)})
+    await players.update_one({"tg_id": user["id"]}, {"$set": fields})
     return {"ok": True, "tax_rate": body.rate}

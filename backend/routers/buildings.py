@@ -1,20 +1,21 @@
-from datetime import datetime, timedelta
+import asyncio
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players
 from game import (
-    now, apply_production, can_afford, pay, normalize_building_state, resolve_building_upgrades,
-    owned_castles, castle_building_state,
+    now, apply_production, can_afford, pay, normalize_building_state,
+    owned_castles, castle_building_state, production_fields,
 )
-from game_data import BUILDINGS, MAX_BUILDING_LEVEL, building_cost, building_hours, building_produces, building_cap_bonus, building_max_level
+from game_data import BUILDINGS, building_cost, building_hours, building_produces, building_cap_bonus, building_max_level
 from routers.war import all_castle_terrain
 from routers.ravens import send_system_message
 
 router = APIRouter(prefix="/api/buildings", tags=["buildings"])
 
-EMPTY_STATE = {"level": 0, "upgrade_to": None, "ready_at": None}
-_resolve = resolve_building_upgrades
+EMPTY_STATE = {"level": 0, "upgrade_to": None, "ready_at": None, "notice_pending": None}
+_upgrade_locks: dict[int, asyncio.Lock] = {}
 
 def _resolve_castle(p: dict, castle: str | None) -> str:
     """قلعه‌ای که این درخواست برایش است — پیش‌فرض قلعهٔ اصلی؛ اگر castle داده شده
@@ -30,10 +31,8 @@ async def list_buildings(castle: str | None = None, user: dict = Depends(get_use
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    p = _resolve(p)
-    await players.update_one({"tg_id": user["id"]}, {"$set": {
-        "buildings": p["buildings"], "castle_buildings": p.get("castle_buildings", {}),
-    }})
+    p = apply_production(p)
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
 
     target_castle = _resolve_castle(p, castle)
     terrain = await all_castle_terrain()
@@ -70,15 +69,12 @@ class ActionBody(BaseModel):
     building_id: str
     castle: str | None = None
 
-async def _start_upgrade(building_id: str, castle: str | None, user: dict, require_built: bool):
+async def _start_upgrade_unlocked(building_id: str, castle: str | None, user: dict, require_built: bool):
     if building_id not in BUILDINGS:
         raise HTTPException(400, "ساختمان نامعتبر")
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    # اول ارتقاهای تمام‌شده نهایی می‌شن، بعد تولید حساب می‌شه — وگرنه تولیدِ فاصلهٔ
-    # زمانیِ سپری‌شده با سطحِ قدیمی (پیش‌از-ارتقا) حساب می‌شه، نه سطحِ واقعیِ الان
-    p = _resolve(p)
     p = apply_production(p)
 
     target_castle = _resolve_castle(p, castle)
@@ -108,13 +104,21 @@ async def _start_upgrade(building_id: str, castle: str | None, user: dict, requi
     pay(p["resources"], cost)
     st["upgrade_to"] = target
     st["ready_at"] = now() + timedelta(hours=hours)
+    st["notice_pending"] = None
     state[building_id] = st
 
-    await players.update_one({"tg_id": user["id"]}, {"$set": {
-        "resources": p["resources"], "buildings": p["buildings"],
-        "castle_buildings": p.get("castle_buildings", {}), "last_tick": p["last_tick"],
-    }})
-    return {"ok": True, "target_level": target, "cost": cost, "ready_at": st["ready_at"].isoformat()}
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    return {
+        "ok": True, "target_level": target, "cost": cost,
+        "resources": {k: round(v) if isinstance(v, (int, float)) else v for k, v in p["resources"].items()},
+        "ready_at": st["ready_at"].isoformat(),
+    }
+
+async def _start_upgrade(building_id: str, castle: str | None, user: dict, require_built: bool):
+    """درخواست‌های هم‌زمان یک بازیکن را سری می‌کند تا دو ساخت، همدیگر را overwrite نکنند."""
+    lock = _upgrade_locks.setdefault(user["id"], asyncio.Lock())
+    async with lock:
+        return await _start_upgrade_unlocked(building_id, castle, user, require_built)
 
 @router.post("/build")
 async def build(body: ActionBody, user: dict = Depends(get_user)):
@@ -132,39 +136,41 @@ async def notify_building_completions():
     """
     cur = players.find(
         {"castle": {"$ne": None}},
-        {"tg_id": 1, "name": 1, "castle": 1, "buildings": 1, "castle_buildings": 1},
+        {
+            "tg_id": 1, "name": 1, "castle": 1,
+            "resources": 1, "created_at": 1, "last_tick": 1, "stats": 1,
+            "popularity": 1, "tax_rate": 1,
+            "buildings": 1, "castle_buildings": 1,
+        },
     )
     async for p in cur:
+        # apply_production بازهٔ قبل و بعد از زمان پایان ارتقا را جدا حساب می‌کند و
+        # notice_pending را نگه می‌دارد تا حتی بازشدن صفحه قبل از watcher اعلان را نسوزاند.
+        # projection بالا باید تمام ورودی‌های apply_production را داشته باشد؛ کمبود
+        # resources/last_tick در نسخهٔ قبلی watcher را با KeyError متوقف می‌کرد.
+        p = apply_production(p)
+        await players.update_one({"_id": p["_id"]}, {"$set": production_fields(p)})
+
         completed = []
         scopes = [(p.get("castle"), "buildings", p.get("buildings", {}))]
-        for castle, state in p.get("castle_buildings", {}).items():
-            scopes.append((castle, f"castle_buildings.{castle}", state))
-
+        scopes.extend((castle, f"castle_buildings.{castle}", state) for castle, state in p.get("castle_buildings", {}).items())
         for castle, prefix, state in scopes:
             if not castle:
                 continue
             for bid, raw in list(state.items()):
                 st = normalize_building_state(raw)
-                ready = st.get("ready_at")
-                target = st.get("upgrade_to")
-                if isinstance(ready, str):
-                    ready = datetime.fromisoformat(ready)
-                if not target or not ready or ready > now():
+                target = st.get("notice_pending")
+                if not target or st.get("level", 0) < target:
                     continue
 
                 field = f"{prefix}.{bid}"
-                raw_ready = raw.get("ready_at") if isinstance(raw, dict) else ready
                 claimed = await players.update_one(
                     {
                         "_id": p["_id"],
-                        f"{field}.upgrade_to": target,
-                        f"{field}.ready_at": raw_ready,
+                        f"{field}.level": {"$gte": target},
+                        f"{field}.notice_pending": target,
                     },
-                    {"$set": {
-                        f"{field}.level": target,
-                        f"{field}.upgrade_to": None,
-                        f"{field}.ready_at": None,
-                    }},
+                    {"$unset": {f"{field}.notice_pending": ""}},
                 )
                 if claimed.modified_count:
                     building_name = BUILDINGS.get(bid, {}).get("name", bid)

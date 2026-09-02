@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
 from db import players, items, item_grants
-from game import now, normalize_building_state, resolve_building_upgrades, owned_castles, castle_building_state
+from game import now, apply_production, normalize_building_state, owned_castles, castle_building_state, production_fields
 from game_data import BUILDINGS, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, building_produces, building_cap_bonus, CASTLE_HOUSES
 from routers.war import all_castle_terrain
 
@@ -26,10 +26,8 @@ async def castle_assets(castle: str | None = None, user: dict = Depends(get_user
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
-    p = resolve_building_upgrades(p)
-    await players.update_one({"tg_id": user["id"]}, {"$set": {
-        "buildings": p["buildings"], "castle_buildings": p.get("castle_buildings", {}),
-    }})
+    p = apply_production(p)
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
     target_castle = castle or p["castle"]
     if target_castle not in owned_castles(p):
         raise HTTPException(403, "این قلعه مالِ تو نیست")

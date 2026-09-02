@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, alliances
-from game import now, apply_production, can_afford, pay, add_resources
+from game import now, apply_production, can_afford, pay, add_resources, production_fields
 from game_data import ALLIANCE_TYPES
 from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX, PRIVATE_ALLIANCE_MULTIPLIER
 from routers.ravens import send_system_message
@@ -56,8 +56,7 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     if not can_afford(me["resources"], total_cost):
         raise HTTPException(400, f"شراب کافی برای پیشنهاد به {len(valid_targets)} نفر نداری")
     pay(me["resources"], total_cost)
-    await players.update_one({"tg_id": user["id"]},
-        {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
 
     pact_name = body.name.strip()[:60]
     penalty_gold = body.penalty_gold if body.type == "non_aggression" else 0
@@ -182,7 +181,7 @@ async def leave(alliance_id: str, user: dict = Depends(get_user)):
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
     if penalty:
         me["resources"]["gold"] -= penalty
-        await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
+        await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
     await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
     await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
     other_id = a["to_id"] if a["from_id"] == user["id"] else a["from_id"]
@@ -220,8 +219,7 @@ async def feast(user: dict = Depends(get_user)):
     pay(p["resources"], feast_cost)
     popularity = min(POPULARITY_MAX, p.get("popularity", 0) + feast_gain)
 
-    await players.update_one({"tg_id": user["id"]}, {"$set": {
-        "resources": p["resources"], "last_tick": p["last_tick"],
-        "popularity": popularity, "last_feast": now(),
-    }})
+    fields = production_fields(p)
+    fields.update({"popularity": popularity, "last_feast": now()})
+    await players.update_one({"tg_id": user["id"]}, {"$set": fields})
     return {"ok": True, "popularity": popularity}

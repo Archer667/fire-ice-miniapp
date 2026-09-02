@@ -55,7 +55,7 @@ export default function Buildings() {
     try {
       const res = row.level === 0 ? await api.buildBuilding(row.id, castle) : await api.upgradeBuilding(row.id, castle);
       haptic('medium');
-      setMe({ ...me, resources: { ...me.resources, ...subtractCost(me.resources, res.cost) } });
+      setMe({ ...me, resources: res.resources || { ...me.resources, ...subtractCost(me.resources, res.cost) } });
       toast(row.level === 0
         ? `ساخت «${row.name}» شروع شد — سطح ۱`
         : `ارتقای «${row.name}» به سطح ${res.target_level.toLocaleString('fa-IR')} شروع شد`);
@@ -74,7 +74,7 @@ export default function Buildings() {
   return (
     <>
       <div className="page-title up">ساختمان‌های قلمرو</div>
-      <div className="page-sub up">تا سطح {(30).toLocaleString('fa-IR')} می‌تونی بالا ببریشون — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
+      <div className="page-sub up">سقف هر ساختمان را ادمین مشخص می‌کند — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
 
       {data.castles.length > 1 && (
         <div className="tabs up u1" role="tablist" aria-label="قلعه">

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, rumors, rumor_views
-from game import now, apply_production, can_afford, pay
+from game import now, apply_production, can_afford, pay, production_fields
 from config import RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, POPULARITY_START
 from routers.ravens import send_system_message
 
@@ -41,8 +41,7 @@ async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
     if not can_afford(me["resources"], {"gold": RUMOR_GOLD_COST}):
         raise HTTPException(400, "طلای کافی برای پخش این توییت نداری")
     pay(me["resources"], {"gold": RUMOR_GOLD_COST})
-    await players.update_one({"tg_id": user["id"]},
-        {"$set": {"resources": me["resources"], "last_tick": me["last_tick"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
 
     new_popularity = max(0, target.get("popularity", POPULARITY_START) - RUMOR_POPULARITY_DAMAGE)
     await players.update_one({"tg_id": target["tg_id"]}, {"$set": {"popularity": new_popularity}})

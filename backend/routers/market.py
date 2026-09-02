@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, market_listings, black_market_listings, player_market_listings
-from game import now, can_afford, pay, add_resources, apply_production
+from game import now, can_afford, pay, add_resources, apply_production, production_fields
 from game_data import TRADE_GOOD_NAMES
 
 router = APIRouter(prefix="/api/market", tags=["market"])
@@ -55,7 +55,7 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
 
     pay(p["resources"], {"gold": cost})
     add_resources(p, {body.resource: body.qty})
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
     return {"ok": True, "resource": body.resource, "qty": body.qty, "cost": cost}
 
 @router.get("/players")
@@ -85,9 +85,12 @@ async def create_player_listing(body: PlayerListingBody, user: dict = Depends(ge
     p = apply_production(p)
     if int(p.get("resources", {}).get(body.resource, 0)) < body.qty:
         raise HTTPException(400, "از این کالا به‌اندازهٔ کافی نداری")
+    # تولید و تکمیل ساختمان‌ها را همراه همان کسر موجودی ذخیره می‌کنیم؛ در نسخهٔ قبلی
+    # last_tick جلو می‌رفت ولی تولید تازه و ساختمان تکمیل‌شده در این مسیر گم می‌شد.
+    p["resources"][body.resource] -= body.qty
     result = await players.update_one(
-        {"tg_id": user["id"], f"resources.{body.resource}": {"$gte": body.qty}},
-        {"$inc": {f"resources.{body.resource}": -body.qty}, "$set": {"last_tick": p["last_tick"]}},
+        {"tg_id": user["id"]},
+        {"$set": production_fields(p)},
     )
     if not result.matched_count:
         raise HTTPException(409, "موجودی‌ات همین الان تغییر کرد؛ دوباره امتحان کن")
@@ -192,7 +195,7 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
 
     pay(p["resources"], {"gold": cost})
     add_resources(p, {m["resource"]: body.qty})
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "last_tick": p["last_tick"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
     return {"ok": True, "resource": m["resource"], "qty": body.qty, "cost": cost}
 
 async def drift_market_prices():

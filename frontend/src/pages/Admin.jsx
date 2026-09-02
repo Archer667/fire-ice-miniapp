@@ -7,7 +7,7 @@ import PlayerPicker from '../components/PlayerPicker.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
 
@@ -361,11 +361,11 @@ export default function Admin() {
           const owner = ownerByCastle.get(castle.name);
           const port = castle.port ? ' ⚓️' : '';
           if (!owner) {
-            lines.push(`⚪️ ${castleLabel(castle.name)}${port} — آزاد`);
+            lines.push(`⚪️ ${castle.name}${port} — آزاد`);
             return;
           }
           const username = owner.telegram_username ? `@${owner.telegram_username.replace(/^@/, '')}` : 'بدون username';
-          lines.push(`🔴 ${castleLabel(castle.name)}${port} — ${owner.name} | ${username}`);
+          lines.push(`🔴 ${castle.name}${port} — ${owner.name} | ${username}`);
         });
         if (regionIndex < regions.length - 1) lines.push('', '━━━━━━━━━━━━━━', '');
       });
@@ -1194,6 +1194,7 @@ export default function Admin() {
     setBalanceBusyId(b.id);
     try {
       await api.adminSetBuildingBalance(payload);
+      applyRuntimeGamedata(await api.gamedata());
       haptic('medium');
       toast(`تنظیمات «${b.name}» ذخیره شد`);
       loadBalance();
@@ -1205,6 +1206,7 @@ export default function Admin() {
     setBalanceBusyId(b.id);
     try {
       await api.adminResetBuildingBalance(b.id);
+      applyRuntimeGamedata(await api.gamedata());
       haptic();
       toast(`«${b.name}» به مقدار پیش‌فرض برگشت`);
       loadBalance();
@@ -1225,7 +1227,10 @@ export default function Admin() {
     setGameplayBalanceBusy(true);
     try {
       const saved = await api.adminSetGameplayBalance(gameplayBalance);
-      setGameplayBalance(saved); haptic('medium'); toast('تعادل نیروها و ادوات ذخیره شد');
+      setGameplayBalance(saved);
+      applyRuntimeGamedata(await api.gamedata());
+      loadBalance();
+      haptic('medium'); toast('تعادل نیروها و ادوات ذخیره شد');
     } catch (e) { toast(e.message); }
     setGameplayBalanceBusy(false);
   };
@@ -1233,7 +1238,10 @@ export default function Admin() {
     setGameplayBalanceBusy(true);
     try {
       const saved = await api.adminResetGameplayBalance();
-      setGameplayBalance(saved); haptic(); toast('تعادل نیروها و ادوات به پیش‌فرض برگشت');
+      setGameplayBalance(saved);
+      applyRuntimeGamedata(await api.gamedata());
+      loadBalance();
+      haptic(); toast('تعادل نیروها و ادوات به پیش‌فرض برگشت');
     } catch (e) { toast(e.message); }
     setGameplayBalanceBusy(false);
   };

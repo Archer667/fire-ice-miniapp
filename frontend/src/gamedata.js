@@ -825,6 +825,10 @@ export function buildingCapBonus(id) {
   return BUILDINGS_STATIC[id].cap_bonus || {};
 }
 
+export function buildingMaxLevel(id) {
+  return Number(BUILDING_OVERRIDES[id]?.max_level ?? BUILDINGS_STATIC[id]?.max_level ?? MAX_BUILDING_LEVEL);
+}
+
 // داده‌های زنده‌ای که بک‌اند از تنظیمات پنل ادمین می‌فرستد. آرایه‌ها و آبجکت‌ها
 // درجا تغییر می‌کنند تا تمام صفحه‌هایی که قبلاً آن‌ها را import کرده‌اند مقدار تازه را ببینند.
 export function applyRuntimeGamedata(data) {
@@ -839,7 +843,10 @@ export function applyRuntimeGamedata(data) {
   if (data.siege_equipment) {
     SIEGE_EQUIPMENT.splice(0, SIEGE_EQUIPMENT.length, ...Object.entries(data.siege_equipment).map(([id, meta]) => ({ id, ...meta })));
   }
-  Object.assign(BUILDING_OVERRIDES, data.building_overrides || {});
+  if (Object.prototype.hasOwnProperty.call(data, 'building_overrides')) {
+    for (const key of Object.keys(BUILDING_OVERRIDES)) delete BUILDING_OVERRIDES[key];
+    Object.assign(BUILDING_OVERRIDES, data.building_overrides || {});
+  }
   const rules = data.game_rules || {};
   SPECIAL_COST = Number(rules.special_troop_cost ?? SPECIAL_COST);
   SPECIAL_POWER = Number(rules.special_troop_power ?? SPECIAL_POWER);

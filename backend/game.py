@@ -1,5 +1,5 @@
 """منطق مشترک: تولید روزانه، خرج منابع"""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config import (
     DAILY_PRODUCTION, RESOURCE_CAPS, TAX_RATE_DEFAULT,
     POPULARITY_START, tax_yield_multiplier,
@@ -12,13 +12,27 @@ def now():
     # TypeError می‌دهد.
     return datetime.utcnow()
 
+def normalize_datetime(value) -> datetime | None:
+    """تاریخ‌های قدیمیِ رشته‌ای و timezone-aware را به UTC بدون timezone تبدیل می‌کند."""
+    if not value:
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
 def normalize_building_state(raw) -> dict:
     """buildings[id] معمولاً {"level","upgrade_to","ready_at"} است، اما نسخه‌های
     قدیمی‌تر بازی (پیش از سیستم سطح‌بندی) فقط True/False ذخیره می‌کردند —
     این را هم برای سازگاری با داده‌های قدیمی در دیتابیس می‌پذیریم."""
     if isinstance(raw, dict):
-        return {"level": raw.get("level", 0), "upgrade_to": raw.get("upgrade_to"), "ready_at": raw.get("ready_at")}
-    return {"level": 1, "upgrade_to": None, "ready_at": None} if raw else {"level": 0, "upgrade_to": None, "ready_at": None}
+        return {
+            "level": max(0, int(raw.get("level", 0) or 0)),
+            "upgrade_to": raw.get("upgrade_to"), "ready_at": raw.get("ready_at"),
+            "notice_pending": raw.get("notice_pending"),
+        }
+    return {"level": 1, "upgrade_to": None, "ready_at": None, "notice_pending": None} if raw else {"level": 0, "upgrade_to": None, "ready_at": None, "notice_pending": None}
 
 def resolve_building_upgrades(player: dict) -> dict:
     """ارتقاهای تمام‌شده را نهایی می‌کند و ساختار قدیمی‌تر (True/False به‌جای
@@ -60,19 +74,21 @@ def all_building_levels(player: dict) -> dict:
             total[bid] = total.get(bid, 0) + level
     return total
 
-def resolve_building_upgrades_for(state: dict) -> dict:
+def resolve_building_upgrades_for(state: dict, at: datetime | None = None) -> dict:
     """نسخهٔ خامِ resolve_building_upgrades که فقط روی یک دیکشنریِ ساختمانِ تکی
     (نه کلِ بازیکن) کار می‌کنه — برایِ همون قلعهٔ اصلی و هر قلعهٔ اضافه یکسان به کار می‌ره"""
+    current = normalize_datetime(at) or now()
     for bid, raw in list(state.items()):
         st = normalize_building_state(raw)
-        ready = st["ready_at"]
+        ready = normalize_datetime(st["ready_at"])
         if ready and st["upgrade_to"]:
-            if isinstance(ready, str):
-                ready = datetime.fromisoformat(ready)
-            if ready <= now():
-                st["level"] = st["upgrade_to"]
+            st["ready_at"] = ready
+            if ready <= current:
+                completed_level = int(st["upgrade_to"])
+                st["level"] = completed_level
                 st["upgrade_to"] = None
                 st["ready_at"] = None
+                st["notice_pending"] = completed_level
         state[bid] = st
     return state
 
@@ -94,6 +110,29 @@ def add_resources(player: dict, deltas: dict) -> dict:
             continue
         res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + delta)
     return res
+
+def _building_states(player: dict):
+    yield player.setdefault("buildings", {})
+    yield from player.setdefault("castle_buildings", {}).values()
+
+def _apply_production_interval(player: dict, elapsed_days: float):
+    if elapsed_days <= 0:
+        return
+    res = player["resources"]
+    caps = effective_caps(player)
+    prod = daily_production(player)
+    gold_before = res.get("gold", 0)
+    for key, per_day in prod.items():
+        before = res.get(key, 0)
+        candidate = before + per_day * elapsed_days
+        cap = caps.get(key, 10 ** 9)
+        # پایین‌آمدن سقف به‌دلیل تنظیم ادمین نباید موجودی قبلی را نابود کند؛ فقط
+        # جلوی تولید تازه را می‌گیرد تا مصرف، مقدار را دوباره زیر سقف بیاورد.
+        res[key] = max(before, min(cap, candidate)) if per_day >= 0 else candidate
+    gold_added = max(0, res.get("gold", 0) - gold_before)
+    if gold_added:
+        stats = player.setdefault("stats", {})
+        stats["gold_produced"] = stats.get("gold_produced", 0) + gold_added
 
 def daily_production(player: dict) -> dict:
     """تولید پایه + بونوس ساختمان‌ها (طبق مقادیرِ سراسریِ فعلی — پیش‌فرض یا بازنویسیِ
@@ -120,24 +159,51 @@ def apply_production(player: dict) -> dict:
     می‌کرد تا اولین‌بار عددی ببیند. برای این‌که تولیدِ کم‌مقدار (مثلاً چند واحد در روز)
     در چک‌های پیاپی صفر رند نشه و گم نشه، مقدارِ اعشاریِ دقیق نگه داشته می‌شود؛ فقط
     موقعِ نمایش (پاسخِ /me) برای بازیکن رند می‌شود"""
-    last = player.get("last_tick", player["created_at"])
-    if isinstance(last, str):
-        last = datetime.fromisoformat(last)
-    elapsed_days = (now() - last).total_seconds() / 86400
-    if elapsed_days <= 0:
+    current = now()
+    last = normalize_datetime(player.get("last_tick", player["created_at"]))
+    if not last or current <= last:
+        resolve_building_upgrades(player)
+        player["last_tick"] = last or current
         return player
-    res = player["resources"]
-    caps = effective_caps(player)
-    prod = daily_production(player)
-    gold_before = res.get("gold", 0)
-    for k, per_day in prod.items():
-        res[k] = min(caps.get(k, 10 ** 9), res.get(k, 0) + per_day * elapsed_days)
-    gold_added = max(0, res.get("gold", 0) - gold_before)
-    if gold_added:
-        stats = player.setdefault("stats", {})
-        stats["gold_produced"] = stats.get("gold_produced", 0) + gold_added
-    player["last_tick"] = now()
+
+    # ارتقاهایی که پیش از آخرین tick تمام شده‌اند، از ابتدای بازه فعال‌اند.
+    for state in _building_states(player):
+        resolve_building_upgrades_for(state, last)
+
+    boundaries = set()
+    for state in _building_states(player):
+        for raw in state.values():
+            st = normalize_building_state(raw)
+            ready = normalize_datetime(st.get("ready_at"))
+            if st.get("upgrade_to") and ready and last < ready <= current:
+                boundaries.add(ready)
+
+    cursor = last
+    for boundary in sorted(boundaries):
+        _apply_production_interval(player, (boundary - cursor).total_seconds() / 86400)
+        for state in _building_states(player):
+            resolve_building_upgrades_for(state, boundary)
+        cursor = boundary
+
+    _apply_production_interval(player, (current - cursor).total_seconds() / 86400)
+    for state in _building_states(player):
+        resolve_building_upgrades_for(state, current)
+    player["last_tick"] = current
     return player
+
+def production_fields(player: dict) -> dict:
+    """تمام فیلدهایی که apply_production ممکن است تغییر دهد.
+
+    هر مسیری که تولید را تسویه می‌کند باید این مجموعه را یک‌جا ذخیره کند؛ در غیر این
+    صورت ممکن است منابع ثبت شوند ولی تکمیل ساختمان/آمار تولید از دست برود، یا برعکس.
+    """
+    return {
+        "resources": player["resources"],
+        "last_tick": player["last_tick"],
+        "stats": player.get("stats", {}),
+        "buildings": player.get("buildings", {}),
+        "castle_buildings": player.get("castle_buildings", {}),
+    }
 
 def can_afford(resources: dict, cost: dict) -> bool:
     return all(resources.get(k, 0) >= v for k, v in cost.items())
