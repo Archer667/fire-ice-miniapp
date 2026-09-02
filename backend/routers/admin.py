@@ -1575,7 +1575,8 @@ async def list_admins(user: dict = Depends(management_admin_user)):
             out.append({"tg_id": a["tg_id"], "role": a["role"], "source": "db", **names.get(a["tg_id"], {})})
             seen.add(a["tg_id"])
     for row in out:
-        row["removable"] = row["source"] == "db" and row["tg_id"] != user["id"]
+        row["is_self"] = row["tg_id"] == user["id"]
+        row["removable"] = row["source"] == "db" and not row["is_self"]
     return out
 
 class AddAdminBody(BaseModel):
@@ -1588,6 +1589,8 @@ async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
         raise HTTPException(400, "سطح دسترسی ادمین نامعتبر است")
     if body.tg_id in ADMIN_IDS or (OWNER_ID is not None and body.tg_id == OWNER_ID):
         raise HTTPException(400, "این ادمین از تنظیمات سرور مدیریت می‌شود و سطحش از پنل قابل‌تغییر نیست")
+    if body.tg_id == user["id"] and body.role != "owner":
+        raise HTTPException(400, "نمی‌توانی سطح دسترسی ادمین اصلی خودت را پایین بیاوری")
     target = await players.find_one({"tg_id": body.tg_id})
     if not target:
         raise HTTPException(404, "این کاربر هنوز ثبت‌نام نکرده")

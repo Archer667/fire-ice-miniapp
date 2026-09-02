@@ -500,6 +500,9 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .admin-access-summary b { display: block; color: var(--hi); font-size: 11px; }
 .admin-access-summary span { display: block; color: var(--mid); font-size: 9.5px; line-height: 1.75; margin-top: 3px; }
 .admin-access-warning { margin-top: 9px; padding: 9px 10px; border: 1px solid rgba(179,39,27,.35); border-radius: 4px; color: #ff9c87; background: rgba(179,39,27,.08); font-size: 9.5px; line-height: 1.75; }
+.admin-row-actions { display: flex; flex: none; gap: 5px; }
+.admin-row-actions .btn { width: auto; padding: 7px 9px; font-size: 9px; }
+.admin-row-actions .danger { color: #ff8a75; border-color: rgba(179,39,27,.35); }
 
 @media (min-width: 680px) {
   .admin-section-switcher { grid-template-columns: repeat(3, minmax(0, 1fr)); }

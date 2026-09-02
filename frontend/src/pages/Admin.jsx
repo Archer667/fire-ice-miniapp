@@ -1026,6 +1026,7 @@ export default function Admin() {
 
   const addAdmin = async () => {
     if (!newAdminTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    if (newAdminRole === 'owner' && !window.confirm('این فرد دقیقاً تمام دسترسی‌های ادمین اصلی را می‌گیرد؛ از جمله مدیریت ادمین‌ها و ریست فصل. مطمئنی؟')) return;
     try {
       await api.adminAddAdmin(newAdminTarget[0].tg_id, newAdminRole);
       haptic('medium');
@@ -1036,8 +1037,15 @@ export default function Admin() {
   };
 
   const removeAdmin = async (tgId) => {
+    if (!window.confirm('دسترسی ادمین این فرد حذف شود؟')) return;
     try { await api.adminRemoveAdmin(tgId); haptic(); toast('ادمین حذف شد'); loadAdmins(); }
     catch (e) { toast(e.message); }
+  };
+
+  const editAdminRole = (admin) => {
+    setNewAdminTarget([{ tg_id: admin.tg_id, name: admin.name || String(admin.tg_id), castle: admin.castle }]);
+    setNewAdminRole(admin.role);
+    document.getElementById('admin-role-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   const assignHouse = async (tgId) => {
@@ -2167,7 +2175,7 @@ export default function Admin() {
       {tab === 'map' && (
         <>
           <div className="sect up u2">افزودن قلعه/شهر به نقشه</div>
-          <div className="card up u2">
+          <div className="card up u2" id="admin-role-form">
             <div className="page-sub" style={{ margin: '0 4px 10px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
             {mapError && (
               <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5, margin: '10px 0' }}>
@@ -3253,9 +3261,10 @@ export default function Admin() {
               <div className="res" key={a.tg_id}>
                 <div className="ic"><Shield s={16} /></div>
                 <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
-                {a.removable && (
-                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => removeAdmin(a.tg_id)}>حذف</button>
-                )}
+                {a.source === 'db' && !a.is_self && <div className="admin-row-actions">
+                  <button className="btn ghost" onClick={() => editAdminRole(a)}>تغییر سطح</button>
+                  {a.removable && <button className="btn ghost danger" onClick={() => removeAdmin(a.tg_id)}>حذف</button>}
+                </div>}
               </div>
             ))}
           </div>
