@@ -155,6 +155,7 @@ BUILDINGS = {
 # پیش‌فرض بالانس فصل ۳۰روزه. جدا نگه‌داشتن این جدول باعث می‌شود همهٔ هزینه‌ها و
 # بازدهی‌های بازطراحی‌شده یک‌جا قابل بازبینی باشند و پنل ادمین همچنان بتواند
 # هر مورد را در دیتابیس بازنویسی کند.
+SEASON_30_BUILDING_BALANCE_VERSION = 1
 SEASON_30_BUILDING_BALANCE = {
     "lumber_mill": {"cost": {"gold": 20, "stone": 5}, "produces": {"wood": 14}},
     "stone_mine": {"cost": {"gold": 25, "wood": 10}, "produces": {"stone": 12}},

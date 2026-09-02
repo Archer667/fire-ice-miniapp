@@ -180,6 +180,45 @@ async def _ensure_indexes():
 
 BUILDING_OVERRIDES_DOC_ID = "building_overrides"
 GAMEPLAY_BALANCE_DOC_ID = "gameplay_balance"
+SEASON_30_BALANCE_MARKER_ID = "season_30_building_balance"
+
+async def _migrate_season_30_building_balance():
+    """تنظیمات ذخیره‌شدهٔ فصل قبلی نباید پیش‌فرض تازهٔ ۳۰روزه را خنثی کند.
+
+    این مهاجرت فقط یک‌بار برای هر نسخه اجرا می‌شود. بازنویسی‌های قدیمی ساختمان‌ها
+    پاک می‌شوند، اما تنظیمات نیرو و ادوات دست‌نخورده می‌مانند. پس از آن هر تغییری
+    که ادمین از پنل ثبت کند مثل قبل پایدار خواهد ماند.
+    """
+    version = game_data.SEASON_30_BUILDING_BALANCE_VERSION
+    try:
+        marker = await game_settings.find_one({"_id": SEASON_30_BALANCE_MARKER_ID}) or {}
+        if int(marker.get("version", 0)) >= version:
+            return
+
+        await game_settings.update_one(
+            {"_id": BUILDING_OVERRIDES_DOC_ID},
+            {"$set": {"overrides": {}, "season_balance_version": version}},
+            upsert=True,
+        )
+        # فقط قواعد مرتبط با ساختمان را عوض می‌کنیم؛ قیمت/قدرت نیروها و ادواتی
+        # که ادمین قبلاً تنظیم کرده محفوظ می‌ماند.
+        await game_settings.update_one(
+            {"_id": GAMEPLAY_BALANCE_DOC_ID},
+            {"$set": {
+                "rules.level_hours_step": game_data.DEFAULT_GAME_RULES["level_hours_step"],
+                "rules.default_max_building_level": game_data.DEFAULT_GAME_RULES["default_max_building_level"],
+                "season_balance_version": version,
+            }},
+            upsert=True,
+        )
+        await game_settings.update_one(
+            {"_id": SEASON_30_BALANCE_MARKER_ID},
+            {"$set": {"version": version, "applied_at": now()}},
+            upsert=True,
+        )
+        logger.info("season-30 building balance v%d applied", version)
+    except Exception:
+        logger.exception("season-30 building balance migration failed")
 
 async def _load_building_overrides():
     """مقادیرِ بازدهی/سقفِ سراسری‌ای که ادمین از تب «تعادل بازی» بازنویسی کرده رو موقع
@@ -272,6 +311,7 @@ async def _migrate_castle_roster_v2():
 async def start_background_watchers():
     await _ensure_indexes()
     await _migrate_castle_roster_v2()
+    await _migrate_season_30_building_balance()
     await _load_building_overrides()
     await _load_gameplay_balance()
     await _detach_admin_players()
