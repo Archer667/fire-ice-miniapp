@@ -424,6 +424,32 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .admin-role-badge.limited { color: var(--az2); background: rgba(106,151,205,0.1); }
 
 .admin-nav { margin-bottom: 14px; }
+.admin-section-switcher {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px;
+  padding: 7px; border: 1px solid var(--iron); border-radius: 6px;
+  background: rgba(0,0,0,.18); overflow: hidden;
+}
+.admin-section-button {
+  position: relative; min-width: 0; padding: 10px 11px; text-align: start;
+  border: 1px solid rgba(160,195,255,.1); border-radius: 5px;
+  background: rgba(160,195,255,.025); transition: border-color .18s ease, background .18s ease;
+}
+.admin-section-button > span { display: block; color: var(--mid); font-size: 11.5px; font-weight: 800; }
+.admin-section-button > small {
+  display: block; margin-top: 3px; color: var(--low); font-size: 8.7px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.admin-section-button > b {
+  position: absolute; top: 6px; inset-inline-end: 7px; min-width: 17px; height: 17px;
+  display: grid; place-items: center; padding: 0 4px; border-radius: 999px;
+  background: var(--danger); color: #fff; font-size: 9px;
+}
+.admin-section-button.on { border-color: rgba(201,162,39,.55); background: rgba(201,162,39,.09); }
+.admin-section-button.on > span { color: var(--gold); }
+.admin-active-section { margin-top: 9px; padding: 8px; border: 1px solid rgba(201,162,39,.15); border-radius: 6px; background: var(--glass); }
+.admin-active-section-heading { display: flex; align-items: baseline; gap: 8px; padding: 3px 5px 8px; }
+.admin-active-section-heading strong { color: var(--hi); font-size: 11px; }
+.admin-active-section-heading span { color: var(--low); font-size: 9px; }
 .tabs-group-heading { margin: 10px 4px 4px; }
 .tabs-group-heading .tabs-group-label { margin: 0; }
 .tabs-group-description { color: var(--low); font-size: 10px; line-height: 1.7; margin-top: 2px; }
@@ -469,11 +495,18 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .admin-help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .admin-help-grid .card { margin: 0; padding: 13px; }
 .admin-help-grid strong { display: block; color: var(--hi); font-size: 11.5px; margin-bottom: 5px; }
+.admin-access-summary { display: grid; gap: 7px; margin-bottom: 14px; }
+.admin-access-summary > div { padding: 10px 11px; border-inline-start: 3px solid var(--az); border-radius: 4px; background: rgba(106,151,205,.055); }
+.admin-access-summary b { display: block; color: var(--hi); font-size: 11px; }
+.admin-access-summary span { display: block; color: var(--mid); font-size: 9.5px; line-height: 1.75; margin-top: 3px; }
+.admin-access-warning { margin-top: 9px; padding: 9px 10px; border: 1px solid rgba(179,39,27,.35); border-radius: 4px; color: #ff9c87; background: rgba(179,39,27,.08); font-size: 9.5px; line-height: 1.75; }
 
 @media (min-width: 680px) {
+  .admin-section-switcher { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 380px) {
+  .admin-section-switcher { grid-template-columns: 1fr; }
   .admin-role-card { align-items: flex-start; flex-direction: column; }
   .admin-current-guide { grid-template-columns: 1fr auto; }
   .admin-current-guide span { grid-column: 1 / -1; grid-row: 2; }

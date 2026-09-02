@@ -6,12 +6,19 @@ from game import now
 import telegram_bot
 
 
-async def _admin_ids() -> set[int]:
-    ids = set(ADMIN_IDS)
+async def _admin_ids(roles: tuple[str, ...] | None = None) -> set[int]:
+    """گیرنده‌های اعلان؛ در صورت تعیین roles فقط همان سطح‌ها را برمی‌گرداند."""
+    ids = set(ADMIN_IDS) if roles is None or "full" in roles else set()
     if OWNER_ID is not None:
-        ids.add(OWNER_ID)
-    async for row in admin_roles.find({}, {"tg_id": 1}):
-        ids.add(row["tg_id"])
+        if roles is None or "owner" in roles:
+            ids.add(OWNER_ID)
+        else:
+            ids.discard(OWNER_ID)
+    async for row in admin_roles.find({}, {"tg_id": 1, "role": 1}):
+        if roles is None or row.get("role") in roles:
+            ids.add(row["tg_id"])
+        else:
+            ids.discard(row["tg_id"])
     return ids
 
 
@@ -28,8 +35,9 @@ async def notify_admins(
     action: str | None = None,
     source_id: str | None = None,
     deadline=None,
+    audience_roles: tuple[str, ...] | None = None,
 ):
-    """یک اعلان ماندگار برای پنل می‌سازد و خلاصه‌اش را یک‌بار به تلگرام همهٔ ادمین‌ها می‌فرستد."""
+    """اعلان ماندگار پنل را می‌سازد و خلاصه را برای سطح‌های مجاز تلگرام می‌کند."""
     doc = {
         "kind": kind,
         "title": title,
@@ -43,6 +51,7 @@ async def notify_admins(
         "deadline": deadline,
         "created_at": now(),
         "read_by": [],
+        "audience_roles": list(audience_roles) if audience_roles else None,
     }
     claimed = await admin_notifications.update_one(
         {"dedupe_key": dedupe_key},
@@ -55,7 +64,7 @@ async def notify_admins(
     message = f"{title}\n{detail}"
     if action:
         message += f"\nاقدام پیشنهادی: {action}"
-    for tg_id in await _admin_ids():
+    for tg_id in await _admin_ids(audience_roles):
         telegram_bot.push(tg_id, message)
     return True
 

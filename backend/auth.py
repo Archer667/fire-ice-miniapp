@@ -36,13 +36,19 @@ async def get_user(
     return _validate_init_data(authorization[4:])
 
 async def get_admin_role(user: dict) -> str | None:
-    """owner = ادمین اصلی، full = ادمین کامل، limited = ادمین اجرایی."""
+    """owner = ادمین اصلی، full = ادمین کامل، limited = ادمین اجرایی.
+
+    OWNER_ID همیشه ادمین اصلیِ غیرقابل‌حذف است، اما ادمین اصلی می‌تواند همین نقش را
+    از داخل پنل به افراد دیگری هم بدهد. ADMIN_IDS برای سازگاری با دیپلوی‌های قدیمی
+    همچنان ادمین کامل محسوب می‌شود.
+    """
     if OWNER_ID is not None and user["id"] == OWNER_ID:
         return "owner"
     if user["id"] in ADMIN_IDS:
         return "full"
     doc = await admin_roles.find_one({"tg_id": user["id"]})
-    return doc["role"] if doc else None
+    role = doc.get("role") if doc else None
+    return role if role in ("owner", "full", "limited") else None
 
 async def get_admin(user: dict) -> dict:
     """هر سه سطح ادمین — برای کارهای اجرایی مشترک."""
@@ -61,9 +67,9 @@ async def get_full_admin(user: dict) -> dict:
     return user
 
 async def get_owner(user: dict) -> dict:
-    """فقط صاحبِ بازی (OWNER_ID) — سخت‌گیرتر از ادمین کامل، مخصوص کارهای
-    بازگشت‌ناپذیر مثل ری‌استارت کل بازی؛ حتی ادمین‌های کامل دیگر هم نمی‌توانند"""
-    if OWNER_ID is None or user["id"] != OWNER_ID:
-        raise HTTPException(403, "این بخش فقط برای صاحب بازی است")
+    """هر ادمین اصلی؛ OWNER_ID یا کسی که نقش owner را از پنل گرفته است."""
+    role = await get_admin_role(user)
+    if role != "owner":
+        raise HTTPException(403, "این بخش فقط برای ادمین اصلی است")
     user["admin_role"] = "owner"
     return user

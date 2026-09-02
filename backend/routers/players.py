@@ -7,7 +7,7 @@ from game import now, apply_production, effective_caps, owned_castles, productio
 from medals import medal_rows, normalize_stats, sync_medals
 from admin_notifications import notify_admins
 from game_data import REGIONS, CASTLE_HOUSES
-from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE, OWNER_ID
+from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
 from ranks import scored_players
 from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
 from registration import castle_region_map, registration_state
@@ -111,6 +111,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         player_name=doc["name"],
         player_tg_id=user["id"],
         action="از پنل ادمین ← ثبت‌نام، اقلیم و قلعه را مشخص کن.",
+        audience_roles=("owner", "full"),
     )
     return {"ok": True}
 
@@ -132,7 +133,7 @@ async def me(user: dict = Depends(get_user)):
             "name": profile.get("name", user.get("first_name", "ادمین")),
             "backstory": profile.get("backstory", ""), "profile_image": profile.get("profile_image"),
             "gender": profile.get("gender", "lord"), "title": "ادمین",
-            "admin_role": admin_role, "is_owner": user["id"] == OWNER_ID,
+            "admin_role": admin_role, "is_owner": admin_role == "owner",
             "rank_label": None, "region": None, "region_name": "بدون اقلیم",
             "castle": None, "castles": [], "house": None, "is_port": False,
             "resources": {key: 0 for key in STARTING_RESOURCES}, "resource_caps": {},
@@ -158,7 +159,7 @@ async def me(user: dict = Depends(get_user)):
             "name": p["name"], "gender": p.get("gender", "lord"),
             "title": p.get("title", DEFAULT_TITLE.get(p.get("gender", "lord"))),
             "admin_role": await get_admin_role(user),
-            "is_owner": user["id"] == OWNER_ID,
+            "is_owner": admin_role == "owner",
         }
     # پیمان‌ها در هر بازدید دوباره محاسبه می‌شوند تا رسیدن به روز هفتم/دهم
     # بدون نیاز به عملیات تازه، مدال را خودکار ارتقا دهد.
@@ -210,7 +211,7 @@ async def me(user: dict = Depends(get_user)):
         "name": p["name"],
         "backstory": p.get("backstory", ""), "profile_image": p.get("profile_image"),
         "admin_role": admin_role,
-        "is_owner": user["id"] == OWNER_ID,
+        "is_owner": admin_role == "owner",
         "gender": p.get("gender", "lord"),
         "title": p.get("title", DEFAULT_TITLE.get(p.get("gender", "lord"))),
         "rank_label": rank_label,

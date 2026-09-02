@@ -65,21 +65,17 @@ const MAP_KINDS = [
 // هر تب توضیح کوتاه و سطح دسترسی خودش را دارد تا ادمین تازه‌کار هم مسیر را گم نکند
 const TAB_GROUPS = [
   {
-    label: 'شروع و بازیکن‌ها',
-    description: 'ورود بازیکن، منابع و مدیریت دسترسی‌ها',
+    key: 'desk', label: 'پیشخوان',
+    description: 'وضعیت امروز و کارهای منتظر',
     tabs: [
       { key: 'overview',   label: 'راهنمای پنل', description: 'کارهای روزانه و مسیر پیشنهادی' },
-      { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
-      { key: 'onboarding', label: 'خاندان‌ها', description: 'مدیریت بازیکن‌های پذیرفته‌شده و قلعه‌ها' },
-      { key: 'resources',  label: 'منابع و لشکرها', description: 'ویرایش منابع و توقف لشکر', fullOnly: true },
-      { key: 'admins',     label: 'ادمین‌ها', description: 'افزودن، حذف و تعیین سطح ادمین‌ها', ownerOnly: true },
+      { key: 'notifications', label: 'کارهای منتظر', description: 'اعلان‌ها، مهلت‌ها و پرونده‌های تازه' },
     ],
   },
   {
-    label: 'داوری و ارتباط',
+    key: 'judgment', label: 'داوری و ارتباط',
     description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
     tabs: [
-      { key: 'notifications', label: 'اعلان‌های ادمین', description: 'کارهای تازه و مهلت‌های نزدیک' },
       { key: 'war',         label: 'جنگ', description: 'لشکرکشی‌ها، کمین‌ها، نبردها و جاسوسی' },
       { key: 'roleplays',   label: 'رول‌ها', description: 'بررسی و اعلام نتیجهٔ سناریوهای بازیکنان' },
       { key: 'security_archive', label: 'آرشیو امنیتی', description: 'جست‌وجوی رول‌های دفاعی و امنیتی' },
@@ -91,23 +87,39 @@ const TAB_GROUPS = [
     ],
   },
   {
-    label: 'سیاست و جهان',
-    description: 'اتحادها، مقام‌ها، رأی‌گیری و نقشه',
+    key: 'players', label: 'بازیکنان و جهان',
+    description: 'ثبت‌نام، قلمروها، منابع و نقشه',
     tabs: [
-      { key: 'alliances', label: 'اتحادها', description: 'مرور پیمان‌های بازیکنان' },
-      { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا' },
-      { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
-      { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین' },
+      { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها', fullOnly: true },
+      { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
+      { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
+      { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین', fullOnly: true },
     ],
   },
   {
-    label: 'اقتصاد و تنظیمات',
+    key: 'politics', label: 'سیاست و محتوا',
+    description: 'پیمان‌ها، مقام‌ها و محتوای فصل',
+    tabs: [
+      { key: 'alliances', label: 'اتحادها', description: 'مرور و مدیریت پیمان‌های بازیکنان', fullOnly: true },
+      { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا', fullOnly: true },
+      { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
+    ],
+  },
+  {
+    key: 'economy', label: 'اقتصاد و تنظیمات',
     description: 'ابزارهای حساس و سراسری بازی',
     tabs: [
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
       { key: 'balance', label: 'تعادل بازی', description: 'تغییر تولید و سقف ساختمان‌ها', fullOnly: true },
       { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
+    ],
+  },
+  {
+    key: 'system', label: 'مدیریت سامانه',
+    description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
+    tabs: [
+      { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
   },
 ];
@@ -130,8 +142,10 @@ export default function Admin() {
   const { me, toast } = useGame();
   const isOwner = me.is_owner || me.admin_role === 'owner';
   const isFull = isOwner || me.admin_role === 'full';
-  const availGroups = TAB_GROUPS;
+  const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
+  const availGroups = TAB_GROUPS.map(group => ({ ...group, tabs: group.tabs.filter(canAccessTab) })).filter(group => group.tabs.length);
   const [tab, setTab] = useState('overview');
+  const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -454,9 +468,6 @@ export default function Admin() {
   useEffect(() => {
     loadAdminNotifications();
     loadAdminRumors();
-    loadPendingPlayers();
-    loadRegistrationSettings();
-    loadRoster();
     loadCampaigns();
     loadAmbushes();
     loadWarWindow();
@@ -465,10 +476,9 @@ export default function Admin() {
     loadRoleplayPending();
     api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(() => setSecurityRoleplays([]));
     loadBattles();
-    loadAlliances();
     loadRebellions();
-    loadMapData();
     if (isFull) {
+      loadPendingPlayers(); loadRegistrationSettings(); loadRoster(); loadAlliances(); loadMapData();
       loadRebellionSettings();
       loadPolls(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance();
       api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
@@ -481,6 +491,7 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
+    if (!isFull) return;
     loadMapOptions();
     resetCastlePicker();
     setEditingCastle(null);
@@ -1018,7 +1029,7 @@ export default function Admin() {
     try {
       await api.adminAddAdmin(newAdminTarget[0].tg_id, newAdminRole);
       haptic('medium');
-      toast(newAdminRole === 'full' ? 'ادمین کامل اضافه شد' : 'ادمین اجرایی اضافه شد');
+      toast(newAdminRole === 'owner' ? 'ادمین اصلی ثبت شد' : newAdminRole === 'full' ? 'ادمین کامل ثبت شد' : 'ادمین اجرایی ثبت شد');
       setNewAdminTarget([]);
       loadAdmins();
     } catch (e) { toast(e.message); }
@@ -1326,6 +1337,11 @@ export default function Admin() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const openGroup = (group) => {
+    const first = group.tabs[0];
+    if (first) openTab(first.key);
+  };
+
   const tabBadge = (key) => {
     if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
     if (key === 'registration') return pendingPlayers?.length || 0;
@@ -1351,39 +1367,43 @@ export default function Admin() {
         <div>
           <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : 'ادمین اجرایی'}</strong>
           <small>{isOwner
-            ? 'به تمام بخش‌ها، از جمله مدیریت ادمین‌ها و ابزارهای مالک، دسترسی داری.'
+            ? 'به تمام بخش‌ها، مدیریت ادمین‌ها و ابزارهای فصل دسترسی داری.'
             : isFull
               ? 'به همهٔ بخش‌های بازی دسترسی داری؛ تب مدیریت ادمین‌ها فقط برای ادمین اصلی است.'
-              : 'به ابزارهای اجرایی روزمره دسترسی داری و بخش‌های حساس برایت قفل‌اند.'}</small>
+              : 'فقط بخش‌های داوری، پرونده‌های منتظر و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
         </div>
         <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
       </div>
 
       <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
-        {availGroups.map((g, gi) => (
-          <section key={g.label} className={gi > 0 ? 'tabs-group' : ''}>
-            <div className="tabs-group-heading up u1">
-              <div className="tabs-group-label">{g.label}</div>
-              <div className="tabs-group-description">{g.description}</div>
+        <div className="admin-section-switcher up u1" role="tablist" aria-label="دسته‌های پنل">
+          {availGroups.map(group => {
+            const selected = activeGroup?.key === group.key;
+            const count = group.tabs.reduce((sum, item) => sum + tabBadge(item.key), 0);
+            return <button type="button" key={group.key} role="tab" aria-selected={selected}
+              className={`rbtn admin-section-button ${selected ? 'on' : ''}`} onClick={() => openGroup(group)}>
+              <span>{group.label}</span><small>{group.description}</small>
+              {count > 0 && <b>{count.toLocaleString('fa-IR')}</b>}
+            </button>;
+          })}
+        </div>
+        {activeGroup && (
+          <section className="admin-active-section up u1">
+            <div className="admin-active-section-heading">
+              <strong>{activeGroup.label}</strong><span>{activeGroup.description}</span>
             </div>
-            <div className="tabs admin-tabs up u1" role="tablist" aria-label={g.label}>
-              {g.tabs.filter(t => isOwner || !t.ownerOnly).map(t => {
-                const locked = Boolean(t.fullOnly && !isFull);
-                const count = tabBadge(t.key);
-                return (
-                  <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
-                       aria-disabled={locked}
-                       className={`rbtn tab admin-tab ${tab === t.key ? 'on' : ''} ${locked ? 'locked' : ''}`}
-                       onClick={() => openTab(t.key)}>
-                    <span>{t.label}{locked ? ' 🔒' : ''}</span>
-                    <small>{locked ? 'فقط ادمین اصلی یا کامل' : t.description}</small>
-                    {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
-                  </button>
-                );
+            <div className="tabs admin-tabs" role="tablist" aria-label={activeGroup.label}>
+              {activeGroup.tabs.map(item => {
+                const count = tabBadge(item.key);
+                return <button type="button" key={item.key} role="tab" aria-selected={tab === item.key}
+                  className={`rbtn tab admin-tab ${tab === item.key ? 'on' : ''}`} onClick={() => openTab(item.key)}>
+                  <span>{item.label}</span><small>{item.description}</small>
+                  {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
+                </button>;
               })}
             </div>
           </section>
-        ))}
+        )}
       </nav>
 
       {tab !== 'overview' && TAB_BY_KEY[tab] && (
@@ -1454,40 +1474,46 @@ export default function Admin() {
 
       {tab === 'overview' && (
         <>
-          <div className="sect up u2">از کجا شروع کنم؟</div>
+          <div className="sect up u2">مسیر پیشنهادی امروز</div>
           <div className="admin-help-card card up u2">
-            <p>اگه تازه وارد این پنلی، کارها رو به همین ترتیب جلو ببر. عددِ روی هر تب یعنی چند مورد منتظر رسیدگیه.</p>
+            <p>عدد قرمز یعنی کاری منتظر رسیدگیه. اول اعلان‌ها رو ببین، بعد پرونده را در بخش مربوط باز کن و در پایان نتیجه یا پیام را ثبت کن.</p>
             <div className="admin-workflow">
-              <button type="button" className="rbtn" onClick={() => openTab('onboarding')}>
-                <b>۱. بازیکن‌های تازه</b><span>خاندان و قلعه‌شون رو مشخص کن</span>
+              <button type="button" className="rbtn" onClick={() => openTab('notifications')}>
+                <b>۱. کارهای منتظر</b><span>اعلان تازه و مهلت نزدیک را از اینجا پیدا کن</span>
               </button>
               <button type="button" className="rbtn" onClick={() => openTab('war')}>
-                <b>۲. داوری‌ها</b><span>جاسوسی و رول‌های منتظر رو جواب بده</span>
+                <b>۲. جنگ و جاسوسی</b><span>نبرد، لشکر، کمین و جاسوسی را بررسی کن</span>
               </button>
-              <button type="button" className="rbtn" onClick={() => openTab('rebellions')}>
-                <b>۳. شورش‌ها</b><span>مهلت‌ها و رول‌های شورش رو بررسی کن</span>
+              <button type="button" className="rbtn" onClick={() => openTab('roleplays')}>
+                <b>۳. رول‌ها</b><span>سناریوهای منتظر را بخوان و نتیجه را ثبت کن</span>
               </button>
               <button type="button" className="rbtn" onClick={() => openTab('bot_messages')}>
-                <b>۴. اطلاع‌رسانی</b><span>در صورت نیاز پیام مستقیم بفرست</span>
+                <b>۴. ارتباط با بازیکن</b><span>پیام را در بات، کلاغ یا هر دو مسیر بفرست</span>
               </button>
+              {isFull && <button type="button" className="rbtn" onClick={() => openTab('registration')}>
+                <b>ثبت‌نام‌های تازه</b><span>ظرفیت، درخواست و تخصیص قلعه را مدیریت کن</span>
+              </button>}
+              {isFull && <button type="button" className="rbtn" onClick={() => openTab('balance')}>
+                <b>تنظیمات بازی</b><span>قبل از فصل، قیمت‌ها و فرمول‌ها را بازبینی کن</span>
+              </button>}
             </div>
           </div>
           <div className="admin-help-grid up u3">
             <div className="card">
-              <strong>کارهای روزمره</strong>
-              <p>خاندان‌ها، جنگ و رول‌ها، شورش‌ها و پیام بات. بازیکن در این بخش‌ها منتظر ادمینه.</p>
+              <strong>دسترسی فعلی تو</strong>
+              <p>{isOwner ? 'همهٔ بخش‌ها، مدیریت ادمین‌ها و عملیات فصل.' : isFull ? 'همهٔ امور بازی به‌جز مدیریت ادمین‌ها و عملیات مالک.' : 'فقط داوری جنگ، رول، شورش، مدال، توییت و ارتباط با بازیکن‌ها.'}</p>
             </div>
             <div className="card">
-              <strong>کارهای حساس</strong>
-              <p>منابع، بازار، آیتم‌ها، تعادل و مدیریت ادمین فقط برای ادمین کامل بازه و روی کل بازی اثر می‌ذاره.</p>
+              <strong>ثبت نتیجه</strong>
+              <p>قبل از تایید، طرفین، تلفات، برنده‌ها و دامنهٔ انتشار پیام را دوباره چک کن؛ نتیجه ممکنه منابع و آمار بازیکن را تغییر بده.</p>
             </div>
             <div className="card">
               <strong>پیام بات یا رویداد؟</strong>
               <p>«پیام بات» فقط به چت تلگرام می‌ره؛ «رویداد همگانی» داخل صندوق کلاغ‌های بازی هم ثبت می‌شه.</p>
             </div>
             <div className="card">
-              <strong>قبل از تغییر بزرگ</strong>
-              <p>اسم بازیکن، قلعه و اثر عملیات رو دوباره بخون. انتقال قلعه و ری‌استارت می‌تونه بازگشت‌ناپذیر باشه.</p>
+              <strong>{isFull ? 'تغییرهای حساس' : 'اگر ابزار بیشتری لازم داری'}</strong>
+              <p>{isFull ? 'انتقال قلعه، ویرایش منابع، تعادل و پاک‌سازی روی کل بازی اثر می‌ذارن؛ توضیح هر فرم را قبل از ثبت بخون.' : 'تخصیص خاندان، منابع، نقشه و تنظیمات عمداً برای ادمین اجرایی نمایش داده نمی‌شن؛ از یک ادمین کامل کمک بگیر.'}</p>
             </div>
           </div>
         </>
@@ -3203,14 +3229,21 @@ export default function Admin() {
         <>
           <div className="sect up u2">مدیریت ادمین‌ها</div>
           <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>افزودن ادمین — فقط مالک اصلی بازی اجازه دارد</label>
+            <div className="admin-access-summary">
+              <div><b>ادمین اصلی</b><span>تمام دسترسی‌ها؛ می‌تواند ادمین اصلی دیگری تعریف کند و عملیات فصل انجام دهد.</span></div>
+              <div><b>ادمین کامل</b><span>همهٔ بخش‌های بازی را می‌بیند، ولی تب ادمین‌ها اصلاً برایش نمایش داده نمی‌شود.</span></div>
+              <div><b>ادمین اجرایی</b><span>فقط امور داوری و ارتباط: جنگ، رول، شورش، مدال، توییت، رویداد و پیام.</span></div>
+            </div>
+            <label className="f">افزودن ادمین یا تغییر سطح دسترسی</label>
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
             <label className="f">سطح دسترسی</label>
             <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}>
               <option value="limited">ادمین اجرایی — عملیات روزمره و دسترسی محدود</option>
               <option value="full">ادمین کامل — همهٔ بخش‌ها به‌جز مدیریت ادمین‌ها</option>
+              <option value="owner">ادمین اصلی — دقیقاً با تمام دسترسی‌های تو</option>
             </select>
-            <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>افزودن ادمین</button>
+            {newAdminRole === 'owner' && <div className="admin-access-warning">این سطح می‌تواند ادمین اضافه یا حذف کند، فصل را ریست کند و به تمام ابزارهای حساس دسترسی دارد.</div>}
+            <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>ثبت سطح دسترسی</button>
           </div>
           <div className="card up u2">
             {(!admins || admins.length === 0) && (
@@ -3220,7 +3253,7 @@ export default function Admin() {
               <div className="res" key={a.tg_id}>
                 <div className="ic"><Shield s={16} /></div>
                 <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
-                {a.source === 'db' && a.role !== 'owner' && (
+                {a.removable && (
                   <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => removeAdmin(a.tg_id)}>حذف</button>
                 )}
               </div>

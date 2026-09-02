@@ -45,7 +45,7 @@ class RegistrationCapacityBody(BaseModel):
 
 @router.get("/registration/settings")
 async def admin_registration_settings(user: dict = Depends(get_user)):
-    await get_admin(user)
+    await get_full_admin(user)
     return {"regions": list((await registration_state()).values())}
 
 @router.post("/registration/settings")
@@ -100,17 +100,25 @@ async def full_admin_user(user: dict = Depends(get_user)):
     return await get_full_admin(user)
 
 async def management_admin_user(user: dict = Depends(get_user)):
-    """فقط ادمین اصلی — برای دیدن و مدیریت فهرست ادمین‌ها."""
+    """هر ادمین اصلی — برای دیدن و مدیریت فهرست ادمین‌ها."""
     return await get_owner(user)
 
 async def owner_user(user: dict = Depends(get_user)):
-    """فقط صاحبِ بازی — برای ری‌استارت کامل"""
+    """فقط ادمین اصلی — برای مدیریت ادمین‌ها و عملیات فصل."""
     return await get_owner(user)
+
+def _admin_notification_scope(role: str) -> dict:
+    return {"$or": [
+        {"audience_roles": None},
+        {"audience_roles": {"$exists": False}},
+        {"audience_roles": role},
+    ]}
 
 @router.get("/notifications")
 async def list_admin_notifications(user: dict = Depends(admin_user)):
     out = []
-    async for row in admin_notifications.find({}).sort("created_at", -1).limit(100):
+    query = _admin_notification_scope(user["admin_role"])
+    async for row in admin_notifications.find(query).sort("created_at", -1).limit(100):
         out.append({
             "id": str(row["_id"]), "kind": row.get("kind", "general"),
             "title": row.get("title", "اعلان مدیریتی"), "detail": row.get("detail", ""),
@@ -127,7 +135,7 @@ async def list_admin_notifications(user: dict = Depends(admin_user)):
 @router.post("/notifications/read-all")
 async def read_all_admin_notifications(user: dict = Depends(admin_user)):
     await admin_notifications.update_many(
-        {"read_by": {"$ne": user["id"]}},
+        {"$and": [_admin_notification_scope(user["admin_role"]), {"read_by": {"$ne": user["id"]}}]},
         {"$addToSet": {"read_by": user["id"]}},
     )
     return {"ok": True}
@@ -139,7 +147,10 @@ async def read_admin_notification(notification_id: str, user: dict = Depends(adm
         oid = ObjectId(notification_id)
     except Exception:
         raise HTTPException(400, "شناسه اعلان نامعتبر است")
-    result = await admin_notifications.update_one({"_id": oid}, {"$addToSet": {"read_by": user["id"]}})
+    result = await admin_notifications.update_one(
+        {"$and": [{"_id": oid}, _admin_notification_scope(user["admin_role"])]},
+        {"$addToSet": {"read_by": user["id"]}},
+    )
     if not result.matched_count:
         raise HTTPException(404, "اعلان پیدا نشد")
     return {"ok": True}
@@ -1227,7 +1238,7 @@ async def _castle_region_map() -> dict:
     return out
 
 @router.get("/players/pending")
-async def list_pending_players(user: dict = Depends(admin_user)):
+async def list_pending_players(user: dict = Depends(full_admin_user)):
     """بازیکن‌هایی که فقط اسم‌نویسی کرده‌اند و هنوز خاندان (اقلیم) و قلعه‌شان تعیین نشده"""
     admin_ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
     if OWNER_ID is not None:
@@ -1253,7 +1264,7 @@ async def list_pending_players(user: dict = Depends(admin_user)):
     return out
 
 @router.get("/players/roster")
-async def list_roster(user: dict = Depends(admin_user)):
+async def list_roster(user: dict = Depends(full_admin_user)):
     """همهٔ بازیکن‌های خاندان‌دار — برای مرور، حذف از خاندان یا تخصیص دوباره"""
     out = []
     cur = players.find({"region": {"$ne": None}, "castle": {"$ne": None}}).sort("name", 1)
@@ -1269,7 +1280,7 @@ async def list_roster(user: dict = Depends(admin_user)):
     return out
 
 @router.post("/players/sync-telegram-usernames")
-async def sync_telegram_usernames(user: dict = Depends(admin_user)):
+async def sync_telegram_usernames(user: dict = Depends(full_admin_user)):
     """username حساب‌های قبلی را، تا جایی که بات به چت خصوصی‌شان دسترسی دارد،
     از Bot API بازیابی می‌کند. نبودن username یا بلاک‌بودن بات خطای پنل نیست."""
     rows = await players.find({}, {"tg_id": 1, "telegram_username": 1}).to_list(None)
@@ -1301,7 +1312,7 @@ class AssignHouseBody(BaseModel):
     castle: str
 
 @router.post("/players/{tg_id}/assign")
-async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Depends(admin_user)):
+async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Depends(full_admin_user)):
     """خاندان (اقلیم) و قلعهٔ یک بازیکن را دستی تعیین می‌کند — چه تازه‌ثبت‌نامی چه
     بازیکنی که می‌خواهی به خاندان/قلعهٔ دیگری منتقلش کنی"""
     target = await players.find_one({"tg_id": tg_id})
@@ -1344,7 +1355,7 @@ async def admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = Dep
     return {"ok": True}
 
 @router.post("/players/{tg_id}/unassign")
-async def admin_unassign_house(tg_id: int, user: dict = Depends(admin_user)):
+async def admin_unassign_house(tg_id: int, user: dict = Depends(full_admin_user)):
     """خاندان و قلعهٔ یک بازیکن را از او می‌گیرد — دوباره «در انتظار تخصیص» می‌شود
     و قلعه‌اش برای بازیکن دیگری آزاد می‌شود؛ منابع/ساختمان‌هایش دست‌نخورده می‌ماند"""
     target = await players.find_one({"tg_id": tg_id})
@@ -1366,7 +1377,7 @@ class AddCastleBody(BaseModel):
     castle: str
 
 @router.post("/players/{tg_id}/castles")
-async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends(admin_user)):
+async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends(full_admin_user)):
     """قلعهٔ اضافه (پایگاهِ دومِ کامل، با ساختمان‌های خودش) به این بازیکن می‌دهد —
     مثلاً وقتی توی جنگ قلعهٔ یک بازیکنِ دیگر را گرفته. اگر آن قلعه الان دستِ کسِ
     دیگری باشد (چه قلعهٔ اصلی‌اش چه یکی از قلعه‌های اضافه‌اش)، خودکار ازش گرفته
@@ -1428,7 +1439,7 @@ async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends
     return {"ok": True, "captured_from": previous_owner["name"] if previous_owner and previous_owner["tg_id"] != tg_id else None}
 
 @router.delete("/players/{tg_id}/castles/{castle}")
-async def admin_remove_castle(tg_id: int, castle: str, user: dict = Depends(admin_user)):
+async def admin_remove_castle(tg_id: int, castle: str, user: dict = Depends(full_admin_user)):
     """یکی از قلعه‌های اضافهٔ این بازیکن را ازش می‌گیرد (قلعه دوباره آزاد می‌شود) —
     برای گرفتنِ قلعهٔ اصلی از «حذف از خاندان» استفاده کن"""
     target = await players.find_one({"tg_id": tg_id})
@@ -1441,7 +1452,7 @@ async def admin_remove_castle(tg_id: int, castle: str, user: dict = Depends(admi
     return {"ok": True}
 
 @router.delete("/players/{tg_id}/pending")
-async def delete_pending_player(tg_id: int, user: dict = Depends(admin_user)):
+async def delete_pending_player(tg_id: int, user: dict = Depends(full_admin_user)):
     """درخواستِ ثبت‌نامِ یک بازیکنِ هنوز-تخصیص‌نیافته را کاملاً پاک می‌کند — برای
     ثبت‌نام‌های آزمایشی/اشتباهی که اصلاً نباید وارد صف تخصیص خاندان بمانند.
     فقط روی کسی کار می‌کند که هنوز خاندان/قلعه ندارد — برای بازیکنِ واقعاً
@@ -1457,7 +1468,7 @@ async def delete_pending_player(tg_id: int, user: dict = Depends(admin_user)):
 MAP_KINDS = {"castle", "city", "ruin", "port"}
 
 @router.get("/map/options")
-async def map_options(region: str, user: dict = Depends(admin_user)):
+async def map_options(region: str, user: dict = Depends(full_admin_user)):
     """اسم قلعه/بندرهای این اقلیم که هنوز روی نقشه مکان ندارند — برای پرکردن انتخابگر ادمین"""
     if region not in REGIONS:
         raise HTTPException(400, "اقلیم نامعتبر")
@@ -1477,7 +1488,7 @@ class MapCastleBody(BaseModel):
     terrain: str = "land"         # نوع دسترسی زمینی/دریایی: land | coastal | sea
 
 @router.post("/map/castles")
-async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
+async def add_map_castle(body: MapCastleBody, user: dict = Depends(full_admin_user)):
     if body.region not in REGIONS:
         raise HTTPException(400, "اقلیم نامعتبر")
     if not (0 <= body.x <= 100 and 0 <= body.y <= 100):
@@ -1514,7 +1525,7 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(admin_user)):
     return {"ok": True, "name": name}
 
 @router.delete("/map/castles/{name}")
-async def delete_map_castle(name: str, user: dict = Depends(admin_user)):
+async def delete_map_castle(name: str, user: dict = Depends(full_admin_user)):
     res = await map_castles.delete_one({"name": name})
     if res.deleted_count == 0:
         raise HTTPException(404, "این نشانه روی نقشه پیدا نشد")
@@ -1525,7 +1536,7 @@ class EditMapCastleBody(BaseModel):
     terrain: str = "land"     # نوع دسترسی زمینی/دریایی: land | coastal | sea
 
 @router.patch("/map/castles/{name}")
-async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depends(admin_user)):
+async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depends(full_admin_user)):
     """آیکن یا نوع زمینِ یک نشانهٔ ازقبل‌گذاشته‌شده را عوض می‌کند — بدون نیاز به حذف و
     دوباره‌گذاشتنش (مختصاتش دست‌نخورده می‌ماند)"""
     if body.kind not in MAP_KINDS:
@@ -1541,7 +1552,7 @@ async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depen
 
 @router.get("/admins")
 async def list_admins(user: dict = Depends(management_admin_user)):
-    """همهٔ ادمین‌ها؛ این فهرست فقط برای ادمین اصلی قابل مشاهده است."""
+    """همهٔ ادمین‌ها؛ این فهرست فقط برای ادمین‌های اصلی قابل مشاهده است."""
     db_admins = await admin_roles.find({}).to_list(None)
     tg_ids = set(ADMIN_IDS) | {a["tg_id"] for a in db_admins}
     if OWNER_ID is not None:
@@ -1563,6 +1574,8 @@ async def list_admins(user: dict = Depends(management_admin_user)):
         if a["tg_id"] not in seen:
             out.append({"tg_id": a["tg_id"], "role": a["role"], "source": "db", **names.get(a["tg_id"], {})})
             seen.add(a["tg_id"])
+    for row in out:
+        row["removable"] = row["source"] == "db" and row["tg_id"] != user["id"]
     return out
 
 class AddAdminBody(BaseModel):
@@ -1571,10 +1584,10 @@ class AddAdminBody(BaseModel):
 
 @router.post("/admins")
 async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
-    if body.role not in ("limited", "full"):
+    if body.role not in ("limited", "full", "owner"):
         raise HTTPException(400, "سطح دسترسی ادمین نامعتبر است")
     if body.tg_id in ADMIN_IDS or (OWNER_ID is not None and body.tg_id == OWNER_ID):
-        raise HTTPException(400, "این کاربر از قبل ادمین کامل است")
+        raise HTTPException(400, "این ادمین از تنظیمات سرور مدیریت می‌شود و سطحش از پنل قابل‌تغییر نیست")
     target = await players.find_one({"tg_id": body.tg_id})
     if not target:
         raise HTTPException(404, "این کاربر هنوز ثبت‌نام نکرده")
@@ -1593,8 +1606,10 @@ async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
 
 @router.delete("/admins/{tg_id}")
 async def remove_admin(tg_id: int, user: dict = Depends(owner_user)):
-    if tg_id in ADMIN_IDS:
-        raise HTTPException(400, "ادمین کامل از env مدیریت می‌شود، نه از اینجا")
+    if tg_id == user["id"]:
+        raise HTTPException(400, "نمی‌توانی دسترسی ادمین خودت را حذف کنی")
+    if tg_id in ADMIN_IDS or (OWNER_ID is not None and tg_id == OWNER_ID):
+        raise HTTPException(400, "این ادمین از تنظیمات سرور مدیریت می‌شود، نه از پنل")
     res = await admin_roles.delete_one({"tg_id": tg_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "ادمین قابل‌حذف پیدا نشد")
@@ -2049,7 +2064,7 @@ class WarWindowBody(BaseModel):
     open: bool
 
 @router.post("/war-window")
-async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(admin_user)):
+async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(full_admin_user)):
     """باز/بستن پنجرهٔ لشکرکشی برای همهٔ بازیکنان — مثلاً فقط چند ساعت در روز
     اجازهٔ فرمانِ گسیل بدهی؛ بستن، لشکرهای در حال حرکت را متوقف نمی‌کند، فقط
     فرمان تازه نمی‌گیرد. با هر تغییر همهٔ بازیکنان کلاغ می‌گیرند"""
@@ -2071,7 +2086,7 @@ async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(admin_u
     return {"ok": True, "open": body.open}
 
 @router.get("/alliances")
-async def admin_list_alliances(user: dict = Depends(admin_user)):
+async def admin_list_alliances(user: dict = Depends(full_admin_user)):
     """همهٔ پیمان‌ها — از جمله خصوصی و رد/در انتظار — برای مرور و در صورت نیاز انحلال"""
     out = []
     cur = alliances.find({}).sort("created_at", -1).limit(100)

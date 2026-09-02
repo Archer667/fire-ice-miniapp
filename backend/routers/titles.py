@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth import get_user, get_admin
+from auth import get_user, get_full_admin
 from db import players, hierarchy
 from game import now, add_resources
 from game_data import REGIONS, WARDEN_GROUPS, SMALL_COUNCIL_SEATS
@@ -56,7 +56,7 @@ async def get_titles(user: dict = Depends(get_user)):
     }
 
 async def admin_user(user: dict = Depends(get_user)):
-    return await get_admin(user)
+    return await get_full_admin(user)
 
 class OverlordBody(BaseModel):
     region: str
