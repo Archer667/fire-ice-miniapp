@@ -4,7 +4,7 @@ import re
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from config import ADMIN_IDS, CORS_ORIGINS, CORS_ORIGIN_REGEX
+from config import ADMIN_IDS, OWNER_ID, CORS_ORIGINS, CORS_ORIGIN_REGEX
 from game import now
 import game_data
 from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WARDEN_GROUPS, ALLIANCE_TYPES
@@ -223,6 +223,8 @@ async def _load_gameplay_balance():
 async def _detach_admin_players():
     """ادمین‌ها داور بازی‌اند و نباید مالک قلعه یا حاضر در جدول بازی باشند."""
     ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
+    if OWNER_ID is not None:
+        ids.add(OWNER_ID)
     if ids:
         await players_col.update_many({"tg_id": {"$in": list(ids)}}, {"$set": {
             "region": None, "castle": None, "is_port": False, "house": None,

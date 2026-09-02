@@ -17,7 +17,7 @@ import telegram_bot
 from game import now, add_resources, building_levels_for, effective_caps, resolve_building_upgrades, owned_castles, castle_building_state, normalize_building_state
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows, normalize_stats
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, building_max_level, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power, SIEGE_EQUIPMENT
-from config import ADMIN_IDS, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
+from config import ADMIN_IDS, OWNER_ID, STARTING_RESOURCES, POPULARITY_START, TAX_RATE_DEFAULT, DEFAULT_TITLE
 from routers.war import OP_TYPES, DEFENSE_OP_TYPES, get_war_window, WAR_WINDOW_ID, all_castle_terrain, owner_of_castle, battle_army_snapshot
 from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
@@ -50,7 +50,7 @@ async def admin_registration_settings(user: dict = Depends(get_user)):
 
 @router.post("/registration/settings")
 async def save_admin_registration_settings(body: RegistrationCapacityBody, user: dict = Depends(get_user)):
-    user = await get_admin(user)
+    user = await get_full_admin(user)
     allowed = set(REGIONS)
     capacities = {key: max(0, min(250, int(value))) for key, value in body.capacities.items() if key in allowed}
     if set(capacities) != allowed:
@@ -64,7 +64,7 @@ async def save_admin_registration_settings(body: RegistrationCapacityBody, user:
 
 @router.get("/music")
 async def admin_music_settings(user: dict = Depends(get_user)):
-    user = await get_admin(user)
+    user = await get_full_admin(user)
     doc = await game_settings.find_one({"_id": MUSIC_SETTINGS_ID}) or {}
     return {
         "enabled": bool(doc.get("enabled", False)), "title": doc.get("title", "موسیقی والریا"),
@@ -74,7 +74,7 @@ async def admin_music_settings(user: dict = Depends(get_user)):
 
 @router.post("/music")
 async def save_admin_music_settings(body: MusicSettingsBody, user: dict = Depends(get_user)):
-    user = await get_admin(user)
+    user = await get_full_admin(user)
     source = body.audio_url.strip()
     if source and not (source.startswith("data:audio/") or source.startswith("https://")):
         raise HTTPException(400, "فایل صوتی یا لینک امن https وارد کن")
@@ -96,12 +96,12 @@ async def admin_user(user: dict = Depends(get_user)):
     return await get_admin(user)
 
 async def full_admin_user(user: dict = Depends(get_user)):
-    """همهٔ ادمین‌های اجرایی — برای ابزارهای عملیاتی پنل"""
-    return await get_admin(user)
+    """ادمین اصلی یا کامل — برای ابزارهای حساس پنل."""
+    return await get_full_admin(user)
 
 async def management_admin_user(user: dict = Depends(get_user)):
-    """فقط ادمین کامل — برای دیدن و مدیریت فهرست ادمین‌ها"""
-    return await get_full_admin(user)
+    """فقط ادمین اصلی — برای دیدن و مدیریت فهرست ادمین‌ها."""
+    return await get_owner(user)
 
 async def owner_user(user: dict = Depends(get_user)):
     """فقط صاحبِ بازی — برای ری‌استارت کامل"""
@@ -177,7 +177,7 @@ async def admin_delete_rumor(rumor_id: str, user: dict = Depends(admin_user)):
 
 
 @router.get("/cleanup/preview")
-async def cleanup_preview(user: dict = Depends(full_admin_user)):
+async def cleanup_preview(user: dict = Depends(owner_user)):
     return {
         "messages": await messages.count_documents({}),
         "rumors": await rumors.count_documents({}),
@@ -200,7 +200,7 @@ class CleanupBody(BaseModel):
 
 
 @router.post("/cleanup")
-async def cleanup_data(body: CleanupBody, user: dict = Depends(full_admin_user)):
+async def cleanup_data(body: CleanupBody, user: dict = Depends(owner_user)):
     labels = {
         "messages": ("MESSAGES", "پیام"),
         "rumors": ("RUMORS", "توییت"),
@@ -1230,6 +1230,8 @@ async def _castle_region_map() -> dict:
 async def list_pending_players(user: dict = Depends(admin_user)):
     """بازیکن‌هایی که فقط اسم‌نویسی کرده‌اند و هنوز خاندان (اقلیم) و قلعه‌شان تعیین نشده"""
     admin_ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
+    if OWNER_ID is not None:
+        admin_ids.add(OWNER_ID)
     castle_region = await _castle_region_map()
     occupied = {p["castle"] async for p in players.find({"castle": {"$ne": None}}, {"castle": 1})}
     out = []
@@ -1539,15 +1541,28 @@ async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depen
 
 @router.get("/admins")
 async def list_admins(user: dict = Depends(management_admin_user)):
-    """همهٔ ادمین‌ها — کامل (از env) و محدود (از دیتابیس)"""
-    tg_ids = list(ADMIN_IDS) + [a["tg_id"] async for a in admin_roles.find({})]
+    """همهٔ ادمین‌ها؛ این فهرست فقط برای ادمین اصلی قابل مشاهده است."""
+    db_admins = await admin_roles.find({}).to_list(None)
+    tg_ids = set(ADMIN_IDS) | {a["tg_id"] for a in db_admins}
+    if OWNER_ID is not None:
+        tg_ids.add(OWNER_ID)
     names = {}
-    async for p in players.find({"tg_id": {"$in": tg_ids}}, {"tg_id": 1, "name": 1, "castle": 1}):
+    async for p in players.find({"tg_id": {"$in": list(tg_ids)}}, {"tg_id": 1, "name": 1, "castle": 1}):
         names[p["tg_id"]] = {"name": p["name"], "castle": p["castle"]}
 
-    out = [{"tg_id": tid, "role": "full", "source": "env", **names.get(tid, {})} for tid in ADMIN_IDS]
-    async for a in admin_roles.find({}):
-        out.append({"tg_id": a["tg_id"], "role": a["role"], "source": "db", **names.get(a["tg_id"], {})})
+    out = []
+    seen = set()
+    if OWNER_ID is not None:
+        out.append({"tg_id": OWNER_ID, "role": "owner", "source": "env", **names.get(OWNER_ID, {})})
+        seen.add(OWNER_ID)
+    for tid in ADMIN_IDS:
+        if tid not in seen:
+            out.append({"tg_id": tid, "role": "full", "source": "env", **names.get(tid, {})})
+            seen.add(tid)
+    for a in db_admins:
+        if a["tg_id"] not in seen:
+            out.append({"tg_id": a["tg_id"], "role": a["role"], "source": "db", **names.get(a["tg_id"], {})})
+            seen.add(a["tg_id"])
     return out
 
 class AddAdminBody(BaseModel):
@@ -1558,7 +1573,7 @@ class AddAdminBody(BaseModel):
 async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
     if body.role not in ("limited", "full"):
         raise HTTPException(400, "سطح دسترسی ادمین نامعتبر است")
-    if body.tg_id in ADMIN_IDS:
+    if body.tg_id in ADMIN_IDS or (OWNER_ID is not None and body.tg_id == OWNER_ID):
         raise HTTPException(400, "این کاربر از قبل ادمین کامل است")
     target = await players.find_one({"tg_id": body.tg_id})
     if not target:
@@ -1582,7 +1597,7 @@ async def remove_admin(tg_id: int, user: dict = Depends(owner_user)):
         raise HTTPException(400, "ادمین کامل از env مدیریت می‌شود، نه از اینجا")
     res = await admin_roles.delete_one({"tg_id": tg_id})
     if res.deleted_count == 0:
-        raise HTTPException(404, "ادمین محدود پیدا نشد")
+        raise HTTPException(404, "ادمین قابل‌حذف پیدا نشد")
     return {"ok": True}
 
 @router.get("/market")
@@ -2091,6 +2106,8 @@ async def admin_dissolve_alliance(alliance_id: str, user: dict = Depends(full_ad
 
 async def _current_admin_ids() -> set:
     admin_ids = set(ADMIN_IDS)
+    if OWNER_ID is not None:
+        admin_ids.add(OWNER_ID)
     async for a in admin_roles.find({}, {"tg_id": 1}):
         admin_ids.add(a["tg_id"])
     return admin_ids

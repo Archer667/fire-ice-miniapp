@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from config import ADMIN_IDS
+from config import ADMIN_IDS, OWNER_ID
 from db import admin_roles, admin_notifications, campaigns, roleplays, rebellions
 from game import now
 import telegram_bot
@@ -8,6 +8,8 @@ import telegram_bot
 
 async def _admin_ids() -> set[int]:
     ids = set(ADMIN_IDS)
+    if OWNER_ID is not None:
+        ids.add(OWNER_ID)
     async for row in admin_roles.find({}, {"tg_id": 1}):
         ids.add(row["tg_id"])
     return ids

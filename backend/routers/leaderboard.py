@@ -3,7 +3,7 @@ from auth import get_user
 from db import admin_roles
 from medals import medal_rows, normalize_stats
 from game_data import REGIONS
-from config import ADMIN_IDS
+from config import ADMIN_IDS, OWNER_ID
 from ranks import scored_players, weekly_scored_players
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
@@ -13,6 +13,8 @@ RANK_LABEL_FA = {"overlord": "بالادستی", "warden": "والی", "king": "
 async def _without_admins(rows: list) -> list:
     """ادمین‌ها (چه از env، چه نقش‌داده‌شده در admin_roles) در لیدربرد نمی‌آیند"""
     admin_ids = set(ADMIN_IDS) | {a["tg_id"] async for a in admin_roles.find({}, {"tg_id": 1})}
+    if OWNER_ID is not None:
+        admin_ids.add(OWNER_ID)
     return [row for row in rows if row["player"]["tg_id"] not in admin_ids]
 
 @router.get("")

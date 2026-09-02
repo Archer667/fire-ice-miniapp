@@ -36,15 +36,16 @@ async def get_user(
     return _validate_init_data(authorization[4:])
 
 async def get_admin_role(user: dict) -> str | None:
-    """"full" = ادمین کامل (از ADMIN_IDS)، "limited" = ادمین محدودی که یک ادمین کامل
-    تعیین کرده (فقط سناریوها و مقام‌ها)، None = ادمین نیست"""
+    """owner = ادمین اصلی، full = ادمین کامل، limited = ادمین اجرایی."""
+    if OWNER_ID is not None and user["id"] == OWNER_ID:
+        return "owner"
     if user["id"] in ADMIN_IDS:
         return "full"
     doc = await admin_roles.find_one({"tg_id": user["id"]})
     return doc["role"] if doc else None
 
 async def get_admin(user: dict) -> dict:
-    """ادمین کامل یا محدود — برای اکشن‌های مشترک (سناریوها، مقام‌ها)"""
+    """هر سه سطح ادمین — برای کارهای اجرایی مشترک."""
     role = await get_admin_role(user)
     if not role:
         raise HTTPException(403, "دسترسی ادمین نداری")
@@ -52,10 +53,10 @@ async def get_admin(user: dict) -> dict:
     return user
 
 async def get_full_admin(user: dict) -> dict:
-    """فقط ادمین کامل — برای مدیریت ادمین‌ها و رای‌گیری"""
+    """ادمین اصلی یا کامل — برای تنظیمات و ابزارهای حساس بازی."""
     role = await get_admin_role(user)
-    if role != "full":
-        raise HTTPException(403, "این بخش فقط برای ادمین کامل است")
+    if role not in ("owner", "full"):
+        raise HTTPException(403, "این بخش فقط برای ادمین اصلی یا کامل است")
     user["admin_role"] = role
     return user
 
@@ -64,5 +65,5 @@ async def get_owner(user: dict) -> dict:
     بازگشت‌ناپذیر مثل ری‌استارت کل بازی؛ حتی ادمین‌های کامل دیگر هم نمی‌توانند"""
     if OWNER_ID is None or user["id"] != OWNER_ID:
         raise HTTPException(403, "این بخش فقط برای صاحب بازی است")
-    user["admin_role"] = "full"
+    user["admin_role"] = "owner"
     return user

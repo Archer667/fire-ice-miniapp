@@ -72,7 +72,7 @@ const TAB_GROUPS = [
       { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
       { key: 'onboarding', label: 'خاندان‌ها', description: 'مدیریت بازیکن‌های پذیرفته‌شده و قلعه‌ها' },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'ویرایش منابع و توقف لشکر', fullOnly: true },
-      { key: 'admins',     label: 'ادمین‌ها', description: 'افزودن یا حذف ادمین محدود', fullOnly: true },
+      { key: 'admins',     label: 'ادمین‌ها', description: 'افزودن، حذف و تعیین سطح ادمین‌ها', ownerOnly: true },
     ],
   },
   {
@@ -128,7 +128,8 @@ const RES_LABEL = Object.fromEntries(PLAYER_RES.map(r => [r.key, r.label]));
 
 export default function Admin() {
   const { me, toast } = useGame();
-  const isFull = me.admin_role === 'full';
+  const isOwner = me.is_owner || me.admin_role === 'owner';
+  const isFull = isOwner || me.admin_role === 'full';
   const availGroups = TAB_GROUPS;
   const [tab, setTab] = useState('overview');
 
@@ -417,6 +418,7 @@ export default function Admin() {
   const loadCleanupPreview = () => api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message));
   const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
   const loadRebellionSettings = () => {
+    if (!isFull) return;
     api.adminRebellionSettings().then(setRebellionSettings).catch(e => toast(e.message));
   };
   const setRebellionNumber = (key, value) => setRebellionSettings(prev => ({ ...prev, [key]: Number(value) }));
@@ -452,7 +454,6 @@ export default function Admin() {
   useEffect(() => {
     loadAdminNotifications();
     loadAdminRumors();
-    loadCleanupPreview();
     loadPendingPlayers();
     loadRegistrationSettings();
     loadRoster();
@@ -466,12 +467,17 @@ export default function Admin() {
     loadBattles();
     loadAlliances();
     loadRebellions();
-    loadRebellionSettings();
     loadMapData();
-    loadPolls(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance();
-    api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
-    if (isFull) loadAdmins();
-    if (me.is_owner) loadResetPreview();
+    if (isFull) {
+      loadRebellionSettings();
+      loadPolls(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance();
+      api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
+    }
+    if (isOwner) {
+      loadAdmins();
+      loadCleanupPreview();
+      loadResetPreview();
+    }
   }, []);
 
   useEffect(() => {
@@ -1012,7 +1018,7 @@ export default function Admin() {
     try {
       await api.adminAddAdmin(newAdminTarget[0].tg_id, newAdminRole);
       haptic('medium');
-      toast(newAdminRole === 'full' ? 'ادمین کامل اضافه شد' : 'ادمین محدود اضافه شد');
+      toast(newAdminRole === 'full' ? 'ادمین کامل اضافه شد' : 'ادمین اجرایی اضافه شد');
       setNewAdminTarget([]);
       loadAdmins();
     } catch (e) { toast(e.message); }
@@ -1299,8 +1305,12 @@ export default function Admin() {
 
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
-    if (key === 'admins' && !isFull) {
+    if (target?.ownerOnly && !isOwner) {
       toast('مدیریت ادمین‌ها فقط برای ادمین اصلی باز است');
+      return;
+    }
+    if (target?.fullOnly && !isFull) {
+      toast('این بخش فقط برای ادمین اصلی یا ادمین کامل باز است');
       return;
     }
     haptic();
@@ -1331,12 +1341,14 @@ export default function Admin() {
       <div className="page-title up">پنل ادمین</div>
       <div className="admin-role-card up">
         <div>
-          <strong>{isFull ? 'ادمین کامل' : 'ادمین محدود'}</strong>
-          <small>{isFull
-            ? 'به تنظیمات سراسری و ابزارهای حساس دسترسی داری.'
-            : 'به تمام ابزارهای اجرایی پنل دسترسی داری؛ فقط مدیریت ادمین‌ها برای ادمین اصلی است.'}</small>
+          <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : 'ادمین اجرایی'}</strong>
+          <small>{isOwner
+            ? 'به تمام بخش‌ها، از جمله مدیریت ادمین‌ها و ابزارهای مالک، دسترسی داری.'
+            : isFull
+              ? 'به همهٔ بخش‌های بازی دسترسی داری؛ تب مدیریت ادمین‌ها فقط برای ادمین اصلی است.'
+              : 'به ابزارهای اجرایی روزمره دسترسی داری و بخش‌های حساس برایت قفل‌اند.'}</small>
         </div>
-        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
+        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
       </div>
 
       <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
@@ -1347,8 +1359,8 @@ export default function Admin() {
               <div className="tabs-group-description">{g.description}</div>
             </div>
             <div className="tabs admin-tabs up u1" role="tablist" aria-label={g.label}>
-              {g.tabs.filter(t => isFull || t.key !== 'admins').map(t => {
-                const locked = t.key === 'admins' && !isFull;
+              {g.tabs.filter(t => isOwner || !t.ownerOnly).map(t => {
+                const locked = Boolean(t.fullOnly && !isFull);
                 const count = tabBadge(t.key);
                 return (
                   <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
@@ -1356,7 +1368,7 @@ export default function Admin() {
                        className={`rbtn tab admin-tab ${tab === t.key ? 'on' : ''} ${locked ? 'locked' : ''}`}
                        onClick={() => openTab(t.key)}>
                     <span>{t.label}{locked ? ' 🔒' : ''}</span>
-                    <small>{locked ? 'فقط ادمین اصلی' : t.description}</small>
+                    <small>{locked ? 'فقط ادمین اصلی یا کامل' : t.description}</small>
                     {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
                   </button>
                 );
@@ -1513,13 +1525,15 @@ export default function Admin() {
                 <label key={region.id} className={`registration-capacity ${region.full ? 'full' : ''}`}>
                   <span><strong>{region.name}</strong><small>{region.assigned.toLocaleString('fa-IR')} بازیکن تخصیص داده شده</small></span>
                   <input type="number" min="0" max="250" value={region.capacity}
+                         disabled={!isFull}
                          onChange={e => setRegistrationSettings(prev => ({ ...prev, regions: prev.regions.map(r => r.id === region.id ? { ...r, capacity: e.target.value } : r) }))} />
                 </label>
               ))}
             </div>
-            <button className="btn" style={{ marginTop: 12 }} disabled={!registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
+            <button className="btn" style={{ marginTop: 12 }} disabled={!isFull || !registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
               {registrationSettingsBusy ? 'در حال ذخیره...' : 'ذخیره ظرفیت اقلیم‌ها'}
             </button>
+            {!isFull && <div className="page-sub" style={{ marginTop: 10 }}>تغییر ظرفیت فقط برای ادمین اصلی یا کامل باز است.</div>}
           </div>
 
           <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
@@ -1721,10 +1735,10 @@ export default function Admin() {
                   وقتی بسته باشد هیچ بازیکنی نمی‌تواند فرمان گسیل تازه بدهد؛ لشکرهای در راه دست‌نخورده می‌مانند
                 </div>
               </div>
-              <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
+              {isFull && <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
                       disabled={!warWindow || warWindowBusy} onClick={toggleWarWindow}>
                 {warWindowBusy ? '...' : warWindow?.open ? 'بستن' : 'باز کردن'}
-              </button>
+              </button>}
             </div>
             {(!campaignsInfo || campaignsInfo.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
@@ -1750,7 +1764,7 @@ export default function Admin() {
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
                   </div>
-                  {s.active && (
+                  {s.active && isFull && (
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
                             disabled={disbandBusyId === s.id} onClick={() => disbandCampaign(s.id)}>
                       {disbandBusyId === s.id ? 'در حال انحلال...' : 'منحل کن'}
@@ -2103,7 +2117,7 @@ export default function Admin() {
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {{ pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده' }[a.status] || a.status}
                   </div>
-                  {a.status === 'accepted' && (
+                  {a.status === 'accepted' && isFull && (
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
                             disabled={dissolveBusyId === a.id} onClick={() => dissolveAlliance(a.id)}>
                       {dissolveBusyId === a.id ? 'در حال انحلال...' : 'منحل کن'}
@@ -2315,7 +2329,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'items' && (
+      {tab === 'items' && isFull && (
         <>
           <div className="sect up u2">ساخت آیتم تازه</div>
           <div className="card up u2">
@@ -2393,7 +2407,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'balance' && (
+      {tab === 'balance' && isFull && (
         <>
           <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
             <button type="button" role="tab" aria-selected={buildingAdminMode === 'global'}
@@ -2647,7 +2661,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'market' && (
+      {tab === 'market' && isFull && (
         <>
           <div className="sect up u2">بازار وستروس</div>
           <div className="card up u2">
@@ -2707,7 +2721,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'resources' && (
+      {tab === 'resources' && isFull && (
         <>
           <div className="sect up u2">ویرایش منابع بازیکن</div>
           <div className="card up u2">
@@ -2827,7 +2841,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'polls' && (
+      {tab === 'polls' && isFull && (
         <>
           <div className="sect up u2">رای‌گیری تازه</div>
           <div className="card up u2">
@@ -2927,7 +2941,7 @@ export default function Admin() {
             );
           })}
 
-          {rebellionSettings && (
+          {isFull && rebellionSettings && (
             <>
               <div className="sect up u2">تنظیمات سراسری شورش</div>
               <div className="card up u2">
@@ -3024,7 +3038,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'music' && (
+      {tab === 'music' && isFull && (
         <>
           <div className="sect up u2">موسیقی پس‌زمینهٔ بازی</div>
           <div className="page-sub up u2" style={{ marginTop: -10, lineHeight: 1.9 }}>
@@ -3177,7 +3191,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'admins' && isFull && (
+      {tab === 'admins' && isOwner && (
         <>
           <div className="sect up u2">مدیریت ادمین‌ها</div>
           <div className="card up u2">
@@ -3185,8 +3199,8 @@ export default function Admin() {
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
             <label className="f">سطح دسترسی</label>
             <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}>
-              <option value="limited">محدود — داوری و عملیات روزمره</option>
-              <option value="full">کامل — تنظیمات و مدیریت کامل بازی</option>
+              <option value="limited">ادمین اجرایی — عملیات روزمره و دسترسی محدود</option>
+              <option value="full">ادمین کامل — همهٔ بخش‌ها به‌جز مدیریت ادمین‌ها</option>
             </select>
             <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>افزودن ادمین</button>
           </div>
@@ -3197,8 +3211,8 @@ export default function Admin() {
             {admins && admins.map(a => (
               <div className="res" key={a.tg_id}>
                 <div className="ic"><Shield s={16} /></div>
-                <div className="n">{a.name || a.tg_id}<small>{a.role === 'full' ? 'ادمین کامل' : 'ادمین محدود'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
-                {a.role === 'limited' && (
+                <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
+                {a.source === 'db' && a.role !== 'owner' && (
                   <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => removeAdmin(a.tg_id)}>حذف</button>
                 )}
               </div>
@@ -3235,7 +3249,7 @@ export default function Admin() {
             </div>
           )}
 
-          {me.is_owner && (
+          {isOwner && (
             <>
               <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
               <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
