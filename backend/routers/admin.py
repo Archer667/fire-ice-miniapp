@@ -14,6 +14,7 @@ from db import (
 )
 import game_data
 import telegram_bot
+import control_settings
 from game import now, add_resources, apply_production, production_fields, building_levels_for, effective_caps, owned_castles, castle_building_state, normalize_building_state
 from medals import MEDALS, TIER_ORDER, bump_player_stat, medal_rows, normalize_stats
 from game_data import REGIONS, COMMON_TROOPS, TRADE_GOODS, BUILDINGS, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ALLIANCE_TYPES, CASTLE_HOUSES, MAP_TERRAINS, building_produces, building_cap_bonus, building_base_cost, building_cost_step, building_cost, building_max_level, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, campaign_power, SIEGE_EQUIPMENT
@@ -43,6 +44,77 @@ class MusicSettingsBody(BaseModel):
 
 class RegistrationCapacityBody(BaseModel):
     capacities: dict[str, int]
+
+class ControlSettingsBody(BaseModel):
+    settings: dict
+
+ROLEPLAY_SCORE_SETTINGS_ID = "roleplay_score_settings"
+
+class RoleplayScoreSettingsBody(BaseModel):
+    max_score: int
+
+class RoleplayScoreBody(BaseModel):
+    score: int
+
+@router.get("/roleplay-score/settings")
+async def get_roleplay_score_settings(user: dict = Depends(get_user)):
+    await get_admin(user)
+    doc = await game_settings.find_one({"_id": ROLEPLAY_SCORE_SETTINGS_ID}) or {}
+    return {"max_score": max(1, min(100000, int(doc.get("max_score", 100))))}
+
+@router.post("/roleplay-score/settings")
+async def save_roleplay_score_settings(body: RoleplayScoreSettingsBody, user: dict = Depends(get_user)):
+    user = await get_admin(user)
+    maximum = max(1, min(100000, int(body.max_score)))
+    await game_settings.update_one({"_id": ROLEPLAY_SCORE_SETTINGS_ID}, {"$set": {
+        "max_score": maximum, "updated_at": now(), "updated_by": user["id"],
+    }}, upsert=True)
+    return {"max_score": maximum}
+
+@router.post("/roleplay/{roleplay_id}/score")
+async def score_roleplay(roleplay_id: str, body: RoleplayScoreBody, user: dict = Depends(get_user)):
+    user = await get_admin(user)
+    try:
+        oid = ObjectId(roleplay_id)
+    except Exception:
+        raise HTTPException(400, "شناسه رول نامعتبر است")
+    row = await roleplays.find_one({"_id": oid})
+    if not row:
+        raise HTTPException(404, "رول پیدا نشد")
+    limits = await get_roleplay_score_settings(user)
+    score = int(body.score)
+    if score < 0 or score > limits["max_score"]:
+        raise HTTPException(400, f"امتیاز رول باید بین صفر تا {limits['max_score']} باشد")
+    old_score = int(row.get("admin_score", 0) or 0)
+    delta = score - old_score
+    await roleplays.update_one({"_id": oid}, {"$set": {
+        "admin_score": score, "scored_at": now(), "scored_by": user["id"],
+    }})
+    if delta:
+        player = await players.find_one({"tg_id": row["tg_id"]}, {"points": 1})
+        if player:
+            await players.update_one({"tg_id": row["tg_id"]}, {"$set": {"points": max(0, int(player.get("points", 0)) + delta)}})
+    return {"ok": True, "score": score, "max_score": limits["max_score"], "applied_delta": delta}
+
+@router.get("/control-settings")
+async def admin_control_settings(user: dict = Depends(get_user)):
+    await get_owner(user)
+    return {"settings": control_settings.snapshot()}
+
+@router.post("/control-settings")
+async def save_admin_control_settings(body: ControlSettingsBody, user: dict = Depends(get_user)):
+    user = await get_owner(user)
+    try:
+        saved = await control_settings.save(body.settings, user_id=user["id"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"settings": saved}
+
+@router.post("/control-settings/reset")
+async def reset_admin_control_settings(user: dict = Depends(get_user)):
+    user = await get_owner(user)
+    saved = await control_settings.reset(user_id=user["id"])
+    return {"settings": saved}
 
 @router.get("/registration/settings")
 async def admin_registration_settings(user: dict = Depends(get_user)):
@@ -109,11 +181,9 @@ async def owner_user(user: dict = Depends(get_user)):
     return await get_owner(user)
 
 def _admin_notification_scope(role: str) -> dict:
-    return {"$or": [
-        {"audience_roles": None},
-        {"audience_roles": {"$exists": False}},
-        {"audience_roles": role},
-    ]}
+    return {"$and": [{"hidden_from_panel": {"$ne": True}}, {"$or": [
+        {"audience_roles": None}, {"audience_roles": {"$exists": False}}, {"audience_roles": role},
+    ]}]}
 
 @router.get("/notifications")
 async def list_admin_notifications(user: dict = Depends(admin_user)):
@@ -357,16 +427,19 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
             await send_system_message(
                 spy_player["tg_id"], spy_player["name"],
                 f"جاسوس‌های تو با موفقیت به {m['target_castle']} نفوذ کردند و گزارش کاملی به دست آوردند — نتیجه در بخش جاسوسی منتظر توست.",
+                kind="espionage",
             )
         else:
             await send_system_message(
                 spy_player["tg_id"], spy_player["name"],
                 f"جاسوسی تو در {m['target_castle']} شناسایی و دستگیر شد — نفرات اعزامی برنگشتند.",
+                kind="espionage",
             )
     if not success and target:
         await send_system_message(
             target["tg_id"], target["name"],
             f"جاسوسی از سوی {m['player_name']} در تلاش برای نفوذ به {m['target_castle']} شناسایی و دستگیر شد.",
+            kind="espionage",
         )
 
     return {"ok": True, "success": success}
@@ -396,6 +469,7 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
             "actor_state": player_state(actor) if r["category"] in ("economy", "sabotage") else None,
             "target_state": player_state(target) if r["category"] == "sabotage" else None,
             "target_tg_id": r.get("target_tg_id"), "target_player_name": r.get("target_player_name"),
+            "admin_score": r.get("admin_score"),
         }
         if r["category"] == "war" and r.get("campaign_id"):
             sib = await roleplays.find_one({"category": "war", "campaign_id": r["campaign_id"], "tg_id": {"$ne": r["tg_id"]}})
@@ -503,6 +577,7 @@ async def search_security_roleplays(q: str = "", tg_id: int | None = None, user:
             "id": str(row["_id"]), "tg_id": row["tg_id"],
             "player": row.get("player_name", "نامشخص"), "castle": row.get("castle"),
             "text": row.get("text", ""), "created_at": row["created_at"].isoformat(),
+            "admin_score": row.get("admin_score"),
         })
     return out
 
@@ -958,6 +1033,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         raise HTTPException(404, "این رول پیدا نشد")
     if r.get("resolved"):
         raise HTTPException(400, "این رول قبلاً پاسخ داده شده")
+    if not r.get("admin_generated") and r.get("admin_score") is None:
+        raise HTTPException(400, "قبل از ثبت نتیجه، امتیاز این رول را ثبت کن")
 
     ids_to_resolve = [r["_id"]]
     recipient_tg_ids = {r["tg_id"]}
@@ -984,6 +1061,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             "tg_id": {"$ne": r["tg_id"]}, "resolved": False,
         }).to_list(None)
         for sibling in siblings:
+            if not sibling.get("admin_generated") and sibling.get("admin_score") is None:
+                raise HTTPException(400, f"اول امتیاز رول {sibling.get('player_name', 'طرف مقابل')} را ثبت کن")
             ids_to_resolve.append(sibling["_id"])
             recipient_tg_ids.add(sibling["tg_id"])
         campaign = await _battle_root(r["campaign_id"])
@@ -1123,7 +1202,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 lord = await players.find_one({"tg_id": tg_id})
                 if lord:
                     new_pop = max(0, min(100, int(lord.get("popularity", 50)) + winner_delta))
-                    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}})
+                    win_points = int(control_settings.get("scoring.victory" if combat_outcome == "attacker" else "scoring.defense", 10))
+                    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}, "$inc": {"points": win_points}})
             for tg_id in loser_tg_ids:
                 lord = await players.find_one({"tg_id": tg_id})
                 if lord:
@@ -1237,7 +1317,11 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                     bot_text=battle_report_bot, bot_parse_mode="HTML", image_url=_validated_message_image(body.image_url),
                 )
             else:
-                await send_system_message(player["tg_id"], player["name"], f"{prefix}: {result}{parties_line}{adjustment_line}", image_url=_validated_message_image(body.image_url))
+                await send_system_message(
+                    player["tg_id"], player["name"],
+                    f"{prefix}: {result}{parties_line}{adjustment_line}", kind="roleplay",
+                    image_url=_validated_message_image(body.image_url),
+                )
 
     return {"ok": True, "sent_to": len(recipient_tg_ids)}
 
@@ -1448,6 +1532,7 @@ async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends
     await players.update_one({"tg_id": tg_id}, {"$set": {f"castle_buildings.{body.castle}": captured_buildings}})
     if previous_owner and previous_owner["tg_id"] != tg_id:
         await bump_player_stat(tg_id, "castles_captured")
+        await players.update_one({"tg_id": tg_id}, {"$inc": {"points": int(control_settings.get("scoring.castle_capture", 15))}})
     spoils_note = " (به‌همراهِ ساختمان‌هایی که رویش ساخته بودند — غنیمتِ جنگ)" if captured_buildings else ""
     await send_system_message(tg_id, target["name"], f"قلعهٔ «{body.castle}»{spoils_note} به قلمروِ تو اضافه شد.")
     return {"ok": True, "captured_from": previous_owner["name"] if previous_owner and previous_owner["tg_id"] != tg_id else None}
@@ -1827,7 +1912,7 @@ class AdjustPlayerPopularityBody(BaseModel):
     delta: int
 
 @router.post("/players/{tg_id}/points")
-async def admin_adjust_player_points(tg_id: int, body: AdjustPlayerPointsBody, user: dict = Depends(full_admin_user)):
+async def admin_adjust_player_points(tg_id: int, body: AdjustPlayerPointsBody, user: dict = Depends(owner_user)):
     """امتیاز بازیکن را به مقدار مثبت/منفی تغییر می‌دهد؛ امتیاز هیچ‌وقت زیر صفر نمی‌رود."""
     if body.delta == 0:
         raise HTTPException(400, "مقدار تغییر امتیاز نباید صفر باشد")
@@ -1840,6 +1925,37 @@ async def admin_adjust_player_points(tg_id: int, body: AdjustPlayerPointsBody, u
     new_points = max(0, old_points + int(body.delta))
     await players.update_one({"tg_id": tg_id}, {"$set": {"points": new_points}})
     return {"ok": True, "old_points": old_points, "points": new_points, "applied_delta": new_points - old_points}
+
+class EditPlayerProfileBody(BaseModel):
+    name: str
+    backstory: str
+    profile_image: str | None = None
+
+@router.get("/players/{tg_id}/profile")
+async def admin_get_player_profile(tg_id: int, user: dict = Depends(admin_user)):
+    player = await players.find_one({"tg_id": tg_id}, {"name": 1, "backstory": 1, "profile_image": 1})
+    if not player:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    return {"name": player.get("name", ""), "backstory": player.get("backstory", ""), "profile_image": player.get("profile_image")}
+
+@router.post("/players/{tg_id}/profile")
+async def admin_edit_player_profile(tg_id: int, body: EditPlayerProfileBody, user: dict = Depends(admin_user)):
+    name = body.name.strip()
+    backstory = body.backstory.strip()
+    if not name or len(name) > 40:
+        raise HTTPException(400, "نام باید بین ۱ تا ۴۰ نویسه باشد")
+    if len(backstory) < 40 or len(backstory) > 2000:
+        raise HTTPException(400, "بک‌استوری باید بین ۴۰ تا ۲۰۰۰ نویسه باشد")
+    image = body.profile_image
+    if image and (not image.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")) or len(image) > 3_500_000):
+        raise HTTPException(400, "عکس باید JPG، PNG یا WebP و حداکثر ۲٫۵ مگابایت باشد")
+    result = await players.update_one({"tg_id": tg_id}, {"$set": {
+        "name": name, "backstory": backstory, "profile_image": image,
+        "profile_edited_at": now(), "profile_edited_by": user["id"],
+    }})
+    if not result.matched_count:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    return {"ok": True, "name": name, "backstory": backstory, "profile_image": image}
 
 @router.post("/players/{tg_id}/popularity")
 async def admin_adjust_player_popularity(tg_id: int, body: AdjustPlayerPopularityBody, user: dict = Depends(full_admin_user)):
@@ -2081,7 +2197,7 @@ class WarWindowBody(BaseModel):
     open: bool
 
 @router.post("/war-window")
-async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(full_admin_user)):
+async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(owner_user)):
     """باز/بستن پنجرهٔ لشکرکشی برای همهٔ بازیکنان — مثلاً فقط چند ساعت در روز
     اجازهٔ فرمانِ گسیل بدهی؛ بستن، لشکرهای در حال حرکت را متوقف نمی‌کند، فقط
     فرمان تازه نمی‌گیرد. با هر تغییر همهٔ بازیکنان کلاغ می‌گیرند"""
@@ -2187,9 +2303,9 @@ async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
         title = DEFAULT_TITLE.get(player.get("gender", "lord"), DEFAULT_TITLE["lord"])
         await players.update_one({"_id": player["_id"]}, {
             "$set": {
-                "resources": dict(STARTING_RESOURCES), "troops": {}, "buildings": {},
+                "resources": control_settings.get("economy.starting_resources", STARTING_RESOURCES), "troops": {}, "buildings": {},
                 "castle_buildings": extra_castles, "points": 100, "scoreboard_baseline": 0,
-                "popularity": POPULARITY_START, "tax_rate": TAX_RATE_DEFAULT,
+                "popularity": POPULARITY_START, "tax_rate": int(control_settings.get("tax.default_rate", TAX_RATE_DEFAULT)),
                 "alliance_count": 0, "last_feast": None, "last_tick": started_at,
                 "season_started_at": started_at, "stats": blank["stats"], "medals": {},
                 "title": title, "food_ration": rebellion_settings.get("default_ration", "normal"), "daily_streak": 0,
@@ -2271,7 +2387,7 @@ async def _settle_all_building_production():
         await players.update_one({"_id": player["_id"]}, {"$set": production_fields(player)})
 
 @router.get("/building-balance")
-async def get_building_balance(user: dict = Depends(full_admin_user)):
+async def get_building_balance(user: dict = Depends(owner_user)):
     out = []
     for bid, meta in BUILDINGS.items():
         base_cost = meta.get("cost", {})
@@ -2307,7 +2423,7 @@ class BuildingBalanceBody(BaseModel):
     max_level: int = 8
 
 @router.post("/building-balance")
-async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(full_admin_user)):
+async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(owner_user)):
     """تنظیم سراسری هزینهٔ پایه، رشد هزینهٔ ارتقا، تولید و افزایش سقف هر ساختمان."""
     meta = BUILDINGS.get(body.building_id)
     if not meta:
@@ -2349,7 +2465,7 @@ async def set_building_balance(body: BuildingBalanceBody, user: dict = Depends(f
     return {"ok": True}
 
 @router.post("/building-balance/{building_id}/reset")
-async def reset_building_balance(building_id: str, user: dict = Depends(full_admin_user)):
+async def reset_building_balance(building_id: str, user: dict = Depends(owner_user)):
     if building_id not in BUILDINGS:
         raise HTTPException(400, "ساختمان نامعتبر")
     await _settle_all_building_production()
@@ -2385,7 +2501,7 @@ def _gameplay_balance_payload():
     }
 
 @router.get("/gameplay-balance")
-async def get_gameplay_balance(user: dict = Depends(full_admin_user)):
+async def get_gameplay_balance(user: dict = Depends(owner_user)):
     return _gameplay_balance_payload()
 
 class GameplayBalanceBody(BaseModel):
@@ -2404,7 +2520,7 @@ def _num(value, name: str, minimum=0, maximum=1_000_000):
     return number
 
 @router.post("/gameplay-balance")
-async def set_gameplay_balance(body: GameplayBalanceBody, user: dict = Depends(full_admin_user)):
+async def set_gameplay_balance(body: GameplayBalanceBody, user: dict = Depends(owner_user)):
     r = body.rules
     clean_rules = {
         "camp_power_step": _num(r.get("camp_power_step_percent"), "رشد قدرت پادگان", 0, 500) / 100,
@@ -2476,7 +2592,7 @@ async def set_gameplay_balance(body: GameplayBalanceBody, user: dict = Depends(f
     return _gameplay_balance_payload()
 
 @router.post("/gameplay-balance/reset")
-async def reset_gameplay_balance(user: dict = Depends(full_admin_user)):
+async def reset_gameplay_balance(user: dict = Depends(owner_user)):
     game_data.GAME_RULES.clear(); game_data.GAME_RULES.update(game_data.DEFAULT_GAME_RULES)
     game_data.COMMON_TROOPS.clear(); game_data.COMMON_TROOPS.update(game_data._copy.deepcopy(game_data.DEFAULT_COMMON_TROOPS))
     game_data.NAVAL_TROOPS.clear(); game_data.NAVAL_TROOPS.update(game_data._copy.deepcopy(game_data.DEFAULT_NAVAL_TROOPS))

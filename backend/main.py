@@ -34,6 +34,7 @@ from routers.buildings import notify_building_completions
 from routers.daily import notify_daily_rewards
 from admin_notifications import notify_admin_deadlines
 import telegram_bot
+import control_settings
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +315,7 @@ async def start_background_watchers():
     await _migrate_season_30_building_balance()
     await _load_building_overrides()
     await _load_gameplay_balance()
+    await control_settings.load()
     await _detach_admin_players()
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())

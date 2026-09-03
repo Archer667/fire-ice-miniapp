@@ -1,6 +1,7 @@
 """Medal definitions and helpers shared by player/admin APIs."""
 
 from db import players
+from control_settings import get as rule
 
 TIER_ORDER = {"bronze": 1, "silver": 2, "gold": 3}
 
@@ -64,18 +65,19 @@ def normalize_stats(player):
 
 def _automatic_tier(key, stats):
     definition = MEDALS[key]
+    thresholds = rule(f"medals.{key}", definition.get("thresholds", {}))
     if key == "oathbound":
-        if stats.get("alliances_10_days", 0) >= 5:
+        if stats.get("alliances_10_days", 0) >= thresholds.get("gold", 5):
             return "gold"
-        if stats.get("alliances_accepted", 0) >= 3:
+        if stats.get("alliances_accepted", 0) >= thresholds.get("silver", 3):
             return "silver"
-        if stats.get("alliances_7_days", 0) >= 1:
+        if stats.get("alliances_7_days", 0) >= thresholds.get("bronze", 1):
             return "bronze"
         return None
     value = stats.get(definition["stat"], 0)
     earned = None
     for tier in ("bronze", "silver", "gold"):
-        if value >= definition["thresholds"][tier]:
+        if value >= thresholds[tier]:
             earned = tier
     return earned
 

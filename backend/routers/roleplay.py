@@ -6,7 +6,7 @@ from auth import get_user
 from db import players, campaigns, roleplays
 from game import now, owned_castles
 from game_data import ROLEPLAY_CATEGORIES
-from routers.war import ATTACK_OP_TYPES, ROLEPLAY_WINDOW_HOURS
+from routers.war import ATTACK_OP_TYPES, ROLEPLAY_WINDOW_HOURS, roleplay_window_hours
 from admin_notifications import notify_admins
 
 router = APIRouter(prefix="/api/roleplay", tags=["roleplay"])
@@ -58,8 +58,8 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         arrival_at = c.get("battle_started_at") or c.get("arrival_at")
         if not arrival_at or now() < arrival_at:
             raise HTTPException(400, "این نبرد هنوز به مقصد نرسیده")
-        if now() > arrival_at + timedelta(hours=ROLEPLAY_WINDOW_HOURS):
-            raise HTTPException(400, f"مهلت {ROLEPLAY_WINDOW_HOURS} ساعته برای فرستادن سناریوی این نبرد گذشته")
+        if now() > arrival_at + timedelta(hours=roleplay_window_hours()):
+            raise HTTPException(400, f"مهلت {roleplay_window_hours():g} ساعته برای فرستادن سناریوی این نبرد گذشته")
         if await roleplays.find_one({"tg_id": user["id"], "campaign_id": body.campaign_id}):
             raise HTTPException(400, "قبلاً سناریوی این نبرد را فرستاده‌ای")
         campaign_id = body.campaign_id
@@ -77,7 +77,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     res = await roleplays.insert_one(doc)
     if campaign_id:
         submitted = await roleplays.count_documents({"campaign_id": campaign_id})
-        deadline = c["arrival_at"] + timedelta(hours=ROLEPLAY_WINDOW_HOURS)
+        deadline = c["arrival_at"] + timedelta(hours=roleplay_window_hours())
         both_ready = submitted >= 2
         await notify_admins(
             "war_roleplay",
@@ -120,6 +120,7 @@ async def mine(user: dict = Depends(get_user)):
             "result_required": r.get("result_required", r.get("category") != "security"),
             "campaign_id": r.get("campaign_id"),
             "target_tg_id": r.get("target_tg_id"), "target_player_name": r.get("target_player_name"),
+            "admin_score": r.get("admin_score"),
             "created_at": r["created_at"].isoformat(),
         })
     return out

@@ -11,6 +11,7 @@ from config import STARTING_RESOURCES, SEASON_LENGTH_DAYS, POPULARITY_START, TAX
 from ranks import scored_players
 from routers.war import apply_campaign_upkeep, all_castle_names_and_ports
 from registration import castle_region_map, registration_state
+from control_settings import get as rule, feature_enabled
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -43,6 +44,8 @@ class RegisterBody(BaseModel):
 async def register(body: RegisterBody, user: dict = Depends(get_user)):
     """فقط نام، جنسیت، و لیستِ اولویتیِ خاندان‌های درخواستی — خودِ تخصیصِ نهاییِ
     اقلیم/قلعه رو ادمین بعداً از پنلش دستی انجام می‌ده"""
+    if not feature_enabled("registration"):
+        raise HTTPException(503, "ثبت‌نام فعلاً توسط ادمین اصلی بسته شده است")
     if body.gender not in DEFAULT_TITLE:
         raise HTTPException(400, "جنسیت نامعتبر")
     if not body.name.strip():
@@ -88,12 +91,12 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "requested_castles": requested,
         "backstory": body.backstory.strip(),
         "profile_image": body.profile_image,
-        "resources": dict(STARTING_RESOURCES),
+        "resources": rule("economy.starting_resources", STARTING_RESOURCES),
         "troops": {},
         "buildings": {},
         "points": 100,
         "popularity": POPULARITY_START,
-        "tax_rate": TAX_RATE_DEFAULT,
+        "tax_rate": int(rule("tax.default_rate", TAX_RATE_DEFAULT)),
         "alliance_count": 0,
         "last_feast": None,
         "created_at": now(),

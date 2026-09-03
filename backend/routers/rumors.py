@@ -7,6 +7,7 @@ from db import players, rumors, rumor_views
 from game import now, apply_production, can_afford, pay, production_fields
 from config import RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, POPULARITY_START
 from routers.ravens import send_system_message
+from control_settings import get as rule, feature_enabled
 
 router = APIRouter(prefix="/api/rumors", tags=["rumors"])
 
@@ -17,11 +18,16 @@ class RumorBody(BaseModel):
 @router.post("/send")
 async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
     """کارزار عمومی علیه یک بازیکن — همه می‌بینند، محبوبیت هدف کمی افت می‌کند"""
+    if not feature_enabled("tweets"):
+        raise HTTPException(503, "انتشار توییت فعلاً غیرفعال است")
     if body.target_tg_id == user["id"]:
         raise HTTPException(400, "نمی‌توانی علیه خودت توییت بسازی")
     text = body.text.strip()
-    if len(text) < 10:
+    text_min = int(rule("tweets.text_min", 10)); text_max = int(rule("tweets.text_max", 400))
+    if len(text) < text_min:
         raise HTTPException(400, "متن توییت خیلی کوتاه است")
+    if len(text) > text_max:
+        raise HTTPException(400, f"متن توییت بیشتر از {text_max} نویسه است")
 
     me = await players.find_one({"tg_id": user["id"]})
     if not me:
@@ -32,30 +38,33 @@ async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
 
     recent = await rumors.find_one({
         "author_tg_id": user["id"], "target_tg_id": body.target_tg_id,
-        "created_at": {"$gt": now() - timedelta(hours=RUMOR_COOLDOWN_HOURS)},
+        "created_at": {"$gt": now() - timedelta(hours=float(rule('tweets.cooldown_hours', RUMOR_COOLDOWN_HOURS)))},
     })
     if recent:
-        raise HTTPException(400, f"همین الان علیه این لرد توییت ساختی — {RUMOR_COOLDOWN_HOURS} ساعت دیگر دوباره امتحان کن")
+        raise HTTPException(400, f"هنوز کول‌داون توییت تمام نشده است")
 
     me = apply_production(me)
-    if not can_afford(me["resources"], {"gold": RUMOR_GOLD_COST}):
+    tweet_cost = int(rule("tweets.gold_cost", RUMOR_GOLD_COST))
+    if not can_afford(me["resources"], {"gold": tweet_cost}):
         raise HTTPException(400, "طلای کافی برای پخش این توییت نداری")
-    pay(me["resources"], {"gold": RUMOR_GOLD_COST})
+    pay(me["resources"], {"gold": tweet_cost})
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
 
-    new_popularity = max(0, target.get("popularity", POPULARITY_START) - RUMOR_POPULARITY_DAMAGE)
+    damage = int(rule("tweets.popularity_damage", RUMOR_POPULARITY_DAMAGE))
+    new_popularity = max(0, target.get("popularity", POPULARITY_START) - damage)
     await players.update_one({"tg_id": target["tg_id"]}, {"$set": {"popularity": new_popularity}})
 
     doc = {
         "author_tg_id": user["id"], "author_name": me["name"],
         "target_tg_id": target["tg_id"], "target_name": target["name"],
-        "text": text[:400], "created_at": now(), "reactions": {},
+        "text": text[:text_max], "created_at": now(), "reactions": {},
     }
     res = await rumors.insert_one(doc)
 
     await send_system_message(
         target["tg_id"], target["name"],
         "توییت‌ای علیه‌ات در وستروس پیچیده و محبوبیتت کمی افت کرد — از تب «توییت‌ها» ببینش.",
+        kind="tweet",
     )
     return {"ok": True, "id": str(res.inserted_id)}
 
@@ -101,6 +110,8 @@ class ReactBody(BaseModel):
 
 @router.post("/{rumor_id}/react")
 async def react_rumor(rumor_id: str, body: ReactBody, user: dict = Depends(get_user)):
+    if not feature_enabled("tweets"):
+        raise HTTPException(503, "واکنش به توییت فعلاً غیرفعال است")
     try:
         oid = ObjectId(rumor_id)
     except Exception:
@@ -114,10 +125,18 @@ async def react_rumor(rumor_id: str, body: ReactBody, user: dict = Depends(get_u
         raise HTTPException(400, "واکنش نامعتبر")
 
     key = f"reactions.{user['id']}"
+    previous = (r.get("reactions") or {}).get(str(user["id"]))
+    effects = {None: 0, "like": int(rule("tweets.like_popularity", 0)), "dislike": int(rule("tweets.dislike_popularity", -1))}
+    popularity_delta = effects[body.reaction] - effects.get(previous, 0)
     if body.reaction is None:
         await rumors.update_one({"_id": oid}, {"$unset": {key: ""}})
     else:
         await rumors.update_one({"_id": oid}, {"$set": {key: body.reaction}})
+    if popularity_delta:
+        target = await players.find_one({"tg_id": r["target_tg_id"]}, {"popularity": 1})
+        if target:
+            value = max(0, min(100, int(target.get("popularity", POPULARITY_START)) + popularity_delta))
+            await players.update_one({"tg_id": r["target_tg_id"]}, {"$set": {"popularity": value}})
 
     r = await rumors.find_one({"_id": oid})
     return _rumor_brief(r, user["id"])

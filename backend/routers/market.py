@@ -6,6 +6,11 @@ from auth import get_user
 from db import players, market_listings, black_market_listings, player_market_listings
 from game import now, can_afford, pay, add_resources, apply_production, production_fields
 from game_data import TRADE_GOOD_NAMES
+from control_settings import feature_enabled
+
+def _market_write_guard():
+    if not feature_enabled("market"):
+        raise HTTPException(503, "بازار فعلاً غیرفعال است")
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -27,6 +32,7 @@ class BuyBody(BaseModel):
 
 @router.post("/buy")
 async def buy(body: BuyBody, user: dict = Depends(get_user)):
+    _market_write_guard()
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -75,6 +81,7 @@ class PlayerListingBody(BaseModel):
 
 @router.post("/players")
 async def create_player_listing(body: PlayerListingBody, user: dict = Depends(get_user)):
+    _market_write_guard()
     if body.resource not in TRADE_GOOD_NAMES or body.resource == "gold":
         raise HTTPException(400, "فقط کالاهای بازار قابل فروش‌اند")
     if body.qty <= 0:
@@ -106,6 +113,7 @@ class PlayerMarketBuyBody(BaseModel):
 
 @router.post("/players/buy")
 async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get_user)):
+    _market_write_guard()
     try:
         oid = ObjectId(body.listing_id)
     except Exception:
@@ -166,6 +174,7 @@ class BlackBuyBody(BaseModel):
 
 @router.post("/black/buy")
 async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
+    _market_write_guard()
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")

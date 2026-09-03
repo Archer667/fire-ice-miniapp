@@ -15,6 +15,7 @@ import game_data
 from routers.ravens import send_system_message
 from admin_notifications import notify_admins
 from player_labels import titled_name
+from control_settings import get as rule, feature_enabled
 
 router = APIRouter(prefix="/api/war", tags=["war"])
 
@@ -76,6 +77,11 @@ async def repair_stale_engagement_lock(campaign: dict) -> dict:
 
 # ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
 REPORT_VISIBLE_HOURS = 24
+
+def roleplay_window_hours(): return float(rule("war.roleplay_hours", ROLEPLAY_WINDOW_HOURS))
+def minimum_campaign_men(): return int(rule("war.minimum_army_men", MIN_CAMPAIGN_MEN))
+def minimum_ambush_men(): return int(rule("war.minimum_ambush_men", MIN_AMBUSH_MEN))
+def report_visible_hours(): return float(rule("war.report_visible_hours", REPORT_VISIBLE_HOURS))
 
 WAR_WINDOW_ID = "war_window"
 
@@ -377,6 +383,8 @@ async def my_ambushes(user: dict = Depends(get_user)):
 
 @router.post("/ambush")
 async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
+    if not feature_enabled("war"):
+        raise HTTPException(503, "جنگ و کمین فعلاً غیرفعال است")
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -399,8 +407,8 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     gold, men, food_per_day, weapons = troop_food_and_gold(origin_region, body.troops, buildings, terrain.get(body.origin_castle) in ("coastal", "sea"))
     naval_capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n > 0)
     land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n > 0)
-    if land_men < MIN_AMBUSH_MEN:
-        raise HTTPException(400, f"هر کمین باید حداقل {MIN_AMBUSH_MEN} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
+    if land_men < minimum_ambush_men():
+        raise HTTPException(400, f"هر کمین باید حداقل {minimum_ambush_men()} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
     if is_sea and land_men > naval_capacity:
         raise HTTPException(400, f"این مسیر دریایی است؛ کشتی‌ها فقط ظرفیت حمل {naval_capacity} نفر را دارند")
     cost = {"gold": gold, **weapons}
@@ -426,6 +434,8 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
 
 @router.post("/submit")
 async def submit(body: CampaignBody, user: dict = Depends(get_user)):
+    if not feature_enabled("war"):
+        raise HTTPException(503, "لشکرکشی فعلاً غیرفعال است")
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -497,8 +507,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
 
     naval_capacity = sum(NAVAL_TROOPS[tid]["capacity"] * n for tid, n in body.troops.items() if tid in NAVAL_TROOPS and n and n > 0)
     land_men = sum(n for tid, n in body.troops.items() if tid not in NAVAL_TROOPS and n and n > 0)
-    if land_men < MIN_CAMPAIGN_MEN:
-        raise HTTPException(400, f"هر لشکر باید حداقل {MIN_CAMPAIGN_MEN} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
+    if land_men < minimum_campaign_men():
+        raise HTTPException(400, f"هر لشکر باید حداقل {minimum_campaign_men()} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
 
     same_castle = target_castle == body.origin_castle
     if not same_castle:
@@ -519,13 +529,19 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
                 raise HTTPException(400, "این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن")
             raise HTTPException(400, f"این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
         travel, route_path = chosen["minutes"], chosen["path"]
-    travel = max(travel, round(travel * (1 + equipment_slowdown)))
+    speed_factor = max(.01, float(rule("movement.base_speed_percent", 100)) / 100)
+    route_factor = max(0, float(rule("movement.route_time_percent", 100)) / 100)
+    slowdown_cap = max(0, float(rule("movement.equipment_slowdown_cap_percent", 100)) / 100)
+    travel = round(travel * route_factor / speed_factor)
+    travel = max(travel, round(travel * (1 + min(equipment_slowdown, slowdown_cap))))
     if body.commander_present:
-        travel = max(0, round(travel * (1 - float(game_data.GAME_RULES["commander_speed_bonus"]))))
+        commander_speed = float(rule("movement.commander_speed_bonus_percent", float(game_data.GAME_RULES["commander_speed_bonus"]) * 100)) / 100
+        travel = max(0, round(travel * (1 - commander_speed)))
     arrival_at = now() + timedelta(minutes=travel)
     power = campaign_power(body.troops, _building_levels(p, body.origin_castle))
     if body.commander_present:
-        power = round(power * (1 + float(game_data.GAME_RULES["commander_power_bonus"])))
+        commander_power = float(rule("movement.commander_power_bonus_percent", float(game_data.GAME_RULES["commander_power_bonus"]) * 100)) / 100
+        power = round(power * (1 + commander_power))
 
     pay(p["resources"], combined_cost)
     p["resources"]["men"] = p["resources"].get("men", 0) - men
@@ -586,8 +602,10 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
             weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * int(game_data.GAME_RULES["weapon_per_soldier"])
 
     grace_started_at = c.get("moved_at") or c.get("created_at") or now()
-    penalty_applied = (now() - grace_started_at) > timedelta(minutes=5)
-    refund_ratio = 0.5 if penalty_applied else 1.0
+    grace_minutes = float(rule("war.cancel_grace_minutes", 5))
+    penalty_percent = max(0, min(100, float(rule("war.cancel_penalty_percent", 50))))
+    penalty_applied = (now() - grace_started_at) > timedelta(minutes=grace_minutes)
+    refund_ratio = (1 - penalty_percent / 100) if penalty_applied else 1.0
     def refundable(value):
         return max(0, int(int(value or 0) * refund_ratio))
 
@@ -662,8 +680,14 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     if chosen.get("via_sea") and land_men > naval_capacity:
         raise HTTPException(400, f"کشتی‌های این لشکر فقط ظرفیت جابه‌جایی {naval_capacity} نیروی زمینی را دارند")
 
-    move_slowdown = min(float(game_data.GAME_RULES["equipment_slowdown_cap"]), sum(SIEGE_EQUIPMENT.get(eid, {}).get("slowdown", 0) * int(count or 0) for eid, count in c.get("equipment", {}).items()))
-    move_minutes = max(chosen["minutes"], round(chosen["minutes"] * (1 + move_slowdown)))
+    slowdown_cap = max(0, float(rule("movement.equipment_slowdown_cap_percent", 100)) / 100)
+    move_slowdown = min(slowdown_cap, sum(SIEGE_EQUIPMENT.get(eid, {}).get("slowdown", 0) * int(count or 0) for eid, count in c.get("equipment", {}).items()))
+    speed_factor = max(.01, float(rule("movement.base_speed_percent", 100)) / 100)
+    route_factor = max(0, float(rule("movement.route_time_percent", 100)) / 100)
+    base_minutes = round(chosen["minutes"] * route_factor / speed_factor)
+    move_minutes = max(base_minutes, round(base_minutes * (1 + move_slowdown)))
+    if c.get("commander_present"):
+        move_minutes = max(0, round(move_minutes * (1 - float(rule("movement.commander_speed_bonus_percent", 10)) / 100)))
     arrival_at = now() + timedelta(minutes=move_minutes)
     await campaigns.update_one({"_id": oid}, {
         "$set": {
@@ -687,6 +711,8 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
 @router.post("/{campaign_id}/attack")
 async def order_siege_attack(campaign_id: str, user: dict = Depends(get_user)):
     """محاصرهٔ رسیده را به حملهٔ مستقیم تبدیل می‌کند؛ واچر درگیری را ایجاد و لشکرها را قفل می‌کند."""
+    if not feature_enabled("war"):
+        raise HTTPException(503, "جنگ فعلاً غیرفعال است")
     try:
         oid = ObjectId(campaign_id)
     except Exception:
@@ -752,7 +778,7 @@ async def mine(user: dict = Depends(get_user)):
     async for c in cur:
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
-        if arrived and arrival_at and now() - arrival_at > timedelta(hours=REPORT_VISIBLE_HOURS):
+        if arrived and arrival_at and now() - arrival_at > timedelta(hours=report_visible_hours()):
             continue
         out.append({
             "id": str(c["_id"]),
@@ -859,7 +885,7 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         "battle_started", "⚔️ نبرد تازه آغاز شد", detail,
         dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
         player_name=attacker_name, player_tg_id=attacker.get("tg_id"), castle=location,
-        source_id=engagement_id, deadline=now() + timedelta(hours=ROLEPLAY_WINDOW_HOURS),
+        source_id=engagement_id, deadline=now() + timedelta(hours=roleplay_window_hours()),
         action="در پنل ادمین ← نبردها، نیروها و رول‌های دو طرف را بررسی کن.",
     )
     # اعلان عمومی شروع نبرد: فقط هویت طرفین و محل؛ ترکیب/تعداد نیروها محرمانه و فقط
@@ -1127,10 +1153,10 @@ async def detect_route_encounters():
                 f"لشکرهای شما در {location} با هم روبه‌رو شدند و تا اعلام نتیجهٔ ادمین قفل‌اند.\n"
                 f"{root['player_name']}: {troops_summary(root.get('troops', {}))} · ادوات: {root_eq}\n"
                 f"{opponent['player_name']}: {troops_summary(opponent.get('troops', {}))} · ادوات: {opponent_eq}\n"
-                f"تا {ROLEPLAY_WINDOW_HOURS} ساعت فرصت ارسال رول جنگ دارید."
+                f"تا {roleplay_window_hours():g} ساعت فرصت ارسال رول جنگ دارید."
             )
-            await send_system_message(root["tg_id"], root["player_name"], msg)
-            await send_system_message(opponent["tg_id"], opponent["player_name"], msg)
+            await send_system_message(root["tg_id"], root["player_name"], msg, kind="battle")
+            await send_system_message(opponent["tg_id"], opponent["player_name"], msg, kind="battle")
             await notify_battle_admins(engagement_id, location, root, opponent, dict(opponent.get("troops", {})))
 
 async def notify_arrivals():
@@ -1295,10 +1321,10 @@ async def notify_arrivals():
                 f"لشکر دفاعی قلعه ({battle_defender['name']}): {defender_summary} — توان {defender_power}\n"
                 f"زیرساخت‌های دفاعی {target}: {infrastructure_summary(defense_infrastructure)}\n"
                 f"ادوات مهاجم: {attacker_equipment_summary}\nادوات طرف مقابل: {defender_equipment_summary}\n"
-                f"هر دو طرف تا {ROLEPLAY_WINDOW_HOURS} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
+                f"هر دو طرف تا {roleplay_window_hours():g} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
             )
-            await send_system_message(c["tg_id"], c["player_name"], stats_text)
-            await send_system_message(battle_defender["tg_id"], battle_defender["name"], stats_text)
+            await send_system_message(c["tg_id"], c["player_name"], stats_text, kind="battle")
+            await send_system_message(battle_defender["tg_id"], battle_defender["name"], stats_text, kind="battle")
             await notify_battle_admins(engagement_id, target, c, battle_defender, defense_troops)
 
         await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
@@ -1310,7 +1336,7 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         return []
-    cutoff = now() - timedelta(hours=ROLEPLAY_WINDOW_HOURS)
+    cutoff = now() - timedelta(hours=roleplay_window_hours())
 
     async def build(c, role):
         canonical_id = c.get("engagement_campaign_id") or str(c["_id"])

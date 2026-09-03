@@ -3,12 +3,13 @@ from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from auth import get_user, get_admin, get_full_admin
+from auth import get_user, get_admin, get_full_admin, get_owner
 from config import POPULARITY_START, tax_yield_multiplier
 from db import players, rebellions, rebellion_checks, game_settings
 from game import now
 from routers.ravens import send_system_message
 from admin_notifications import notify_admins
+from control_settings import get as rule
 
 router = APIRouter(prefix="/api/rebellions", tags=["rebellions"])
 SETTINGS_ID = "rebellion_settings"
@@ -67,7 +68,20 @@ def _merge_settings(raw: dict | None) -> dict:
 
 async def get_settings() -> dict:
     doc = await game_settings.find_one({"_id": SETTINGS_ID})
-    return _merge_settings((doc or {}).get("settings"))
+    settings = _merge_settings((doc or {}).get("settings"))
+    settings.update({
+        "safe_popularity": int(rule("tax.safe_popularity", settings["safe_popularity"])),
+        "high_risk_popularity": int(rule("tax.high_risk_popularity", settings["high_risk_popularity"])),
+        "guaranteed_popularity": int(rule("tax.guaranteed_popularity", settings["guaranteed_popularity"])),
+        "tax_overage_start": int(rule("tax.overage_start", settings["tax_overage_start"])),
+        "tax_overage_step": int(rule("tax.overage_step", settings["tax_overage_step"])),
+        "tax_overage_popularity": int(rule("tax.overage_popularity_penalty", settings["tax_overage_popularity"])),
+        "feast_food_cost": int(rule("diplomacy.feast_food_cost", settings["feast_food_cost"])),
+        "feast_wine_cost": int(rule("diplomacy.feast_wine_cost", settings["feast_wine_cost"])),
+        "feast_popularity_gain": int(rule("diplomacy.feast_popularity_gain", settings["feast_popularity_gain"])),
+        "roleplay_hours": int(rule("war.roleplay_hours", settings["roleplay_hours"])),
+    })
+    return settings
 
 def rebellion_chance(popularity: int, settings: dict) -> int:
     safe = int(settings["safe_popularity"])
@@ -129,7 +143,7 @@ async def _trigger_rebellion(player: dict, popularity: int, chance: int, roll: i
         f"🔥 شورش در قلمرو تو آغاز شده است. محبوبیت هنگام وقوع {popularity} بود. "
         f"تا {settings['roleplay_hours']} ساعت فرصت داری سناریوی مقابله با شورش را از صفحه قلمرو بفرستی."
     )
-    await send_system_message(player["tg_id"], player["name"], text)
+    await send_system_message(player["tg_id"], player["name"], text, kind="rebellion")
     await notify_admins(
         "rebellion",
         "🚨 شورش تازه شروع شد",
@@ -207,6 +221,9 @@ async def admin_user(user: dict = Depends(get_user)):
 
 async def full_admin_user(user: dict = Depends(get_user)):
     return await get_full_admin(user)
+
+async def owner_user(user: dict = Depends(get_user)):
+    return await get_owner(user)
 
 class RationBody(BaseModel):
     level: str
@@ -306,11 +323,11 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
     return {"ok": True}
 
 @router.get("/admin/settings")
-async def admin_settings(user: dict = Depends(full_admin_user)):
+async def admin_settings(user: dict = Depends(owner_user)):
     return await get_settings()
 
 @router.post("/admin/settings")
-async def update_settings(body: SettingsBody, user: dict = Depends(full_admin_user)):
+async def update_settings(body: SettingsBody, user: dict = Depends(owner_user)):
     merged = _merge_settings(body.settings)
     if not (0 <= int(merged["guaranteed_popularity"]) < int(merged["high_risk_popularity"]) < int(merged["safe_popularity"]) <= 100):
         raise HTTPException(400, "ترتیب حدها باید قطعی < خطر زیاد < امن و بین صفر تا صد باشد")
@@ -356,5 +373,5 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
         "resolved_at": now(), "resolved_by": user["id"],
     }})
     image = body.image_url if body.image_url and body.image_url.startswith(("https://", "data:image/")) and len(body.image_url) <= 3_500_000 else None
-    await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}", image_url=image)
+    await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}", image_url=image, kind="rebellion")
     return {"ok": True, "popularity": popularity, "resources": resources}

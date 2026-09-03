@@ -6,6 +6,7 @@ from game import now
 from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
 import telegram_bot
 from player_labels import normalize_player_names, titled_name
+from control_settings import notification_route
 
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
@@ -16,6 +17,9 @@ async def send_system_message(
     bot_text: str | None = None, bot_parse_mode: str | None = None,
 ):
     """پیام سیستمی داخل کلاغ و تلگرام؛ ایونت می‌تواند تصویر و بازهٔ زمانی هم داشته باشد."""
+    route = notification_route(kind)
+    via_raven = via_raven and bool(route.get("raven", True))
+    via_bot = via_bot and bool(route.get("bot", True))
     text = await normalize_player_names(text)
     doc = {
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,

@@ -1,5 +1,5 @@
 import asyncio
-from datetime import timedelta
+from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
 from db import players
@@ -7,6 +7,7 @@ from game import now, add_resources
 from config import DAILY_REWARDS
 from medals import normalize_stats, sync_medals
 from routers.ravens import send_system_message
+from control_settings import get as rule
 
 router = APIRouter(prefix="/api/daily", tags=["daily"])
 
@@ -21,6 +22,10 @@ def _today_str() -> str:
 def _yesterday_str() -> str:
     return (now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
+def _rewards():
+    rewards = rule("daily_rewards.rewards", DAILY_REWARDS)
+    return rewards if isinstance(rewards, list) and rewards else DAILY_REWARDS
+
 def _pending_streak(p: dict) -> tuple[int, bool]:
     """استریکی که الان (اگر کلیم کنی) ثبت می‌شود، و اینکه امروز از قبل کلیم شده یا نه"""
     last = p.get("daily_last_claim_date")
@@ -28,12 +33,20 @@ def _pending_streak(p: dict) -> tuple[int, bool]:
     today = _today_str()
     if last == today:
         return streak, True
-    if last == _yesterday_str():
+    missed_limit = max(1, int(rule("daily_rewards.reset_after_missed_days", 1)))
+    if last:
+        try:
+            days = (now().date() - date.fromisoformat(last)).days
+        except (ValueError, TypeError):
+            days = missed_limit + 1
+    else:
+        days = missed_limit + 1
+    if 1 <= days <= missed_limit:
         return streak + 1, False
     return 1, False
 
 def _day_in_cycle(pending_streak: int) -> int:
-    return ((pending_streak - 1) % len(DAILY_REWARDS)) + 1
+    return ((pending_streak - 1) % len(_rewards())) + 1
 
 @router.get("/status")
 async def daily_status(user: dict = Depends(get_user)):
@@ -46,8 +59,8 @@ async def daily_status(user: dict = Depends(get_user)):
         "current_streak": p.get("daily_streak", 0),
         "claimed_today": claimed_today,
         "day_in_cycle": day_in_cycle,
-        "cycle_length": len(DAILY_REWARDS),
-        "reward": DAILY_REWARDS[day_in_cycle - 1],
+        "cycle_length": len(_rewards()),
+        "reward": _rewards()[day_in_cycle - 1],
     }
 
 @router.post("/claim")
@@ -60,7 +73,7 @@ async def daily_claim(user: dict = Depends(get_user)):
         raise HTTPException(400, "امروز جایزه‌ات را گرفته‌ای — فردا دوباره سر بزن")
 
     day_in_cycle = _day_in_cycle(pending_streak)
-    reward = DAILY_REWARDS[day_in_cycle - 1]
+    reward = _rewards()[day_in_cycle - 1]
     res = add_resources(p, reward)
 
     stats = normalize_stats(p)
@@ -97,7 +110,7 @@ async def notify_daily_rewards():
             continue
         pending_streak, _ = _pending_streak(p)
         day_in_cycle = _day_in_cycle(pending_streak)
-        reward = DAILY_REWARDS[day_in_cycle - 1]
+        reward = _rewards()[day_in_cycle - 1]
         reward_text = " · ".join(
             f"{amount:,} {RESOURCE_NAMES.get(key, key)}"
             for key, amount in reward.items()

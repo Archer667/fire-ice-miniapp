@@ -7,6 +7,7 @@ from game import now, can_afford, pay, add_resources, owned_castles, apply_produ
 from game_data import CARAVAN_GOODS, TRADE_GOOD_NAMES, travel_minutes
 from routers.ravens import send_system_message
 from routers.war import blocked_castles_for
+from control_settings import feature_enabled
 
 router = APIRouter(prefix="/api/trade", tags=["trade"])
 
@@ -26,6 +27,8 @@ class CaravanBody(BaseModel):
 
 @router.post("/caravan")
 async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
+    if not feature_enabled("caravans"):
+        raise HTTPException(503, "ارسال کاروان فعلاً غیرفعال است")
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -108,9 +111,11 @@ async def notify_caravan_arrivals():
         await send_system_message(
             c["tg_id"], c["player_name"],
             f"کاروانت به {c['target_name']} ({c['target_castle']}) رسید و تحویل داده شد: {goods_text}",
+            kind="trade",
         )
         await send_system_message(
             c["target_tg_id"], c["target_name"],
             f"کاروانی از {c['player_name']} ({c['origin_castle']}) رسید: {goods_text}",
+            kind="trade",
         )
         await caravans.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True, "active": False}})

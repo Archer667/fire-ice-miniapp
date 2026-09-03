@@ -5,6 +5,7 @@ from config import (
     POPULARITY_START, tax_yield_multiplier,
 )
 from game_data import BUILDINGS, building_produces, building_cap_bonus
+from control_settings import get as rule
 
 def now():
     # naive UTC — با چیزی که MongoDB برای فیلدهای datetime برمی‌گرداند یکی است.
@@ -93,7 +94,7 @@ def resolve_building_upgrades_for(state: dict, at: datetime | None = None) -> di
     return state
 
 def effective_caps(player: dict) -> dict:
-    caps = dict(RESOURCE_CAPS)
+    caps = rule("economy.base_caps", RESOURCE_CAPS)
     for bid, level in all_building_levels(player).items():
         for k, v in building_cap_bonus(bid).items():
             caps[k] = caps.get(k, 0) + v * level
@@ -137,7 +138,7 @@ def _apply_production_interval(player: dict, elapsed_days: float):
 def daily_production(player: dict) -> dict:
     """تولید پایه + بونوس ساختمان‌ها (طبق مقادیرِ سراسریِ فعلی — پیش‌فرض یا بازنویسیِ
     ادمین) + مالیات (وابسته به جمعیت، نرخ و محبوبیت)"""
-    prod = dict(DAILY_PRODUCTION)
+    prod = rule("economy.daily_production", DAILY_PRODUCTION)
     for bid, level in all_building_levels(player).items():
         for k, v in building_produces(bid).items():
             prod[k] = prod.get(k, 0) + v * level
@@ -145,12 +146,20 @@ def daily_production(player: dict) -> dict:
     # دهکده فقط ظرفیت جمعیت را زیاد می‌کند؛ سرعت رشد خود جمعیت تابع محبوبیت است.
     # محبوبیت ۵۰ = رشد عادی، صفر = نصف رشد و ۱۰۰ = یک‌ونیم برابر رشد.
     popularity = max(0, min(100, int(player.get("popularity", POPULARITY_START))))
-    prod["men"] = round(prod.get("men", 0) * (0.5 + popularity / 100), 2)
+    normal = max(1, float(rule("economy.population_normal_popularity", POPULARITY_START)))
+    low = float(rule("economy.population_min_multiplier", .5))
+    high = float(rule("economy.population_max_multiplier", 1.5))
+    growth_multiplier = low + (high - low) * min(1, popularity / max(1, normal * 2))
+    prod["men"] = round(prod.get("men", 0) * growth_multiplier, 2)
 
     men = player["resources"].get("men", 0)
-    tax_rate = max(0, min(100, int(player.get("tax_rate", TAX_RATE_DEFAULT))))
-    multiplier = tax_yield_multiplier(player.get("popularity", POPULARITY_START))
-    prod["gold"] = prod.get("gold", 0) + round(men * (tax_rate / 100) * multiplier)
+    tax_rate = max(0, int(player.get("tax_rate", rule("tax.default_rate", TAX_RATE_DEFAULT))))
+    pop_ratio = popularity / 100
+    min_mult = float(rule("tax.income_min_multiplier", .5))
+    max_mult = float(rule("tax.income_max_multiplier", 1.0))
+    multiplier = min_mult + (max_mult - min_mult) * pop_ratio
+    factor = max(0, float(rule("tax.income_population_factor", 1.0)))
+    prod["gold"] = prod.get("gold", 0) + round(men * (tax_rate / 100) * multiplier * factor)
     return prod
 
 def apply_production(player: dict) -> dict:

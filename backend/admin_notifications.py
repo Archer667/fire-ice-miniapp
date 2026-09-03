@@ -5,6 +5,7 @@ from db import admin_roles, admin_notifications, campaigns, roleplays, rebellion
 from game import now
 import telegram_bot
 from player_labels import normalize_player_names
+from control_settings import notification_route
 
 
 async def _admin_ids(roles: tuple[str, ...] | None = None) -> set[int]:
@@ -39,6 +40,7 @@ async def notify_admins(
     audience_roles: tuple[str, ...] | None = None,
 ):
     """اعلان ماندگار پنل را می‌سازد و خلاصه را برای سطح‌های مجاز تلگرام می‌کند."""
+    route = notification_route(kind)
     title = await normalize_player_names(title)
     detail = await normalize_player_names(detail)
     action = await normalize_player_names(action)
@@ -59,7 +61,7 @@ async def notify_admins(
     }
     claimed = await admin_notifications.update_one(
         {"dedupe_key": dedupe_key},
-        {"$setOnInsert": {**doc, "dedupe_key": dedupe_key}},
+        {"$setOnInsert": {**doc, "dedupe_key": dedupe_key, "hidden_from_panel": not bool(route.get("admin_panel", True))}},
         upsert=True,
     )
     if claimed.upserted_id is None:
@@ -68,8 +70,9 @@ async def notify_admins(
     message = f"{title}\n{detail}"
     if action:
         message += f"\nاقدام پیشنهادی: {action}"
-    for tg_id in await _admin_ids(audience_roles):
-        telegram_bot.push(tg_id, message)
+    if bool(route.get("bot", True)):
+        for tg_id in await _admin_ids(audience_roles):
+            telegram_bot.push(tg_id, message)
     return True
 
 
@@ -98,13 +101,13 @@ async def notify_admin_deadlines():
         )
 
     # مهلت رول جنگ از زمان رسیدن لشکر شروع می‌شود.
-    from routers.war import ATTACK_OP_TYPES, ROLEPLAY_WINDOW_HOURS
-    cutoff = current - timedelta(hours=ROLEPLAY_WINDOW_HOURS)
+    from routers.war import ATTACK_OP_TYPES, roleplay_window_hours
+    cutoff = current - timedelta(hours=roleplay_window_hours())
     async for campaign in campaigns.find({
         "op_type": {"$in": list(ATTACK_OP_TYPES)},
         "arrival_at": {"$gt": cutoff, "$lte": current},
     }):
-        deadline = campaign["arrival_at"] + timedelta(hours=ROLEPLAY_WINDOW_HOURS)
+        deadline = campaign["arrival_at"] + timedelta(hours=roleplay_window_hours())
         if deadline > soon:
             continue
         battle_id = campaign.get("engagement_campaign_id") or str(campaign["_id"])

@@ -9,6 +9,7 @@ from game_data import ALLIANCE_TYPES
 from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX, PRIVATE_ALLIANCE_MULTIPLIER
 from routers.ravens import send_system_message
 from player_labels import titled_name
+from control_settings import get as rule
 
 router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
 
@@ -52,7 +53,9 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         raise HTTPException(409, "با همهٔ گیرنده‌های انتخابی، پیمانی از همین نوع از قبل داری")
 
     me = apply_production(me)
-    unit_cost = ALLIANCE_TYPES[body.type]["wine_cost"] * (PRIVATE_ALLIANCE_MULTIPLIER if body.private else 1)
+    pact_costs = rule("diplomacy.pact_costs", {})
+    base_cost = int(pact_costs.get(body.type, ALLIANCE_TYPES[body.type]["wine_cost"]))
+    unit_cost = round(base_cost * (float(rule("diplomacy.private_multiplier", PRIVATE_ALLIANCE_MULTIPLIER)) if body.private else 1))
     total_cost = {"wine": unit_cost * len(valid_targets)}
     if not can_afford(me["resources"], total_cost):
         raise HTTPException(400, f"شراب کافی برای پیشنهاد به {len(valid_targets)} نفر نداری")
@@ -77,6 +80,7 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         await send_system_message(
             t["tg_id"], t["name"],
             f"{titled_name(me)} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد{penalty_note} — از تب دیپلماسی پاسخ بده.",
+            kind="diplomacy",
         )
     return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
 
@@ -145,7 +149,7 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1, "stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
-        await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را پذیرفت.")
+        await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را پذیرفت.", kind="diplomacy")
         # پیمان‌های عمومی (غیرخصوصی) به همهٔ لردها اطلاع داده می‌شود — نه فقط دو طرفِ پیمان
         if a.get("public", True):
             type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", a["type"])
@@ -153,13 +157,13 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
             text = f"📜 {type_name}{pact_name} میان {from_label} و {to_label} بسته شد."
             async for p in players.find({}, {"tg_id": 1, "name": 1}):
                 if p["tg_id"] not in (a["from_id"], a["to_id"]):
-                    await send_system_message(p["tg_id"], p["name"], text)
+                    await send_system_message(p["tg_id"], p["name"], text, kind="diplomacy")
     else:
         proposer = await players.find_one({"tg_id": a["from_id"]})
         if proposer:
             add_resources(proposer, {"wine": a["wine_cost"]})
             await players.update_one({"tg_id": a["from_id"]}, {"$set": {"resources": proposer["resources"]}})
-        await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را رد کرد — شرابت برگشت.")
+        await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را رد کرد — شرابت برگشت.", kind="diplomacy")
     return {"ok": True}
 
 @router.post("/{alliance_id}/leave")
@@ -202,15 +206,15 @@ async def leave(alliance_id: str, user: dict = Depends(get_user)):
             await players.update_one({"tg_id": other_id}, {"$set": {"resources": other["resources"]}})
     type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", "پیمان")
     penalty_note = f" و {penalty:,} سکه غرامت به تو پرداخت کرد" if penalty else ""
-    await send_system_message(other_id, other_name, f"{titled_name(me)} از {type_name} خارج شد{penalty_note}.")
+    await send_system_message(other_id, other_name, f"{titled_name(me)} از {type_name} خارج شد{penalty_note}.", kind="diplomacy")
     return {"ok": True, "penalty_paid": penalty}
 
 @router.post("/feast")
 async def feast(user: dict = Depends(get_user)):
     from routers.rebellions import get_settings as get_rebellion_settings
     rebellion_settings = await get_rebellion_settings()
-    feast_cost = {"food": int(rebellion_settings["feast_food_cost"]), "wine": int(rebellion_settings["feast_wine_cost"])}
-    feast_gain = int(rebellion_settings["feast_popularity_gain"])
+    feast_cost = {"food": int(rule("diplomacy.feast_food_cost", rebellion_settings["feast_food_cost"])), "wine": int(rule("diplomacy.feast_wine_cost", rebellion_settings["feast_wine_cost"]))}
+    feast_gain = int(rule("diplomacy.feast_popularity_gain", rebellion_settings["feast_popularity_gain"]))
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -220,7 +224,7 @@ async def feast(user: dict = Depends(get_user)):
     if last_feast:
         if isinstance(last_feast, str):
             last_feast = datetime.fromisoformat(last_feast)
-        if now() - last_feast < timedelta(hours=FEAST_COOLDOWN_HOURS):
+        if now() - last_feast < timedelta(hours=float(rule("diplomacy.feast_cooldown_hours", FEAST_COOLDOWN_HOURS))):
             raise HTTPException(400, "ضیافت را همین امروز برگزار کرده‌ای — فردا دوباره امتحان کن")
 
     if not can_afford(p["resources"], feast_cost):

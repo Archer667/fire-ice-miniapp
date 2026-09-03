@@ -7,6 +7,7 @@ import PlayerPicker from '../components/PlayerPicker.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
+import AdminControlCenter from '../components/AdminControlCenter.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
 const NEW_CASTLE = '__new__';
@@ -84,6 +85,7 @@ const TAB_GROUPS = [
       { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
       { key: 'rumor_admin', label: 'مدیریت توییت‌ها', description: 'دیدن نویسنده و حذف توییت' },
       { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
+      { key: 'profiles', label: 'مشخصات بازیکن', description: 'ویرایش نام، عکس و بک‌استوری بازیکن' },
     ],
   },
   {
@@ -111,8 +113,9 @@ const TAB_GROUPS = [
     tabs: [
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
-      { key: 'balance', label: 'تعادل بازی', description: 'تغییر تولید و سقف ساختمان‌ها', fullOnly: true },
+      { key: 'balance', label: 'تعادل ساختمان و نیرو', description: 'هزینه، بازدهی، نیروها و ادوات', ownerOnly: true },
       { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
+      { key: 'control_center', label: 'قوانین و نرخ‌ها', description: 'مرکز کنترل تمام فرمول‌ها و قابلیت‌ها', ownerOnly: true },
     ],
   },
   {
@@ -282,6 +285,16 @@ export default function Admin() {
   const [roleplayLosses, setRoleplayLosses] = useState({}); // roleplayId -> {attacker:{troopId:n}, defender:{troopId:n}}
   const [roleplayAdjustments, setRoleplayAdjustments] = useState({}); // roleplayId -> actor/target resource and popularity deltas
   const [roleplayBusyId, setRoleplayBusyId] = useState(null);
+  const [roleplayScores, setRoleplayScores] = useState({});
+  const [roleplayScoreBusyId, setRoleplayScoreBusyId] = useState(null);
+  const [roleplayScoreMax, setRoleplayScoreMax] = useState(100);
+  const [roleplayScoreSettingsBusy, setRoleplayScoreSettingsBusy] = useState(false);
+
+  const [profileTarget, setProfileTarget] = useState([]);
+  const [profileDraft, setProfileDraft] = useState(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [controlSettings, setControlSettings] = useState(null);
+  const [controlSettingsBusy, setControlSettingsBusy] = useState(false);
 
   const [itemsList, setItemsList] = useState(null);
   const [itemName, setItemName] = useState('');
@@ -433,7 +446,7 @@ export default function Admin() {
   const loadCleanupPreview = () => api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message));
   const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
   const loadRebellionSettings = () => {
-    if (!isFull) return;
+    if (!isOwner) return;
     api.adminRebellionSettings().then(setRebellionSettings).catch(e => toast(e.message));
   };
   const setRebellionNumber = (key, value) => setRebellionSettings(prev => ({ ...prev, [key]: Number(value) }));
@@ -478,18 +491,27 @@ export default function Admin() {
     api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(() => setSecurityRoleplays([]));
     loadBattles();
     loadRebellions();
+    api.adminRoleplayScoreSettings().then(r => setRoleplayScoreMax(r.max_score)).catch(e => toast(e.message));
     if (isFull) {
       loadPendingPlayers(); loadRegistrationSettings(); loadRoster(); loadAlliances(); loadMapData();
-      loadRebellionSettings();
-      loadPolls(); loadMarket(); loadBlackMarket(); loadItems(); loadBalance(); loadGameplayBalance();
+      loadPolls(); loadMarket(); loadBlackMarket(); loadItems();
       api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
     }
     if (isOwner) {
+      loadRebellionSettings();
+      loadBalance(); loadGameplayBalance();
       loadAdmins();
       loadCleanupPreview();
       loadResetPreview();
+      api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
     }
   }, []);
+
+  useEffect(() => {
+    if (!profileTarget.length) { setProfileDraft(null); return; }
+    setProfileDraft(null);
+    api.adminGetPlayerProfile(profileTarget[0].tg_id).then(setProfileDraft).catch(e => toast(e.message));
+  }, [profileTarget]);
 
   useEffect(() => {
     if (!isFull) return;
@@ -932,6 +954,54 @@ export default function Admin() {
       loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
     setRoleplayBusyId(null);
+  };
+
+  const scoreRoleplay = async (roleplayId) => {
+    const score = Number(roleplayScores[roleplayId]);
+    if (!Number.isInteger(score) || score < 0 || score > roleplayScoreMax) { toast(`امتیاز باید بین ۰ تا ${roleplayScoreMax.toLocaleString('fa-IR')} باشد`); return; }
+    setRoleplayScoreBusyId(roleplayId);
+    try {
+      await api.adminScoreRoleplay(roleplayId, score);
+      haptic('medium'); toast('امتیاز رول ثبت و به امتیاز بازیکن اعمال شد');
+      loadRoleplayPending();
+      api.adminSecurityRoleplays(securityQuery, securityPlayer[0]?.tg_id).then(setSecurityRoleplays).catch(() => {});
+    } catch (e) { toast(e.message); }
+    setRoleplayScoreBusyId(null);
+  };
+
+  const saveRoleplayScoreMax = async () => {
+    const value = Number(roleplayScoreMax);
+    if (!Number.isInteger(value) || value < 1) { toast('سقف امتیاز باید عددی مثبت باشد'); return; }
+    setRoleplayScoreSettingsBusy(true);
+    try { const r = await api.adminSaveRoleplayScoreSettings(value); setRoleplayScoreMax(r.max_score); toast('سقف امتیاز رول ذخیره شد'); }
+    catch (e) { toast(e.message); }
+    setRoleplayScoreSettingsBusy(false);
+  };
+
+  const savePlayerProfile = async () => {
+    if (!profileTarget.length || !profileDraft) return;
+    if (!profileDraft.name?.trim() || profileDraft.backstory?.trim().length < 40) { toast('نام و بک‌استوری حداقل ۴۰ نویسه‌ای را کامل کن'); return; }
+    setProfileBusy(true);
+    try {
+      const saved = await api.adminEditPlayerProfile(profileTarget[0].tg_id, profileDraft);
+      setProfileDraft(saved); haptic('medium'); toast('مشخصات بازیکن ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setProfileBusy(false);
+  };
+
+  const saveControlSettings = async () => {
+    setControlSettingsBusy(true);
+    try { const r = await api.adminSaveControlSettings(controlSettings); setControlSettings(r.settings); toast('تمام قوانین و نرخ‌ها ذخیره شدند'); }
+    catch (e) { toast(e.message); }
+    setControlSettingsBusy(false);
+  };
+
+  const resetControlSettings = async () => {
+    if (!window.confirm('همهٔ نرخ‌ها و قوانین این صفحه به پیش‌فرض برگردند؟')) return;
+    setControlSettingsBusy(true);
+    try { const r = await api.adminResetControlSettings(); setControlSettings(r.settings); toast('تنظیمات پیش‌فرض بازی برگشت'); }
+    catch (e) { toast(e.message); }
+    setControlSettingsBusy(false);
   };
 
   const toggleBattleWinner = (battleId, tgId, side) => {
@@ -1796,7 +1866,7 @@ export default function Admin() {
                   وقتی بسته باشد هیچ بازیکنی نمی‌تواند فرمان گسیل تازه بدهد؛ لشکرهای در راه دست‌نخورده می‌مانند
                 </div>
               </div>
-              {isFull && <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
+              {isOwner && <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
                       disabled={!warWindow || warWindowBusy} onClick={toggleWarWindow}>
                 {warWindowBusy ? '...' : warWindow?.open ? 'بستن' : 'باز کردن'}
               </button>}
@@ -1998,6 +2068,7 @@ export default function Admin() {
               <div className="card" key={r.id} style={{ marginBottom: 10 }}>
                 <div className="res"><div className="ic"><Shield s={16} /></div><div className="n">{r.player}<small>{castleLabel(r.castle)} · {new Date(r.created_at).toLocaleString('fa-IR')}</small></div></div>
                 <div style={{ marginTop: 10, whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.9, color: 'var(--mid)' }}>{r.text}</div>
+                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {roleplayScoreMax.toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
               </div>
             ))}
           </div>
@@ -2008,6 +2079,7 @@ export default function Admin() {
           <div className="page-sub up u3">
             سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
           </div>
+          <div className="card up u3 roleplay-cap-card"><div><b>سقف امتیاز رول‌ها</b><small>این سقف برای تمام دسته‌هاست و همهٔ ادمین‌ها می‌توانند آن را تنظیم کنند.</small></div><input type="number" min="1" value={roleplayScoreMax} onChange={e=>setRoleplayScoreMax(e.target.value)} /><button className="btn ghost" disabled={roleplayScoreSettingsBusy} onClick={saveRoleplayScoreMax}>ذخیره سقف</button></div>
           <div className="tabs up u3" role="tablist" style={{ marginBottom: 10 }}>
             {[['all', 'همه'], ...Object.entries(ROLEPLAY_CATEGORIES).filter(([key]) => key !== 'security')].map(([key, label]) => {
               const count = (roleplayPending || []).filter(r => key === 'all' || r.category === key).length;
@@ -2029,6 +2101,7 @@ export default function Admin() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
+                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {Number(roleplayScoreMax).toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
                 {r.category === 'sabotage' && <div className="notice-guide" style={{ marginBottom: 10 }}><strong>هدف خرابکاری: {r.target_player_name || 'نامشخص'}</strong><span>نتیجه و تغییرات هر دو طرف را از همین پرونده ثبت کن.</span></div>}
                 {['economy', 'sabotage'].includes(r.category) && [
                   ['actor', r.actor_state, r.category === 'economy' ? 'وضعیت اقتصادی صاحب رول' : 'وضعیت فرستندهٔ خرابکاری'],
@@ -2155,6 +2228,26 @@ export default function Admin() {
           </div>
           </>
           )}
+      {tab === 'profiles' && (
+        <>
+          <div className="sect up u2">ویرایش مشخصات بازیکن</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>این ابزار برای اصلاح نام، بک‌استوری یا عکس نامناسب است و قلعه، منابع و امتیاز بازیکن را تغییر نمی‌دهد.</div>
+          <div className="card up u2">
+            <label className="f" style={{marginTop:0}}>بازیکن</label><PlayerPicker value={profileTarget} onChange={setProfileTarget} single placeholder="نام بازیکن یا قلعه را جست‌وجو کن..." />
+            {profileTarget.length > 0 && !profileDraft && <div className="loading">در حال دریافت مشخصات...</div>}
+            {profileDraft && <>
+              <label className="f">نام نمایشی</label><input maxLength="40" value={profileDraft.name || ''} onChange={e=>setProfileDraft(p=>({...p,name:e.target.value}))} />
+              <label className="f">بک‌استوری <small>۴۰ تا ۲۰۰۰ نویسه</small></label><textarea rows="7" maxLength="2000" value={profileDraft.backstory || ''} onChange={e=>setProfileDraft(p=>({...p,backstory:e.target.value}))} />
+              <label className="f">عکس پروفایل <small>اختیاری، حداکثر ۲٫۵ مگابایت</small></label>
+              {profileDraft.profile_image && <img src={profileDraft.profile_image} alt="پیش‌نمایش پروفایل" className="admin-profile-preview" />}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readAdminImage(e.target.files?.[0], image=>setProfileDraft(p=>({...p,profile_image:image})), toast)} />
+              {profileDraft.profile_image && <button className="btn ghost" style={{marginTop:8}} onClick={()=>setProfileDraft(p=>({...p,profile_image:null}))}>حذف عکس</button>}
+              <button className="btn" style={{marginTop:14}} disabled={profileBusy} onClick={savePlayerProfile}>{profileBusy?'در حال ذخیره...':'ذخیره مشخصات بازیکن'}</button>
+            </>}
+          </div>
+        </>
+      )}
+
       {tab === 'alliances' && (
         <>
           <div className="sect up u2">اتحادهای بازی</div>
@@ -2467,6 +2560,8 @@ export default function Admin() {
           </div>
         </>
       )}
+
+      {tab === 'control_center' && isOwner && <AdminControlCenter data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
 
       {tab === 'balance' && isFull && (
         <>
@@ -2797,7 +2892,7 @@ export default function Admin() {
             )}
             {resValues && (
               <>
-                <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
+                {isOwner && <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
                   <div className="res" style={{ marginBottom: 8 }}>
                     <div className="n">امتیاز بازیکن<small>امتیاز فعلی: {(resPoints ?? 0).toLocaleString('fa-IR')}</small></div>
                   </div>
@@ -2809,7 +2904,7 @@ export default function Admin() {
                     </button>
                   </div>
                   <div className="page-sub" style={{ marginTop: 7 }}>عدد مثبت امتیاز اضافه می‌کند و عدد منفی از امتیاز کم می‌کند؛ امتیاز زیر صفر نمی‌رود.</div>
-                </div>
+                </div>}
                 <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
                   <div className="res" style={{ marginBottom: 8 }}>
                     <div className="n">محبوبیت بازیکن<small>محبوبیت فعلی: {(resPopularity ?? 50).toLocaleString('fa-IR')} از ۱۰۰</small></div>

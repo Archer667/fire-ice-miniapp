@@ -8,6 +8,7 @@ from db import players, hierarchy
 from game_data import REGIONS, WARDEN_GROUPS, BUILDINGS
 from config import SCORE_W_ECONOMY, SCORE_W_MILITARY, SCORE_W_POPULARITY, SCORE_W_ALLIANCE, TITLE_SCORE_BONUS
 from game import now, all_building_levels
+from control_settings import get as rule
 
 HIERARCHY_ID = "main"
 
@@ -23,8 +24,8 @@ def base_score(p: dict) -> float:
     levels = all_building_levels(p)
     economy = sum(lvl for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") == "economy")
     military = sum(lvl for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") in ("barracks", "armory"))
-    political = p.get("popularity", 0) * SCORE_W_POPULARITY + p.get("alliance_count", 0) * SCORE_W_ALLIANCE
-    return p.get("points", 0) + economy * SCORE_W_ECONOMY + military * SCORE_W_MILITARY + political
+    political = p.get("popularity", 0) * float(rule("scoring.popularity", SCORE_W_POPULARITY)) + p.get("alliance_count", 0) * float(rule("scoring.alliance", SCORE_W_ALLIANCE))
+    return p.get("points", 0) + economy * float(rule("scoring.building_economy", SCORE_W_ECONOMY)) + military * float(rule("scoring.building_military", SCORE_W_MILITARY)) + political
 
 async def get_hierarchy_doc() -> dict:
     doc = await hierarchy.find_one({"_id": HIERARCHY_ID}) or {}
@@ -64,11 +65,11 @@ async def my_tribute_role(tg_id: int):
 def title_bonus_and_rank(tg_id: int, h: dict):
     """بونوس امتیاز و برچسب مقامی که این بازیکن الان داره (بالاترین مقامش)"""
     if h.get("king") == tg_id:
-        return TITLE_SCORE_BONUS["king"], "king"
+        return float(rule("scoring.title_king", TITLE_SCORE_BONUS["king"])), "king"
     if tg_id in wardens_of(h):
-        return TITLE_SCORE_BONUS["warden"], "warden"
+        return float(rule("scoring.title_warden", TITLE_SCORE_BONUS["warden"])), "warden"
     if tg_id in h.get("overlords", {}).values():
-        return TITLE_SCORE_BONUS["overlord"], "overlord"
+        return float(rule("scoring.title_overlord", TITLE_SCORE_BONUS["overlord"])), "overlord"
     return 0, None
 
 async def scored_players() -> list:
