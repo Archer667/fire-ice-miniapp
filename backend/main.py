@@ -271,6 +271,11 @@ async def _detach_admin_players():
             "castles": [], "castle_buildings": {}, "buildings": {},
         }})
 
+async def _fix_stonedance_region():
+    """اصلاح جغرافیای استون دنس در داده‌های فعلی فصل؛ اجرای دوباره بی‌خطر است."""
+    await map_castles.update_many({"name": "استون دنس"}, {"$set": {"region": "crown"}})
+    await players_col.update_many({"castle": "استون دنس"}, {"$set": {"region": "crown"}})
+
 CASTLE_ROSTER_V2_MARKER_ID = "castle_roster_v2_migrated"
 
 async def _migrate_castle_roster_v2():
@@ -316,6 +321,7 @@ async def start_background_watchers():
     await _load_building_overrides()
     await _load_gameplay_balance()
     await control_settings.load()
+    await _fix_stonedance_region()
     await _detach_admin_players()
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())

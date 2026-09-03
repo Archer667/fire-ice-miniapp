@@ -83,6 +83,7 @@ async def unread(user: dict = Depends(get_user)):
         rumor_filter["created_at"] = {"$gt": seen_at}
     rumor_count = await rumors.count_documents(rumor_filter)
     latest_rumor = await rumors.find_one(rumor_filter, sort=[("created_at", -1)]) if rumor_count else None
+    latest_personal = await messages.find_one(personal_filter, sort=[("created_at", -1)]) if personal else None
 
     return {
         "count": announcements + personal + rumor_count,
@@ -91,6 +92,8 @@ async def unread(user: dict = Depends(get_user)):
         "rumors": rumor_count,
         "latest_rumor_target": latest_rumor.get("target_name") if latest_rumor else None,
         "latest_rumor_id": str(latest_rumor["_id"]) if latest_rumor else None,
+        "latest_message_from": latest_personal.get("from_name") if latest_personal else None,
+        "latest_message_id": str(latest_personal["_id"]) if latest_personal else None,
     }
 
 @router.get("/inbox")
@@ -127,7 +130,9 @@ async def thread(other_tg_id: int, user: dict = Depends(get_user)):
     ]}
     await messages.update_many({"from_id": other_tg_id, "to_id": user["id"]}, {"$set": {"read": True}})
     out = []
-    async for m in messages.find(q).sort("created_at", 1).limit(100):
+    # تازه‌ترین نامه بالا دیده می‌شود. مرتب‌سازی نزولی پیش از limit همچنین تضمین
+    # می‌کند در گفت‌وگوهای طولانی، آخرین ۱۰۰ نامه برگردند نه اولین ۱۰۰ نامهٔ قدیمی.
+    async for m in messages.find(q).sort("created_at", -1).limit(100):
         out.append({
             "mine": m["from_id"] == user["id"], "text": m["text"],
             "kind": m.get("kind", "general"), "at": m["created_at"].isoformat(),

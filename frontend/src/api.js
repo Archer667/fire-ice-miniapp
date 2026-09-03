@@ -519,6 +519,7 @@ const M = {
     const kind = ['castle', 'city', 'ruin', 'port'].includes(body.kind) ? body.kind : 'castle';
     const terrain = MAP_TERRAINS.some(t => t.key === body.terrain) ? body.terrain : 'land';
     m.kind = kind; m.terrain = terrain;
+    if (body.region && REGIONS_STATIC[body.region]) m.region = body.region;
     if (mockMe.registered && mockMe.castle === name) mockMe.is_port = terrain !== 'land';
     return { ok: true };
   },
@@ -1623,6 +1624,9 @@ export const api = {
     : req(`/api/admin/players/${tgId}/points`, { method: 'POST', body: JSON.stringify({ delta }) }),
   adminAdjustPlayerPopularity: (tgId, delta) => MOCK ? Promise.resolve(M.adminAdjustPlayerPopularity(tgId, delta))
     : req(`/api/admin/players/${tgId}/popularity`, { method: 'POST', body: JSON.stringify({ delta }) }),
+  adminBulkAdjustPlayers: (field, delta, region = null) => MOCK
+    ? Promise.resolve({ ok: true, matched: 1, changed: 1, limited: 0, total_applied: delta })
+    : req('/api/admin/players/bulk-adjust', { method: 'POST', body: JSON.stringify({ field, delta, region }) }),
   adminControlSettings: () => MOCK ? Promise.resolve({ settings: {} }) : req('/api/admin/control-settings'),
   adminSaveControlSettings: (settings) => MOCK ? Promise.resolve({ settings }) : req('/api/admin/control-settings', { method: 'POST', body: JSON.stringify({ settings }) }),
   adminResetControlSettings: () => MOCK ? Promise.resolve({ settings: {} }) : req('/api/admin/control-settings/reset', { method: 'POST' }),

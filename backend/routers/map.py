@@ -36,20 +36,25 @@ async def get_map(user: dict = Depends(get_user)):
     # می‌تونه قلعهٔ دومی در اقلیمِ دیگه‌ای داشته باشه — بالادستیِ اون پین باید بالادستیِ
     # همون اقلیم باشه، نه اقلیمِ خانگیِ لرد
     castle_region = {}
+    static_region = {}
     for rid, r in REGIONS.items():
         for c in r["castles"] + r["ports"]:
             castle_region[c] = rid
+            static_region[c] = rid
 
     # مختصات و نوع آیکنِ هرچه ادمین از پنلش روی نقشه گذاشته (چه اسم موجود چه کاملاً تازه)
     coords_by_region = {}
     kind_by_name = {}
     custom_by_region = {}
+    moved_by_region = {}
     async for m in map_castles.find({}):
         coords_by_region.setdefault(m["region"], {})[m["name"]] = [m["x"], m["y"]]
         kind_by_name[m["name"]] = m.get("kind", "port" if m.get("port") else "castle")
         castle_region[m["name"]] = m["region"]
         if m.get("custom"):
             custom_by_region.setdefault(m["region"], []).append({"name": m["name"], "kind": kind_by_name[m["name"]]})
+        elif static_region.get(m["name"]) not in (None, m["region"]):
+            moved_by_region.setdefault(m["region"], []).append({"name": m["name"], "kind": kind_by_name[m["name"]]})
 
     owners_by_castle = {}
     for r in rows:
@@ -76,11 +81,11 @@ async def get_map(user: dict = Depends(get_user)):
                 "house": CASTLE_HOUSES.get(c), "terrain": terrain,
             }
         castle_list = (
-            [built_in(c) for c in r["castles"] + r["ports"]] +
+            [built_in(c) for c in r["castles"] + r["ports"] if castle_region.get(c) == rid] +
             [{"name": c["name"], "owner": owners_by_castle.get(c["name"]),
               "port": terrain_by_name.get(c["name"], "land") in ("coastal", "sea"), "kind": c["kind"],
               "house": CASTLE_HOUSES.get(c["name"]), "terrain": terrain_by_name.get(c["name"], "land")}
-             for c in custom_by_region.get(rid, [])]
+             for c in custom_by_region.get(rid, []) + moved_by_region.get(rid, [])]
         )
         regions.append({
             "id": rid, "name": r["name"],

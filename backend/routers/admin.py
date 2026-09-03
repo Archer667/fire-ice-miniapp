@@ -1571,7 +1571,7 @@ async def map_options(region: str, user: dict = Depends(full_admin_user)):
     """اسم قلعه/بندرهای این اقلیم که هنوز روی نقشه مکان ندارند — برای پرکردن انتخابگر ادمین"""
     if region not in REGIONS:
         raise HTTPException(400, "اقلیم نامعتبر")
-    placed = {m["name"] async for m in map_castles.find({"region": region}, {"name": 1})}
+    placed = {m["name"] async for m in map_castles.find({}, {"name": 1})}
     r = REGIONS[region]
     options = [{"name": c, "kind": "castle", "terrain": "land"} for c in r["castles"] if c not in placed]
     options += [{"name": c, "kind": "port", "terrain": "coastal"} for c in r["ports"] if c not in placed]
@@ -1633,6 +1633,7 @@ async def delete_map_castle(name: str, user: dict = Depends(full_admin_user)):
 class EditMapCastleBody(BaseModel):
     kind: str = "castle"      # نوع آیکن روی نقشه: castle | city | ruin | port
     terrain: str = "land"     # نوع دسترسی زمینی/دریایی: land | coastal | sea
+    region: str | None = None  # انتقال جغرافیایی نشانه به اقلیم دیگر
 
 @router.patch("/map/castles/{name}")
 async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depends(full_admin_user)):
@@ -1642,11 +1643,19 @@ async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depen
         raise HTTPException(400, "نوع آیکن نامعتبر")
     if body.terrain not in MAP_TERRAINS:
         raise HTTPException(400, "نوع زمین نامعتبر")
-    res = await map_castles.update_one({"name": name}, {"$set": {"kind": body.kind, "terrain": body.terrain}})
+    if body.region is not None and body.region not in REGIONS:
+        raise HTTPException(400, "اقلیم نامعتبر")
+    fields = {"kind": body.kind, "terrain": body.terrain}
+    if body.region is not None:
+        fields["region"] = body.region
+    res = await map_castles.update_one({"name": name}, {"$set": fields})
     if res.matched_count == 0:
         raise HTTPException(404, "این نشانه روی نقشه پیدا نشد")
     # اگر بازیکنی همین الان صاحبِ این قلعه است، is_port ذخیره‌شده‌اش را هم فوراً هماهنگ کن
-    await players.update_one({"castle": name}, {"$set": {"is_port": body.terrain in ("coastal", "sea")}})
+    player_fields = {"is_port": body.terrain in ("coastal", "sea")}
+    if body.region is not None:
+        player_fields["region"] = body.region
+    await players.update_one({"castle": name}, {"$set": player_fields})
     return {"ok": True}
 
 @router.get("/admins")
@@ -1911,6 +1920,11 @@ class AdjustPlayerPointsBody(BaseModel):
 class AdjustPlayerPopularityBody(BaseModel):
     delta: int
 
+class BulkAdjustPlayersBody(BaseModel):
+    field: str
+    delta: int
+    region: str | None = None
+
 @router.post("/players/{tg_id}/points")
 async def admin_adjust_player_points(tg_id: int, body: AdjustPlayerPointsBody, user: dict = Depends(owner_user)):
     """امتیاز بازیکن را به مقدار مثبت/منفی تغییر می‌دهد؛ امتیاز هیچ‌وقت زیر صفر نمی‌رود."""
@@ -1992,6 +2006,60 @@ async def admin_set_player_resources(tg_id: int, body: SetPlayerResourcesBody, u
         raise HTTPException(400, "هیچ منبعی برای تغییر مشخص نشده")
     await players.update_one({"tg_id": tg_id}, {"$set": updates})
     return {"ok": True}
+
+@router.post("/players/bulk-adjust")
+async def admin_bulk_adjust_players(body: BulkAdjustPlayersBody, user: dict = Depends(full_admin_user)):
+    """تغییر جمعی یک منبع یا محبوبیت برای همهٔ بازیکنان یا فقط یک اقلیم."""
+    field = body.field.strip()
+    delta = int(body.delta)
+    if field not in PLAYER_RESOURCE_KEYS and field != "popularity":
+        raise HTTPException(400, "منبع نامعتبر است")
+    if delta == 0:
+        raise HTTPException(400, "مقدار تغییر نباید صفر باشد")
+    if field == "popularity" and abs(delta) > 100:
+        raise HTTPException(400, "تغییر محبوبیت نمی‌تواند بیشتر از ۱۰۰ باشد")
+    if field != "popularity" and abs(delta) > 1_000_000:
+        raise HTTPException(400, "مقدار تغییر منبع بیش از حد بزرگ است")
+    if body.region is not None and body.region not in REGIONS:
+        raise HTTPException(400, "اقلیم نامعتبر است")
+
+    admin_ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
+    if OWNER_ID is not None:
+        admin_ids.add(OWNER_ID)
+    query = {
+        "tg_id": {"$nin": list(admin_ids)},
+        "region": body.region if body.region is not None else {"$in": list(REGIONS)},
+        "castle": {"$nin": [None, ""]},
+    }
+    matched = changed = total_applied = limited = 0
+    async for player in players.find(query):
+        matched += 1
+        player = apply_production(player)
+        update = production_fields(player)
+        if field == "popularity":
+            before = max(0, min(100, int(player.get("popularity", POPULARITY_START))))
+            after = max(0, min(100, before + delta))
+            update["popularity"] = after
+        else:
+            resources = player.setdefault("resources", {})
+            before = int(resources.get(field, 0))
+            cap = int(effective_caps(player).get(field, 10 ** 9))
+            after = max(0, min(cap, before + delta))
+            resources[field] = after
+            update["resources"] = resources
+        applied = after - before
+        if applied != delta:
+            limited += 1
+        if applied:
+            changed += 1
+            total_applied += applied
+        await players.update_one({"_id": player["_id"]}, {"$set": update})
+
+    return {
+        "ok": True, "matched": matched, "changed": changed, "limited": limited,
+        "total_applied": total_applied, "region": body.region,
+        "field": field, "delta": delta,
+    }
 
 @router.get("/players/{tg_id}/campaigns")
 async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_user)):

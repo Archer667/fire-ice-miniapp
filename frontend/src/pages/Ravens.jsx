@@ -114,7 +114,7 @@ export default function Ravens() {
     try {
       await api.sendRaven(toTgIds, t);
       haptic('medium');
-      if (!composing) setThread(prev => [...prev, { mine: true, text: t }]);
+      if (!composing) setThread(prev => [{ mine: true, text: t, at: new Date().toISOString() }, ...prev]);
       setText('');
       if (composing) {
         setComposing(false); setComposeTargets([]);

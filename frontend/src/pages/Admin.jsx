@@ -128,6 +128,7 @@ const TAB_GROUPS = [
 ];
 const TABS = TAB_GROUPS.flatMap(g => g.tabs);
 const TAB_BY_KEY = Object.fromEntries(TABS.map(t => [t.key, t]));
+const JUDGMENT_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'judgment').tabs.map(tab => tab.key));
 
 const PLAYER_RES = [
   { key: 'gold',  label: 'طلا',  Icon: Coin },
@@ -146,9 +147,16 @@ export default function Admin() {
   const isOwner = me.is_owner || me.admin_role === 'owner';
   const isFull = isOwner || me.admin_role === 'full';
   const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
-  const availGroups = TAB_GROUPS.map(group => ({ ...group, tabs: group.tabs.filter(canAccessTab) })).filter(group => group.tabs.length);
+  const availGroups = TAB_GROUPS
+    .filter(group => isFull || group.key === 'judgment')
+    .map(group => ({ ...group, tabs: group.tabs.filter(canAccessTab) }))
+    .filter(group => group.tabs.length);
   const [tab, setTab] = useState('overview');
   const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
+
+  useEffect(() => {
+    if (!isFull && !JUDGMENT_TAB_KEYS.has(tab)) setTab('war');
+  }, [isFull, tab]);
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -243,6 +251,7 @@ export default function Admin() {
   const [editingCastle, setEditingCastle] = useState(null);
   const [editKind, setEditKind] = useState('castle');
   const [editTerrain, setEditTerrain] = useState('land');
+  const [editRegion, setEditRegion] = useState('north');
 
   const [marketListings, setMarketListings] = useState(null);
   const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
@@ -265,6 +274,11 @@ export default function Admin() {
   const [popularityBusy, setPopularityBusy] = useState(false);
   const [resBusy, setResBusy] = useState(false);
   const [resCampaigns, setResCampaigns] = useState(null);
+  const [bulkField, setBulkField] = useState('gold');
+  const [bulkDelta, setBulkDelta] = useState('');
+  const [bulkRegion, setBulkRegion] = useState('all');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   const [spyPending, setSpyPending] = useState(null);
   const [spyScores, setSpyScores] = useState({}); // missionId -> score string
@@ -602,16 +616,16 @@ export default function Admin() {
 
   const startEditMapCastle = (c) => {
     haptic();
-    setEditingCastle(c.name); setEditKind(c.kind || 'castle'); setEditTerrain(c.terrain || 'land');
+    setEditingCastle(c.name); setEditKind(c.kind || 'castle'); setEditTerrain(c.terrain || 'land'); setEditRegion(mapRegion);
   };
   const cancelEditMapCastle = () => setEditingCastle(null);
   const saveEditMapCastle = async () => {
     try {
-      await api.adminEditMapCastle(editingCastle, { kind: editKind, terrain: editTerrain });
+      await api.adminEditMapCastle(editingCastle, { kind: editKind, terrain: editTerrain, region: editRegion });
       haptic('medium');
       toast(`نشانهٔ «${editingCastle}» به‌روزرسانی شد`);
       setEditingCastle(null);
-      loadMapData();
+      setMapRegion(editRegion); loadMapData(); loadMapOptions();
     } catch (e) { toast(e.message); }
   };
 
@@ -698,6 +712,21 @@ export default function Admin() {
       toast(`محبوبیت «${resTarget[0].name}» به ${result.popularity.toLocaleString('fa-IR')} رسید`);
     } catch (e) { toast(e.message); }
     setPopularityBusy(false);
+  };
+
+  const applyBulkAdjustment = async () => {
+    const delta = Number(bulkDelta);
+    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش را درست وارد کن'); return; }
+    const fieldName = bulkField === 'popularity' ? 'محبوبیت' : (RES_LABEL[bulkField] || bulkField);
+    const scopeName = bulkRegion === 'all' ? 'همهٔ بازیکنان' : `بازیکنان اقلیم ${REGIONS_STATIC[bulkRegion]?.name || bulkRegion}`;
+    if (!window.confirm(`${delta > 0 ? 'افزودن' : 'کم‌کردن'} ${Math.abs(delta).toLocaleString('fa-IR')} ${fieldName} برای ${scopeName} انجام شود؟`)) return;
+    setBulkBusy(true); setBulkResult(null);
+    try {
+      const result = await api.adminBulkAdjustPlayers(bulkField, delta, bulkRegion === 'all' ? null : bulkRegion);
+      setBulkResult(result); setBulkDelta(''); haptic('medium');
+      toast(`تغییر جمعی برای ${result.changed.toLocaleString('fa-IR')} بازیکن ثبت شد`);
+    } catch (e) { toast(e.message); }
+    setBulkBusy(false);
   };
 
   const toggleWarWindow = async () => {
@@ -1403,6 +1432,10 @@ export default function Admin() {
 
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
+    if (!isFull && !JUDGMENT_TAB_KEYS.has(key)) {
+      toast('ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
+      return;
+    }
     if (target?.ownerOnly && !isOwner) {
       toast('مدیریت ادمین‌ها فقط برای ادمین اصلی باز است');
       return;
@@ -1454,7 +1487,7 @@ export default function Admin() {
             ? 'به تمام بخش‌ها، مدیریت ادمین‌ها و ابزارهای فصل دسترسی داری.'
             : isFull
               ? 'به همهٔ بخش‌های بازی دسترسی داری؛ تب مدیریت ادمین‌ها فقط برای ادمین اصلی است.'
-              : 'فقط بخش‌های داوری، پرونده‌های منتظر و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
+              : 'فقط بخش داوری و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
         </div>
         <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
       </div>
@@ -1494,7 +1527,7 @@ export default function Admin() {
         <div className="admin-current-guide up u2">
           <strong>{TAB_BY_KEY[tab].label}</strong>
           <span>{TAB_BY_KEY[tab].description}</span>
-          <button type="button" className="rbtn" onClick={() => openTab('overview')}>راهنمای پنل</button>
+          {isFull && <button type="button" className="rbtn" onClick={() => openTab('overview')}>راهنمای پنل</button>}
         </div>
       )}
 
@@ -2426,6 +2459,11 @@ export default function Admin() {
                               </div>
                             ))}
                           </div>
+                          <label className="f">اقلیم جغرافیایی قلعه</label>
+                          <select value={editRegion} onChange={e => setEditRegion(e.target.value)}>
+                            {Object.entries(REGIONS_STATIC).map(([rid, region]) => <option key={rid} value={rid}>{region.name}</option>)}
+                          </select>
+                          <div className="page-sub" style={{ marginTop: 6 }}>با تغییر این گزینه، نشانه و قلعهٔ اصلیِ صاحب فعلی به اقلیم تازه منتقل می‌شوند.</div>
                           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                             <button className="btn" style={{ padding: 11 }} onClick={saveEditMapCastle}>ذخیره</button>
                             <button className="btn ghost" style={{ padding: 11 }} onClick={cancelEditMapCastle}>انصراف</button>
@@ -2883,6 +2921,39 @@ export default function Admin() {
 
       {tab === 'resources' && isFull && (
         <>
+          <div className="sect up u2">تغییر جمعی منابع و محبوبیت</div>
+          <div className="card up u2">
+            <div className="notice-guide" style={{ marginTop: 0 }}>
+              <strong>اعمال روی همه یا یک اقلیم</strong>
+              <span>عدد مثبت اضافه می‌کند و عدد منفی کم می‌کند. منابع از سقف انبار رد نمی‌شوند و محبوبیت بین صفر تا صد می‌ماند.</span>
+            </div>
+            <div className="grid2">
+              <div>
+                <label className="f">چه چیزی تغییر کند؟</label>
+                <select value={bulkField} onChange={e => setBulkField(e.target.value)}>
+                  <option value="popularity">محبوبیت</option>
+                  {PLAYER_RES.map(row => <option key={row.key} value={row.key}>{row.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="f">محدودهٔ بازیکنان</label>
+                <select value={bulkRegion} onChange={e => setBulkRegion(e.target.value)}>
+                  <option value="all">همهٔ اقلیم‌ها</option>
+                  {Object.entries(REGIONS_STATIC).map(([rid, region]) => <option key={rid} value={rid}>{region.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <label className="f">مقدار افزایش یا کاهش</label>
+            <input type="number" value={bulkDelta} placeholder="مثلاً ۵۰۰ یا ۲۰۰-" onChange={e => setBulkDelta(e.target.value)} />
+            <button className="btn" disabled={bulkBusy} onClick={applyBulkAdjustment}>
+              {bulkBusy ? 'در حال اعمال...' : 'بررسی و اعمال تغییر جمعی'}
+            </button>
+            {bulkResult && <div className="page-sub" style={{ marginTop: 10, lineHeight: 1.9 }}>
+              {bulkResult.matched.toLocaleString('fa-IR')} بازیکن در محدوده بودند؛ موجودی {bulkResult.changed.toLocaleString('fa-IR')} نفر تغییر کرد.
+              {bulkResult.limited > 0 ? ` برای ${bulkResult.limited.toLocaleString('fa-IR')} نفر، سقف یا کف اجازهٔ اعمال کامل مقدار را نداد.` : ''}
+            </div>}
+          </div>
+
           <div className="sect up u2">ویرایش منابع بازیکن</div>
           <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
