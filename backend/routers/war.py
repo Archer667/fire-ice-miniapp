@@ -427,7 +427,8 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     res = await ambushes.insert_one(doc)
     await notify_admins(
         "ambush_pending", "🏹 کمین تازه منتظر ضریب است",
-        f"{p['name']} · مسیر {body.origin_castle} — {body.target_castle}\n{land_men} سرباز\nسناریو: {scenario[:500]}",
+        f"فرستنده: {p['name']}\nهدف: مسیر {body.origin_castle} — {body.target_castle}\n"
+        f"نیروی کمین: {land_men} سرباز\nمتن کامل رول کمین:\n{scenario[:2800]}",
         dedupe_key=f"ambush:{res.inserted_id}", priority="urgent", player_name=p["name"], player_tg_id=user["id"], source_id=str(res.inserted_id),
     )
     return {"ok": True, "id": str(res.inserted_id), "status": "pending_score"}
@@ -832,6 +833,15 @@ def battle_army_stats_line(army: dict) -> str:
         f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}"
     )
 
+def battle_army_public_line(army: dict) -> str:
+    """آمار قابل نمایش به بازیکنان؛ نوع نیرو و نوع ادوات اطلاعات محرمانه است."""
+    men = int(army.get("men_committed", sum(army.get("troops", {}).values())) or 0)
+    equipment = sum(max(0, int(count or 0)) for count in army.get("equipment", {}).values())
+    return (
+        f"{titled_name(name=army.get('player_name', 'نامشخص'), gender=army.get('player_gender'))} "
+        f"· «{army.get('name', 'لشکر')}» · {men:,} نفر · {equipment:,} ادوات"
+    )
+
 async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str:
     """ترکیب زندهٔ تمام لشکرهای دو سمت؛ فقط برای خود شرکت‌کنندگان نبرد ارسال می‌شود."""
     refreshed = await campaigns.find_one({"_id": root["_id"]}) or root
@@ -859,9 +869,44 @@ async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str
         for army in army_rows:
             if not army.get("player_gender"):
                 army["player_gender"] = gender_by_id.get(army.get("tg_id"), "lord")
-    attacker_text = "\n\n".join(battle_army_stats_line(a) for a in attackers) or "لشکر فعالی ثبت نشده"
-    defender_text = "\n\n".join(battle_army_stats_line(a) for a in defenders) or "لشکر دفاعی مستقلی ثبت نشده"
+    attacker_text = "\n".join(battle_army_public_line(a) for a in attackers) or "لشکر فعالی ثبت نشده"
+    defender_text = "\n".join(battle_army_public_line(a) for a in defenders) or "لشکر دفاعی مستقلی ثبت نشده"
     return f"{intro}\n\n🔴 مهاجمان\n{attacker_text}\n\n🔵 مدافعان\n{defender_text}"
+
+async def battle_admin_roster_text(root: dict, battle_id: str, intro: str) -> str:
+    """ترکیب و سناریوی دقیق تمام لشکرهای نبرد؛ مخصوص بات و پنل ادمین."""
+    refreshed = await campaigns.find_one({"_id": root["_id"]}) or root
+    ids = list(dict.fromkeys([
+        *(refreshed.get("battle_attacker_army_ids") or []),
+        *(refreshed.get("battle_defender_army_ids") or []),
+    ]))
+    object_ids = []
+    for raw in ids:
+        try:
+            object_ids.append(ObjectId(raw))
+        except Exception:
+            continue
+    rows = await campaigns.find({"_id": {"$in": object_ids}, "active": True}).to_list(None) if object_ids else []
+    by_id = {str(row["_id"]): row for row in rows}
+    def side_text(side_ids: list[str]) -> str:
+        parts = []
+        for campaign_id in side_ids:
+            army = by_id.get(str(campaign_id))
+            if not army:
+                continue
+            scenario = (army.get("scenario") or "سناریویی برای این لشکر ثبت نشده").strip()
+            parts.append(f"{battle_army_stats_line(army)}\nسناریوی لشکر: {scenario[:700]}")
+        return "\n\n".join(parts) or "لشکر فعالی ثبت نشده"
+    submitted_rolls = await roleplays.find({"campaign_id": battle_id}).sort("created_at", 1).to_list(None)
+    rolls_text = "\n\n".join(
+        f"{row.get('player_name', 'نامشخص')}:\n{(row.get('text') or '')[:900]}"
+        for row in submitted_rolls
+    ) or "هنوز رولی برای این نبرد ارسال نشده"
+    return (
+        f"{intro}\n\n🔴 مهاجمان (تفکیک کامل)\n{side_text(refreshed.get('battle_attacker_army_ids') or [])}"
+        f"\n\n🔵 مدافعان (تفکیک کامل)\n{side_text(refreshed.get('battle_defender_army_ids') or [])}"
+        f"\n\n📜 رول‌های ثبت‌شده\n{rolls_text}"
+    )[:3800]
 
 async def notify_battle_admins(engagement_id: str, location: str, attacker: dict, defender: dict, defender_troops: dict):
     """همان لحظهٔ تشکیل پروندهٔ نبرد، آمار دو طرف را در بات و پنل همهٔ ادمین‌ها می‌فرستد."""
@@ -881,6 +926,13 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
     defender_equipment = "، ".join(f"{SIEGE_EQUIPMENT.get(k, {}).get('name', k)}×{v}" for k, v in defender.get("equipment", {}).items() if v)
     if attacker_equipment or defender_equipment:
         detail += f"\nادوات {attacker_label}: {attacker_equipment or 'ندارد'}\nادوات {defender_label}: {defender_equipment or 'ندارد'}"
+    detail += (
+        f"\nسناریوی لشکر {attacker_label}: {(attacker.get('scenario') or 'ثبت نشده')[:700]}"
+        f"\nسناریوی لشکر {defender_label}: {(defender.get('scenario') or 'ثبت نشده')[:700]}"
+    )
+    root = await campaigns.find_one({"engagement_campaign_id": engagement_id, "battle_is_root": True})
+    if root:
+        detail = await battle_admin_roster_text(root, engagement_id, f"محل درگیری: {location}")
     await notify_admins(
         "battle_started", "⚔️ نبرد تازه آغاز شد", detail,
         dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
@@ -1087,7 +1139,8 @@ async def detect_route_encounters():
             participant_ids = set(root.get("battle_participant_tg_ids") or []) | {root.get("tg_id"), root.get("battle_defender_tg_id"), army.get("tg_id")}
             async for participant in players.find({"tg_id": {"$in": list(participant_ids - {None})}}):
                 await send_system_message(participant["tg_id"], participant["name"], roster_text, kind="battle")
-            await notify_admins("battle_attacker_joined", "⚔️ نیروی تازه وارد نبرد شد", text,
+            admin_text = await battle_admin_roster_text(root, battle_id, text)
+            await notify_admins("battle_attacker_joined", "⚔️ نیروی تازه وارد نبرد شد", admin_text,
                 dedupe_key=f"battle-join:{battle_id}:{army['_id']}", priority="urgent", player_name=army["player_name"], player_tg_id=army["tg_id"], source_id=battle_id)
             moving.remove(army)
             joined = True
@@ -1147,12 +1200,12 @@ async def detect_route_encounters():
                 "opponent_campaign_id": str(root["_id"]), "opponent_tg_id": root["tg_id"],
                 "battle_location": location, "battle_started_at": now(),
             }})
-            root_eq = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in root.get("equipment", {}).items() if count) or "بدون ادوات"
-            opponent_eq = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in opponent.get("equipment", {}).items() if count) or "بدون ادوات"
+            root_eq = sum(max(0, int(v or 0)) for v in root.get("equipment", {}).values())
+            opponent_eq = sum(max(0, int(v or 0)) for v in opponent.get("equipment", {}).values())
             msg = (
                 f"لشکرهای شما در {location} با هم روبه‌رو شدند و تا اعلام نتیجهٔ ادمین قفل‌اند.\n"
-                f"{root['player_name']}: {troops_summary(root.get('troops', {}))} · ادوات: {root_eq}\n"
-                f"{opponent['player_name']}: {troops_summary(opponent.get('troops', {}))} · ادوات: {opponent_eq}\n"
+                f"{root['player_name']}: {int(root.get('men_committed', 0)):,} نفر · {root_eq:,} ادوات\n"
+                f"{opponent['player_name']}: {int(opponent.get('men_committed', 0)):,} نفر · {opponent_eq:,} ادوات\n"
                 f"تا {roleplay_window_hours():g} ساعت فرصت ارسال رول جنگ دارید."
             )
             await send_system_message(root["tg_id"], root["player_name"], msg, kind="battle")
@@ -1232,14 +1285,15 @@ async def notify_arrivals():
                 pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(c["_id"]), "battle_attacker_joins": join})
             await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {"$push": pushes, "$addToSet": {"battle_participant_tg_ids": c["tg_id"]}})
             side_name = "مدافعان" if joins_defender else "مهاجمان"
-            join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد: {troops_summary(c.get('troops', {}))}"
+            join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد."
             roster_text = await battle_full_roster_text(open_battle, engagement_id, join_text)
             participant_ids = set(open_battle.get("battle_participant_tg_ids") or []) | {open_battle.get("tg_id"), open_battle.get("battle_defender_tg_id"), c.get("tg_id")}
             participant_ids.discard(None)
             async for participant in players.find({"tg_id": {"$in": list(participant_ids)}}):
                 await send_system_message(participant["tg_id"], participant["name"], roster_text, kind="battle")
+            admin_join_text = await battle_admin_roster_text(open_battle, engagement_id, join_text)
             await notify_admins(
-                "battle_attacker_joined", "⚔️ مهاجم تازه به نبرد اضافه شد", join_text,
+                "battle_attacker_joined", "⚔️ مهاجم تازه به نبرد اضافه شد", admin_join_text,
                 dedupe_key=f"battle-join:{engagement_id}:{c['_id']}", priority="urgent",
                 player_name=c["player_name"], player_tg_id=c["tg_id"], castle=target, source_id=engagement_id,
             )
@@ -1301,26 +1355,25 @@ async def notify_arrivals():
                               "battle_root_campaign_id": str(c["_id"]), "battle_is_root": False}})
 
         if creates_battle and battle_defender:
-            attacker_summary = troops_summary(c.get("troops", {}))
+            attacker_summary = int(c.get("men_committed", sum(c.get("troops", {}).values())) or 0)
             defense_troops = {}
             for army in defender_armies:
                 for tid, count in army.get("troops", {}).items():
                     defense_troops[tid] = defense_troops.get(tid, 0) + count
-            defender_summary = troops_summary(defense_troops)
-            attacker_equipment_summary = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in c.get("equipment", {}).items() if count) or "بدون ادوات"
+            defender_summary = sum(max(0, int(v or 0)) for v in defense_troops.values())
+            attacker_equipment_summary = sum(max(0, int(v or 0)) for v in c.get("equipment", {}).values())
             defender_equipment_totals = {}
             for army in defender_armies:
                 for eid, count in army.get("equipment", {}).items():
                     defender_equipment_totals[eid] = defender_equipment_totals.get(eid, 0) + int(count or 0)
-            defender_equipment_summary = "، ".join(f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}×{count}" for eid, count in defender_equipment_totals.items() if count) or "بدون ادوات"
+            defender_equipment_summary = sum(max(0, int(v or 0)) for v in defender_equipment_totals.values())
             defender_power = opposing_army.get("power", 0) if opposing_army else campaign_power(defense_troops, _building_levels(battle_defender, target))
             attacker_power = c.get("power", 0)
             stats_text = (
                 f"آمار نبرد «{name}» در {target}:\n"
-                f"مهاجم ({c['player_name']}): {attacker_summary} — توان {attacker_power}\n"
-                f"لشکر دفاعی قلعه ({battle_defender['name']}): {defender_summary} — توان {defender_power}\n"
+                f"مهاجم ({c['player_name']}): {attacker_summary:,} نفر · {attacker_equipment_summary:,} ادوات\n"
+                f"لشکر دفاعی قلعه ({battle_defender['name']}): {defender_summary:,} نفر · {defender_equipment_summary:,} ادوات\n"
                 f"زیرساخت‌های دفاعی {target}: {infrastructure_summary(defense_infrastructure)}\n"
-                f"ادوات مهاجم: {attacker_equipment_summary}\nادوات طرف مقابل: {defender_equipment_summary}\n"
                 f"هر دو طرف تا {roleplay_window_hours():g} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
             )
             await send_system_message(c["tg_id"], c["player_name"], stats_text, kind="battle")

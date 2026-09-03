@@ -310,7 +310,9 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
     await notify_admins(
         "rebellion_roleplay",
         "✍️ رول شورش آمادهٔ داوری است",
-        f"{row.get('player_name', 'بازیکن')} رول مقابله با شورش {row.get('castle') or 'قلعه نامشخص'} را فرستاد.",
+        f"فرستنده: {row.get('player_name', 'بازیکن')}\n"
+        f"هدف: شورشِ {row.get('castle') or 'قلعه نامشخص'}\n"
+        f"متن کامل رول شورش:\n{text[:2800]}",
         dedupe_key=f"rebellion-roleplay:{oid}",
         priority="high",
         player_name=row.get("player_name"),

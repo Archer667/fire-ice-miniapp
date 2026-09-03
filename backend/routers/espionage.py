@@ -62,7 +62,10 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
     await notify_admins(
         "espionage",
         "👁️ سناریوی جاسوسی تازه",
-        f"{p['name']} از {p['castle']} برای جاسوسی از {body.target_castle} سناریو فرستاد.",
+        f"فرستنده: {p['name']}\n"
+        f"مبدأ: {p['castle']}\n"
+        f"هدف: {target['name']} · {body.target_castle}\n"
+        f"متن کامل رول جاسوسی:\n{scenario[:2800]}",
         dedupe_key=f"spy-submitted:{res.inserted_id}",
         priority="normal",
         player_name=p["name"],

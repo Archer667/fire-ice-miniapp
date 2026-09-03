@@ -75,6 +75,12 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         "created_at": now(),
     }
     res = await roleplays.insert_one(doc)
+    target_line = f"\nهدف: {target_player['name']}" if target_player else ""
+    admin_detail = (
+        f"فرستنده: {p['name']}\n"
+        f"دسته: {ROLEPLAY_CATEGORIES[body.category]}{target_line}\n"
+        f"متن کامل رول:\n{text[:2800]}"
+    )
     if campaign_id:
         submitted = await roleplays.count_documents({"campaign_id": campaign_id})
         deadline = c["arrival_at"] + timedelta(hours=roleplay_window_hours())
@@ -82,7 +88,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         await notify_admins(
             "war_roleplay",
             "⚔️ هر دو رول جنگ آمادهٔ داوری‌اند" if both_ready else "📜 رول جنگ تازه ثبت شد",
-            f"{p['name']} رول نبرد «{c.get('name') or 'بدون نام'}» در {c['target_castle']} را فرستاد."
+            f"{admin_detail}\nنبرد: «{c.get('name') or 'بدون نام'}»\nمحل: {c['target_castle']}"
             + (f" حالا هر {submitted} رول موجود است." if both_ready else " هنوز منتظر رول طرف دیگر هستیم."),
             dedupe_key=(f"war-both-ready:{campaign_id}" if both_ready else f"war-roleplay:{res.inserted_id}"),
             priority="high" if both_ready else "normal",
@@ -93,12 +99,11 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             source_id=campaign_id,
             deadline=deadline,
         )
-    elif result_required:
+    else:
         await notify_admins(
             "roleplay",
-            "📜 رول تازه منتظر داوری است",
-            f"{p['name']} یک رول در دستهٔ «{ROLEPLAY_CATEGORIES[body.category]}» فرستاد."
-            + (f" هدف خرابکاری: {target_player['name']}." if target_player else ""),
+            "🛡️ رول امنیتی تازه ثبت شد" if not result_required else "📜 رول تازه منتظر داوری است",
+            admin_detail,
             dedupe_key=f"roleplay:{res.inserted_id}",
             player_name=p["name"],
             player_tg_id=user["id"],

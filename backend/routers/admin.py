@@ -1256,22 +1256,14 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             defender, name=campaign.get("battle_defender_name", "مدافع"),
         )
 
-        def count_line(values: dict, empty_text: str = "بدون تلفات") -> str:
-            parts = []
-            for tid, raw in values.items():
-                count = max(0, int(raw or 0))
-                if count:
-                    parts.append(f"{COMMON_TROOPS.get(tid, {}).get('name', tid)}: {count:,}")
-            return "، ".join(parts) if parts else empty_text
-
-        attacker_after = {tid: max(0, n - int(attacker_report_losses.get(tid, 0) or 0)) for tid, n in attacker_before.items()}
-        defender_after = {tid: max(0, n - int(defender_report_losses.get(tid, 0) or 0)) for tid, n in defender_before.items()}
-        attacker_equipment_after = {eid: max(0, int(count or 0) - int(attacker_report_equipment_losses.get(eid, 0) or 0)) for eid, count in attacker_equipment_before.items()}
-        defender_equipment_after = {eid: max(0, int(count or 0) - int(defender_report_equipment_losses.get(eid, 0) or 0)) for eid, count in defender_equipment_before.items()}
-
-        def equipment_line(values: dict, empty_text: str) -> str:
-            parts = [f"{SIEGE_EQUIPMENT.get(eid, {}).get('name', eid)}: {int(count):,}" for eid, count in values.items() if int(count or 0) > 0]
-            return "، ".join(parts) if parts else empty_text
+        attacker_men_before = sum(max(0, int(v or 0)) for v in attacker_before.values())
+        defender_men_before = sum(max(0, int(v or 0)) for v in defender_before.values())
+        attacker_men_lost = sum(max(0, int(v or 0)) for v in attacker_report_losses.values())
+        defender_men_lost = sum(max(0, int(v or 0)) for v in defender_report_losses.values())
+        attacker_equipment_total = sum(max(0, int(v or 0)) for v in attacker_equipment_before.values())
+        defender_equipment_total = sum(max(0, int(v or 0)) for v in defender_equipment_before.values())
+        attacker_equipment_lost = sum(max(0, int(v or 0)) for v in attacker_report_equipment_losses.values())
+        defender_equipment_lost = sum(max(0, int(v or 0)) for v in defender_report_equipment_losses.values())
         location = campaign.get("battle_location") or campaign.get("target_castle", "محل نامشخص")
         battle_title = campaign.get("name") or "نتیجهٔ نبرد"
         battle_report_rest = (
@@ -1280,14 +1272,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             f"📜 نتیجهٔ داوری\n{result}\n\n"
             f"🏆 برنده‌ها: {'، '.join(winner_names)}\n"
             f"🏳️ بازنده‌ها: {('، '.join(loser_names) if loser_names else 'ندارد')}\n\n"
-            f"🩸 تلفات {attacker_name}: {count_line(attacker_report_losses)}\n"
-            f"🛡️ نیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}\n\n"
-            f"🩸 تلفات {defender_name}: {count_line(defender_report_losses)}\n"
-            f"🛡️ نیروهای باقی‌مانده {defender_name}: {count_line(defender_after, 'هیچ نیرویی باقی نمانده')}\n\n"
-            f"💥 ادوات منهدم‌شده {attacker_name}: {equipment_line(attacker_report_equipment_losses, 'هیچ‌کدام')}\n"
-            f"💥 ادوات منهدم‌شده {defender_name}: {equipment_line(defender_report_equipment_losses, 'هیچ‌کدام')}\n"
-            f"🏗️ ادوات باقی‌مانده {attacker_name}: {equipment_line(attacker_equipment_after, 'ندارد')}\n"
-            f"🏗️ ادوات باقی‌مانده {defender_name}: {equipment_line(defender_equipment_after, 'ندارد')}"
+            f"🩸 {attacker_name}: {attacker_men_lost:,} نفر از {attacker_men_before:,} نفر کشته شدند؛ "
+            f"{attacker_equipment_lost:,} ادوات از {attacker_equipment_total:,} ادوات از بین رفت.\n\n"
+            f"🩸 {defender_name}: {defender_men_lost:,} نفر از {defender_men_before:,} نفر کشته شدند؛ "
+            f"{defender_equipment_lost:,} ادوات از {defender_equipment_total:,} ادوات از بین رفت."
         )
         battle_report_plain = f"⚔️ {battle_title}\n\n{battle_report_rest}"
         battle_report_bot = f"<b>⚔️ {html.escape(battle_title)}</b>\n\n{html.escape(battle_report_rest)}"
