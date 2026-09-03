@@ -34,6 +34,11 @@ export default function Roleplay() {
   const textTooShort = text.trim().length < 10;
   const noBattleChosen = isWar && !campaignId;
   const noSabotageTarget = category === 'sabotage' && sabotageTarget.length === 0;
+  const scoutRow = rows?.find(r => r.category === 'scout');
+
+  useEffect(() => {
+    if (category === 'scout' && scoutRow) setText(scoutRow.text || '');
+  }, [category, scoutRow?.id]);
 
   const send = async () => {
     if (textTooShort) { toast('رول را کمی بیشتر توضیح بده'); return; }
@@ -43,8 +48,8 @@ export default function Roleplay() {
     try {
       const sent = await api.sendRoleplay(category, text.trim(), isWar ? campaignId : undefined, sabotageTarget[0]?.tg_id);
       haptic('medium');
-      toast(sent.result_required === false ? 'رول امنیتی ثبت و در آرشیو ادمین ذخیره شد' : 'رول برای بررسی شورای جنگ فرستاده شد');
-      setText('');
+      toast(category === 'scout' ? (sent.updated ? 'رول پیش‌قراولت اصلاح و دوباره برای امتیازدهی فرستاده شد' : 'رول پیش‌قراولت برای امتیازدهی فرستاده شد') : (sent.result_required === false ? 'رول امنیتی ثبت و در آرشیو ادمین ذخیره شد' : 'رول برای بررسی شورای جنگ فرستاده شد'));
+      if (category !== 'scout') setText('');
       setSabotageTarget([]);
       load();
       if (isWar) loadBattles();
@@ -104,12 +109,16 @@ export default function Roleplay() {
             </>
           )}
 
+          {category === 'scout' && (
+            <div className="notice-guide" style={{ marginTop: 10 }}><strong>یک رول دائمی برای هر بازیکن</strong><span>این سناریو آمادگی پیش‌قراولان تمام لشکرهایت را مشخص می‌کند. هر بار دوباره ارسالش کنی، نسخهٔ قبلی اصلاح و برای امتیازدهی مجدد فرستاده می‌شود.</span></div>
+          )}
+
           <label className="f">متن رول</label>
           <textarea value={text} onChange={e => setText(e.target.value)}
                     placeholder="سناریوت را بنویس... چه می‌کنی، چطور، و هدفت چیست؟" />
 
           <button className="btn" style={{ marginTop: 14 }} disabled={textTooShort || noBattleChosen || noSabotageTarget || busy} onClick={send}>
-            {busy ? 'در حال ارسال...' : 'ارسال رول به شورای جنگ'}
+            {busy ? 'در حال ارسال...' : category === 'scout' && scoutRow ? 'اصلاح رول پیش‌قراول' : 'ارسال رول به شورای جنگ'}
           </button>
         </div>
       )}
@@ -127,11 +136,14 @@ export default function Roleplay() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span className="title-tag" style={{ marginInlineStart: 0 }}>{r.category_name}</span>
                 <span className={`poll-status ${r.result_required === false || r.resolved ? '' : 'open'}`}>
-                  {r.result_required === false ? 'ثبت شده' : r.resolved ? 'پاسخ آمد' : 'در انتظار بررسی'}
+                  {r.category === 'scout'
+                    ? (r.resolved ? 'امتیازدهی شده' : 'در انتظار امتیاز')
+                    : r.result_required === false ? 'ثبت شده' : r.resolved ? 'پاسخ آمد' : 'در انتظار بررسی'}
                 </span>
               </div>
               <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.8, color: 'var(--mid)' }}>{r.text}</div>
               {r.target_player_name && <div className="page-sub" style={{ marginTop: 7 }}>هدف خرابکاری: {r.target_player_name}</div>}
+              {r.category === 'scout' && r.admin_score != null && <div className="notice-guide" style={{ marginTop: 9 }}><strong>امتیاز پیش‌قراول: {Number(r.admin_score).toLocaleString('fa-IR')} از ۱۰۰</strong><span>اگر امتیاز کمین حریف از این عدد بیشتر نباشد، کمین خنثی می‌شود.</span></div>}
               {r.resolved && (
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(160,195,255,0.07)', fontSize: 12.5, lineHeight: 1.8, color: 'var(--hi)' }}>
                   {r.result}

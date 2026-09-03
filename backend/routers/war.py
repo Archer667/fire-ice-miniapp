@@ -1026,6 +1026,34 @@ async def process_route_ambushes():
             }})
             if not claimed.modified_count:
                 continue
+            quality = max(0, min(100, int(ambush.get("ambush_score", 50))))
+            scout_roll = await roleplays.find_one(
+                {"tg_id": army["tg_id"], "category": "scout", "admin_score": {"$ne": None}},
+                sort=[("updated_at", -1), ("created_at", -1)],
+            )
+            scout_score = max(0, min(100, int((scout_roll or {}).get("admin_score", 0) or 0)))
+            # مساوی هم به سود پیش‌قراول است؛ کمین فقط وقتی عمل می‌کند که امتیازش
+            # صریحاً از آمادگی پیش‌قراولِ لشکر بیشتر باشد.
+            if quality <= scout_score:
+                ambush_total = sum(max(0, int(v or 0)) for v in ambush.get("troops", {}).values())
+                await ambushes.update_one({"_id": ambush["_id"]}, {"$set": {
+                    "status": "thwarted", "campaign_id": str(army["_id"]),
+                    "scout_score": scout_score, "casualties": 0,
+                    "ambusher_losses": ambush_total, "refund": {},
+                }})
+                text = (
+                    f"🔭 پیش‌قراولان لشکر {army['player_name']} کمین مسیر {path[i]} — {path[i + 1]} را خنثی کردند.\n"
+                    f"امتیاز پیش‌قراول: {scout_score} · امتیاز کمین: {quality}\n"
+                    f"به لشکر هدف تلفاتی وارد نشد و کمین با {ambush_total} نفر از بین رفت."
+                )
+                await send_system_message(ambush["tg_id"], ambush["player_name"], text, kind="ambush")
+                await send_system_message(army["tg_id"], army["player_name"], text, kind="ambush")
+                await notify_admins(
+                    "ambush_triggered", "🔭 کمین توسط پیش‌قراول خنثی شد", text,
+                    dedupe_key=f"ambush-thwarted:{ambush['_id']}", priority="urgent",
+                    player_name=ambush["player_name"], player_tg_id=ambush["tg_id"], source_id=str(ambush["_id"]),
+                )
+                break
             requested = round(ambush.get("soldiers_committed", ambush["men_committed"]) * float(ambush.get("coefficient", 0)))
             updated_troops, losses, casualties = apply_automatic_losses(army.get("troops", {}), requested)
             old_men = max(1, int(army.get("men_committed", 0)))
@@ -1040,7 +1068,6 @@ async def process_route_ambushes():
             # کیفیت کمین تعیین می‌کند چند درصد از نیروهای کمین‌گذار در ضدحمله/عقب‌نشینی
             # از بین می‌روند. بازمانده‌ها منحل می‌شوند و نفرات، سکه و سلاحشان برمی‌گردد؛
             # غلهٔ مصرف‌شده هیچ‌وقت جزو بازپرداخت نیست.
-            quality = max(0, min(100, int(ambush.get("ambush_score", 50))))
             ambush_troops = {k: max(0, int(v or 0)) for k, v in ambush.get("troops", {}).items()}
             ambusher_loss_troops = {k: min(v, round(v * (100 - quality) / 100)) for k, v in ambush_troops.items()}
             surviving_troops = {k: v - ambusher_loss_troops[k] for k, v in ambush_troops.items()}
@@ -1066,6 +1093,7 @@ async def process_route_ambushes():
                 await players.update_one({"tg_id": ambush["tg_id"]}, {"$set": {"resources": ambusher["resources"]}})
             await ambushes.update_one({"_id": ambush["_id"]}, {"$set": {
                 "status": "triggered", "casualties": casualties, "losses": losses, "campaign_id": str(army["_id"]),
+                "scout_score": scout_score,
                 "ambusher_losses": ambusher_losses, "ambusher_loss_troops": ambusher_loss_troops,
                 "surviving_troops": surviving_troops, "refund": refund,
             }})
@@ -1074,7 +1102,7 @@ async def process_route_ambushes():
             text = (
                 f"🏹 کمین در مسیر {path[i]} — {path[i + 1]} فعال شد.\n"
                 f"کمین‌گذار: {ambush['player_name']} · هدف: {army['player_name']}\n"
-                f"ضریب: {ambush.get('coefficient', 0):g} · امتیاز کمین: {quality}\n"
+                f"ضریب: {ambush.get('coefficient', 0):g} · امتیاز کمین: {quality} · امتیاز پیش‌قراول: {scout_score}\n"
                 f"تلفات لشکر هدف: {casualties} نفر · جزئیات: {detail}\n"
                 f"تلفات نیروهای کمین‌گذار: {ambusher_losses} · بازپرداخت بازمانده‌ها: {refund_text}"
             )

@@ -64,7 +64,8 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "قبلاً سناریوی این نبرد را فرستاده‌ای")
         campaign_id = body.campaign_id
 
-    result_required = body.category != "security"
+    existing = None
+    result_required = body.category not in ("security", "scout")
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "castle": p["castle"],
         "category": body.category, "text": text[:4000], "campaign_id": campaign_id,
@@ -74,7 +75,21 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         "result_required": result_required,
         "created_at": now(),
     }
-    res = await roleplays.insert_one(doc)
+    if body.category == "scout":
+        existing = await roleplays.find_one({"tg_id": user["id"], "category": "scout"})
+        if existing:
+            updated_at = now()
+            await roleplays.update_one({"_id": existing["_id"]}, {"$set": {
+                **doc, "resolved": False, "updated_at": updated_at,
+            }, "$unset": {"admin_score": "", "scored_at": "", "scored_by": ""}})
+            roleplay_id = existing["_id"]
+        else:
+            inserted = await roleplays.insert_one({**doc, "resolved": False})
+            roleplay_id = inserted.inserted_id
+        res_id = roleplay_id
+    else:
+        inserted = await roleplays.insert_one(doc)
+        res_id = inserted.inserted_id
     target_line = f"\nهدف: {target_player['name']}" if target_player else ""
     admin_detail = (
         f"فرستنده: {p['name']}\n"
@@ -90,7 +105,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             "⚔️ هر دو رول جنگ آمادهٔ داوری‌اند" if both_ready else "📜 رول جنگ تازه ثبت شد",
             f"{admin_detail}\nنبرد: «{c.get('name') or 'بدون نام'}»\nمحل: {c['target_castle']}"
             + (f" حالا هر {submitted} رول موجود است." if both_ready else " هنوز منتظر رول طرف دیگر هستیم."),
-            dedupe_key=(f"war-both-ready:{campaign_id}" if both_ready else f"war-roleplay:{res.inserted_id}"),
+            dedupe_key=(f"war-both-ready:{campaign_id}" if both_ready else f"war-roleplay:{res_id}"),
             priority="high" if both_ready else "normal",
             player_name=p["name"],
             player_tg_id=user["id"],
@@ -102,16 +117,16 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     else:
         await notify_admins(
             "roleplay",
-            "🛡️ رول امنیتی تازه ثبت شد" if not result_required else "📜 رول تازه منتظر داوری است",
+            "🔭 رول پیش‌قراول برای امتیازدهی ارسال شد" if body.category == "scout" else ("🛡️ رول امنیتی تازه ثبت شد" if not result_required else "📜 رول تازه منتظر داوری است"),
             admin_detail,
-            dedupe_key=f"roleplay:{res.inserted_id}",
+            dedupe_key=f"roleplay:{res_id}:{now().isoformat()}" if body.category == "scout" else f"roleplay:{res_id}",
             player_name=p["name"],
             player_tg_id=user["id"],
             castle=p.get("castle"),
             action="از پنل ادمین ← جنگ و رول‌ها ← رول‌ها، نتیجه را ثبت کن.",
-            source_id=str(res.inserted_id),
+            source_id=str(res_id),
         )
-    return {"ok": True, "id": str(res.inserted_id), "result_required": result_required}
+    return {"ok": True, "id": str(res_id), "result_required": result_required, "updated": body.category == "scout" and existing is not None}
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):

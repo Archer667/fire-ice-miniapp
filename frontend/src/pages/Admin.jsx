@@ -184,6 +184,7 @@ export default function Admin() {
   const [ambushesList, setAmbushesList] = useState(null);
   const [ambushScores, setAmbushScores] = useState({});
   const [ambushQualityScores, setAmbushQualityScores] = useState({});
+  const [ambushScenarios, setAmbushScenarios] = useState({});
   const [ambushBusyId, setAmbushBusyId] = useState(null);
   const [warWindow, setWarWindow] = useState(null);
   const [warWindowBusy, setWarWindowBusy] = useState(false);
@@ -923,7 +924,18 @@ export default function Admin() {
     if (Number.isNaN(coefficient) || coefficient < 0 || coefficient > 10) { toast('ضریب باید بین صفر تا ۱۰ باشد'); return; }
     if (Number.isNaN(ambushScore) || ambushScore < 0 || ambushScore > 100) { toast('امتیاز کمین باید بین صفر تا ۱۰۰ باشد'); return; }
     setAmbushBusyId(id);
-    try { await api.adminScoreAmbush(id, coefficient, ambushScore); haptic('medium'); toast('ضریب و امتیاز ثبت شد و کمین فعال شد'); loadAmbushes(); }
+    const row = ambushesList?.find(a => a.id === id);
+    const scenario = (ambushScenarios[id] ?? row?.scenario ?? '').trim();
+    if (scenario.length < 20) { toast('سناریوی کمین باید حداقل ۲۰ نویسه باشد'); return; }
+    try { await api.adminEditAmbush(id, scenario, coefficient, ambushScore); haptic('medium'); toast('کمین ذخیره و فعال شد'); loadAmbushes(); }
+    catch (e) { toast(e.message); }
+    setAmbushBusyId(null);
+  };
+
+  const deleteAmbush = async (id) => {
+    if (!window.confirm('این کمین حذف شود؟ اگر هنوز مصرف نشده باشد، نفرات، سکه و تسلیحاتش به سازنده برمی‌گردد.')) return;
+    setAmbushBusyId(id);
+    try { await api.adminDeleteAmbush(id); haptic('medium'); toast('کمین حذف و هزینه‌های قابل بازگشت مسترد شد'); loadAmbushes(); }
     catch (e) { toast(e.message); }
     setAmbushBusyId(null);
   };
@@ -985,13 +997,14 @@ export default function Admin() {
     setRoleplayBusyId(null);
   };
 
-  const scoreRoleplay = async (roleplayId) => {
+  const scoreRoleplay = async (roleplayId, category = '') => {
+    const maxScore = category === 'scout' ? 100 : roleplayScoreMax;
     const score = Number(roleplayScores[roleplayId]);
-    if (!Number.isInteger(score) || score < 0 || score > roleplayScoreMax) { toast(`امتیاز باید بین ۰ تا ${roleplayScoreMax.toLocaleString('fa-IR')} باشد`); return; }
+    if (!Number.isInteger(score) || score < 0 || score > maxScore) { toast(`امتیاز باید بین ۰ تا ${maxScore.toLocaleString('fa-IR')} باشد`); return; }
     setRoleplayScoreBusyId(roleplayId);
     try {
       await api.adminScoreRoleplay(roleplayId, score);
-      haptic('medium'); toast('امتیاز رول ثبت و به امتیاز بازیکن اعمال شد');
+      haptic('medium'); toast(category === 'scout' ? 'امتیاز پیش‌قراول ثبت شد' : 'امتیاز رول ثبت و به امتیاز بازیکن اعمال شد');
       loadRoleplayPending();
       api.adminSecurityRoleplays(securityQuery, securityPlayer[0]?.tg_id).then(setSecurityRoleplays).catch(() => {});
     } catch (e) { toast(e.message); }
@@ -1941,18 +1954,19 @@ export default function Admin() {
           )}
 
           {warSubTab === 'ambushes' && <div className="up u2">
-            <div className="page-sub" style={{ marginBottom: 12 }}>ضریب ۰ تا ۱۰، تلفات دشمن را مشخص می‌کند. امتیاز کمین ۰ تا ۱۰۰ کیفیت عقب‌نشینی است: مثلاً امتیاز ۸۰ یعنی ۲۰٪ نیروهای کمین‌گذار از بین می‌روند و ۸۰٪ با هزینه‌هایشان برمی‌گردند.</div>
+            <div className="page-sub" style={{ marginBottom: 12 }}>ابتدا امتیاز کمین با امتیاز رول پیش‌قراولِ صاحب لشکر مقایسه می‌شود. کمین فقط با امتیاز بیشتر موفق است؛ سپس ضریب، تلفات دشمن و امتیاز کمین، تلفات کمین‌گذار را تعیین می‌کند. ویرایش و حذف فقط برای ادمین کامل و اصلی است.</div>
             {ambushesList === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
             {ambushesList && ambushesList.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی ثبت نشده</div>}
             {(ambushesList || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 10 }}>
               <div className="res"><div className="ic"><Eye s={16} /></div><div className="n">{a.player}<small>{castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)} · {a.men_committed.toLocaleString('fa-IR')} نفر</small></div></div>
-              <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>
+              {isFull && ['pending_score', 'active'].includes(a.status) ? <textarea value={ambushScenarios[a.id] ?? a.scenario} onChange={e => setAmbushScenarios(p => ({ ...p, [a.id]: e.target.value }))} style={{ margin: '10px 0' }} /> : <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>}
               <div style={{ fontSize: 11.5, marginBottom: 8 }}>نیروها: {a.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ')}</div>
-              {a.status === 'pending_score' ? <div className="grid2">
-                <div><label className="f" style={{ marginTop: 0 }}>ضریب تلفات دشمن</label><input type="number" min="0" max="10" step="0.1" placeholder="۰ تا ۱۰" value={ambushScores[a.id] ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
-                <div><label className="f" style={{ marginTop: 0 }}>امتیاز کیفیت کمین</label><input type="number" min="0" max="100" placeholder="۰ تا ۱۰۰" value={ambushQualityScores[a.id] ?? ''} onChange={e => setAmbushQualityScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
-                <button className="btn" disabled={ambushBusyId === a.id} onClick={() => scoreAmbush(a.id)}>ثبت و فعال‌سازی</button>
-              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')} · امتیاز {Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name}` : ''}{a.ambusher_losses != null ? ` · ${a.ambusher_losses.toLocaleString('fa-IR')} تلفات کمین‌گذار` : ''}</span></div>}
+              {isFull && ['pending_score', 'active'].includes(a.status) ? <div className="grid2">
+                <div><label className="f" style={{ marginTop: 0 }}>ضریب تلفات دشمن</label><input type="number" min="0" max="10" step="0.1" placeholder="۰ تا ۱۰" value={ambushScores[a.id] ?? a.coefficient ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
+                <div><label className="f" style={{ marginTop: 0 }}>امتیاز کمین</label><input type="number" min="0" max="100" placeholder="۰ تا ۱۰۰" value={ambushQualityScores[a.id] ?? a.ambush_score ?? ''} onChange={e => setAmbushQualityScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
+                <button className="btn" disabled={ambushBusyId === a.id} onClick={() => scoreAmbush(a.id)}>{a.status === 'active' ? 'ذخیرهٔ تغییرات' : 'ثبت و فعال‌سازی'}</button>
+                <button className="btn ghost" style={{ color: 'var(--danger)' }} disabled={ambushBusyId === a.id} onClick={() => deleteAmbush(a.id)}>حذف کمین</button>
+              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : a.status === 'thwarted' ? 'خنثی‌شده توسط پیش‌قراول' : a.status === 'admin_deleted' ? 'حذف‌شده توسط ادمین' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')} · امتیاز {Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}{a.scout_score != null ? ` · پیش‌قراول ${Number(a.scout_score).toLocaleString('fa-IR')}` : ''}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name || 'لشکر هدف'}` : ''}{a.ambusher_losses != null ? ` · ${a.ambusher_losses.toLocaleString('fa-IR')} تلفات کمین‌گذار` : ''}</span></div>}
             </div>)}
           </div>}
 
@@ -2101,7 +2115,7 @@ export default function Admin() {
               <div className="card" key={r.id} style={{ marginBottom: 10 }}>
                 <div className="res"><div className="ic"><Shield s={16} /></div><div className="n">{r.player}<small>{castleLabel(r.castle)} · {new Date(r.created_at).toLocaleString('fa-IR')}</small></div></div>
                 <div style={{ marginTop: 10, whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.9, color: 'var(--mid)' }}>{r.text}</div>
-                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {roleplayScoreMax.toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
+                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {roleplayScoreMax.toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id, r.category)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
               </div>
             ))}
           </div>
@@ -2134,7 +2148,8 @@ export default function Admin() {
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
-                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {Number(roleplayScoreMax).toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
+                <div className="roleplay-score-box"><label>{r.category === 'scout' ? 'امتیاز آمادگی پیش‌قراول' : 'امتیاز این رول'} <small>از {(r.category === 'scout' ? 100 : Number(roleplayScoreMax)).toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={r.category === 'scout' ? 100 : roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id, r.category)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
+                {r.category === 'scout' && <div className="page-sub" style={{ margin: '-4px 2px 10px' }}>این امتیاز به جدول امتیازات اضافه نمی‌شود و فقط هنگام برخورد با کمین مقایسه خواهد شد.</div>}
                 {r.category === 'sabotage' && <div className="notice-guide" style={{ marginBottom: 10 }}><strong>هدف خرابکاری: {r.target_player_name || 'نامشخص'}</strong><span>نتیجه و تغییرات هر دو طرف را از همین پرونده ثبت کن.</span></div>}
                 {['economy', 'sabotage'].includes(r.category) && [
                   ['actor', r.actor_state, r.category === 'economy' ? 'وضعیت اقتصادی صاحب رول' : 'وضعیت فرستندهٔ خرابکاری'],
@@ -2229,7 +2244,7 @@ export default function Admin() {
                     </div>
                   </div>
                 )}
-                <div style={{ display: r.category === 'war' ? 'none' : 'block' }}>
+                <div style={{ display: ['war', 'scout'].includes(r.category) ? 'none' : 'block' }}>
                 <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}

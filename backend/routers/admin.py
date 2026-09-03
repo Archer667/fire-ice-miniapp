@@ -82,7 +82,7 @@ async def score_roleplay(roleplay_id: str, body: RoleplayScoreBody, user: dict =
     row = await roleplays.find_one({"_id": oid})
     if not row:
         raise HTTPException(404, "رول پیدا نشد")
-    limits = await get_roleplay_score_settings(user)
+    limits = {"max_score": 100} if row.get("category") == "scout" else await get_roleplay_score_settings(user)
     score = int(body.score)
     if score < 0 or score > limits["max_score"]:
         raise HTTPException(400, f"امتیاز رول باید بین صفر تا {limits['max_score']} باشد")
@@ -90,12 +90,13 @@ async def score_roleplay(roleplay_id: str, body: RoleplayScoreBody, user: dict =
     delta = score - old_score
     await roleplays.update_one({"_id": oid}, {"$set": {
         "admin_score": score, "scored_at": now(), "scored_by": user["id"],
+        **({"resolved": True} if row.get("category") == "scout" else {}),
     }})
-    if delta:
+    if delta and row.get("category") != "scout":
         player = await players.find_one({"tg_id": row["tg_id"]}, {"points": 1})
         if player:
             await players.update_one({"tg_id": row["tg_id"]}, {"$set": {"points": max(0, int(player.get("points", 0)) + delta)}})
-    return {"ok": True, "score": score, "max_score": limits["max_score"], "applied_delta": delta}
+    return {"ok": True, "score": score, "max_score": limits["max_score"], "applied_delta": 0 if row.get("category") == "scout" else delta}
 
 @router.get("/control-settings")
 async def admin_control_settings(user: dict = Depends(get_user)):
@@ -532,6 +533,7 @@ async def admin_list_ambushes(user: dict = Depends(admin_user)):
             "men_committed": a.get("soldiers_committed", a["men_committed"]), "status": a["status"],
             "coefficient": a.get("coefficient"), "casualties": a.get("casualties"),
             "ambush_score": a.get("ambush_score"), "ambusher_losses": a.get("ambusher_losses"),
+            "scout_score": a.get("scout_score"),
             "refund": a.get("refund"), "victim_name": a.get("victim_name"),
         })
     return out
@@ -541,7 +543,7 @@ class AmbushScoreBody(BaseModel):
     ambush_score: int
 
 @router.post("/ambushes/{ambush_id}/score")
-async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict = Depends(admin_user)):
+async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict = Depends(full_admin_user)):
     if body.coefficient < 0 or body.coefficient > 10:
         raise HTTPException(400, "ضریب کمین باید بین صفر تا ۱۰ باشد")
     if body.ambush_score < 0 or body.ambush_score > 100:
@@ -550,10 +552,10 @@ async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict =
         oid = ObjectId(ambush_id)
     except Exception:
         raise HTTPException(400, "شناسهٔ کمین نامعتبر است")
-    a = await ambushes.find_one({"_id": oid, "status": "pending_score"})
+    a = await ambushes.find_one({"_id": oid, "status": {"$in": ["pending_score", "active"]}})
     if not a:
-        raise HTTPException(404, "کمین منتظر امتیاز پیدا نشد")
-    await ambushes.update_one({"_id": oid, "status": "pending_score"}, {"$set": {
+        raise HTTPException(404, "کمین قابل ویرایش پیدا نشد")
+    await ambushes.update_one({"_id": oid, "status": {"$in": ["pending_score", "active"]}}, {"$set": {
         "coefficient": round(body.coefficient, 2), "ambush_score": body.ambush_score,
         "status": "active", "scored_at": now(), "scored_by": user["id"],
     }})
@@ -561,6 +563,57 @@ async def admin_score_ambush(ambush_id: str, body: AmbushScoreBody, user: dict =
     if owner:
         await send_system_message(owner["tg_id"], owner["name"], f"کمینت در مسیر {a['origin_castle']} — {a['target_castle']} با ضریب {body.coefficient:g} و امتیاز {body.ambush_score} آماده شد.", kind="ambush")
     return {"ok": True, "status": "active"}
+
+class AmbushEditBody(BaseModel):
+    scenario: str
+    coefficient: float
+    ambush_score: int
+
+@router.put("/ambushes/{ambush_id}")
+async def admin_edit_ambush(ambush_id: str, body: AmbushEditBody, user: dict = Depends(full_admin_user)):
+    scenario = body.scenario.strip()
+    if len(scenario) < 20:
+        raise HTTPException(400, "سناریوی کمین باید حداقل ۲۰ نویسه باشد")
+    if not 0 <= body.coefficient <= 10 or not 0 <= body.ambush_score <= 100:
+        raise HTTPException(400, "ضریب باید ۰ تا ۱۰ و امتیاز کمین ۰ تا ۱۰۰ باشد")
+    try:
+        oid = ObjectId(ambush_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ کمین نامعتبر است")
+    result = await ambushes.update_one(
+        {"_id": oid, "status": {"$in": ["pending_score", "active"]}},
+        {"$set": {"scenario": scenario[:4000], "coefficient": round(body.coefficient, 2),
+                  "ambush_score": body.ambush_score, "status": "active", "edited_at": now(), "edited_by": user["id"]}},
+    )
+    if not result.matched_count:
+        raise HTTPException(404, "کمین فعال یا منتظر امتیاز پیدا نشد")
+    return {"ok": True}
+
+@router.delete("/ambushes/{ambush_id}")
+async def admin_delete_ambush(ambush_id: str, user: dict = Depends(full_admin_user)):
+    """حذف اداری کمینِ هنوز مصرف‌نشده؛ تمام هزینهٔ غیرغله‌ای آن به سازنده برمی‌گردد."""
+    try:
+        oid = ObjectId(ambush_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ کمین نامعتبر است")
+    a = await ambushes.find_one({"_id": oid, "status": {"$in": ["pending_score", "active"]}})
+    if not a:
+        raise HTTPException(404, "فقط کمین فعال یا منتظر امتیاز قابل حذف است")
+    claimed = await ambushes.update_one(
+        {"_id": oid, "status": {"$in": ["pending_score", "active"]}},
+        {"$set": {"status": "admin_deleted", "deleted_at": now(), "deleted_by": user["id"]}},
+    )
+    if not claimed.modified_count:
+        raise HTTPException(409, "وضعیت کمین هم‌زمان تغییر کرده؛ صفحه را تازه کن")
+    refund = {"men": int(a.get("men_committed", 0) or 0), "gold": float(a.get("gold_cost", 0) or 0)}
+    for resource, amount in (a.get("weapons_cost") or {}).items():
+        refund[resource] = refund.get(resource, 0) + amount
+    owner = await players.find_one({"tg_id": a["tg_id"]})
+    if owner:
+        add_resources(owner, refund)
+        await players.update_one({"_id": owner["_id"]}, {"$set": {"resources": owner["resources"]}})
+        await send_system_message(owner["tg_id"], owner["name"], "کمینت توسط ادمین حذف شد و نفرات، سکه و تسلیحات آن برگشت داده شد.", kind="ambush")
+    return {"ok": True, "refund": refund}
 
 @router.get("/roleplay/security")
 async def search_security_roleplays(q: str = "", tg_id: int | None = None, user: dict = Depends(admin_user)):
@@ -1034,6 +1087,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         raise HTTPException(404, "این رول پیدا نشد")
     if r.get("resolved"):
         raise HTTPException(400, "این رول قبلاً پاسخ داده شده")
+    if r.get("category") == "scout":
+        raise HTTPException(400, "رول پیش‌قراول نتیجهٔ متنی ندارد؛ امتیازش را از بخش امتیاز رول ثبت کن")
     if not r.get("admin_generated") and r.get("admin_score") is None:
         raise HTTPException(400, "قبل از ثبت نتیجه، امتیاز این رول را ثبت کن")
 
