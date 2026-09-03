@@ -3492,15 +3492,16 @@ export default function Admin() {
             <>
               <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
               <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>شروع فصل تازه بدون حذف بازیکن‌ها</div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فصل و شروع فصل تازه</div>
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
                   منابع، ساختمان‌ها، نیروها، مدال‌ها، محبوبیت و تاریخچهٔ فصل پاک و از مقدار آغازین شروع می‌شوند.
-                  حساب بازیکن، خاندان، اقلیم، قلعهٔ اصلی و قلعه‌های فتح‌شده سر جای خود می‌مانند.
+                  حساب، نام، عکس، بک‌استوری، خاندان، اقلیم و قلعهٔ اصلی هر بازیکن سر جای خود می‌ماند.
+                  قلعه‌های فتح‌شده آزاد می‌شوند و تنظیمات بالانس و پین‌های نقشه تغییر نمی‌کنند.
                 </div>
                 <label className="f">برای تایید بنویس: <code>NEWSEASON</code></label>
                 <input value={seasonResetConfirm} onChange={e => setSeasonResetConfirm(e.target.value)} placeholder="NEWSEASON" dir="ltr" />
                 <button className="btn ghost" disabled={seasonResetConfirm.trim() !== 'NEWSEASON' || seasonResetBusy} onClick={resetSeason}>
-                  {seasonResetBusy ? 'در حال شروع فصل...' : 'شروع فصل تازه'}
+                  {seasonResetBusy ? 'در حال ریست فصل...' : 'ریست فصل و شروع دوباره'}
                 </button>
               </div>
               <div className="card up u3" style={{ borderColor: '#9c6b20' }}>

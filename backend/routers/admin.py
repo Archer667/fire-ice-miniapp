@@ -11,6 +11,7 @@ from db import (
     campaigns, ambushes, players, admin_roles, map_castles, market_listings, black_market_listings,
     spy_missions, roleplays, items, item_grants, alliances, game_settings,
     caravans, messages, rumors, hierarchy, polls, rebellions, rebellion_checks, admin_notifications,
+    player_market_listings, rumor_views, tributes,
 )
 import game_data
 import telegram_bot
@@ -2341,26 +2342,30 @@ async def _clear_season_history():
     for collection in (
         campaigns, ambushes, spy_missions, messages, roleplays, rebellions, rebellion_checks,
         rumors, alliances, polls, caravans, hierarchy, item_grants, admin_notifications,
+        player_market_listings, rumor_views, tributes,
     ):
         await collection.delete_many({})
 
 @router.post("/reset-season")
 async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
-    """شروع فصل تازه بدون حذف بازیکن، جایگاه، قلعه، خاندان یا قلعه‌های فتح‌شده."""
+    """شروع فصل تازه بدون حذف حساب، پروفایل، خاندان، اقلیم یا قلعهٔ اصلی بازیکن.
+
+    قلعه‌های اضافه جزو پیشرفت همان فصل‌اند و آزاد می‌شوند. تنظیمات بالانس، پین‌های
+    نقشه، نقش‌های ادمین و کالا/بازارهای تعریف‌شده توسط ادمین دست‌نخورده می‌مانند.
+    """
     if body.confirm.strip() != "NEWSEASON":
         raise HTTPException(400, "برای تایید، دقیقاً عبارت NEWSEASON را تایپ کن")
     started_at = now()
     rebellion_settings = await get_rebellion_settings()
     reset_count = 0
     async for player in players.find({}):
-        extra_castles = {castle: {} for castle in (player.get("castle_buildings") or {})}
         blank = {}
         normalize_stats(blank)
         title = DEFAULT_TITLE.get(player.get("gender", "lord"), DEFAULT_TITLE["lord"])
         await players.update_one({"_id": player["_id"]}, {
             "$set": {
                 "resources": control_settings.get("economy.starting_resources", STARTING_RESOURCES), "troops": {}, "buildings": {},
-                "castle_buildings": extra_castles, "points": 100, "scoreboard_baseline": 0,
+                "castle_buildings": {}, "points": 100, "scoreboard_baseline": 0,
                 "popularity": POPULARITY_START, "tax_rate": int(control_settings.get("tax.default_rate", TAX_RATE_DEFAULT)),
                 "alliance_count": 0, "last_feast": None, "last_tick": started_at,
                 "season_started_at": started_at, "stats": blank["stats"], "medals": {},
