@@ -157,6 +157,7 @@ export default function Admin() {
   const [telegramSyncBusy, setTelegramSyncBusy] = useState(false);
   const [castleReportBusy, setCastleReportBusy] = useState(false);
   const [castleReport, setCastleReport] = useState('');
+  const [rosterQuery, setRosterQuery] = useState('');
   const [registrationSettings, setRegistrationSettings] = useState(null);
   const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
   const [reassignOpenId, setReassignOpenId] = useState(null);
@@ -1359,6 +1360,11 @@ export default function Admin() {
     return 0;
   };
 
+  const normalizedRosterQuery = rosterQuery.trim().toLocaleLowerCase('fa-IR');
+  const visibleRoster = !normalizedRosterQuery ? (roster || []) : (roster || []).filter(player => [
+    player.name, player.telegram_username, player.region_name, player.castle, ...(player.castles || []),
+  ].some(value => String(value || '').toLocaleLowerCase('fa-IR').includes(normalizedRosterQuery)));
+
   if (!me.admin_role) {
     return (
       <>
@@ -1664,11 +1670,24 @@ export default function Admin() {
           <div className="page-sub up u3" style={{ marginTop: -10 }}>
             هر بازیکنِ خاندان‌دار — می‌توانی از خاندانش خارجش کنی یا به خاندان/قلعهٔ دیگری منتقلش کنی
           </div>
+          <div className="card up u3" style={{ marginBottom: 12 }}>
+            <label className="f" style={{ marginTop: 0 }}>جست‌وجوی خاندان‌ها</label>
+            <input value={rosterQuery} onChange={e => setRosterQuery(e.target.value)}
+                   placeholder="نام پلیر، username، اقلیم یا قلعه..." autoComplete="off" />
+            {normalizedRosterQuery && (
+              <div className="page-sub" style={{ marginTop: 8 }}>
+                {visibleRoster.length.toLocaleString('fa-IR')} نتیجه از {(roster || []).length.toLocaleString('fa-IR')} بازیکن
+              </div>
+            )}
+          </div>
           <div className="up u3">
             {(!roster || roster.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کسی خاندانی ندارد</div>
             )}
-            {roster && roster.map(p => {
+            {roster && visibleRoster.length === 0 && normalizedRosterQuery && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>چیزی با این عبارت پیدا نشد</div>
+            )}
+            {roster && visibleRoster.map(p => {
               const regionId = assignRegion[p.tg_id] || p.region || Object.keys(REGIONS_STATIC)[0];
               const region = REGIONS_STATIC[regionId];
               const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];

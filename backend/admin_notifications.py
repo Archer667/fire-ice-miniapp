@@ -4,6 +4,7 @@ from config import ADMIN_IDS, OWNER_ID
 from db import admin_roles, admin_notifications, campaigns, roleplays, rebellions
 from game import now
 import telegram_bot
+from player_labels import normalize_player_names
 
 
 async def _admin_ids(roles: tuple[str, ...] | None = None) -> set[int]:
@@ -38,6 +39,9 @@ async def notify_admins(
     audience_roles: tuple[str, ...] | None = None,
 ):
     """اعلان ماندگار پنل را می‌سازد و خلاصه را برای سطح‌های مجاز تلگرام می‌کند."""
+    title = await normalize_player_names(title)
+    detail = await normalize_player_names(detail)
+    action = await normalize_player_names(action)
     doc = {
         "kind": kind,
         "title": title,

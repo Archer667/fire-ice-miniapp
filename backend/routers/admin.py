@@ -23,6 +23,7 @@ from routers.ravens import send_system_message
 from routers.rebellions import get_settings as get_rebellion_settings
 from admin_notifications import notify_admins
 from registration import SETTINGS_ID as REGISTRATION_SETTINGS_ID, registration_state
+from player_labels import titled_name
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 MUSIC_SETTINGS_ID = "background_music"
@@ -1151,16 +1152,29 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     battle_report_bot = None
     if campaign and combat_outcome:
         attacker_player = await players.find_one({"tg_id": campaign["tg_id"]})
-        winner_players = await players.find({"tg_id": {"$in": winner_tg_ids}}, {"tg_id": 1, "name": 1}).to_list(None)
-        loser_players = await players.find({"tg_id": {"$in": loser_tg_ids}}, {"tg_id": 1, "name": 1}).to_list(None)
-        winner_name_map = {p["tg_id"]: p["name"] for p in winner_players}
-        loser_name_map = {p["tg_id"]: p["name"] for p in loser_players}
-        winner_names = [winner_name_map.get(tg_id, str(tg_id)) for tg_id in winner_tg_ids]
-        loser_names = [loser_name_map.get(tg_id, str(tg_id)) for tg_id in loser_tg_ids]
-        attacker_names = list(dict.fromkeys(a.get("player_name") for a in attacker_campaigns if a.get("player_name")))
-        defender_names = list(dict.fromkeys(a.get("player_name") for a in defender_campaigns if a.get("player_name")))
-        attacker_name = " و ".join(attacker_names) or (attacker_player["name"] if attacker_player else campaign.get("player_name", "مهاجم"))
-        defender_name = " و ".join(defender_names) or (defender["name"] if defender else campaign.get("battle_defender_name", "مدافع"))
+        combat_tg_ids = set(winner_tg_ids) | set(loser_tg_ids)
+        combat_tg_ids |= {a.get("tg_id") for a in [*attacker_campaigns, *defender_campaigns] if a.get("tg_id") is not None}
+        combat_players = await players.find(
+            {"tg_id": {"$in": list(combat_tg_ids)}}, {"tg_id": 1, "name": 1, "gender": 1},
+        ).to_list(None)
+        combat_player_map = {p["tg_id"]: p for p in combat_players}
+        winner_names = [titled_name(combat_player_map.get(tg_id), name=str(tg_id)) for tg_id in winner_tg_ids]
+        loser_names = [titled_name(combat_player_map.get(tg_id), name=str(tg_id)) for tg_id in loser_tg_ids]
+
+        def campaign_player_label(row: dict) -> str:
+            return titled_name(
+                combat_player_map.get(row.get("tg_id")),
+                name=row.get("player_name", "نامشخص"), gender=row.get("player_gender"),
+            )
+
+        attacker_names = list(dict.fromkeys(campaign_player_label(a) for a in attacker_campaigns if a.get("player_name")))
+        defender_names = list(dict.fromkeys(campaign_player_label(a) for a in defender_campaigns if a.get("player_name")))
+        attacker_name = " و ".join(attacker_names) or titled_name(
+            attacker_player, name=campaign.get("player_name", "مهاجم"), gender=campaign.get("player_gender"),
+        )
+        defender_name = " و ".join(defender_names) or titled_name(
+            defender, name=campaign.get("battle_defender_name", "مدافع"),
+        )
 
         def count_line(values: dict, empty_text: str = "بدون تلفات") -> str:
             parts = []
@@ -1181,11 +1195,11 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         location = campaign.get("battle_location") or campaign.get("target_castle", "محل نامشخص")
         battle_title = campaign.get("name") or "نتیجهٔ نبرد"
         battle_report_rest = (
-            f"⚔️ طرفین: لرد {attacker_name} در برابر لرد {defender_name}\n"
+            f"⚔️ طرفین: {attacker_name} در برابر {defender_name}\n"
             f"📍 محل نبرد: {location}\n\n"
             f"📜 نتیجهٔ داوری\n{result}\n\n"
-            f"🏆 برنده‌ها: {'، '.join('لرد ' + name for name in winner_names)}\n"
-            f"🏳️ بازنده‌ها: {('، '.join('لرد ' + name for name in loser_names) if loser_names else 'ندارد')}\n\n"
+            f"🏆 برنده‌ها: {'، '.join(winner_names)}\n"
+            f"🏳️ بازنده‌ها: {('، '.join(loser_names) if loser_names else 'ندارد')}\n\n"
             f"🩸 تلفات {attacker_name}: {count_line(attacker_report_losses)}\n"
             f"🛡️ نیروهای باقی‌مانده {attacker_name}: {count_line(attacker_after, 'هیچ نیرویی باقی نمانده')}\n\n"
             f"🩸 تلفات {defender_name}: {count_line(defender_report_losses)}\n"
@@ -2119,8 +2133,16 @@ async def admin_dissolve_alliance(alliance_id: str, user: dict = Depends(full_ad
     await alliances.update_one({"_id": oid}, {"$set": {"status": "dissolved"}})
     await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
     await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
-    for tg_id, name, other_name in [(a["from_id"], a["from_name"], a["to_name"]), (a["to_id"], a["to_name"], a["from_name"])]:
-        await send_system_message(tg_id, name, f"پیمانت با لرد {other_name} به فرمان ادمین منحل شد.")
+    party_rows = await players.find(
+        {"tg_id": {"$in": [a["from_id"], a["to_id"]]}}, {"tg_id": 1, "name": 1, "gender": 1},
+    ).to_list(2)
+    party_by_id = {p["tg_id"]: p for p in party_rows}
+    for tg_id, name, other_id, other_name, other_gender in [
+        (a["from_id"], a["from_name"], a["to_id"], a["to_name"], a.get("to_gender")),
+        (a["to_id"], a["to_name"], a["from_id"], a["from_name"], a.get("from_gender")),
+    ]:
+        other_label = titled_name(party_by_id.get(other_id), name=other_name, gender=other_gender)
+        await send_system_message(tg_id, name, f"پیمانت با {other_label} به فرمان ادمین منحل شد.")
     return {"ok": True}
 
 async def _current_admin_ids() -> set:

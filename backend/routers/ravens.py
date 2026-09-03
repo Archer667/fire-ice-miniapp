@@ -5,6 +5,7 @@ from db import players, messages, rumors, rumor_views
 from game import now
 from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
 import telegram_bot
+from player_labels import normalize_player_names, titled_name
 
 router = APIRouter(prefix="/api/ravens", tags=["ravens"])
 
@@ -15,6 +16,7 @@ async def send_system_message(
     bot_text: str | None = None, bot_parse_mode: str | None = None,
 ):
     """پیام سیستمی داخل کلاغ و تلگرام؛ ایونت می‌تواند تصویر و بازهٔ زمانی هم داشته باشد."""
+    text = await normalize_player_names(text)
     doc = {
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
         "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
@@ -59,7 +61,7 @@ async def send(body: SendBody, user: dict = Depends(get_user)):
         "text": text[:1000], "read": False, "created_at": now(),
     } for t in targets])
     for t in targets:
-        telegram_bot.push(t["tg_id"], f"نامه‌ای از {me['name']}: {text[:300]}")
+        telegram_bot.push(t["tg_id"], f"نامه‌ای از {titled_name(me)}: {text[:300]}")
     return {"ok": True, "sent_to": len(targets)}
 
 @router.get("/unread")

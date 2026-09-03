@@ -8,6 +8,7 @@ from game import now, apply_production, can_afford, pay, add_resources, producti
 from game_data import ALLIANCE_TYPES
 from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPULARITY_MAX, PRIVATE_ALLIANCE_MULTIPLIER
 from routers.ravens import send_system_message
+from player_labels import titled_name
 
 router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
 
@@ -62,7 +63,8 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     penalty_gold = body.penalty_gold if body.type == "non_aggression" else 0
     await alliances.insert_many([{
         "from_id": user["id"], "from_name": me["name"],
-        "to_id": t["tg_id"], "to_name": t["name"],
+        "from_gender": me.get("gender", "lord"),
+        "to_id": t["tg_id"], "to_name": t["name"], "to_gender": t.get("gender", "lord"),
         "type": body.type, "wine_cost": unit_cost, "name": pact_name,
         "penalty_gold": penalty_gold,
         "public": not body.private,
@@ -74,7 +76,7 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     for t in valid_targets:
         await send_system_message(
             t["tg_id"], t["name"],
-            f"لرد {me['name']} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد{penalty_note} — از تب دیپلماسی پاسخ بده.",
+            f"{titled_name(me)} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد{penalty_note} — از تب دیپلماسی پاسخ بده.",
         )
     return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
 
@@ -132,16 +134,23 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
     if guard.matched_count == 0:
         raise HTTPException(400, "این پیمان قبلاً پاسخ داده شده")
 
+    party_rows = await players.find(
+        {"tg_id": {"$in": [a["from_id"], a["to_id"]]}}, {"tg_id": 1, "name": 1, "gender": 1},
+    ).to_list(2)
+    party_by_id = {p["tg_id"]: p for p in party_rows}
+    from_label = titled_name(party_by_id.get(a["from_id"]), name=a["from_name"], gender=a.get("from_gender"))
+    to_label = titled_name(party_by_id.get(a["to_id"]), name=a["to_name"], gender=a.get("to_gender"))
+
     if body.accept:
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1, "stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
-        await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را پذیرفت.")
+        await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را پذیرفت.")
         # پیمان‌های عمومی (غیرخصوصی) به همهٔ لردها اطلاع داده می‌شود — نه فقط دو طرفِ پیمان
         if a.get("public", True):
             type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", a["type"])
             pact_name = f" («{a['name']}»)" if a.get("name") else ""
-            text = f"📜 {type_name}{pact_name} میان لرد {a['from_name']} و لرد {a['to_name']} بسته شد."
+            text = f"📜 {type_name}{pact_name} میان {from_label} و {to_label} بسته شد."
             async for p in players.find({}, {"tg_id": 1, "name": 1}):
                 if p["tg_id"] not in (a["from_id"], a["to_id"]):
                     await send_system_message(p["tg_id"], p["name"], text)
@@ -150,7 +159,7 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         if proposer:
             add_resources(proposer, {"wine": a["wine_cost"]})
             await players.update_one({"tg_id": a["from_id"]}, {"$set": {"resources": proposer["resources"]}})
-        await send_system_message(a["from_id"], a["from_name"], f"لرد {a['to_name']} پیشنهاد پیمانت را رد کرد — شرابت برگشت.")
+        await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را رد کرد — شرابت برگشت.")
     return {"ok": True}
 
 @router.post("/{alliance_id}/leave")
@@ -193,7 +202,7 @@ async def leave(alliance_id: str, user: dict = Depends(get_user)):
             await players.update_one({"tg_id": other_id}, {"$set": {"resources": other["resources"]}})
     type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", "پیمان")
     penalty_note = f" و {penalty:,} سکه غرامت به تو پرداخت کرد" if penalty else ""
-    await send_system_message(other_id, other_name, f"لرد {me['name']} از {type_name} خارج شد{penalty_note}.")
+    await send_system_message(other_id, other_name, f"{titled_name(me)} از {type_name} خارج شد{penalty_note}.")
     return {"ok": True, "penalty_paid": penalty}
 
 @router.post("/feast")

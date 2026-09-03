@@ -14,6 +14,7 @@ from config import FOOD_COST_REGULAR, FOOD_COST_SPECIAL
 import game_data
 from routers.ravens import send_system_message
 from admin_notifications import notify_admins
+from player_labels import titled_name
 
 router = APIRouter(prefix="/api/war", tags=["war"])
 
@@ -409,7 +410,7 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     p["resources"]["men"] -= men
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
     doc = {
-        "tg_id": user["id"], "player_name": p["name"], "origin_castle": body.origin_castle,
+        "tg_id": user["id"], "player_name": p["name"], "player_gender": p.get("gender", "lord"), "origin_castle": body.origin_castle,
         "target_castle": body.target_castle, "edge_key": edge_key, "sea": is_sea,
         "troops": {k: int(v or 0) for k, v in body.troops.items() if int(v or 0) > 0},
         "men_committed": men, "soldiers_committed": land_men, "gold_cost": gold, "weapons_cost": weapons,
@@ -536,7 +537,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "points": p.get("points", 0)}})
 
     doc = {
-        "tg_id": user["id"], "player_name": p["name"],
+        "tg_id": user["id"], "player_name": p["name"], "player_gender": p.get("gender", "lord"),
         "origin_castle": body.origin_castle,
         "op_type": body.op_type, "target_castle": target_castle,
         "name": body.name.strip()[:60] or op["name"], "troops": body.troops, "power": power,
@@ -786,6 +787,7 @@ def battle_army_snapshot(campaign: dict) -> dict:
     return {
         "campaign_id": str(campaign.get("_id", "")),
         "tg_id": campaign.get("tg_id"), "player_name": campaign.get("player_name", "نامشخص"),
+        "player_gender": campaign.get("player_gender"),
         "name": campaign.get("name", "لشکر"),
         "men": campaign.get("men_committed", sum(campaign.get("troops", {}).values())),
         "troops": dict(campaign.get("troops", {})),
@@ -800,7 +802,7 @@ def battle_army_stats_line(army: dict) -> str:
     ) or "بدون ادوات"
     men = int(army.get("men_committed", sum(army.get("troops", {}).values())) or 0)
     return (
-        f"لرد {army.get('player_name', 'نامشخص')} · «{army.get('name', 'لشکر')}» · {men} نفر\n"
+        f"{titled_name(name=army.get('player_name', 'نامشخص'), gender=army.get('player_gender'))} · «{army.get('name', 'لشکر')}» · {men} نفر\n"
         f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}"
     )
 
@@ -823,6 +825,14 @@ async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str
         }).to_list(None)
     attackers = await load(refreshed.get("battle_attacker_army_ids") or [])
     defenders = await load(refreshed.get("battle_defender_army_ids") or [])
+    army_rows = [*attackers, *defenders]
+    army_tg_ids = {row.get("tg_id") for row in army_rows if row.get("tg_id") is not None}
+    if army_tg_ids:
+        player_rows = await players.find({"tg_id": {"$in": list(army_tg_ids)}}, {"tg_id": 1, "gender": 1}).to_list(None)
+        gender_by_id = {row["tg_id"]: row.get("gender", "lord") for row in player_rows}
+        for army in army_rows:
+            if not army.get("player_gender"):
+                army["player_gender"] = gender_by_id.get(army.get("tg_id"), "lord")
     attacker_text = "\n\n".join(battle_army_stats_line(a) for a in attackers) or "لشکر فعالی ثبت نشده"
     defender_text = "\n\n".join(battle_army_stats_line(a) for a in defenders) or "لشکر دفاعی مستقلی ثبت نشده"
     return f"{intro}\n\n🔴 مهاجمان\n{attacker_text}\n\n🔵 مدافعان\n{defender_text}"
@@ -834,15 +844,17 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
     defender_total = sum(max(0, int(n or 0)) for n in defender_troops.values())
     attacker_name = attacker.get("player_name") or "مهاجم"
     defender_name = defender.get("player_name") or defender.get("name") or "مدافع"
+    attacker_label = titled_name(name=attacker_name, gender=attacker.get("player_gender") or attacker.get("gender"))
+    defender_label = titled_name(name=defender_name, gender=defender.get("player_gender") or defender.get("gender"))
     detail = (
         f"محل درگیری: {location}\n"
-        f"{attacker_name}: {attacker_total} نفر — {troops_summary(attacker_troops)}\n"
-        f"{defender_name}: {defender_total} نفر — {troops_summary(defender_troops)}"
+        f"{attacker_label}: {attacker_total} نفر — {troops_summary(attacker_troops)}\n"
+        f"{defender_label}: {defender_total} نفر — {troops_summary(defender_troops)}"
     )
     attacker_equipment = "، ".join(f"{SIEGE_EQUIPMENT.get(k, {}).get('name', k)}×{v}" for k, v in attacker.get("equipment", {}).items() if v)
     defender_equipment = "، ".join(f"{SIEGE_EQUIPMENT.get(k, {}).get('name', k)}×{v}" for k, v in defender.get("equipment", {}).items() if v)
     if attacker_equipment or defender_equipment:
-        detail += f"\nادوات {attacker_name}: {attacker_equipment or 'ندارد'}\nادوات {defender_name}: {defender_equipment or 'ندارد'}"
+        detail += f"\nادوات {attacker_label}: {attacker_equipment or 'ندارد'}\nادوات {defender_label}: {defender_equipment or 'ندارد'}"
     await notify_admins(
         "battle_started", "⚔️ نبرد تازه آغاز شد", detail,
         dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
@@ -865,7 +877,7 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         except Exception:
             claimed = None
     if claimed and claimed.modified_count:
-        public_text = f"⚔️ نبردی میان لرد {attacker_name} و لرد {defender_name} در {location} آغاز شد."
+        public_text = f"⚔️ نبردی میان {attacker_label} و {defender_label} در {location} آغاز شد."
         async for player in players.find({}, {"tg_id": 1, "name": 1}):
             await send_system_message(player["tg_id"], player["name"], public_text, kind="battle")
 
