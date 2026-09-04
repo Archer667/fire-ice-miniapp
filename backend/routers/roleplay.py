@@ -43,26 +43,43 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     if body.category == "war":
         if not body.campaign_id:
             raise HTTPException(400, "برای دستهٔ جنگ باید نبردت را انتخاب کنی")
+        # انتخابگرِ صفحهٔ رول شناسهٔ یکتای «پروندهٔ نبرد» را می‌فرستد. این شناسه
+        # عمداً با _id لشکر ریشه فرق دارد؛ نسخهٔ قبلی آن را فقط به‌عنوان _id
+        # جست‌وجو می‌کرد و بنابراین رول نبردهای جدید (خصوصاً مدافع) با 404 رد می‌شد.
+        c = await campaigns.find_one({
+            "engagement_campaign_id": body.campaign_id,
+            "battle_is_root": True,
+        })
+        # سازگاری با پرونده‌های قدیمی که campaign_id همان _id لشکر بوده است.
         try:
             oid = ObjectId(body.campaign_id)
         except Exception:
-            raise HTTPException(400, "شناسهٔ نبرد نامعتبر است")
-        c = await campaigns.find_one({"_id": oid})
-        if not c or not c.get("engagement_locked"):
+            oid = None
+        if not c and oid is not None:
+            c = await campaigns.find_one({"_id": oid, "engagement_locked": True})
+        if not c or not c.get("engagement_locked") or c.get("battle_cancelled_at") or c.get("combat_resolved_at"):
             raise HTTPException(404, "این نبرد پیدا نشد")
-        is_attacker = c["tg_id"] == user["id"]
-        is_defender = c["target_castle"] in owned_castles(p) and c["tg_id"] != user["id"]
-        is_opponent = c.get("opponent_tg_id") == user["id"]
-        if not (is_attacker or is_defender or is_opponent):
+
+        canonical_id = c.get("engagement_campaign_id") or str(c["_id"])
+        participant_ids = set(c.get("battle_participant_tg_ids") or [])
+        participant_ids.update(j.get("tg_id") for j in (c.get("battle_joins") or []) if j.get("tg_id") is not None)
+        participant_ids.update({c.get("tg_id"), c.get("battle_defender_tg_id"), c.get("opponent_tg_id")})
+        # داده‌های قدیمی ممکن است فهرست شرکت‌کنندگان را روی ریشه نداشته باشند؛
+        # اعضای قفل‌شدهٔ همان پرونده نیز مرجع معتبرند.
+        async for member in campaigns.find({"engagement_campaign_id": canonical_id}, {"tg_id": 1}):
+            participant_ids.add(member.get("tg_id"))
+        participant_ids.discard(None)
+        is_castle_defender = (c.get("battle_location") or c.get("target_castle")) in owned_castles(p)
+        if user["id"] not in participant_ids and not is_castle_defender:
             raise HTTPException(403, "این نبرد به تو ربطی ندارد")
         arrival_at = c.get("battle_started_at") or c.get("arrival_at")
         if not arrival_at or now() < arrival_at:
             raise HTTPException(400, "این نبرد هنوز به مقصد نرسیده")
         if now() > arrival_at + timedelta(hours=roleplay_window_hours()):
             raise HTTPException(400, f"مهلت {roleplay_window_hours():g} ساعته برای فرستادن سناریوی این نبرد گذشته")
-        if await roleplays.find_one({"tg_id": user["id"], "campaign_id": body.campaign_id}):
+        if await roleplays.find_one({"tg_id": user["id"], "campaign_id": canonical_id}):
             raise HTTPException(400, "قبلاً سناریوی این نبرد را فرستاده‌ای")
-        campaign_id = body.campaign_id
+        campaign_id = canonical_id
 
     existing = None
     result_required = body.category not in ("security", "scout")
@@ -98,7 +115,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     )
     if campaign_id:
         submitted = await roleplays.count_documents({"campaign_id": campaign_id})
-        deadline = c["arrival_at"] + timedelta(hours=roleplay_window_hours())
+        deadline = (c.get("battle_started_at") or c["arrival_at"]) + timedelta(hours=roleplay_window_hours())
         both_ready = submitted >= 2
         await notify_admins(
             "war_roleplay",
