@@ -940,8 +940,8 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         source_id=engagement_id, deadline=now() + timedelta(hours=roleplay_window_hours()),
         action="در پنل ادمین ← نبردها، نیروها و رول‌های دو طرف را بررسی کن.",
     )
-    # اعلان عمومی شروع نبرد: فقط هویت طرفین و محل؛ ترکیب/تعداد نیروها محرمانه و فقط
-    # برای خود طرفین و ادمین‌هاست. فلگ اتمیک جلوی ارسال دوبارهٔ همان اعلان را می‌گیرد.
+    # اعلان عمومی شروع نبرد نوع یگان‌ها را فاش نمی‌کند، اما مجموع نفرات و ادوات هر
+    # لرد را نشان می‌دهد. فلگ اتمیک جلوی ارسال دوبارهٔ همان اعلان را می‌گیرد.
     claimed = await campaigns.update_one(
         {"engagement_campaign_id": engagement_id, "battle_is_root": True, "public_start_notified": {"$ne": True}},
         {"$set": {"public_start_notified": True}},
@@ -955,7 +955,19 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         except Exception:
             claimed = None
     if claimed and claimed.modified_count:
-        public_text = f"⚔️ نبردی میان {attacker_label} و {defender_label} در {location} آغاز شد."
+        if root:
+            public_text = await battle_full_roster_text(
+                root, engagement_id,
+                f"⚔️ نبردی میان {attacker_label} و {defender_label} در {location} آغاز شد.",
+            )
+        else:
+            attacker_equipment_total = sum(max(0, int(v or 0)) for v in attacker.get("equipment", {}).values())
+            defender_equipment_total = sum(max(0, int(v or 0)) for v in defender.get("equipment", {}).values())
+            public_text = (
+                f"⚔️ نبردی میان {attacker_label} و {defender_label} در {location} آغاز شد.\n\n"
+                f"🔴 {attacker_label}: {attacker_total:,} نفر · {attacker_equipment_total:,} ادوات\n"
+                f"🔵 {defender_label}: {defender_total:,} نفر · {defender_equipment_total:,} ادوات"
+            )
         async for player in players.find({}, {"tg_id": 1, "name": 1}):
             await send_system_message(player["tg_id"], player["name"], public_text, kind="battle")
 
@@ -1442,6 +1454,23 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out = []
     seen_engagements = set()
+    # منبع اصلی، خود پرونده‌های باز نبرد و فهرست شرکت‌کنندگان آنهاست. این روش برای
+    # لشکری که پس از نتیجه دوباره حرکت کرده و وارد نبرد تازه شده هم مستقل از شناسهٔ
+    # نبرد قبلی کار می‌کند و مدافعِ قلعهٔ بدون لشکر را نیز جا نمی‌اندازد.
+    roots = campaigns.find({
+        "battle_is_root": True, "battle_open": True,
+        "battle_participant_tg_ids": user["id"],
+        "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False},
+    })
+    async for root in roots:
+        if (root.get("battle_started_at") or root.get("arrival_at")) < cutoff:
+            continue
+        row = await build(root, "participant")
+        if row and row["campaign_id"] not in seen_engagements:
+            out.append(row)
+            seen_engagements.add(row["campaign_id"])
+
+    # fallback برای پرونده‌های قدیمی که آرایهٔ participant نداشتند.
     cur = campaigns.find({"tg_id": user["id"], "engagement_locked": True})
     async for c in cur:
         if (c.get("battle_started_at") or c.get("arrival_at")) < cutoff:

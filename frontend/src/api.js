@@ -1593,6 +1593,8 @@ export const api = {
   adminEditMapCastle: (name, b) => MOCK ? Promise.resolve(M.adminEditMapCastle(name, b))
     : req(`/api/admin/map/castles/${encodeURIComponent(name)}`, { method: 'PATCH', body: JSON.stringify(b) }),
   sendCaravan: (b) => MOCK ? Promise.resolve(M.sendCaravan(b)) : req('/api/trade/caravan', { method: 'POST', body: JSON.stringify(b) }),
+  caravanRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
+    : req(`/api/trade/caravan/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
   playerCastles: (tgId) => MOCK ? Promise.resolve(M.playerCastles(tgId)) : req(`/api/players/${tgId}/castles`),
   myCaravans: () => MOCK ? Promise.resolve(M.myCaravans()) : req('/api/trade/caravans/mine'),
   market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),

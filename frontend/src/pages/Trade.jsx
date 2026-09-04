@@ -29,6 +29,9 @@ export default function Trade() {
   const [originCastle, setOriginCastle] = useState(me.castle);
   const [targetCastles, setTargetCastles] = useState([]);
   const [targetCastle, setTargetCastle] = useState('');
+  const [routeOptions, setRouteOptions] = useState(null);
+  const [routeChoice, setRouteChoice] = useState(0);
+  const [routeError, setRouteError] = useState('');
 
   // با انتخابِ هم‌پیمان، قلعه‌های خودش رو می‌گیریم — چون ممکنه قلعهٔ دوم داشته باشه
   // و کاروان بخواد جای دیگه‌ای غیر از خونه‌اش برسه
@@ -42,6 +45,24 @@ export default function Trade() {
     }).catch(() => { if (!cancelled) { setTargetCastles([]); setTargetCastle(''); } });
     return () => { cancelled = true; };
   }, [target]);
+
+  useEffect(() => {
+    if (!target || !originCastle || !targetCastle) {
+      setRouteOptions(null); setRouteChoice(0); setRouteError(''); return;
+    }
+    let cancelled = false;
+    setRouteOptions(null); setRouteError('');
+    api.caravanRoutes(originCastle, targetCastle).then(res => {
+      if (cancelled) return;
+      const routes = res.routes || [];
+      setRouteOptions(routes);
+      const firstAvailable = routes.findIndex(r => r.available !== false);
+      setRouteChoice(firstAvailable >= 0 ? firstAvailable : 0);
+    }).catch(e => {
+      if (!cancelled) { setRouteOptions([]); setRouteError(e.message || 'مسیری پیدا نشد'); }
+    });
+    return () => { cancelled = true; };
+  }, [target, originCastle, targetCastle]);
 
   const [market, setMarket] = useState(null);
   const [buyQty, setBuyQty] = useState({});
@@ -100,11 +121,14 @@ export default function Trade() {
     if (!target) { toast('یک هم‌پیمان تجاری را انتخاب کن'); return; }
     const resources = Object.fromEntries(Object.entries(amounts).filter(([, v]) => v > 0));
     if (!Object.keys(resources).length) { toast('حداقل یک کالا انتخاب کن'); return; }
+    const selectedRoute = routeOptions?.[routeChoice];
+    if (!selectedRoute || selectedRoute.available === false) { toast('یک مسیر تجاری مجاز انتخاب کن'); return; }
     setSendBusy(true);
     try {
       const res = await api.sendCaravan({
         target_tg_id: Number(target), resources,
         origin_castle: originCastle, target_castle: targetCastle || undefined,
+        via: selectedRoute.path,
       });
       haptic('medium');
       api.me().then(setMe);
@@ -185,6 +209,38 @@ export default function Trade() {
                     </select>
                   </>
                 )}
+                {target && targetCastle && (
+                  routeOptions === null ? (
+                    <div className="page-sub" style={{ margin: '10px 4px 0' }}>در حال بررسی مسیرهای تجاری...</div>
+                  ) : routeOptions.length ? (
+                    <div style={{ marginTop: 12 }}>
+                      <label className="f" style={{ marginTop: 0 }}>مسیر کاروان — یکی را انتخاب کن</label>
+                      {routeOptions.map((route, index) => {
+                        const unavailable = route.available === false;
+                        const missing = (route.missing_lords || []).map(lord => lord.name).join('، ');
+                        return <div key={index}
+                          onClick={() => { if (!unavailable) { haptic(); setRouteChoice(index); } }}
+                          className={`pick ${routeChoice === index && !unavailable ? 'sel' : ''}`}
+                          style={{ marginBottom: 7, textAlign: 'right', cursor: unavailable ? 'not-allowed' : 'pointer', opacity: unavailable ? .58 : 1 }}>
+                          <div className="n" style={{ fontSize: 11.5, lineHeight: 1.9 }}>
+                            {route.path.map(castleLabel).join('  ←  ')}
+                          </div>
+                          <div className="c">
+                            {route.minutes.toLocaleString('fa-IR')} دقیقه{route.via_sea ? ' · ⚓ مسیر دریایی' : ''}
+                          </div>
+                          {unavailable && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 5 }}>
+                            این مسیر بسته است؛ با {missing || 'لردهای مسیر'} پیمان تجاری یا اتحاد کامل نداری.
+                          </div>}
+                        </div>;
+                      })}
+                      <div className="page-sub" style={{ margin: '8px 4px 0' }}>
+                        پیمان عدم تجاوز برای عبور کاروان کافی نیست؛ تمام لردهای مسیر باید پیمان تجاری یا اتحاد کامل داشته باشند.
+                      </div>
+                    </div>
+                  ) : <div className="page-sub" style={{ margin: '10px 4px 0', color: 'var(--danger)' }}>
+                    {routeError || 'هیچ مسیر تجاری تا این قلعه پیدا نشد.'}
+                  </div>
+                )}
                 <label className="f">کالاها</label>
                 {CARAVAN_GOODS.map(g => {
                   const Icon = RES_ICON[g];
@@ -199,7 +255,9 @@ export default function Trade() {
                     </div>
                   );
                 })}
-                <button className="btn" style={{ marginTop: 14 }} disabled={sendBusy || !totalGoods} onClick={sendCaravan}>
+                <button className="btn" style={{ marginTop: 14 }}
+                  disabled={sendBusy || !totalGoods || !routeOptions?.[routeChoice] || routeOptions[routeChoice].available === false}
+                  onClick={sendCaravan}>
                   {sendBusy ? 'در حال ارسال...' : 'مُهر و فرستادن کاروان'}
                 </button>
               </>

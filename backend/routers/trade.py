@@ -4,9 +4,9 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players, caravans, alliances
 from game import now, can_afford, pay, add_resources, owned_castles, apply_production, production_fields
-from game_data import CARAVAN_GOODS, TRADE_GOOD_NAMES, travel_minutes
+from game_data import CARAVAN_GOODS, TRADE_GOOD_NAMES, travel_routes
 from routers.ravens import send_system_message
-from routers.war import blocked_castles_for
+from routers.war import all_castle_terrain
 from control_settings import feature_enabled
 
 router = APIRouter(prefix="/api/trade", tags=["trade"])
@@ -24,6 +24,44 @@ class CaravanBody(BaseModel):
     resources: dict  # {resource: qty}
     origin_castle: str | None = None   # پیش‌فرض: قلعهٔ خانگی‌ات — می‌تونه هرکدوم از قلعه‌های خودت باشه
     target_castle: str | None = None   # پیش‌فرض: قلعهٔ خانگیِ گیرنده — می‌تونه هرکدوم از قلعه‌های او باشه
+    via: list[str] | None = None       # مسیر انتخابی از /caravan/routes
+
+async def caravan_route_options(sender_id: int, origin_castle: str, target_castle: str) -> list[dict]:
+    """سه مسیر پیشنهادی و لردهای فاقد مجوز عبور تجاری در هر مسیر.
+
+    عدم‌تجاوز مجوز کاروان نیست؛ فقط پیمان تجاری یا اتحاد کامل پذیرفته‌شده حساب می‌شود.
+    """
+    if origin_castle == target_castle:
+        return [{"minutes": 0, "path": [origin_castle], "via_sea": False,
+                 "available": True, "missing_lords": []}]
+    terrain = await all_castle_terrain()
+    raw_routes = travel_routes(origin_castle, target_castle, frozenset(), max_routes=3, terrain=terrain)
+    owners_by_castle = {}
+    async for owner in players.find({"tg_id": {"$ne": sender_id}}, {"tg_id": 1, "name": 1, "castle": 1, "castle_buildings": 1}):
+        for castle in owned_castles(owner):
+            owners_by_castle[castle] = owner
+    permitted_ids = set()
+    async for pact in alliances.find({
+        "status": "accepted", "type": {"$in": ["trade", "full_alliance"]},
+        "$or": [{"from_id": sender_id}, {"to_id": sender_id}],
+    }):
+        permitted_ids.add(pact["to_id"] if pact["from_id"] == sender_id else pact["from_id"])
+    result = []
+    for route in raw_routes:
+        missing_by_id = {}
+        for castle in route["path"][1:]:
+            owner = owners_by_castle.get(castle)
+            if owner and owner["tg_id"] not in permitted_ids:
+                missing_by_id[owner["tg_id"]] = {"tg_id": owner["tg_id"], "name": owner.get("name", "نامشخص")}
+        result.append({**route, "available": not missing_by_id, "missing_lords": list(missing_by_id.values())})
+    return result
+
+@router.get("/caravan/routes")
+async def caravan_routes(origin_castle: str, target_castle: str, user: dict = Depends(get_user)):
+    p = await players.find_one({"tg_id": user["id"]})
+    if not p or origin_castle not in owned_castles(p):
+        raise HTTPException(400, "قلعهٔ مبدا مال تو نیست")
+    return {"routes": await caravan_route_options(user["id"], origin_castle, target_castle)}
 
 @router.post("/caravan")
 async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
@@ -62,11 +100,17 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], cost):
         raise HTTPException(400, "این مقدار کالا رو نداری")
 
-    same_castle = origin_castle == target_castle
-    blocked = frozenset() if same_castle else await blocked_castles_for(user["id"])
-    travel = travel_minutes(same_castle, origin_castle, target_castle, blocked)
-    if travel is None:
-        raise HTTPException(400, "مسیر این کاروان از قلمروِ لردی می‌گذرد که با او پیمان (عدم‌تجاوز یا اتحاد کامل) نداری")
+    route_options = await caravan_route_options(user["id"], origin_castle, target_castle)
+    chosen = next((r for r in route_options if body.via and r["path"] == body.via), None)
+    if body.via and not chosen:
+        raise HTTPException(400, "مسیر انتخاب‌شده دیگر معتبر نیست؛ مسیرها را دوباره دریافت کن")
+    chosen = chosen or next((r for r in route_options if r["available"]), None)
+    if not chosen or not chosen["available"]:
+        missing = (chosen or (route_options[0] if route_options else {})).get("missing_lords", [])
+        names = "، ".join(row["name"] for row in missing)
+        detail = f"؛ با این لردها پیمان تجاری یا اتحاد کامل نداری: {names}" if names else ""
+        raise HTTPException(400, f"هیچ مسیر تجاری مجازی تا مقصد وجود ندارد{detail}")
+    travel = chosen["minutes"]
 
     pay(p["resources"], cost)
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
@@ -76,11 +120,12 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "origin_castle": origin_castle,
         "target_tg_id": target["tg_id"], "target_name": target["name"], "target_castle": target_castle,
-        "resources": cost, "travel_minutes": travel, "arrival_at": arrival_at,
+        "resources": cost, "travel_minutes": travel, "route_path": chosen["path"], "arrival_at": arrival_at,
         "active": True, "arrival_notified": False, "created_at": now(),
     }
     res = await caravans.insert_one(doc)
-    return {"ok": True, "id": str(res.inserted_id), "travel_minutes": travel, "arrival_at": arrival_at.isoformat()}
+    return {"ok": True, "id": str(res.inserted_id), "travel_minutes": travel,
+            "route_path": chosen["path"], "arrival_at": arrival_at.isoformat()}
 
 @router.get("/caravans/mine")
 async def my_caravans(user: dict = Depends(get_user)):
