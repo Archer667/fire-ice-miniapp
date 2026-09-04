@@ -109,7 +109,7 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
         missing = (chosen or (route_options[0] if route_options else {})).get("missing_lords", [])
         names = "، ".join(row["name"] for row in missing)
         detail = f"؛ با این لردها پیمان تجاری یا اتحاد کامل نداری: {names}" if names else ""
-        raise HTTPException(400, f"هیچ مسیر تجاری مجازی تا مقصد وجود ندارد{detail}")
+        raise HTTPException(400, f"هیچ مسیر تجاری مجاز تا مقصد وجود ندارد{detail}")
     travel = chosen["minutes"]
 
     pay(p["resources"], cost)

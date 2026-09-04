@@ -914,7 +914,7 @@ def _dijkstra_path(origin_castle: str, target_castle: str, blocked: frozenset = 
     return None, None
 
 def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = frozenset(), max_routes: int = 2, allow_sea: bool = True, terrain: dict | None = None):
-    """یک یا دو گزینهٔ مسیرِ واقعی بین دو قلعهٔ متفاوت — هرکدوم {"minutes", "path", "via_sea"}
+    """تا max_routes گزینهٔ مسیر واقعی بین دو قلعه — هرکدوم {"minutes", "path", "via_sea"}
     (path شاملِ خودِ مبدا و مقصد است، via_sea یعنی این مسیر از یالِ دریایی رد می‌شود
     و بدون کشتیِ کافی ممکن نیست). گزینهٔ دوم فقط وقتی اضافه می‌شود که واقعاً
     مسیرِ دیگری (نه همون توالیِ قلعه‌ها) پیدا بشه — با حذفِ موقتِ هر یالِ روی
@@ -945,7 +945,7 @@ def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = f
             candidates.append({"minutes": alt_min, "path": alt_path, "via_sea": path_uses_sea(alt_path, terrain)})
     if candidates:
         candidates.sort(key=lambda r: r["minutes"])
-        routes.append(candidates[0])
+        routes.extend(candidates[:max(0, max_routes - 1)])
     return routes[:max_routes]
 
 # جاسوس‌ها سبک‌بارتر و سریع‌تر از لشکر حرکت می‌کنند — حدود نصف زمان یک لشکر کامل
