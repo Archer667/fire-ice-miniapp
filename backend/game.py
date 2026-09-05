@@ -215,8 +215,13 @@ def production_fields(player: dict) -> dict:
     }
 
 def can_afford(resources: dict, cost: dict) -> bool:
-    return all(resources.get(k, 0) >= v for k, v in cost.items())
+    """موجودی قابل خرج همان عدد صحیح‌ای است که در رابط به بازیکن نشان می‌دهیم.
+
+    تولید در دیتابیس اعشاری نگه داشته می‌شود، اما /me آن را گرد می‌کند. بدون این
+    یکپارچگی ممکن بود بازیکن ۱۱ ببیند ولی مقدار خام ۱۰٫۸۳ باشد و هزینهٔ ۱۱ رد شود.
+    """
+    return all(round(resources.get(k, 0)) >= v for k, v in cost.items())
 
 def pay(resources: dict, cost: dict):
     for k, v in cost.items():
-        resources[k] = resources.get(k, 0) - v
+        resources[k] = max(0, round(resources.get(k, 0)) - v)

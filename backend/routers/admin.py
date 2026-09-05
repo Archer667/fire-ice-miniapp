@@ -1157,9 +1157,9 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             if not winner_tg_ids or not set(winner_tg_ids).issubset(valid_winners):
                 raise HTTPException(400, "برنده‌های نبرد را از بین لردهای درگیر انتخاب کن")
             winner_sides = {"attacker" if tg_id in attacker_tg_ids else "defender" for tg_id in winner_tg_ids}
-            if len(winner_sides) != 1:
-                raise HTTPException(400, "برنده‌ها باید همگی از یک سمت نبرد باشند")
-            combat_outcome = winner_sides.pop()
+            # در نبرد گروهی پیروزی می‌تواند ائتلافی و میان دو ستون فنیِ مهاجم/مدافع
+            # باشد؛ نمونه‌اش لشکر مهاجمی است که برای کمک به صاحب قلعه وارد صحنه شده.
+            combat_outcome = next(iter(winner_sides)) if len(winner_sides) == 1 else "mixed"
             loser_tg_ids = sorted((attacker_tg_ids | defender_tg_ids) - set(winner_tg_ids))
 
             attacker_before = _sum_campaign_field(attacker_campaigns or [campaign], "troops")
@@ -1250,17 +1250,19 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         if outcome_guard.modified_count:
             rebellion_settings = await get_rebellion_settings()
             war_pop = rebellion_settings["war_popularity"]
-            winner_delta = int(war_pop["attack_win"] if combat_outcome == "attacker" else war_pop["defense_win"])
-            loser_delta = int(war_pop["defense_loss"] if combat_outcome == "attacker" else war_pop["attack_loss"])
-            win_stat = "attack_wins" if combat_outcome == "attacker" else "defense_wins"
             for tg_id in winner_tg_ids:
+                side = "attacker" if tg_id in attacker_tg_ids else "defender"
+                winner_delta = int(war_pop["attack_win"] if side == "attacker" else war_pop["defense_win"])
+                win_stat = "attack_wins" if side == "attacker" else "defense_wins"
                 await bump_player_stat(tg_id, win_stat)
                 lord = await players.find_one({"tg_id": tg_id})
                 if lord:
                     new_pop = max(0, min(100, int(lord.get("popularity", 50)) + winner_delta))
-                    win_points = int(control_settings.get("scoring.victory" if combat_outcome == "attacker" else "scoring.defense", 10))
+                    win_points = int(control_settings.get("scoring.victory" if side == "attacker" else "scoring.defense", 10))
                     await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}, "$inc": {"points": win_points}})
             for tg_id in loser_tg_ids:
+                side = "attacker" if tg_id in attacker_tg_ids else "defender"
+                loser_delta = int(war_pop["attack_loss"] if side == "attacker" else war_pop["defense_loss"])
                 lord = await players.find_one({"tg_id": tg_id})
                 if lord:
                     new_pop = max(0, min(100, int(lord.get("popularity", 50)) + loser_delta))

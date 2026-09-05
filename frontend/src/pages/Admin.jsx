@@ -1046,18 +1046,11 @@ export default function Admin() {
     setControlSettingsBusy(false);
   };
 
-  const toggleBattleWinner = (battleId, tgId, side) => {
+  const toggleBattleWinner = (battleId, tgId) => {
     setRoleplayWinners(prev => {
       const current = prev[battleId] || [];
       const selected = current.includes(tgId);
       if (selected) return { ...prev, [battleId]: current.filter(id => id !== tgId) };
-      const battle = battles?.find(row => row.campaign_id === battleId);
-      const attackerIds = new Set((battle?.attacker_armies || []).map(a => a.tg_id));
-      const currentSide = current.length ? (attackerIds.has(current[0]) ? 'attacker' : 'defender') : side;
-      if (current.length && currentSide !== side) {
-        toast('تمام برنده‌ها باید از یک سمت نبرد باشند؛ اول انتخاب سمت دیگر را بردار');
-        return prev;
-      }
       return { ...prev, [battleId]: [...current, tgId] };
     });
   };
@@ -1993,14 +1986,14 @@ export default function Admin() {
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
                 </div>)}
                 <label className="f">برنده‌ها</label>
-                <div className="page-sub" style={{ margin: '0 0 8px' }}>می‌توانی چند لرد از یک سمت را انتخاب کنی؛ همهٔ برنده‌ها امتیاز پیروزی و محبوبیت می‌گیرند.</div>
+                <div className="page-sub" style={{ margin: '0 0 8px' }}>می‌توانی هر تعداد لرد را از هر دو سمت انتخاب کنی؛ پاداش هر برنده براساس نقش واقعی او در نبرد محاسبه می‌شود.</div>
                 <div className="grid2">{[
                   ...(b.attacker_armies || []).map(a => [a.tg_id, a.player_name, 'attacker']),
                   ...(b.defender_armies || []).map(a => [a.tg_id, a.player_name, 'defender']),
                   [b.defender_tg_id, b.defender_name, 'defender'],
                 ].filter(x => x[0]).filter((x,i,a) => a.findIndex(y => y[0] === x[0]) === i).map(([id,name,side]) => {
                   const selected = (roleplayWinners[b.campaign_id] || []).includes(id);
-                  return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id, side)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
+                  return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
                 })}</div>
                 <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
                 <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setBattleResultImages(p => ({ ...p, [b.campaign_id]: image })), toast)} />

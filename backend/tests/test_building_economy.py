@@ -38,6 +38,16 @@ def player_at(moment, *, wood=0, buildings=None, castle_buildings=None):
 
 
 class BuildingEconomyTests(unittest.TestCase):
+    def test_displayed_rounded_resource_can_pay_equal_integer_cost(self):
+        resources = {"wood": 10.836958803889004}
+        self.assertTrue(game.can_afford(resources, {"wood": 11}))
+        game.pay(resources, {"wood": 11})
+        self.assertEqual(resources["wood"], 0)
+
+    def test_resource_rounding_never_creates_negative_balance(self):
+        resources = {"wood": 10.49}
+        self.assertFalse(game.can_afford(resources, {"wood": 11}))
+
     def test_production_is_split_at_upgrade_completion(self):
         start = datetime(2026, 1, 1)
         player = player_at(start, buildings={
