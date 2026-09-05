@@ -5,9 +5,12 @@ import { haptic } from '../telegram.js';
 import { Coin, Wood, Rock, Pick, Wheat, Wine, Send } from '../components/Icons.jsx';
 import { CARAVAN_GOODS, TRADE_GOOD_NAMES, castleLabel } from '../gamedata.js';
 
+import Projects from './Projects.jsx';
+
 const RES_ICON = { gold: Coin, wood: Wood, stone: Rock, iron: Pick, food: Wheat, wine: Wine };
 
 const TABS = [
+  { key: 'projects', label: 'پروژه‌های مشترک' },
   { key: 'caravan', label: 'کاروان' },
   { key: 'market',  label: 'بازار وستروس' },
   { key: 'black',   label: 'بازار سیاه' },
@@ -178,6 +181,7 @@ export default function Trade() {
         ))}
       </div>
 
+      {tab === 'projects' && <Projects />}
       {tab === 'caravan' && (
         <>
           <div className="sect up u2">فرستادن کاروان</div>

@@ -28,6 +28,8 @@ from registration import SETTINGS_ID as REGISTRATION_SETTINGS_ID, registration_s
 from player_labels import titled_name
 from ranks import base_score, title_bonus_and_rank, get_hierarchy_doc, current_week_start
 
+from project_engine import fail_owner_projects, projects as project_records
+
 castle_transfer_lock = asyncio.Lock()
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -1558,6 +1560,7 @@ async def _mark_player_dead(target: dict, reason: str):
     }})
     if not changed.matched_count:
         raise HTTPException(409, "مرگ این بازیکن قبلاً ثبت شده است")
+    await fail_owner_projects(tg_id)
     armies = await campaigns.find({"tg_id": tg_id, "active": True}).to_list(None)
     # Retain inactive records because an army document can also hold a battle's history.
     for army in armies:
@@ -2511,7 +2514,7 @@ async def _clear_season_history():
     for collection in (
         campaigns, ambushes, spy_missions, messages, roleplays, rebellions, rebellion_checks,
         rumors, alliances, polls, caravans, hierarchy, item_grants, admin_notifications,
-        player_market_listings, rumor_views, tributes,
+        player_market_listings, rumor_views, tributes, project_records,
     ):
         await collection.delete_many({})
 

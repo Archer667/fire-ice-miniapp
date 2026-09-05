@@ -10,6 +10,8 @@ import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import AdminControlCenter from '../components/AdminControlCenter.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
+import Projects from './Projects.jsx';
+
 const NEW_CASTLE = '__new__';
 
 function readAdminImage(file, setter, toast) {
@@ -111,6 +113,7 @@ const TAB_GROUPS = [
     key: 'economy', label: 'اقتصاد و تنظیمات',
     description: 'ابزارهای حساس و سراسری بازی',
     tabs: [
+      { key: 'projects', label: 'پروژه‌ها', description: 'بررسی طرح، زمان عرضه و اعلام شکست', fullOnly: true },
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
       { key: 'balance', label: 'تعادل ساختمان و نیرو', description: 'هزینه، بازدهی، نیروها و ادوات', ownerOnly: true },
@@ -1663,6 +1666,7 @@ export default function Admin() {
         </>
       )}
 
+      {tab === 'projects' && <Projects admin />}
       {tab === 'onboarding' && (
         <>
           <div className="card up u2" style={{ marginBottom: 14 }}>

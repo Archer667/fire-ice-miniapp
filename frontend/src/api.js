@@ -22,7 +22,9 @@ async function req(path, opts = {}) {
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     if (res.headers.get('X-Player-Dead') === '1') window.dispatchEvent(new Event('player-dead'));
-    throw new Error(e.detail || 'خطای سرور');
+    const error = new Error(typeof e.detail === 'string' ? e.detail : 'اطلاعات درخواست معتبر نیست یا سرور پاسخ نداد');
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }
@@ -1675,6 +1677,12 @@ export const api = {
     : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
   adminAddCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminAddCastle(tgId, castle))
     : req(`/api/admin/players/${tgId}/castles`, { method: 'POST', body: JSON.stringify({ castle }) }),
+  projectRules: () => req('/api/projects/rules'),
+  projects: (mine = false) => req(`/api/projects?mine=${mine}`),
+  submitProject: (body) => req('/api/projects', { method: 'POST', body: JSON.stringify(body) }),
+  buyProjectShares: (id, body) => req(`/api/projects/${id}/buy`, { method: 'POST', body: JSON.stringify(body) }),
+  adminProjects: () => req('/api/projects/admin/list'),
+  decideProject: (id, action, body) => req(`/api/projects/admin/${id}/${action}`, { method: 'POST', body: JSON.stringify(body) }),
   adminPlayerDeath: (tgId, transfers) => MOCK ? Promise.reject(new Error('ثبت مرگ به اتصال سرور نیاز دارد'))
     : req(`/api/admin/players/${tgId}/death`, { method: 'POST', body: JSON.stringify({ transfers }) }),
   adminRemoveCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminRemoveCastle(tgId, castle))

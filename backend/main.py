@@ -35,6 +35,8 @@ from routers.daily import notify_daily_rewards
 from admin_notifications import notify_admin_deadlines
 import telegram_bot
 import control_settings
+from project_engine import game_state_lock, tick_projects
+from routers import projects as projects_router
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,16 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         status_code=500, content={"detail": "خطای غیرمنتظرهٔ سرور — دوباره امتحان کن"}, headers=headers,
     )
 
+@app.middleware("http")
+async def serialize_game_state(request: Request, call_next):
+    # Legacy economy handlers use read/modify/write. Serialize with project wallets
+    # in this single-Uvicorn-worker deployment, including production-on-read routes.
+    if request.url.path.startswith('/api/') and request.url.path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
+        async with game_state_lock:
+            return await call_next(request)
+    return await call_next(request)
+
+app.include_router(projects_router.router)
 app.include_router(players.router)
 app.include_router(war.router)
 app.include_router(map_router.router)
@@ -99,23 +111,34 @@ async def _arrival_watcher():
     پادشاه/شورای کوچک را (اگر یک روز گذشته و خزانهٔ رد کیپ کافی بود) واریز می‌کند"""
     while True:
         try:
-            await notify_arrivals()
-            await notify_caravan_arrivals()
-            await notify_building_completions()
-            await notify_daily_rewards()
-            await notify_admin_deadlines()
-            await expire_unpaid_tributes()
-            await pay_daily_salaries()
-            await evaluate_rebellions()
+            async with game_state_lock:
+                await notify_arrivals()
+                await notify_caravan_arrivals()
+                await notify_building_completions()
+                await notify_daily_rewards()
+                await notify_admin_deadlines()
+                await expire_unpaid_tributes()
+                await pay_daily_salaries()
+                await evaluate_rebellions()
         except Exception:
             logger.exception("arrival watcher tick failed")
         await asyncio.sleep(30)
+
+async def _project_watcher():
+    while True:
+        try:
+            async with game_state_lock:
+                await tick_projects()
+        except Exception:
+            logger.exception('project watcher tick failed')
+        await asyncio.sleep(15)
 
 async def _market_watcher():
     """هر ۵ دقیقه قیمت‌های بازار وستروس را کمی نوسان می‌دهد"""
     while True:
         try:
-            await drift_market_prices()
+            async with game_state_lock:
+                await drift_market_prices()
         except Exception:
             logger.exception("market watcher tick failed")
         await asyncio.sleep(300)
@@ -326,6 +349,7 @@ async def start_background_watchers():
     await telegram_bot.register_webhook()
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
+    asyncio.create_task(_project_watcher())
 
 @app.get("/api/health")
 async def health():

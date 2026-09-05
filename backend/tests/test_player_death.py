@@ -128,6 +128,7 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
+        self.stack.enter_context(patch.object(admin, 'fail_owner_projects', AsyncMock()))
         self.people = Collection([player(1, 'A', {'B': {'mine': 4}}), player(2, 'C'), player(3, 'D')])
         self.armies = Collection()
         self.ambushes = Collection()
