@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from uuid import uuid4
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -64,7 +65,9 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
 
     pact_name = body.name.strip()[:60]
     penalty_gold = body.penalty_gold if body.type == "non_aggression" else 0
+    group_id = str(uuid4()) if body.type in ("trade", "full_alliance") else None
     await alliances.insert_many([{
+        **({"group_id": group_id} if group_id else {}),
         "from_id": user["id"], "from_name": me["name"],
         "from_gender": me.get("gender", "lord"),
         "to_id": t["tg_id"], "to_name": t["name"], "to_gender": t.get("gender", "lord"),
@@ -87,12 +90,22 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):
     out = []
+    group_members = {}
     cur = alliances.find({"$or": [{"from_id": user["id"]}, {"to_id": user["id"]}]}).sort("created_at", -1)
     async for a in cur:
         mine_proposed = a["from_id"] == user["id"]
+        gid = a.get('group_id')
+        if gid and gid not in group_members:
+            members = {}
+            async for edge in alliances.find({'group_id': gid, 'status': 'accepted'}):
+                members[edge['from_id']] = edge['from_name']
+                members[edge['to_id']] = edge['to_name']
+            group_members[gid] = list(members.values())
         out.append({
             "id": str(a["_id"]),
             "mine_proposed": mine_proposed,
+            "group_id": a.get("group_id"),
+            "group_members": group_members.get(gid, []) if a['status'] in ('pending', 'accepted') else [],
             "other_id": a["to_id"] if mine_proposed else a["from_id"],
             "other_name": a["to_name"] if mine_proposed else a["from_name"],
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
@@ -155,6 +168,11 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
             type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", a["type"])
             pact_name = f" («{a['name']}»)" if a.get("name") else ""
             text = f"📜 {type_name}{pact_name} میان {from_label} و {to_label} بسته شد."
+            if a.get('group_id'):
+                members = {a['from_name']}
+                async for member in alliances.find({'group_id': a['group_id'], 'status': 'accepted'}):
+                    members.add(member['to_name'])
+                text = f"📜 {to_label} به گروه {type_name}{pact_name} پیوست.\nاعضای پذیرفته‌شده: {'، '.join(sorted(members))}\nاعضای این گروه مجوز تجارت و عبور کاروان با یکدیگر دارند."
             async for p in players.find({}, {"tg_id": 1, "name": 1}):
                 if p["tg_id"] not in (a["from_id"], a["to_id"]):
                     await send_system_message(p["tg_id"], p["name"], text, kind="diplomacy")

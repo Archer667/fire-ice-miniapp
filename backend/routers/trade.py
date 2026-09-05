@@ -1,6 +1,8 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt, Field
+from typing import Annotated
+from trade_pacts import trade_partners
 from auth import get_user
 from db import players, caravans, alliances
 from game import now, can_afford, pay, add_resources, owned_castles, apply_production, production_fields
@@ -12,16 +14,18 @@ from control_settings import feature_enabled
 router = APIRouter(prefix="/api/trade", tags=["trade"])
 
 async def has_trade_alliance(a_id: int, b_id: int) -> bool:
-    """اتحاد تجاری یا اتحاد کامل، پذیرفته‌شده، بین این دو بازیکن"""
-    doc = await alliances.find_one({
-        "status": "accepted", "type": {"$in": ["trade", "full_alliance"]},
-        "$or": [{"from_id": a_id, "to_id": b_id}, {"from_id": b_id, "to_id": a_id}],
-    })
-    return doc is not None
+    return any(p['other_id'] == b_id for p in await trade_partners(a_id))
+
+@router.get('/caravan/partners')
+async def caravan_partners(user: dict = Depends(get_user)):
+    candidates = await trade_partners(user['id'])
+    living = {p['tg_id'] async for p in players.find({'tg_id': {'$in': [c['other_id'] for c in candidates]},
+             'is_dead': {'$ne': True}, 'castle': {'$ne': None}}, {'tg_id': 1})}
+    return [c for c in candidates if c['other_id'] in living]
 
 class CaravanBody(BaseModel):
     target_tg_id: int
-    resources: dict  # {resource: qty}
+    resources: dict[str, Annotated[StrictInt, Field(ge=0, le=1000000000)]]  # integer game goods
     origin_castle: str | None = None   # پیش‌فرض: قلعهٔ خانگی‌ات — می‌تونه هرکدوم از قلعه‌های خودت باشه
     target_castle: str | None = None   # پیش‌فرض: قلعهٔ خانگیِ گیرنده — می‌تونه هرکدوم از قلعه‌های او باشه
     via: list[str] | None = None       # مسیر انتخابی از /caravan/routes
@@ -40,12 +44,7 @@ async def caravan_route_options(sender_id: int, origin_castle: str, target_castl
     async for owner in players.find({"tg_id": {"$ne": sender_id}}, {"tg_id": 1, "name": 1, "castle": 1, "castle_buildings": 1}):
         for castle in owned_castles(owner):
             owners_by_castle[castle] = owner
-    permitted_ids = set()
-    async for pact in alliances.find({
-        "status": "accepted", "type": {"$in": ["trade", "full_alliance"]},
-        "$or": [{"from_id": sender_id}, {"to_id": sender_id}],
-    }):
-        permitted_ids.add(pact["to_id"] if pact["from_id"] == sender_id else pact["from_id"])
+    permitted_ids = {p['other_id'] for p in await trade_partners(sender_id)}
     result = []
     for route in raw_routes:
         missing_by_id = {}
@@ -73,8 +72,8 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     if body.target_tg_id == user["id"]:
         raise HTTPException(400, "نمی‌تونی برای خودت کاروان بفرستی")
     target = await players.find_one({"tg_id": body.target_tg_id})
-    if not target:
-        raise HTTPException(404, "گیرنده پیدا نشد")
+    if not target or target.get("is_dead") or not target.get("castle"):
+        raise HTTPException(404, "گیرندهٔ زنده و دارای قلعه پیدا نشد")
     if not await has_trade_alliance(user["id"], body.target_tg_id):
         raise HTTPException(403, "فقط با هم‌پیمان‌های تجاری (پیمان تجاری یا اتحاد کامل) می‌تونی کاروان رد و بدل کنی")
 
@@ -120,6 +119,7 @@ async def send_caravan(body: CaravanBody, user: dict = Depends(get_user)):
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "origin_castle": origin_castle,
         "target_tg_id": target["tg_id"], "target_name": target["name"], "target_castle": target_castle,
+        "target_character_created_at": target.get("created_at"),
         "resources": cost, "travel_minutes": travel, "route_path": chosen["path"], "arrival_at": arrival_at,
         "active": True, "arrival_notified": False, "created_at": now(),
     }
@@ -139,6 +139,7 @@ async def my_caravans(user: dict = Depends(get_user)):
             "from_castle": c["origin_castle"], "to_castle": c["target_castle"],
             "resources": {TRADE_GOOD_NAMES.get(k, k): v for k, v in c["resources"].items()},
             "travel_minutes": c.get("travel_minutes", 0),
+            "delivery_failed": c.get("delivery_failed", False),
             "arrived": (now() >= arrival_at) if arrival_at else True,
             "created_at": c["created_at"].isoformat(),
         })
@@ -149,9 +150,18 @@ async def notify_caravan_arrivals():
     cur = caravans.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}})
     async for c in cur:
         target = await players.find_one({"tg_id": c["target_tg_id"]})
-        if target:
+        receipt = f"caravan_receipts.{c['_id']}"
+        if target and not target.get('caravan_receipts', {}).get(str(c['_id'])):
+            if target.get('is_dead') or ('target_character_created_at' in c and target.get('created_at') != c['target_character_created_at']):
+                await caravans.update_one({'_id': c['_id']}, {'$set': {'active': False, 'arrival_notified': True, 'delivery_failed': True}})
+                continue
+            target = apply_production(target)
             add_resources(target, c["resources"])
-            await players.update_one({"tg_id": c["target_tg_id"]}, {"$set": {"resources": target["resources"]}})
+            await players.update_one({"tg_id": c["target_tg_id"], receipt: {'$exists': False}},
+                                     {"$set": {**production_fields(target), receipt: True}})
+        if not target:
+            await caravans.update_one({'_id': c['_id']}, {'$set': {'active': False, 'arrival_notified': True, 'delivery_failed': True}})
+            continue
         goods_text = " · ".join(f"{v} {TRADE_GOOD_NAMES.get(k, k)}" for k, v in c["resources"].items())
         await send_system_message(
             c["tg_id"], c["player_name"],

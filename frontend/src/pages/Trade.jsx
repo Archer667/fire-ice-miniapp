@@ -80,7 +80,7 @@ export default function Trade() {
   const [blackQty, setBlackQty] = useState({});
   const [blackBusy, setBlackBusy] = useState(null);
 
-  const loadAlliances = () => api.diplomacyMine().then(setAlliances).catch(e => toast(e.message));
+  const loadAlliances = () => api.caravanPartners().then(setAlliances).catch(e => toast(e.message));
   const loadCaravans = () => api.myCaravans().then(setCaravans).catch(e => toast(e.message));
   const loadMarket = () => api.market().then(setMarket).catch(e => toast(e.message));
   const loadPlayerMarket = () => api.playerMarket().then(setPlayerMarket).catch(e => toast(e.message));
@@ -118,6 +118,11 @@ export default function Trade() {
 
   const partners = (alliances || []).filter(a =>
     a.status === 'accepted' && (a.type === 'trade' || a.type === 'full_alliance'));
+  useEffect(() => {
+    if (tab !== 'caravan') return;
+    const timer = setInterval(loadAlliances, 15000);
+    return () => clearInterval(timer);
+  }, [tab]);
   const totalGoods = Object.values(amounts).reduce((s, v) => s + (v || 0), 0);
 
   const sendCaravan = async () => {
@@ -282,7 +287,7 @@ export default function Trade() {
                     : <><b>کاروانی از {c.from}</b> ({c.from_castle}) به‌سویت</>}
                   <div className="tm">
                     {Object.entries(c.resources).map(([k, v]) => `${v.toLocaleString('fa-IR')} ${k}`).join(' · ')}
-                    {' · '}{c.arrived ? 'رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه`}
+                    {' · '}{c.delivery_failed ? 'تحویل ناموفق — گیرنده دیگر فعال نیست' : c.arrived ? 'رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه`}
                   </div>
                 </div>
               </div>

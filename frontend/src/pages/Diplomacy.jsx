@@ -316,6 +316,7 @@ export default function Diplomacy() {
           <div className="troop" key={a.id}>
             <div className="tn">
               {a.name ? <>{a.name} <small style={{ display: 'inline' }}>— {a.other_name}</small></> : a.other_name}
+              {a.group_members?.length > 2 && <small>اعضای پذیرفته‌شدهٔ گروه: {a.group_members.join('، ')}</small>}
               <small>
                 {a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}
                 {a.public === false ? ' · خصوصی' : ''}
@@ -330,7 +331,7 @@ export default function Diplomacy() {
             )}
             {(a.type === 'trade' || a.type === 'non_aggression') && a.status === 'accepted' && (
               <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => leaveAlliance(a)}>
-                {a.type === 'non_aggression' ? `ترک با پرداخت ${(a.penalty_gold || 0).toLocaleString('fa-IR')} سکه` : 'ترک پیمان'}
+                {a.type === 'non_aggression' ? `ترک با پرداخت ${(a.penalty_gold || 0).toLocaleString('fa-IR')} سکه` : a.group_members?.length > 2 ? (a.mine_proposed ? `قطع عضویت ${a.other_name}` : 'خروج از گروه') : 'ترک پیمان'}
               </button>
             )}
           </div>

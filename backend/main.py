@@ -339,6 +339,8 @@ async def _migrate_castle_roster_v2():
 @app.on_event("startup")
 async def start_background_watchers():
     await _ensure_indexes()
+    from trade_pacts import migrate_legacy_groups
+    await migrate_legacy_groups()
     await _migrate_castle_roster_v2()
     await _migrate_season_30_building_balance()
     await _load_building_overrides()
