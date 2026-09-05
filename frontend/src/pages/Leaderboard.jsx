@@ -102,7 +102,8 @@ export default function Leaderboard() {
         ) : (
           <div className="up u2">
             {lordRows.map(r => (
-              <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
+              <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
+                {r.is_dead && <span className="death-stamp">کشته شد</span>}
                 <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
                 <div className="n">
                   {r.name}{r.me ? ' — تو' : ''}
@@ -128,7 +129,8 @@ export default function Leaderboard() {
             <div className="page-sub up u2" style={{ marginTop: -6 }}>امتیازی که هرکس فقط از اول همین هفته کسب کرده — رقابت تازه، بدون انباشت کل بازی</div>
             <div className="up u2">
               {weeklyRows.map(r => (
-                <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''}`}>
+                <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
+                {r.is_dead && <span className="death-stamp">کشته شد</span>}
                   <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
                   <div className="n">
                     {r.name}{r.me ? ' — تو' : ''}

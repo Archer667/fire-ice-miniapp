@@ -80,7 +80,7 @@ async def scored_players() -> list:
     h = await get_hierarchy_doc()
     rows = []
     async for p in players.find({}):
-        if not p.get("region") or not p.get("castle"):
+        if p.get("is_dead") or not p.get("region") or not p.get("castle"):
             continue  # هنوز ادمین خاندان/قلعه‌اش را مشخص نکرده — هنوز عملاً وارد بازی نشده
         bonus, rank_label = title_bonus_and_rank(p["tg_id"], h)
         score = max(0, round(base_score(p) + bonus - p.get("scoreboard_baseline", 0)))

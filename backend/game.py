@@ -168,6 +168,8 @@ def apply_production(player: dict) -> dict:
     می‌کرد تا اولین‌بار عددی ببیند. برای این‌که تولیدِ کم‌مقدار (مثلاً چند واحد در روز)
     در چک‌های پیاپی صفر رند نشه و گم نشه، مقدارِ اعشاریِ دقیق نگه داشته می‌شود؛ فقط
     موقعِ نمایش (پاسخِ /me) برای بازیکن رند می‌شود"""
+    if player.get("is_dead"):
+        return player
     current = now()
     last = normalize_datetime(player.get("last_tick", player["created_at"]))
     if not last or current <= last:

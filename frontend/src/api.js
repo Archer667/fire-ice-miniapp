@@ -21,6 +21,7 @@ async function req(path, opts = {}) {
   });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
+    if (res.headers.get('X-Player-Dead') === '1') window.dispatchEvent(new Event('player-dead'));
     throw new Error(e.detail || 'خطای سرور');
   }
   return res.json();
@@ -1674,6 +1675,8 @@ export const api = {
     : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
   adminAddCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminAddCastle(tgId, castle))
     : req(`/api/admin/players/${tgId}/castles`, { method: 'POST', body: JSON.stringify({ castle }) }),
+  adminPlayerDeath: (tgId, transfers) => MOCK ? Promise.reject(new Error('ثبت مرگ به اتصال سرور نیاز دارد'))
+    : req(`/api/admin/players/${tgId}/death`, { method: 'POST', body: JSON.stringify({ transfers }) }),
   adminRemoveCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminRemoveCastle(tgId, castle))
     : req(`/api/admin/players/${tgId}/castles/${encodeURIComponent(castle)}`, { method: 'DELETE' }),
   myCastles: () => MOCK ? Promise.resolve(M.myCastles()) : req('/api/assets/castles'),

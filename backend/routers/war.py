@@ -774,7 +774,7 @@ async def mine(user: dict = Depends(get_user)):
     """گزارش لشکرکشی‌های همهٔ بازیکنان — عمداً حداقلی: فقط اسم، فرستنده، مبدا/مقصد و زمان رسیدن؛
     نه توان نه ترکیب/تعداد نیرو. لشکر دفاعی (همون‌جایی) اصلاً وارد گزارش‌ها نمی‌شود، و
     لشکری که بیش از REPORT_VISIBLE_HOURS ساعت پیش رسیده دیگر توی این لیست نمی‌آید"""
-    cur = campaigns.find({"op_type": {"$ne": "defense"}}).sort("created_at", -1).limit(100)
+    cur = campaigns.find({"op_type": {"$ne": "defense"}, "destroyed_by_death": {"$ne": True}}).sort("created_at", -1).limit(100)
     out = []
     async for c in cur:
         arrival_at = c.get("arrival_at")

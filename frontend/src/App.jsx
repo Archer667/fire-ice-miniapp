@@ -44,10 +44,24 @@ export default function App() {
     if (me?.admin_role && me?.pending) setTab(ADMIN_INDEX);
   }, [me?.admin_role, me?.pending]);
 
+  useEffect(() => {
+    const onDeath = () => api.me().then(setMe).catch(() => {});
+    window.addEventListener('player-dead', onDeath);
+    return () => window.removeEventListener('player-dead', onDeath);
+  }, []);
+
   if (me === null) {
     return <div className="shell"><div className="loading">کلاغ‌ها در راه‌اند...</div></div>;
   }
 
+  if (me.is_dead) {
+    return <div className="shell" dir="rtl"><div className="card death-screen">
+      <div style={{ fontSize: 48 }}>⚔️</div><h1>کشته شد</h1>
+      <p>{me.name}، داستان این شخصیت به پایان رسید.</p>
+      <p>{me.death_reason}</p><p>برای درخواست شخصیت تازه، ادمین باید «حذف از خاندان» را انجام دهد.</p>
+      <button className="btn ghost" onClick={() => api.me().then(setMe).catch(e => toast(e.message))}>بررسی وضعیت</button>
+    </div><Toast /></div>;
+  }
   const Page = PAGES[tab];
   return (
     <div className="shell">

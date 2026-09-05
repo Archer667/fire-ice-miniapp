@@ -172,6 +172,9 @@ export default function Admin() {
   const [registrationSettings, setRegistrationSettings] = useState(null);
   const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
   const [reassignOpenId, setReassignOpenId] = useState(null);
+  const [deathPlayerId, setDeathPlayerId] = useState(null);
+  const [deathTransfers, setDeathTransfers] = useState({});
+  const [deathBusy, setDeathBusy] = useState(false);
   const [addCastleOpenId, setAddCastleOpenId] = useState(null);
   const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
   const [addCastleBusyId, setAddCastleBusyId] = useState(null);
@@ -1182,9 +1185,27 @@ export default function Admin() {
     setUnassignBusyId(null);
   };
 
+  const submitPlayerDeath = async (p) => {
+    if (deathBusy) return;
+    const castles = [...new Set([p.castle, ...(p.castles || [])].filter(Boolean))];
+    if (castles.some(c => !deathTransfers[c])) { toast('برای هر قلعه یک گیرنده انتخاب کن'); return; }
+    const summary = castles.map(c => `${castleLabel(c)} ← ${roster.find(r => r.tg_id === Number(deathTransfers[c]))?.name || ''}`).join('\n');
+    if (!window.confirm(`مرگ «${p.name}» ثبت شود؟ تمام لشکرها حذف می‌شوند و امکان بازی مسدود می‌شود.\n${summary}\nمنابع منتقل نمی‌شوند و امتیاز فتح داده نمی‌شود.`)) return;
+    setDeathBusy(true);
+    try {
+      await api.adminPlayerDeath(p.tg_id, Object.fromEntries(castles.map(c => [c, Number(deathTransfers[c])])));
+      toast('مرگ ثبت شد و قلعه‌ها بدون امتیاز فتح واگذار شدند');
+      setDeathPlayerId(null); setDeathTransfers({});
+      loadRoster(); loadPendingPlayers(); loadMapData(); loadRegistrationSettings();
+    } catch (e) { toast(e.message); }
+    finally { setDeathBusy(false); }
+  };
+
   const addCastle = async (tgId) => {
     const castle = addCastleValue[0];
     if (!castle) { toast('یک قلعه انتخاب کن'); return; }
+    const holder = roster?.find(p => !p.is_dead && (p.castle === castle || p.castles?.includes(castle)));
+    if (holder && holder.tg_id !== tgId && !window.confirm(`قلعهٔ «${castle}» از «${holder.name}» گرفته شود؟ ساختمان‌ها منتقل می‌شوند و منابع مشترک باقی می‌مانند.${!(holder.castles?.length) && holder.castle === castle ? ' این آخرین قلعهٔ اوست؛ بازیکن کشته و تمام لشکرهایش حذف می‌شوند.' : ''}`)) return;
     setAddCastleBusyId(tgId);
     try {
       const res = await api.adminAddCastle(tgId, castle);
@@ -1713,7 +1734,7 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}<small>
+                    <div className="n">{p.name}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
                       {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
                       {p.telegram_username
                         ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
@@ -1804,7 +1825,7 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}<small>
+                    <div className="n">{p.name}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
                       {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
                       {p.telegram_username
                         ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
@@ -1834,13 +1855,26 @@ export default function Admin() {
                             disabled={unassignBusyId === p.tg_id} onClick={() => unassignHouse(p.tg_id)}>
                       {unassignBusyId === p.tg_id ? 'در حال حذف...' : 'حذف از خاندان'}
                     </button>
-                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => toggleReassign(p.tg_id)}>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} disabled={p.is_dead} onClick={() => toggleReassign(p.tg_id)}>
                       انتقال به خاندان دیگر
                     </button>
-                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => toggleAddCastle(p.tg_id)}>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} disabled={p.is_dead} onClick={() => toggleAddCastle(p.tg_id)}>
                       افزودن قلعه
                     </button>
+                    {!p.is_dead && <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', color: 'var(--danger)' }}
+                      disabled={deathBusy} onClick={() => { setDeathPlayerId(deathPlayerId === p.tg_id ? null : p.tg_id); setDeathTransfers({}); }}>مرگ پلیر</button>}
                   </div>
+                  {!p.is_dead && deathPlayerId === p.tg_id && <div style={{ marginTop: 14, borderTop: '1px solid var(--danger)', paddingTop: 12 }}>
+                    <p className="page-sub">برای هر قلعه گیرنده را انتخاب کن. ساختمان‌ها منتقل می‌شوند؛ منابع مشترک باقی می‌مانند. تمام لشکرهای این بازیکن حذف می‌شوند و واگذاری امتیاز فتح ندارد.</p>
+                    {[...new Set([p.castle, ...(p.castles || [])].filter(Boolean))].map(c => <label className="f" key={c}>
+                      {castleLabel(c)}
+                      <select disabled={deathBusy} value={deathTransfers[c] || ''} onChange={e => setDeathTransfers(prev => ({ ...prev, [c]: e.target.value }))}>
+                        <option value="">انتخاب گیرنده...</option>
+                        {(roster || []).filter(r => r.tg_id !== p.tg_id && !r.is_dead && r.castle).map(r => <option value={r.tg_id} key={r.tg_id}>{r.name} — {castleLabel(r.castle)}</option>)}
+                      </select>
+                    </label>)}
+                    <button className="btn" disabled={deathBusy} onClick={() => submitPlayerDeath(p)}>{deathBusy ? 'در حال ثبت...' : 'ثبت مرگ و واگذاری قلعه‌ها'}</button>
+                  </div>}
                   {reassignOpenId === p.tg_id && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
                       <label className="f" style={{ marginTop: 0 }}>اقلیم (خاندان) تازه</label>

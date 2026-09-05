@@ -57,7 +57,8 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "عکس پروفایل باید JPG، PNG یا WebP باشد")
         if len(body.profile_image) > 3_500_000:
             raise HTTPException(400, "حجم عکس پروفایل باید حداکثر ۲٫۵ مگابایت باشد")
-    if await players.find_one({"tg_id": user["id"]}):
+    existing = await players.find_one({"tg_id": user["id"]})
+    if existing and not existing.get("registration_reset"):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
 
     requested = list(dict.fromkeys(c.strip() for c in body.requested_castles if c.strip()))[:MAX_REQUESTED_CASTLES]
@@ -103,7 +104,12 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "last_tick": now(),
         "stats": normalize_stats({}), "medals": {},
     }
-    await players.insert_one(doc)
+    if existing:
+        changed = await players.replace_one({"tg_id": user["id"], "registration_reset": True}, doc)
+        if not changed.matched_count:
+            raise HTTPException(409, "درخواست قبلاً ثبت شده است")
+    else:
+        await players.insert_one(doc)
     requested_text = "، ".join(requested) if requested else "بدون اولویت قلعه"
     await notify_admins(
         "new_player",
@@ -146,6 +152,10 @@ async def me(user: dict = Depends(get_user)):
             "day": 1, "season_length": SEASON_LENGTH_DAYS,
         }
     if not p:
+        return {"registered": False}
+    if p.get("is_dead"):
+        return {"registered": True, "is_dead": True, "name": p["name"], "death_reason": p.get("death_reason")}
+    if p.get("registration_reset"):
         return {"registered": False}
     # username بدون فرم و دخالت بازیکن از initData معتبر تلگرام تازه نگه داشته می‌شود.
     # اگر کاربر username خود را عوض یا حذف کند، پنل ادمین نیز با ورود بعدی او اصلاح می‌شود.
