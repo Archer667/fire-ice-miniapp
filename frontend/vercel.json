@@ -16,6 +16,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/players/me", "destination": "/api/login" },
     { "source": "/api/:path*", "destination": "https://valyria-game.duckdns.org/api/:path*" },
     { "source": "/telegram-web-app.js", "destination": "https://telegram.org/js/telegram-web-app.js" },
     { "source": "/(.*)", "destination": "/index.html" }

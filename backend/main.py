@@ -144,6 +144,8 @@ async def _market_watcher():
         await asyncio.sleep(300)
 
 async def _ensure_indexes():
+    from login_audit import ensure_indexes as ensure_login_indexes
+    await ensure_login_indexes()
     """ایندکس‌های یکتا برای جلوگیری از رکورد دوتایی زیر بار همزمان (race condition) —
     مثلاً دو ثبت‌نام هم‌زمان با یک قلعه، یا دو بار افزودن یک اسم به نقشه توسط ادمین"""
     try:

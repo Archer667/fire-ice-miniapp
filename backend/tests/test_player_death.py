@@ -222,7 +222,9 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(p['is_dead'])
         self.assertTrue(p['registration_reset'])
         with patch.object(player_routes, 'get_admin_role', AsyncMock(return_value=None)):
-            self.assertEqual(await player_routes.me({'id': 1}), {'registered': False})
+            from fastapi import BackgroundTasks, Request
+            request = Request({'type': 'http', 'headers': []})
+            self.assertEqual(await player_routes.me(request, BackgroundTasks(), {'id': 1}), {'registered': False})
 
     async def test_http_dependency_blocks_dead_character(self):
         import httpx

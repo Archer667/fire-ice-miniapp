@@ -1,5 +1,6 @@
 import re
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from login_audit import request_ip, record_login
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import players, campaigns, alliances, game_settings
@@ -130,7 +131,8 @@ async def get_registration_options(user: dict = Depends(get_user)):
     return {"regions": list((await registration_state()).values())}
 
 @router.get("/me")
-async def me(user: dict = Depends(get_user)):
+async def me(request: Request, background_tasks: BackgroundTasks, user: dict = Depends(get_user)):
+    background_tasks.add_task(record_login, user, request_ip(request))
     p = await players.find_one({"tg_id": user["id"]})
     admin_role = await get_admin_role(user)
     if admin_role:
