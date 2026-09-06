@@ -2913,11 +2913,11 @@ export default function Admin() {
             <select value={marketResource} onChange={e => setMarketResource(e.target.value)}>
               {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
             </select>
-            <label className="f">حجم موجود</label>
+            <label className="f">موجودی نهایی بازار (پس از تأمین)</label>
             <input type="number" min="0" value={marketQty} onChange={e => setMarketQty(e.target.value)} placeholder="مثلاً: ۳۰۰" />
-            <label className="f">قیمت (طلا به‌ازای هر واحد)</label>
+            <label className="f">قیمت پایه (سکه به‌ازای هر واحد)</label>
             <input type="number" min="1" value={marketPrice} onChange={e => setMarketPrice(e.target.value)} placeholder="مثلاً: ۵" />
-            <button className="btn" style={{ marginTop: 14 }} onClick={setMarketListing}>ثبت/به‌روزرسانی در بازار</button>
+            <button className="btn" style={{ marginTop: 14 }} onClick={setMarketListing}>ثبت/به‌روزرسانی در بازار</button><p className="page-sub">با ثابت ماندن قیمت پایه، افزایش موجودی قیمت روز را پایین می‌آورد. تغییر قیمت پایه، حجم مرجع تازه‌ای تعریف می‌کند.</p>
           </div>
           <div className="up u2">
             {(!marketListings || marketListings.length === 0) && (
@@ -2942,7 +2942,7 @@ export default function Admin() {
             </select>
             <label className="f">حجم</label>
             <input type="number" min="1" value={blackQty} onChange={e => setBlackQty(e.target.value)} placeholder="مثلاً: ۴۰" />
-            <label className="f">قیمت (طلا به‌ازای هر واحد)</label>
+            <label className="f">قیمت پایه (سکه به‌ازای هر واحد)</label>
             <input type="number" min="1" value={blackPrice} onChange={e => setBlackPrice(e.target.value)} placeholder="مثلاً: ۵" />
             <label className="f">مدت (ساعت)</label>
             <input type="number" min="1" value={blackHours} onChange={e => setBlackHours(e.target.value)} />

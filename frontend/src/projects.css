@@ -33,3 +33,38 @@
 .project-pre { white-space: pre-wrap; line-height: 2.1; }
 .project-error { color: #f1a3a3; border: 1px solid #af56564d; border-radius: 10px; padding: 10px; }
 .project-review { margin-top: 18px; border-top: 1px solid #a78b5555; padding-top: 12px; }
+
+/* Mobile project cards and native top-layer dialogs share the game's typeface. */
+.projects { min-width:0; font-family:'Peyda',sans-serif; }
+.projects > .project-toolbar:first-child { align-items:center; margin:5px 0 10px; }
+.projects > .project-toolbar { gap:8px; }
+.projects > .project-toolbar .project-check { margin:0; }
+.projects > .project-toolbar .btn { border-radius:9px; font-size:12px; min-height:40px; }
+.projects > .project-toolbar .f { min-width:120px; font-size:12px; }
+.projects .project-grid { grid-template-columns:minmax(0,1fr); gap:16px; }
+.projects .project-card { border:1px solid #b89c6538; border-radius:16px; background:linear-gradient(145deg,#30291f80,#18191c); padding:18px; gap:10px; min-width:0; }
+.project-card .project-toolbar { margin:0; }.projects .project-card h3 { margin:0; font-size:19px; line-height:1.65; overflow-wrap:anywhere; }
+.project-card .project-owner { font-size:12px; color:#c5b290; }.project-card .project-goal { font-size:13px; color:#bbb6ad; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.project-card progress { margin-top:5px; height:7px; }.project-card small { font-size:11px; line-height:1.9; }
+.projects .project-card dl { margin:4px 0; padding:12px; border:1px solid #b89c6520; border-radius:10px; background:#0002; font-size:12px; grid-template-columns:minmax(0,1fr); gap:3px; }
+.project-card dd { color:#e9d6b2; font-size:14px; margin-bottom:8px; }.project-card dd:last-child { margin-bottom:0; }
+.project-card > .btn { border-radius:10px; min-height:44px; font-size:13px; margin-top:6px; }
+.project-dialog { width:min(520px,calc(100vw - 24px)); max-width:calc(100vw - 24px); max-height:calc(100dvh - 32px); padding:0; overflow:hidden; border-radius:18px; background:#1a1a1e; font-family:'Peyda',sans-serif; font-size:14px; line-height:1.95; text-align:right; color:#e7e3da; }
+.project-dialog[open] { display:flex; flex-direction:column; }
+.project-dialog-head { padding:16px 18px; margin:0; flex:0 0 auto; border-bottom:1px solid #b89c6538; background:#211f20; }
+.project-dialog-head > div { min-width:0; }.project-dialog-head small { font-size:10px; color:#c5a878; }.project-dialog-head h2 { font-size:18px; line-height:1.7; margin:3px 0 0; }
+.project-dialog-head .btn { height:38px; width:38px; min-width:38px; border-radius:10px; font-size:23px; margin:0; }
+.project-dialog-body { overflow-y:auto; overscroll-behavior:contain; min-height:0; padding:16px 18px 22px; scrollbar-width:thin; -webkit-overflow-scrolling:touch; }
+.project-dialog-body .f { display:flex; flex-direction:column; gap:7px; font-size:12px; line-height:1.8; color:#c9c3b8; margin:12px 0; letter-spacing:normal; }
+.project-dialog input,.project-dialog select,.project-dialog textarea { font-family:'Peyda',sans-serif; font-size:16px; line-height:1.7; min-width:0; max-width:100%; border:1px solid #b89c6540; border-radius:9px; padding:10px 12px; background:#111214; color:#f0ece3; min-height:44px; }
+.project-dialog textarea { resize:vertical; min-height:90px; }.project-dialog-body h3 { font-size:15px; margin:16px 0 6px; }
+.project-dialog-body p { font-size:14px; line-height:1.95; margin:10px 0; }
+.project-dialog-body .project-step { margin:22px 0 12px; padding-bottom:9px; color:#e2c58e; border-bottom:1px solid #b89c652e; font-size:15px; }.project-dialog-body .project-step:first-child { margin-top:0; }
+.project-dialog .project-fieldset { margin:0 0 14px; }.project-dialog .project-fieldset legend { font-size:13px; }
+.project-dialog .project-check { font-size:12px; align-items:flex-start; }.project-dialog .project-check input { width:18px; min-height:18px; height:18px; padding:0; margin-top:3px; }
+.project-dialog-body .btn { font-family:'Peyda',sans-serif; border-radius:9px; min-height:44px; font-size:13px; line-height:1.8; padding:10px 12px; white-space:normal; }
+.project-dialog .project-economics { background:#c9a7640a; padding:13px; }.project-dialog .project-economics > strong { color:#e2c58e; font-size:13px; }
+.project-dialog dl { grid-template-columns:minmax(0,1fr) minmax(0,1fr); font-size:12px; gap:10px; }.project-dialog dd { color:#e9ddc6; }
+.project-dialog .project-pre { white-space:pre-wrap; font-size:14px; line-height:2.1; color:#c7c2b9; }
+.project-terms-list { padding-inline-start:22px; margin:0; font-size:14px; font-weight:400; line-height:1.95; color:#cec8bd; }.project-terms-list li { padding-inline-start:4px; margin-bottom:12px; }.project-terms-list li::marker { color:#d6b77d; font-weight:700; }
+@media(max-width:360px) { .project-dialog { width:calc(100vw - 16px); max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); }.project-dialog-head,.project-dialog-body { padding:13px; }.project-dialog-head h2 { font-size:16px; }.project-dialog dl { grid-template-columns:minmax(0,1fr); gap:4px; }.project-dialog dd { margin-bottom:8px; }.projects .project-card { padding:14px; }.project-dialog .project-resource-grid { gap:8px; } }

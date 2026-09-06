@@ -1,7 +1,7 @@
-import random
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt, Field
+from market_pricing import stock_price
 from auth import get_user
 from db import players, market_listings, black_market_listings, player_market_listings
 from game import now, can_afford, pay, add_resources, apply_production, production_fields
@@ -18,17 +18,19 @@ router = APIRouter(prefix="/api/market", tags=["market"])
 async def list_market(user: dict = Depends(get_user)):
     out = []
     async for m in market_listings.find({"qty": {"$gt": 0}}):
-        prev = m.get("prev_price") or m["price"]
-        change_pct = round((m["price"] - prev) / prev * 100, 1) if prev else 0.0
+        price = stock_price(m)
+        base = m.get("base_price", m["price"])
+        change_pct = round((price - base) / base * 100, 1)
         out.append({
             "resource": m["resource"], "name": TRADE_GOOD_NAMES.get(m["resource"], m["resource"]),
-            "qty": m["qty"], "price": m["price"], "change_pct": change_pct,
+            "qty": m["qty"], "price": price, "base_price": base, "change_pct": change_pct,
         })
     return out
 
 class BuyBody(BaseModel):
     resource: str
-    qty: int
+    qty: StrictInt = Field(ge=1, le=1000000000)
+    expected_price: StrictInt | None = Field(default=None, ge=1)
 
 @router.post("/buy")
 async def buy(body: BuyBody, user: dict = Depends(get_user)):
@@ -45,16 +47,20 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
         raise HTTPException(400, f"فقط {listing['qty']} واحد از این کالا در بازار مانده")
 
     p = apply_production(p)
-    cost = body.qty * listing["price"]
+    price = stock_price(listing)
+    if body.expected_price is not None and body.expected_price != price:
+        raise HTTPException(409, "قیمت تغییر کرده؛ مبلغ تازه را بررسی و دوباره خرید کن")
+    cost = body.qty * price
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
 
     # به‌روزرسانیِ اتمیک و مشروط به موجودیِ واقعی — وگرنه دو خریدِ هم‌زمان می‌تونن
     # هردو رویِ همون خواندنِ قدیمیِ qty رد بشن و بازار رو منفی/بیش‌ازموجودی بفروشن
-    bumped = min(listing["price"] * (1 + 0.015 * body.qty), listing.get("base_price", listing["price"]) * 2)
+    reference = max(1, listing.get("reference_qty", listing["qty"]))
+    bumped = stock_price({**listing, "reference_qty": reference}, listing["qty"] - body.qty)
     result = await market_listings.update_one(
         {"_id": listing["_id"], "qty": {"$gte": body.qty}},
-        {"$set": {"price": max(1, round(bumped))}, "$inc": {"qty": -body.qty}},
+        {"$set": {"price": bumped, "prev_price": price, "reference_qty": reference}, "$inc": {"qty": -body.qty}},
     )
     if result.matched_count == 0:
         raise HTTPException(409, "موجودیِ بازار همین الان تغییر کرد — دوباره امتحان کن")
@@ -71,13 +77,14 @@ async def list_player_market(user: dict = Depends(get_user)):
         out.append({
             "id": str(m["_id"]), "seller_tg_id": m["seller_tg_id"], "seller_name": m["seller_name"],
             "mine": m["seller_tg_id"] == user["id"], "resource": m["resource"],
-            "name": TRADE_GOOD_NAMES.get(m["resource"], m["resource"]), "qty": m["qty"], "price": 1,
+            "name": TRADE_GOOD_NAMES.get(m["resource"], m["resource"]), "qty": m["qty"], "price": m.get("price", 1),
         })
     return out
 
 class PlayerListingBody(BaseModel):
     resource: str
-    qty: int
+    qty: StrictInt = Field(ge=1, le=1000000000)
+    price: StrictInt = Field(default=1, ge=1, le=1000000000)
 
 @router.post("/players")
 async def create_player_listing(body: PlayerListingBody, user: dict = Depends(get_user)):
@@ -103,13 +110,13 @@ async def create_player_listing(body: PlayerListingBody, user: dict = Depends(ge
         raise HTTPException(409, "موجودی‌ات همین الان تغییر کرد؛ دوباره امتحان کن")
     res = await player_market_listings.insert_one({
         "seller_tg_id": user["id"], "seller_name": p["name"], "resource": body.resource,
-        "qty": body.qty, "price": 1, "created_at": now(),
+        "qty": body.qty, "price": body.price, "created_at": now(),
     })
-    return {"ok": True, "id": str(res.inserted_id), "price": 1}
+    return {"ok": True, "id": str(res.inserted_id), "price": body.price}
 
 class PlayerMarketBuyBody(BaseModel):
     listing_id: str
-    qty: int
+    qty: StrictInt = Field(ge=1, le=1000000000)
 
 @router.post("/players/buy")
 async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get_user)):
@@ -125,7 +132,12 @@ async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get
         raise HTTPException(404, "آگهی موجود نیست یا موجودی‌اش کافی نیست")
     if listing["seller_tg_id"] == user["id"]:
         raise HTTPException(400, "نمی‌توانی کالای خودت را بخری")
-    cost = body.qty  # قانون بازار بازیکن‌ها: هر واحد دقیقاً یک سکه
+    cost = body.qty * listing.get("price", 1)
+    p = await players.find_one({"tg_id": user["id"]})
+    if not p:
+        raise HTTPException(403, "اول ثبت‌نام کن")
+    p = apply_production(p)
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
     buyer = await players.update_one(
         {"tg_id": user["id"], "resources.gold": {"$gte": cost}}, {"$inc": {"resources.gold": -cost}},
     )
@@ -170,7 +182,7 @@ async def list_black_market(user: dict = Depends(get_user)):
 
 class BlackBuyBody(BaseModel):
     listing_id: str
-    qty: int
+    qty: StrictInt = Field(ge=1, le=1000000000)
 
 @router.post("/black/buy")
 async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
@@ -208,11 +220,8 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
     return {"ok": True, "resource": m["resource"], "qty": body.qty, "cost": cost}
 
 async def drift_market_prices():
-    """هر تیک، قیمت‌های بازار وستروس را کمی نوسان می‌دهد — با کشش ملایم به‌سمت قیمت پایه"""
+    """Maintain the stock-based quote; time alone does not change prices."""
     async for m in market_listings.find({}):
-        base = m.get("base_price", m["price"])
-        price = m["price"]
-        revert = (base - price) * 0.1
-        noise = price * random.uniform(-0.05, 0.05)
-        new_price = max(1, round(price + revert + noise))
-        await market_listings.update_one({"_id": m["_id"]}, {"$set": {"prev_price": price, "price": new_price}})
+        reference = max(1, m.get('reference_qty', m['qty']))
+        price = stock_price({**m, 'reference_qty': reference})
+        await market_listings.update_one({'_id': m['_id']}, {'$set': {'price': price, 'reference_qty': reference}})

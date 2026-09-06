@@ -1602,11 +1602,11 @@ export const api = {
   playerCastles: (tgId) => MOCK ? Promise.resolve(M.playerCastles(tgId)) : req(`/api/players/${tgId}/castles`),
   myCaravans: () => MOCK ? Promise.resolve(M.myCaravans()) : req('/api/trade/caravans/mine'),
   market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),
-  marketBuy: (resource, qty) => MOCK ? Promise.resolve(M.marketBuy(resource, qty))
-    : req('/api/market/buy', { method: 'POST', body: JSON.stringify({ resource, qty }) }),
+  marketBuy: (resource, qty, expected_price) => MOCK ? Promise.resolve(M.marketBuy(resource, qty))
+    : req('/api/market/buy', { method: 'POST', body: JSON.stringify({ resource, qty, expected_price }) }),
   playerMarket: () => MOCK ? Promise.resolve([]) : req('/api/market/players'),
-  playerMarketSell: (resource, qty) => MOCK ? Promise.resolve({ ok: true })
-    : req('/api/market/players', { method: 'POST', body: JSON.stringify({ resource, qty }) }),
+  playerMarketSell: (resource, qty, price = 1) => MOCK ? Promise.resolve({ ok: true })
+    : req('/api/market/players', { method: 'POST', body: JSON.stringify({ resource, qty, price }) }),
   playerMarketBuy: (listingId, qty) => MOCK ? Promise.resolve({ ok: true })
     : req('/api/market/players/buy', { method: 'POST', body: JSON.stringify({ listing_id: listingId, qty }) }),
   playerMarketCancel: (listingId) => MOCK ? Promise.resolve({ ok: true })

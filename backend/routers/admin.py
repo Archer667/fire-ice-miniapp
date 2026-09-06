@@ -1906,10 +1906,17 @@ async def admin_market_set(body: MarketListingBody, user: dict = Depends(full_ad
         raise HTTPException(400, "کالای نامعتبر")
     if body.qty < 0 or body.price <= 0:
         raise HTTPException(400, "مقدار یا قیمت نامعتبر")
+    from market_pricing import stock_price
+    existing = await market_listings.find_one({'resource': body.resource})
+    reference = max(1, body.qty)
+    if existing and existing.get('base_price', existing['price']) == body.price:
+        reference = max(reference, existing.get('reference_qty', existing['qty']))
+    quote = stock_price({'qty': body.qty, 'price': body.price, 'base_price': body.price, 'reference_qty': reference})
     await market_listings.update_one(
         {"resource": body.resource},
-        {"$set": {"resource": body.resource, "qty": body.qty, "price": body.price,
-                   "prev_price": body.price, "base_price": body.price, "updated_at": now()}},
+        {"$set": {"resource": body.resource, "qty": body.qty, "price": quote,
+                   "reference_qty": reference, "prev_price": existing['price'] if existing else body.price,
+                   "base_price": body.price, "updated_at": now()}},
         upsert=True,
     )
     return {"ok": True}

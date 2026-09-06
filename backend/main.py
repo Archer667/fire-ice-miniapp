@@ -346,6 +346,7 @@ async def start_background_watchers():
     await _load_building_overrides()
     await _load_gameplay_balance()
     await control_settings.load()
+    await drift_market_prices()
     await _fix_stonedance_region()
     await _detach_admin_players()
     await telegram_bot.register_webhook()

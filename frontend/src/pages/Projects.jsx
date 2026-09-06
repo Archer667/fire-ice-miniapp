@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api.js';
 import '../projects.css';
 import { useGame } from '../store.jsx';
@@ -15,10 +15,11 @@ const initial = () => ({ request_id: crypto.randomUUID(), kind: 'shared', name: 
 
 function Modal({ title, children, close }) {
   const ref = useRef(null);
-  useEffect(() => { ref.current.showModal(); }, []);
-  return <dialog ref={ref} className="project-dialog" onCancel={close} onClick={e => { if (e.target === ref.current) close(); }}>
-    <div className="project-dialog-head"><h2>{title}</h2><button type="button" className="btn ghost" onClick={close} aria-label="بستن پنجره">×</button></div>
-    {children}
+  const titleId = useId();
+  useEffect(() => { const dialog = ref.current; dialog.showModal(); return () => dialog.close(); }, []);
+  return <dialog ref={ref} aria-labelledby={titleId} className="project-dialog" onCancel={close} onClick={e => { if (e.target === ref.current) close(); }}>
+    <div className="project-dialog-head"><div><small>پروژه‌های قلمرو</small><h2 id={titleId}>{title}</h2></div><button type="button" className="btn ghost" onClick={close} aria-label="بستن پنجره">×</button></div>
+    <div className="project-dialog-body">{children}</div>
   </dialog>;
 }
 
@@ -117,7 +118,7 @@ export default function Projects({ admin = false }) {
     {rows && !rows.filter(p => status === 'all' || p.status === status).length && <div className="empty">پروژه‌ای در این فهرست نیست.</div>}
     <div className="project-grid">{rows?.filter(p => status === 'all' || p.status === status).map(p => <article className="card project-card" key={p.id}>
       <div className="project-toolbar"><span className={`project-status ${p.status}`}>{STATUS[p.status]}</span><small>{p.kind === 'personal' ? 'شخصی' : 'مشترک'}</small></div>
-      <h3>{p.name}</h3><p className="page-sub">طراح: {p.owner_name}{p.is_owner ? ' — شما' : ''}</p><p>{p.goal}</p>
+      <h3>{p.name}</h3><p className="project-owner">طراح: {p.owner_name}{p.is_owner ? ' — شما' : ''}</p><p className="project-goal">{p.goal}</p>
       <progress max={p.total_shares} value={p.sold_shares} aria-label="سهام تأمین‌شده" />
       <div className="project-toolbar"><small>{number(p.sold_shares)} از {number(p.total_shares)} سهم تأمین شده</small>{p.my_shares > 0 && <strong>{number(p.my_shares)} سهم شما</strong>}</div>
       <dl><dt>بهای هر سهم</dt><dd>{money(p.share_cost)}</dd><dt>دریافتی هر سهم / {number(p.period_hours)} ساعت</dt><dd>{money(p.share_return)}</dd></dl>
@@ -130,10 +131,12 @@ export default function Projects({ admin = false }) {
     {create && <Modal title="طرح پروژهٔ تازه" close={() => !busy && setCreate(false)}>
       <form onSubmit={submit}>
         <fieldset disabled={busy} className="project-fieldset">
+          <h3 className="project-step">۱. هویت و هدف پروژه</h3>
           <label className="f">نوع پروژه<select value={form.kind} onChange={e => field('kind', e.target.value)}><option value="shared">مشترک — با سرمایه‌گذار</option><option value="personal">شخصی — تمام سرمایه با خودم</option></select></label>
           <label className="f">نام پروژه<input required minLength={3} maxLength={80} value={form.name} onChange={e => field('name', e.target.value)} /></label>
           <label className="f">چشم‌انداز و هدف<textarea required minLength={10} maxLength={250} value={form.goal} onChange={e => field('goal', e.target.value)} /></label>
           <label className="f">توضیح و شیوهٔ رسیدن به هدف<textarea required minLength={20} maxLength={600} value={form.description} onChange={e => field('description', e.target.value)} /></label>
+          <h3 className="project-step">۲. سرمایه و تقسیم سهام</h3>
           <Resources title="کل بودجهٔ موردنیاز" values={form.budget} change={v => field('budget', v)} />
           <div className="project-resource-grid"><label className="f">تعداد کل سهام<input required type="number" min="1" max="10000" step="1" value={form.total_shares} onChange={e => field('total_shares', Number(e.target.value))} /></label>
           <label className="f">سهام اولیهٔ شما<input required type="number" disabled={form.kind === 'personal'} min="1" max={form.total_shares - (form.kind === 'shared' ? 1 : 0)} step="1" value={ownerShares} onChange={e => field('owner_shares', Number(e.target.value))} /></label></div>
@@ -141,6 +144,7 @@ export default function Projects({ admin = false }) {
           <p>بهای هر سهم: <strong>{previewValid ? money(mult(form.budget, 1 / form.total_shares)) : '—'}</strong></p>
           <p>آوردهٔ شما: <strong>{previewValid ? money(mult(form.budget, ownerShares / form.total_shares)) : '—'}</strong></p>
           <p>آوردهٔ سرمایه‌گذاران: <strong>{previewValid ? money(mult(form.budget, (form.total_shares - ownerShares) / form.total_shares)) : '—'}</strong></p>
+          <h3 className="project-step">۳. بازده و برنامهٔ پرداخت</h3>
           <Resources title="خروجی کل پروژه در هر دوره" values={form.period_return} change={v => field('period_return', v)} />
           <div className="project-resource-grid"><label className="f">فاصلهٔ پرداخت‌ها (ساعت)<input required type="number" min="1" max="720" value={form.period_hours} onChange={e => field('period_hours', Number(e.target.value))} /></label>
           <label className="f">تعداد دوره‌ها<input required type="number" min="1" max="365" value={form.period_count} onChange={e => field('period_count', Number(e.target.value))} /></label></div>
@@ -196,6 +200,6 @@ export default function Projects({ admin = false }) {
       </div>}
       {admin && selectedProject.members && <><h3>سهام‌داران</h3>{selectedProject.members.map(m => <p key={m.tg_id}>{m.name} — {number(m.shares)} سهم</p>)}</>}
     </Modal>}
-    {terms && rules && <Modal title="شرایط سرمایه‌گذاری" close={() => setTerms(false)}><p className="project-pre">{rules.terms}</p><p>در محاسبات، طلا و هر منبع جدا ارزیابی می‌شوند؛ برای منابع متفاوت، درصد سود تجمیعی ساختگی نمایش داده نمی‌شود.</p><button className="btn" onClick={() => setTerms(false)}>متوجه شدم</button></Modal>}
+    {terms && rules && <Modal title="شرایط سرمایه‌گذاری" close={() => setTerms(false)}><ol className="project-terms-list">{rules.terms.split(/(?<=\.)\s+/).map((term, i) => <li key={i}>{term}</li>)}</ol><p>در محاسبات، طلا و هر منبع جدا ارزیابی می‌شوند؛ برای منابع متفاوت، درصد سود تجمیعی ساختگی نمایش داده نمی‌شود.</p><button className="btn" onClick={() => setTerms(false)}>متوجه شدم</button></Modal>}
   </section>;
 }
