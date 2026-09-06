@@ -5,7 +5,7 @@ import html
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt
 from auth import get_user, get_admin, get_full_admin, get_owner, get_admin_role
 from db import (
     campaigns, ambushes, players, admin_roles, map_castles, market_listings, black_market_listings,
@@ -1889,11 +1889,27 @@ async def remove_admin(tg_id: int, user: dict = Depends(owner_user)):
 
 @router.get("/market")
 async def admin_market_list(user: dict = Depends(full_admin_user)):
+    from market_pricing import stock_price
     out = []
     async for m in market_listings.find({}):
-        out.append({"resource": m["resource"], "qty": m["qty"], "price": m["price"],
+        out.append({"resource": m["resource"], "qty": m["qty"], "price": stock_price(m),
                     "base_price": m.get("base_price", m["price"])})
     return out
+
+class PlayerMarketFloorsBody(BaseModel):
+    prices: dict[str, StrictInt]
+
+@router.get('/player-market-floors')
+async def get_player_market_floors(user: dict = Depends(full_admin_user)):
+    from market_rules import price_floors
+    return await price_floors()
+
+@router.post('/player-market-floors')
+async def set_player_market_floors(body: PlayerMarketFloorsBody, user: dict = Depends(full_admin_user)):
+    if set(body.prices) != set(TRADE_GOODS) or any(v < 1 or v > 1000000000 for v in body.prices.values()):
+        raise HTTPException(400, 'قیمت تمام کالاها باید عدد صحیح مثبت باشد')
+    await game_settings.update_one({'_id': 'player_market_price_floors'}, {'$set': {'prices': body.prices}}, upsert=True)
+    return body.prices
 
 class MarketListingBody(BaseModel):
     resource: str

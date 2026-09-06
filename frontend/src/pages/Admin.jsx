@@ -114,6 +114,7 @@ const TAB_GROUPS = [
     description: 'ابزارهای حساس و سراسری بازی',
     tabs: [
       { key: 'projects', label: 'پروژه‌ها', description: 'بررسی طرح، زمان عرضه و اعلام شکست', fullOnly: true },
+      { key: 'market-floors', label: 'حداقل قیمت کالاها', description: 'کف قیمت بازار بازیکنان', fullOnly: true },
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
       { key: 'balance', label: 'تعادل ساختمان و نیرو', description: 'هزینه، بازدهی، نیروها و ادوات', ownerOnly: true },
@@ -261,6 +262,8 @@ export default function Admin() {
   const [editRegion, setEditRegion] = useState('north');
 
   const [marketListings, setMarketListings] = useState(null);
+  const [marketFloors, setMarketFloors] = useState(null);
+  const [floorsBusy, setFloorsBusy] = useState(false);
   const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
   const [marketQty, setMarketQty] = useState('');
   const [marketPrice, setMarketPrice] = useState('');
@@ -516,6 +519,7 @@ export default function Admin() {
     if (isFull) {
       loadPendingPlayers(); loadRegistrationSettings(); loadRoster(); loadAlliances(); loadMapData();
       loadPolls(); loadMarket(); loadBlackMarket(); loadItems();
+      api.adminMarketFloors().then(setMarketFloors).catch(e => toast(e.message));
       api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
     }
     if (isOwner) {
@@ -2905,6 +2909,14 @@ export default function Admin() {
         </>
       )}
 
+      {tab === 'market-floors' && isFull && <div className="card">
+        <h2 className="page-title">حداقل قیمت بازار بازیکنان</h2>
+        <p className="page-sub">قیمت هر واحد به سکه؛ پیش‌فرض همهٔ کالاها ۱۰ است. آگهی‌های قدیمی زیر حداقل، تا لغو و ثبت مجدد قابل خرید نیستند.</p>
+        {marketFloors ? <form onSubmit={async e => { e.preventDefault(); setFloorsBusy(true); try { const values = Object.fromEntries(Object.entries(marketFloors).map(([k,v]) => [k, Number(v)])); setMarketFloors(await api.adminSaveMarketFloors(values)); toast('حداقل قیمت‌ها ذخیره شد'); } catch (err) { toast(err.message); } finally { setFloorsBusy(false); } }}>
+          {TRADE_GOODS.map(g => <label className="f" key={g}>{TRADE_GOOD_NAMES[g]}<input type="number" inputMode="numeric" min="1" max="1000000000" step="1" required value={marketFloors[g]} onChange={e => setMarketFloors(v => ({ ...v, [g]: e.target.value }))} /></label>)}
+          <button className="btn" disabled={floorsBusy}>{floorsBusy ? 'در حال ذخیره…' : 'ذخیره حداقل قیمت‌ها'}</button>
+        </form> : <p>در حال دریافت تنظیمات…</p>}
+      </div>}
       {tab === 'market' && isFull && (
         <>
           <div className="sect up u2">بازار وستروس</div>
