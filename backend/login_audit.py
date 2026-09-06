@@ -68,7 +68,7 @@ async def record_login(user, address):
             try:
                 claim = await db.login_alerts.update_one(
                     {'_id': pair, 'last_sent': {'$lte': now - timedelta(hours=24)}},
-                    {'$set': {'last_sent': now, 'expires_at': now + timedelta(days=7)}},
+                    {'$set': {'last_sent': now, 'ip': address, 'expires_at': now + timedelta(days=7)}},
                     upsert=True)
             except DuplicateKeyError:
                 continue
@@ -77,6 +77,7 @@ async def record_login(user, address):
                     '🔎 هشدار ورود از IP مشترک\n'
                     f"بازیکن اول: {player.get('name', uid)} ({uid})\n"
                     f"بازیکن دوم: {peer['name']} ({peer['tg_id']})\n"
+                    f"IP مشترک: {address}\n"
                     f"زمان تشخیص: {now:%Y-%m-%d %H:%M} UTC\n"
                     'هر دو حساب در ۲۴ ساعت اخیر از یک IP وارد شده‌اند.\n'
                     'این هشدار اثبات چنداکانتی نیست؛ اینترنت یا VPN مشترک هم می‌تواند علت باشد.')
