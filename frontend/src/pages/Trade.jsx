@@ -20,7 +20,7 @@ const fa = value => Number(value || 0).toLocaleString('fa-IR');
 function MarketCard({ item, kind, value, onQuantity, onBuy, onCancel, busy }) {
   const Icon = RES_ICON[item.resource] || Coin;
   const qty = value || 1;
-  return <article className={`exchange-card ${kind}`}>
+  return <article className={`card exchange-card ${kind}`}>
     <header><span className="exchange-icon"><Icon s={24} /></span><div><h3>{item.name}</h3><p>{kind === 'player' ? `فروشنده: ${item.seller_name}` : kind === 'black' ? 'عرضهٔ محدود بازار سیاه' : 'عرضهٔ رسمی وستروس'}</p></div><span className="exchange-tag">{kind === 'official' ? 'شناور' : 'قیمت ثابت'}</span></header>
     <div className="exchange-quote"><div><span>قیمت هر واحد</span><strong>{fa(item.price)} <small>سکه</small></strong></div><div><span>موجودی</span><strong>{fa(item.qty)} <small>واحد</small></strong></div></div>
     {kind === 'official' && <p className="exchange-note"><span className={item.change_pct > 0 ? 'price-rise' : item.change_pct < 0 ? 'price-fall' : ''}>{item.change_pct > 0 ? '+' : ''}{fa(item.change_pct)}٪</span> نسبت به قیمت پایهٔ {fa(item.base_price)} سکه</p>}
@@ -198,8 +198,8 @@ export default function Trade() {
 
   return (
     <section className="trade-page">
-      <header className="trade-hero"><div><span className="trade-eyebrow">خزانه و بازرگانی</span><h1>تجارت و سرمایه</h1></div><div className="trade-wallet"><Coin s={18} /><strong>{fa(me.resources?.gold)}</strong><small>سکه</small></div></header>
-      <p className="trade-intro">کالا مبادله کن، کاروان بفرست و در آیندهٔ قلمرو سرمایه‌گذاری کن.</p>
+      <header className="trade-hero"><div><span className="trade-eyebrow">خزانه و بازرگانی</span><h1 className="page-title">تجارت و سرمایه</h1></div><div className="trade-wallet"><Coin s={18} /><strong>{fa(me.resources?.gold)}</strong><small>سکه</small></div></header>
+      <p className="page-sub trade-intro">کالا مبادله کن، کاروان بفرست و در آیندهٔ قلمرو سرمایه‌گذاری کن.</p>
       <nav className="trade-nav" role="tablist" aria-label="بخش‌های تجارت">
         {TABS.map(t => { const Icon = t.icon; return <button type="button" key={t.key} role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'selected' : ''} onClick={() => { haptic(); setTab(t.key); }}><Icon s={22} /><strong>{t.label}</strong><small>{t.detail}</small></button>; })}
       </nav>

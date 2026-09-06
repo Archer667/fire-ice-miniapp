@@ -1,38 +1,42 @@
-.trade-page { --trade-line: #b89c6530; font-family: 'Peyda', sans-serif; min-width: 0; padding-bottom: 12px; }
+.trade-page { --trade-line: var(--edge); font-family: 'Peyda', sans-serif; min-width: 0; padding-bottom: 12px; }
 .trade-hero { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:10px 0 8px; }
-.trade-eyebrow { color:#c7aa75; font-size:11px; font-weight:700; }
-.trade-hero h1 { font-size:25px; line-height:1.5; margin:3px 0; font-weight:850; }
-.trade-wallet { display:flex; align-items:center; gap:5px; padding:10px; border:1px solid var(--trade-line); border-radius:12px; color:#efd29a; }
+.trade-eyebrow { color:var(--az); font-size:11px; font-weight:700; }
+.trade-wallet { display:flex; align-items:center; gap:5px; padding:10px; border:1px solid var(--trade-line); border-radius:12px; color:var(--az); }
 .trade-wallet small { font-size:10px; }
-.trade-intro { color:#aba79e; font-size:13px; line-height:1.9; margin:0 0 18px; }
+.trade-intro {   line-height:1.9;  }
 .trade-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 20px; }
-.trade-nav button { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; padding:11px 3px; border:1px solid var(--trade-line); border-radius:14px; background:#ffffff03; color:#aba79e; }
+.trade-nav button { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; padding:11px 3px; border:1px solid var(--trade-line); border-radius:14px; background:var(--glass); color:var(--mid); }
 .trade-nav button strong { font-size:14px; }.trade-nav button small { font-size:9px; line-height:1.6; }
-.trade-nav button.selected { color:#f6d99f; border-color:#c5a66f; background:linear-gradient(140deg,#ae824a28,#ae824a08); box-shadow:inset 0 2px 0 #ecd09a55; }
+.trade-nav button.selected { color:var(--az); border-color:var(--az); background:linear-gradient(140deg,#ae824a28,#ae824a08); box-shadow:inset 0 2px 0 #ecd09a55; }
 .exchange-tabs { display:flex; gap:4px; padding:5px; border:1px solid var(--trade-line); border-radius:12px; background:#0003; }
-.exchange-tabs button { flex:1; min-width:0; padding:11px 3px; border:0; background:transparent; border-radius:8px; color:#ada99e; font-size:12px; }
-.exchange-tabs button.selected { background:#d4b67b; color:#251e12; font-weight:800; }
-.exchange-heading { margin:22px 0 16px; }.exchange-heading h2 { font-size:18px; margin:5px 0; line-height:1.7; }.exchange-heading p { font-size:13px; color:#aaa69e; line-height:1.9; margin:4px 0; }
-.exchange-refresh { display:flex; justify-content:space-between; align-items:center; margin-top:10px; gap:8px; color:#9d998f; }.exchange-refresh small,.exchange-refresh button { font-size:11px; }.exchange-refresh button { color:#d6bb87; min-height:32px; background:transparent; border:0; }
+.exchange-tabs button { flex:1; min-width:0; padding:11px 3px; border:0; background:transparent; border-radius:8px; color:var(--mid); font-size:12px; }
+.exchange-tabs button.selected { background:var(--az); color:var(--on-parchment); font-weight:800; }
+.exchange-heading { margin:22px 0 16px; }.exchange-heading h2 {  margin:5px 0; line-height:1.7;  color:var(--az); font-size:12.5px; font-weight:700;}.exchange-heading p {  color:var(--mid); line-height:1.9; margin:4px 0; font-size:11.5px;}
+.exchange-refresh { display:flex; justify-content:space-between; align-items:center; margin-top:10px; gap:8px; color:var(--low); }.exchange-refresh small,.exchange-refresh button { font-size:11px; }.exchange-refresh button { color:var(--az); min-height:32px; background:transparent; border:0; }
 .exchange-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
-.exchange-card { border:1px solid var(--trade-line); border-radius:16px; padding:16px; background:linear-gradient(145deg,#30291f77,#171719); min-width:0; }
+.exchange-card {  border-radius:16px; padding:16px;  min-width:0; }
 .exchange-card header { display:flex; gap:10px; align-items:center; }.exchange-card header > div { flex:1; min-width:0; }
-.exchange-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:12px; background:#d6b87b10; color:#e4c687; flex-shrink:0; }
-.exchange-card h3 { font-size:17px; margin:0; }.exchange-card header p { font-size:11px; line-height:1.8; color:#aaa79f; margin:3px 0 0; overflow-wrap:anywhere; }
-.exchange-tag { font-size:10px; color:#dbbf8f; border:1px solid var(--trade-line); border-radius:20px; padding:4px 7px; white-space:nowrap; }
+.exchange-icon { display:grid; place-items:center; width:42px; height:42px; border-radius:12px; background:var(--glass); color:var(--az); flex-shrink:0; }
+.exchange-card h3 {  margin:0; font-size:13px; font-weight:600;}.exchange-card header p { font-size:11px; line-height:1.8; color:var(--mid); margin:3px 0 0; overflow-wrap:anywhere; }
+.exchange-tag { font-size:10px; color:var(--az); border:1px solid var(--trade-line); border-radius:20px; padding:4px 7px; white-space:nowrap; }
 .exchange-quote { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:15px 0; margin-top:8px; border-bottom:1px solid var(--trade-line); }
 .exchange-quote > div { display:flex; flex-direction:column; gap:4px; }.exchange-quote > div + div { border-inline-start:1px solid var(--trade-line); padding-inline-start:16px; }
-.exchange-quote span { font-size:11px; color:#aaa69e; }.exchange-quote strong { font-size:22px; font-weight:800; overflow-wrap:anywhere; }.exchange-quote small { font-size:11px; font-weight:500; color:#c2b49a; }
-.exchange-note { margin:10px 0 14px; font-size:12px; line-height:1.9; color:#b4b0a8; }.price-rise { color:#edaa88; font-weight:800; }.price-fall { color:#a1d4b7; font-weight:800; }
+.exchange-quote span { font-size:11px; color:var(--mid); }.exchange-quote strong {  font-weight:800; overflow-wrap:anywhere; font-size:17px;}.exchange-quote small { font-size:11px; font-weight:500; color:var(--mid); }
+.exchange-note { margin:10px 0 14px; font-size:12px; line-height:1.9; color:var(--mid); }.price-rise { color:#edaa88; font-weight:800; }.price-fall { color:#a1d4b7; font-weight:800; }
 .exchange-buy { display:grid; grid-template-columns:minmax(80px,.7fr) minmax(0,1.3fr); align-items:end; gap:10px; margin-top:14px; }
-.exchange-buy label,.exchange-sell label { display:flex; flex-direction:column; gap:7px; color:#c9c3b8; font-size:12px; min-width:0; }
+.exchange-buy label,.exchange-sell label { display:flex; flex-direction:column; gap:7px; color:var(--mid); font-size:12px; min-width:0; }
 .trade-page input,.trade-page select { min-width:0; max-width:100%; box-sizing:border-box; font-family:'Peyda',sans-serif; }
-.exchange-buy input,.exchange-sell input,.exchange-sell select { width:100%; min-height:46px; padding:10px; border:1px solid #b89c6540; border-radius:9px; background:#111214; font-size:16px; color:#f3eee5; }
-.exchange-buy .btn { min-height:46px; margin:0; border-radius:9px; display:flex; justify-content:space-between; align-items:center; gap:6px; padding:10px 12px; font-size:13px; }.exchange-buy .btn span { font-size:12px; }
-.exchange-sell,.exchange-guide { padding:16px; border:1px solid var(--trade-line); border-radius:14px; margin:14px 0; background:#c9a76408; }
-.exchange-sell summary,.exchange-guide summary { cursor:pointer; font-size:14px; font-weight:750; color:#e3c891; }.exchange-sell form { display:grid; gap:14px; padding-top:18px; }
-.exchange-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }.exchange-preview { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:12px; padding:12px; background:#c8a76512; border-radius:9px; }.exchange-preview strong { color:#efd29a; }
-.exchange-guide p { line-height:2; color:#b7b0a3; font-size:13px; margin:12px 0 0; }
-.exchange-card.black { border-color:#8d78b84d; background:linear-gradient(145deg,#30273788,#171719); }.exchange-card.black .exchange-tag { border-color:#8d78b84d; color:#c9b6e7; }.black-heading .trade-eyebrow { color:#c9b6e7; }
-.exchange-empty { border:1px dashed var(--trade-line); border-radius:14px; text-align:center; padding:32px 18px; font-size:14px; line-height:1.9; color:#cfc4b2; }.exchange-empty small { display:block; color:#99968f; margin-top:7px; font-size:12px; }
-@media(max-width:350px) { .trade-hero h1 { font-size:22px; }.trade-wallet { padding:7px; }.trade-nav { gap:5px; }.trade-nav button small { font-size:8px; }.exchange-card { padding:12px; }.exchange-tag { font-size:9px; padding:3px 5px; }.exchange-tabs button { font-size:11px; }.exchange-quote strong { font-size:20px; }.exchange-buy .btn { flex-direction:column; gap:0; } }
+.exchange-buy input,.exchange-sell input,.exchange-sell select { width:100%; min-height:46px; padding:10px;      }
+.exchange-buy .btn { min-height:46px; margin:0;  display:flex; justify-content:space-between; align-items:center; gap:6px; padding:10px 12px;  }.exchange-buy .btn span { font-size:12px; }
+.exchange-sell,.exchange-guide { padding:16px; border:1px solid var(--trade-line); border-radius:14px; margin:14px 0; background:var(--glass); }
+.exchange-sell summary,.exchange-guide summary { cursor:pointer;   color:var(--az); font-size:12.5px;font-weight:700;}.exchange-sell form { display:grid; gap:14px; padding-top:18px; }
+.exchange-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }.exchange-preview { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:12px; padding:12px; background:var(--glass); border-radius:9px; }.exchange-preview strong { color:var(--az); }
+.exchange-guide p { line-height:2; color:var(--mid); font-size:13px; margin:12px 0 0; }
+.exchange-card.black { border-color:var(--edge);  background:var(--glass);}.exchange-card.black .exchange-tag { border-color:var(--edge); color:var(--az); }.black-heading .trade-eyebrow { color:var(--az); }
+.exchange-empty { border:1px dashed var(--trade-line); border-radius:14px; text-align:center; padding:32px 18px; font-size:14px; line-height:1.9; color:var(--mid); }.exchange-empty small { display:block; color:var(--low); margin-top:7px; font-size:12px; }
+@media(max-width:350px) {.trade-wallet { padding:7px; }.trade-nav { gap:5px; }.trade-nav button small { font-size:8px; }.exchange-card { padding:12px; }.exchange-tag { font-size:9px; padding:3px 5px; }.exchange-tabs button { font-size:11px; }.exchange-quote strong {  font-size:17px;}.exchange-buy .btn { flex-direction:column; gap:0; } }
+
+.trade-nav button,.exchange-tabs button,.exchange-refresh button { font-family:inherit; }
+.trade-page .exchange-card { border-radius:16px; }
+.trade-nav button strong { font-size:12.5px; font-weight:700; }
+.exchange-buy label,.exchange-sell label { color:var(--az); font-weight:700; }
