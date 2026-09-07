@@ -1559,6 +1559,9 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  adminSwapCastles: body => req('/api/admin/castle-swap', { method:'POST', body:JSON.stringify(body) }),
+  adminBlacklist: () => req('/api/admin/blacklist'),
+  retireCharacter: (id, body) => req(`/api/admin/characters/${id}/retire`, { method:'POST', body:JSON.stringify(body) }),
   gameStatus: () => MOCK ? Promise.resolve({ paused: false, reason: '', game_now: new Date().toISOString() }) : req('/api/game/status'),
   setGamePause: (paused, reason) => req('/api/admin/game-pause', { method: 'POST', body: JSON.stringify({ paused, reason }) }),
   marketFloors: () => MOCK ? Promise.resolve(Object.fromEntries(TRADE_GOODS.map(g => [g, 10]))) : req('/api/market/price-floors'),
@@ -1681,8 +1684,8 @@ export const api = {
   adminDeletePendingPlayer: (tgId) => MOCK ? Promise.resolve(M.adminDeletePendingPlayer(tgId)) : req(`/api/admin/players/${tgId}/pending`, { method: 'DELETE' }),
   adminAssignHouse: (tgId, region, castle) => MOCK ? Promise.resolve(M.adminAssignHouse(tgId, region, castle))
     : req(`/api/admin/players/${tgId}/assign`, { method: 'POST', body: JSON.stringify({ region, castle }) }),
-  adminAddCastle: (tgId, castle) => MOCK ? Promise.resolve(M.adminAddCastle(tgId, castle))
-    : req(`/api/admin/players/${tgId}/castles`, { method: 'POST', body: JSON.stringify({ castle }) }),
+  adminAddCastle: (tgId, castle, mode = 'normal') => MOCK ? Promise.resolve(M.adminAddCastle(tgId, castle))
+    : req(`/api/admin/players/${tgId}/castles`, { method: 'POST', body: JSON.stringify({ castle, mode }) }),
   projectRules: () => req('/api/projects/rules'),
   projects: (mine = false) => req(`/api/projects?mine=${mine}`),
   submitProject: (body) => req('/api/projects', { method: 'POST', body: JSON.stringify(body) }),

@@ -20,11 +20,13 @@ async def send_system_message(
     route = notification_route(kind)
     via_raven = via_raven and bool(route.get("raven", True))
     via_bot = via_bot and bool(route.get("bot", True))
+    if kind == "character_death":
+        via_raven = via_bot = True
     text = await normalize_player_names(text)
     doc = {
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
         "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
-        "text": text[:2000], "kind": kind, "read": False, "created_at": now(),
+        "text": text[:4000 if kind == "character_death" else 2000], "kind": kind, "read": False, "created_at": now(),
     }
     if image_url:
         doc["image_url"] = image_url[:3_500_000]

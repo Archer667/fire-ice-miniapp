@@ -145,18 +145,21 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
         self.stack.enter_context(patch.object(admin, 'apply_production', side_effect=lambda p: p))
         self.stack.enter_context(patch.object(admin, '_castle_region_map', AsyncMock(return_value={'A': 'north', 'B': 'west', 'C': 'north', 'D': 'north'})))
         self.stack.enter_context(patch.object(admin, 'all_castle_terrain', AsyncMock(return_value={})))
+        import character_records
+        self.stack.enter_context(patch.object(character_records, 'vacant_buildings', AsyncMock(return_value={})))
+        self.stack.enter_context(patch.object(character_records, 'archives', Collection()))
         self.capture_stat = self.stack.enter_context(patch.object(admin, 'bump_player_stat', AsyncMock()))
 
-    async def test_voluntary_death_splits_castles_without_capture_or_resource_transfer(self):
+    async def test_death_snapshot_without_capture_or_resource_transfer(self):
         before = await self.people.find_one({'tg_id': 1})
-        await admin.admin_player_death(1, admin.DeathTransferBody(transfers={'A': 2, 'B': 3}), {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         dead = await self.people.find_one({'tg_id': 1})
         self.assertTrue(dead['is_dead'])
         self.assertIsNone(dead['castle'])
         self.assertEqual(dead['resources'], before['resources'])
         self.assertEqual(dead['death_snapshot']['score'], round(base_score(before)))
-        self.assertEqual((await self.people.find_one({'tg_id': 2}))['castle_buildings'], {'A': {'farm': 3}})
-        self.assertEqual((await self.people.find_one({'tg_id': 3}))['castle_buildings'], {'B': {'mine': 4}})
+        self.assertEqual((await self.people.find_one({'tg_id': 2}))['castle_buildings'], {})
+        self.assertEqual((await self.people.find_one({'tg_id': 3}))['castle_buildings'], {})
         self.assertEqual((await self.people.find_one({'tg_id': 2}))['points'], 100)
         self.capture_stat.assert_not_awaited()
 
@@ -168,27 +171,29 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.people.rows, before)
 
     async def test_capture_promotes_remaining_castle_and_updates_region(self):
-        await admin.admin_add_castle(2, admin.AddCastleBody(castle='A'), {})
+        await admin.admin_add_castle(2, admin.AddCastleBody(castle='A', mode='conquest'), {})
         old = await self.people.find_one({'tg_id': 1})
         self.assertEqual((old['castle'], old['region'], old['buildings']), ('B', 'west', {'mine': 4}))
         self.assertFalse(old.get('is_dead', False))
         self.assertEqual(old['resources'], {'gold': 100, 'wood': 75})
-        self.capture_stat.assert_awaited_once_with(2, 'castles_captured')
+        self.capture_stat.assert_any_await(2, 'castles_captured')
+        self.capture_stat.assert_any_await(2, 'attack_wins')
 
     async def test_last_castle_capture_kills_and_preserves_score(self):
         self.people.rows[0]['castle_buildings'] = {}
         before = copy.deepcopy(self.people.rows[0])
-        await admin.admin_add_castle(2, admin.AddCastleBody(castle='A'), {})
+        await admin.admin_add_castle(2, admin.AddCastleBody(castle='A', mode='conquest'), {})
         dead = await self.people.find_one({'tg_id': 1})
         self.assertTrue(dead['is_dead'])
         self.assertEqual(dead['death_snapshot']['score'], round(base_score(before)))
         self.assertEqual((await self.people.find_one({'tg_id': 2}))['castle_buildings']['A'], before['buildings'])
-        self.capture_stat.assert_awaited_once()
+        self.capture_stat.assert_any_await(2, 'castles_captured')
+        self.capture_stat.assert_any_await(2, 'attack_wins')
 
     async def test_death_destroys_armies_and_ambush_without_refund(self):
         self.armies.rows = [{'_id': ObjectId(), 'tg_id': 1, 'active': True, 'troops': {'sword': 8}, 'equipment': {'ram': 1}}]
         self.ambushes.rows = [{'tg_id': 1, 'status': 'active', 'troops': {'sword': 5}}]
-        await admin.admin_player_death(1, admin.DeathTransferBody(transfers={'A': 2, 'B': 2}), {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         army = self.armies.rows[0]
         self.assertFalse(army['active'])
         self.assertEqual((army['status'], army['troops'], army['equipment']), ('destroyed', {}, {}))
@@ -199,10 +204,10 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_duplicate_death_rejected_and_no_duplicate_awards(self):
         body = admin.DeathTransferBody(transfers={'A': 2, 'B': 3})
-        await admin.admin_player_death(1, body, {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         before = copy.deepcopy(self.people.rows)
         with self.assertRaises(HTTPException):
-            await admin.admin_player_death(1, body, {})
+            await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         self.assertEqual(self.people.rows, before)
 
     async def test_dead_auth_cannot_act_but_can_read_me(self):
@@ -216,8 +221,8 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(user['id'], 1)
 
     async def test_unassign_dead_opens_fresh_registration(self):
-        await admin.admin_player_death(1, admin.DeathTransferBody(transfers={'A': 2, 'B': 3}), {})
-        await admin.admin_unassign_house(1, {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
+        await admin._admin_unassign_house(1, {})
         p = await self.people.find_one({'tg_id': 1})
         self.assertFalse(p['is_dead'])
         self.assertTrue(p['registration_reset'])
@@ -243,7 +248,7 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.headers['X-Player-Dead'], '1')
 
     async def test_dead_board_uses_frozen_score_and_castle(self):
-        await admin.admin_player_death(1, admin.DeathTransferBody(transfers={'A': 2, 'B': 3}), {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         rows = await leaderboard.with_dead_players([])
         self.assertEqual(len(rows), 1)
         self.assertTrue(rows[0]['player']['is_dead'])
@@ -263,7 +268,7 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
             {'_id': b, 'tg_id': 2, 'active': True, 'engagement_campaign_id': battle_id, 'engagement_locked': True},
             {'_id': d, 'tg_id': 3, 'active': True, 'engagement_campaign_id': battle_id, 'engagement_locked': True},
         ]
-        await admin.admin_player_death(1, admin.DeathTransferBody(transfers={'A': 2, 'B': 2}), {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         root = self.armies.rows[0]
         self.assertEqual(root['battle_attacker_army_ids'], [str(b)])
         self.assertTrue(root['battle_open'])
@@ -282,7 +287,7 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
              'battle_location': 'D', 'battle_defender_tg_id': 3},
             {'_id': d, 'tg_id': 3, 'active': True, 'engagement_campaign_id': battle_id, 'engagement_locked': True},
         ]
-        await admin.admin_player_death(1, admin.DeathTransferBody(transfers={'A': 2, 'B': 2}), {})
+        await admin._mark_player_dead(await self.people.find_one({'tg_id': 1}), 'test')
         self.assertFalse(self.armies.rows[0]['battle_open'])
         self.assertTrue(self.armies.rows[1]['active'])
         self.assertFalse(self.armies.rows[1]['engagement_locked'])

@@ -1,3 +1,4 @@
+from typing import Literal
 import asyncio
 import random
 import re
@@ -1387,7 +1388,7 @@ async def _castle_region_map() -> dict:
     return out
 
 @router.get("/players/pending")
-async def list_pending_players(user: dict = Depends(full_admin_user)):
+async def list_pending_players(user: dict = Depends(admin_user)):
     """بازیکن‌هایی که فقط اسم‌نویسی کرده‌اند و هنوز خاندان (اقلیم) و قلعه‌شان تعیین نشده"""
     admin_ids = set(ADMIN_IDS) | {row["tg_id"] async for row in admin_roles.find({}, {"tg_id": 1})}
     if OWNER_ID is not None:
@@ -1407,6 +1408,7 @@ async def list_pending_players(user: dict = Depends(full_admin_user)):
         out.append({
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "telegram_username": p.get("telegram_username"),
+            "blacklisted": bool(await __import__("character_records").blacklist.find_one({"_id": p["tg_id"]})),
             "gender": p.get("gender"), "created_at": p["created_at"].isoformat(),
             "requested_castles": requested,
         })
@@ -1421,6 +1423,7 @@ async def list_roster(user: dict = Depends(full_admin_user)):
         if p.get("is_dead"):
             p = {**p, "castle": p.get("death_snapshot", {}).get("castle"), "region": p.get("death_snapshot", {}).get("region")}
         out.append({
+            "character_key": f"{p['tg_id']}:{p.get('created_at')}",
             "is_dead": bool(p.get("is_dead")),
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "telegram_username": p.get("telegram_username"),
@@ -1493,7 +1496,11 @@ async def _admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = De
     extra_castles = dict(target.get("castle_buildings", {}))
     # انتقال خاندان یعنی قلعهٔ قبلی واقعاً آزاد می‌شود. ساختمان‌های قلعهٔ مقصد فقط
     # وقتی حفظ می‌شوند که مقصد از قبل یکی از قلعه‌های اضافهٔ خود بازیکن بوده باشد.
-    new_home_buildings = extra_castles.pop(body.castle, {})
+    from character_records import vacant_buildings, save_castles, vacant
+    new_home_buildings = (target.get('buildings', {}) if old_castle == body.castle else
+                         extra_castles.pop(body.castle, await vacant_buildings(body.castle)))
+    if old_castle and old_castle != body.castle:
+        await save_castles({'castle': old_castle, 'buildings': target.get('buildings', {})})
     if old_castle:
         extra_castles.pop(old_castle, None)
     house = CASTLE_HOUSES.get(body.castle)
@@ -1514,8 +1521,10 @@ async def _admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = De
 
 @router.post("/players/{tg_id}/unassign")
 async def admin_unassign_house(tg_id: int, user: dict = Depends(full_admin_user)):
+    from routers.characters import RetireBody
+    from character_records import retire
     async with castle_transfer_lock:
-        return await _admin_unassign_house(tg_id, user)
+        return await retire(tg_id, RetireBody(action='delete'), user['id'])
 
 async def _admin_unassign_house(tg_id: int, user: dict = Depends(full_admin_user)):
     """خاندان و قلعهٔ یک بازیکن را از او می‌گیرد — دوباره «در انتظار تخصیص» می‌شود
@@ -1542,7 +1551,7 @@ async def _admin_unassign_house(tg_id: int, user: dict = Depends(full_admin_user
     )
     return {"ok": True}
 
-async def _mark_player_dead(target: dict, reason: str):
+async def _mark_player_dead(target: dict, reason: str, notify=True):
     """Keep the character and final score, relinquish ownership, destroy all armies."""
     tg_id = target["tg_id"]
     h = await get_hierarchy_doc()
@@ -1588,7 +1597,8 @@ async def _mark_player_dead(target: dict, reason: str):
                 updates[f"{key}.{seat}"] = None
     if updates:
         await hierarchy.update_one({"_id": "main"}, {"$set": updates})
-    await send_system_message(tg_id, target["name"], f"⚔️ کشته شد\n{reason}\nتمام لشکرها و کمین‌هایت لغو شدند. برای درخواست تازه، ادمین باید حذف خاندان را انجام دهد.")
+    if notify:
+        await send_system_message(tg_id, target["name"], f"⚔️ کشته شد\n{reason}\nتمام لشکرها و کمین‌هایت لغو شدند. برای درخواست تازه، ادمین باید حذف خاندان را انجام دهد.")
 
 
 class DeathTransferBody(BaseModel):
@@ -1597,38 +1607,11 @@ class DeathTransferBody(BaseModel):
 
 @router.post("/players/{tg_id}/death")
 async def admin_player_death(tg_id: int, body: DeathTransferBody, user: dict = Depends(full_admin_user)):
-    async with castle_transfer_lock:
-        target = await players.find_one({"tg_id": tg_id})
-        if not target or target.get("is_dead") or not target.get("castle"):
-            raise HTTPException(409, "بازیکن زنده و خاندان‌دار پیدا نشد")
-        castles = {target["castle"]: target.get("buildings", {}), **target.get("castle_buildings", {})}
-        if set(body.transfers) != set(castles):
-            raise HTTPException(400, "برای تمام قلعه‌های فعلی دقیقاً یک گیرنده مشخص کن؛ فهرست را تازه کن")
-        recipients = {}
-        for recipient_id in set(body.transfers.values()):
-            recipient = await players.find_one({"tg_id": recipient_id})
-            if recipient_id == tg_id or not recipient or recipient.get("is_dead") or not recipient.get("castle") or not recipient.get("region"):
-                raise HTTPException(400, "گیرنده باید بازیکن زندهٔ دیگری با خاندان و قلعه باشد")
-            if await get_admin_role({"id": recipient_id}):
-                raise HTTPException(400, "قلعه به ادمین واگذار نمی‌شود")
-            recipients[recipient_id] = recipient
-        # Validate the entire plan before touching any player. Resources remain personal.
-        target = apply_production(target)
-        await players.update_one({"tg_id": tg_id}, {"$set": production_fields(target)})
-        castles = {target["castle"]: target.get("buildings", {}), **target.get("castle_buildings", {})}
-        for recipient_id, recipient in recipients.items():
-            recipient = apply_production(recipient)
-            await players.update_one({"tg_id": recipient_id}, {"$set": production_fields(recipient)})
-        await _mark_player_dead(target, "مرگ و واگذاری قلعه‌ها به فرمان ادمین ثبت شد.")
-        for castle, recipient_id in body.transfers.items():
-            await players.update_one({"tg_id": recipient_id}, {"$set": {f"castle_buildings.{castle}": castles[castle]}})
-            await send_system_message(recipient_id, recipients[recipient_id]["name"],
-                f"قلعهٔ «{castle}» با ساختمان‌هایش از «{target['name']}» به تو واگذار شد؛ این واگذاری فتح نیست و امتیاز فتح ندارد. منابع مشترک منتقل نشدند.")
-        return {"ok": True}
-
+    raise HTTPException(409, "فرم مرگ تغییر کرده است؛ صفحه را تازه کن و دلیل مرگ را وارد کن")
 
 class AddCastleBody(BaseModel):
     castle: str
+    mode: Literal["normal", "conquest"] = "normal"
 
 @router.post("/players/{tg_id}/castles")
 async def admin_add_castle(tg_id: int, body: AddCastleBody, user: dict = Depends(full_admin_user)):
@@ -1654,7 +1637,8 @@ async def _add_castle(tg_id: int, body: AddCastleBody):
 
     target = apply_production(target)
     await players.update_one({"tg_id": tg_id}, {"$set": production_fields(target)})
-    captured_buildings = {}
+    from character_records import vacant_buildings
+    captured_buildings = await vacant_buildings(body.castle)
     previous_owner = await players.find_one({"$or": [
         {"castle": body.castle}, {f"castle_buildings.{body.castle}": {"$exists": True}},
     ]})
@@ -1675,22 +1659,23 @@ async def _add_castle(tg_id: int, body: AddCastleBody):
                 }})
                 await send_system_message(
                     previous_owner["tg_id"], previous_owner["name"],
-                    f"قلعهٔ اصلی‌ات «{body.castle}» به دستِ دشمن افتاد — حالا «{new_home}» قلعهٔ اصلی‌ات است.",
+                    f"قلعهٔ اصلی‌ات «{body.castle}» واگذار شد — حالا «{new_home}» قلعهٔ اصلی‌ات است.",
                 )
             else:
-                await _mark_player_dead(previous_owner, f"آخرین قلعه‌ات «{body.castle}» فتح شد.")
+                await _mark_player_dead(previous_owner, f"آخرین قلعه‌ات «{body.castle}» واگذار شد.")
         else:
             captured_buildings = previous_owner.get("castle_buildings", {}).get(body.castle, {})
             await players.update_one({"tg_id": previous_owner["tg_id"]}, {"$unset": {f"castle_buildings.{body.castle}": ""}})
             await send_system_message(
-                previous_owner["tg_id"], previous_owner["name"], f"قلعهٔ «{body.castle}» به دستِ دشمن افتاد.",
+                previous_owner["tg_id"], previous_owner["name"], f"قلعهٔ «{body.castle}» واگذار شد.",
             )
 
     await players.update_one({"tg_id": tg_id}, {"$set": {f"castle_buildings.{body.castle}": captured_buildings}})
-    if previous_owner and previous_owner["tg_id"] != tg_id:
+    if body.mode == "conquest":
+        await bump_player_stat(tg_id, "attack_wins")
         await bump_player_stat(tg_id, "castles_captured")
         await players.update_one({"tg_id": tg_id}, {"$inc": {"points": int(control_settings.get("scoring.castle_capture", 15))}})
-    spoils_note = " (به‌همراهِ ساختمان‌هایی که رویش ساخته بودند — غنیمتِ جنگ)" if captured_buildings else ""
+    spoils_note = " (به‌همراهِ ساختمان‌های قلعه)" if captured_buildings else ""
     await send_system_message(tg_id, target["name"], f"قلعهٔ «{body.castle}»{spoils_note} به قلمروِ تو اضافه شد.")
     return {"ok": True, "captured_from": previous_owner["name"] if previous_owner and previous_owner["tg_id"] != tg_id else None}
 
@@ -1707,6 +1692,8 @@ async def _admin_remove_castle(tg_id: int, castle: str, user: dict = Depends(ful
         raise HTTPException(404, "بازیکن پیدا نشد")
     if castle not in target.get("castle_buildings", {}):
         raise HTTPException(400, "این قلعه جزوِ قلعه‌های اضافهٔ این بازیکن نیست")
+    from character_records import save_castles
+    await save_castles({"castle": castle, "buildings": target["castle_buildings"][castle]})
     await players.update_one({"tg_id": tg_id}, {"$unset": {f"castle_buildings.{castle}": ""}})
     await send_system_message(tg_id, target["name"], f"قلعهٔ «{castle}» از قلمروِ تو گرفته شد.")
     return {"ok": True}
@@ -2533,6 +2520,13 @@ class ResetGameBody(BaseModel):
     confirm: str
 
 async def _clear_season_history():
+    from character_records import archives, vacant
+    from db import db
+    await archives.delete_many({})
+    await vacant.delete_many({})
+    await db.character_announcements.delete_many({})
+    await db.character_retirements.delete_many({})
+    await db.castle_swaps.delete_many({})
     """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
     for collection in (
         campaigns, ambushes, spy_missions, messages, roleplays, rebellions, rebellion_checks,

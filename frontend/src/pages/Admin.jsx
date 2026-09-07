@@ -1,3 +1,4 @@
+import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
 import { gameNow } from '../gameClock.js';
 import { syncGameClock } from '../gameClock.js';
 import { useEffect, useState } from 'react';
@@ -128,6 +129,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      { key: 'blacklist', label: 'لیست سیاه و درخواست‌ها', description: 'آیدی‌های ثبت‌شده و وضعیت درخواست‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
   },
@@ -178,9 +180,13 @@ export default function Admin() {
   const [registrationSettings, setRegistrationSettings] = useState(null);
   const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
   const [reassignOpenId, setReassignOpenId] = useState(null);
-  const [deathPlayerId, setDeathPlayerId] = useState(null);
-  const [deathTransfers, setDeathTransfers] = useState({});
-  const [deathBusy, setDeathBusy] = useState(false);
+  const [addCastleMode, setAddCastleMode] = useState('normal');
+  const [swapDraft, setSwapDraft] = useState(null);
+  const [swapBusy, setSwapBusy] = useState(false);
+  const [retireDialog, setRetireDialog] = useState(null);
+  const [blacklistRows, setBlacklistRows] = useState([]);
+  const [auditRequests, setAuditRequests] = useState([]);
+  useEffect(() => { if (tab === 'blacklist') { api.adminBlacklist().then(setBlacklistRows).catch(e => toast(e.message)); api.adminListPendingPlayers().then(setAuditRequests).catch(e => toast(e.message)); } }, [tab]);
   const [addCastleOpenId, setAddCastleOpenId] = useState(null);
   const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
   const [addCastleBusyId, setAddCastleBusyId] = useState(null);
@@ -1203,22 +1209,6 @@ export default function Admin() {
     setUnassignBusyId(null);
   };
 
-  const submitPlayerDeath = async (p) => {
-    if (deathBusy) return;
-    const castles = [...new Set([p.castle, ...(p.castles || [])].filter(Boolean))];
-    if (castles.some(c => !deathTransfers[c])) { toast('برای هر قلعه یک گیرنده انتخاب کن'); return; }
-    const summary = castles.map(c => `${castleLabel(c)} ← ${roster.find(r => r.tg_id === Number(deathTransfers[c]))?.name || ''}`).join('\n');
-    if (!window.confirm(`مرگ «${p.name}» ثبت شود؟ تمام لشکرها حذف می‌شوند و امکان بازی مسدود می‌شود.\n${summary}\nمنابع منتقل نمی‌شوند و امتیاز فتح داده نمی‌شود.`)) return;
-    setDeathBusy(true);
-    try {
-      await api.adminPlayerDeath(p.tg_id, Object.fromEntries(castles.map(c => [c, Number(deathTransfers[c])])));
-      toast('مرگ ثبت شد و قلعه‌ها بدون امتیاز فتح واگذار شدند');
-      setDeathPlayerId(null); setDeathTransfers({});
-      loadRoster(); loadPendingPlayers(); loadMapData(); loadRegistrationSettings();
-    } catch (e) { toast(e.message); }
-    finally { setDeathBusy(false); }
-  };
-
   const addCastle = async (tgId) => {
     const castle = addCastleValue[0];
     if (!castle) { toast('یک قلعه انتخاب کن'); return; }
@@ -1226,7 +1216,7 @@ export default function Admin() {
     if (holder && holder.tg_id !== tgId && !window.confirm(`قلعهٔ «${castle}» از «${holder.name}» گرفته شود؟ ساختمان‌ها منتقل می‌شوند و منابع مشترک باقی می‌مانند.${!(holder.castles?.length) && holder.castle === castle ? ' این آخرین قلعهٔ اوست؛ بازیکن کشته و تمام لشکرهایش حذف می‌شوند.' : ''}`)) return;
     setAddCastleBusyId(tgId);
     try {
-      const res = await api.adminAddCastle(tgId, castle);
+      const res = await api.adminAddCastle(tgId, castle, addCastleMode);
       haptic('medium');
       toast(res.captured_from ? `قلعه از «${res.captured_from}» گرفته شد و به این بازیکن اضافه شد` : 'قلعهٔ اضافه به این بازیکن داده شد');
       setAddCastleValue([]);
@@ -1269,6 +1259,7 @@ export default function Admin() {
 
   const toggleAddCastle = (tgId) => {
     haptic();
+    setAddCastleMode('normal');
     setAddCastleOpenId(prev => prev === tgId ? null : tgId);
     setAddCastleValue([]);
   };
@@ -1754,7 +1745,7 @@ export default function Admin() {
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
                     <div className="n">{p.name}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
-                      {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
+                      {p.blacklisted ? '⚠️ لیست سیاه · ' : ''}{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
                       {p.telegram_username
                         ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
                         : <span>username ثبت نشده</span>}
@@ -1871,8 +1862,8 @@ export default function Admin() {
                   )}
                   <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                     <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
-                            disabled={unassignBusyId === p.tg_id} onClick={() => unassignHouse(p.tg_id)}>
-                      {unassignBusyId === p.tg_id ? 'در حال حذف...' : 'حذف از خاندان'}
+                            disabled={unassignBusyId === p.tg_id} onClick={() => setRetireDialog({ player:p, action:"delete" })}>
+                      حذف بازیکن
                     </button>
                     <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} disabled={p.is_dead} onClick={() => toggleReassign(p.tg_id)}>
                       انتقال به خاندان دیگر
@@ -1880,20 +1871,9 @@ export default function Admin() {
                     <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} disabled={p.is_dead} onClick={() => toggleAddCastle(p.tg_id)}>
                       افزودن قلعه
                     </button>
-                    {!p.is_dead && <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', color: 'var(--danger)' }}
-                      disabled={deathBusy} onClick={() => { setDeathPlayerId(deathPlayerId === p.tg_id ? null : p.tg_id); setDeathTransfers({}); }}>مرگ پلیر</button>}
+                    {!p.is_dead && <button className="btn ghost" style={{width:'auto'}} onClick={() => setSwapDraft({first_id:p.tg_id,first_castle:p.castle,second_id:'',second_castle:''})}>جابجایی قلعه‌ها</button>}
+                    {!p.is_dead && <button className="btn ghost" style={{width:'auto'}} onClick={() => setRetireDialog({player:p,action:'death'})}>مرگ کاراکتر</button>}
                   </div>
-                  {!p.is_dead && deathPlayerId === p.tg_id && <div style={{ marginTop: 14, borderTop: '1px solid var(--danger)', paddingTop: 12 }}>
-                    <p className="page-sub">برای هر قلعه گیرنده را انتخاب کن. ساختمان‌ها منتقل می‌شوند؛ منابع مشترک باقی می‌مانند. تمام لشکرهای این بازیکن حذف می‌شوند و واگذاری امتیاز فتح ندارد.</p>
-                    {[...new Set([p.castle, ...(p.castles || [])].filter(Boolean))].map(c => <label className="f" key={c}>
-                      {castleLabel(c)}
-                      <select disabled={deathBusy} value={deathTransfers[c] || ''} onChange={e => setDeathTransfers(prev => ({ ...prev, [c]: e.target.value }))}>
-                        <option value="">انتخاب گیرنده...</option>
-                        {(roster || []).filter(r => r.tg_id !== p.tg_id && !r.is_dead && r.castle).map(r => <option value={r.tg_id} key={r.tg_id}>{r.name} — {castleLabel(r.castle)}</option>)}
-                      </select>
-                    </label>)}
-                    <button className="btn" disabled={deathBusy} onClick={() => submitPlayerDeath(p)}>{deathBusy ? 'در حال ثبت...' : 'ثبت مرگ و واگذاری قلعه‌ها'}</button>
-                  </div>}
                   {reassignOpenId === p.tg_id && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
                       <label className="f" style={{ marginTop: 0 }}>اقلیم (خاندان) تازه</label>
@@ -1917,9 +1897,9 @@ export default function Admin() {
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
                       <div className="page-sub" style={{ margin: '0 0 8px' }}>
                         قلعهٔ اضافه — پایگاهِ دومِ کاملِ این بازیکن؛ از هر اقلیمی می‌تونه باشه. اگه الان دستِ بازیکنِ
-                        دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، خودکار به‌عنوانِ غنیمتِ جنگ ازش گرفته می‌شود.
+                        دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، با ساختمان‌هایش منتقل می‌شود؛ فقط در حالت فتح، آمار فتح و پیروزی اضافه می‌شود.
                       </div>
-                      <CastlePicker value={addCastleValue} onChange={setAddCastleValue} max={1} />
+                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker value={addCastleValue} onChange={setAddCastleValue} max={1} />
                       <button className="btn" style={{ marginTop: 14 }} disabled={addCastleBusyId === p.tg_id} onClick={() => addCastle(p.tg_id)}>
                         {addCastleBusyId === p.tg_id ? 'در حال ثبت...' : 'افزودن'}
                       </button>
@@ -2920,6 +2900,21 @@ export default function Admin() {
         </>
       )}
 
+      {swapDraft && <div className="character-swap-panel card" role="dialog" aria-modal="true" aria-label="جابجایی قلعه‌ها">
+        <h2 className="page-title">جابجایی قلعه‌ها</h2><p>ساختمان‌ها با قلعه منتقل می‌شوند؛ منابع و آمار پیروزی تغییر نمی‌کنند.</p>
+        <label className="f">قلعهٔ بازیکن اول<select value={swapDraft.first_castle} onChange={e => setSwapDraft(v => ({...v,first_castle:e.target.value}))}>{(() => {const p=roster.find(p=>p.tg_id===swapDraft.first_id);return [p.castle,...(p.castles||[])].map(c=><option key={c}>{c}</option>);})()}</select></label>
+        <label className="f">بازیکن هدف<select value={swapDraft.second_id} onChange={e => setSwapDraft(v => ({...v,second_id:Number(e.target.value),second_castle:''}))}><option value="">انتخاب بازیکن…</option>{roster.filter(p=>!p.is_dead&&p.castle&&p.tg_id!==swapDraft.first_id).map(p=><option value={p.tg_id} key={p.tg_id}>{p.name}</option>)}</select></label>
+        <label className="f">قلعهٔ هدف<select value={swapDraft.second_castle} onChange={e => setSwapDraft(v => ({...v,second_castle:e.target.value}))}><option value="">انتخاب قلعه…</option>{(() => {const p=roster.find(p=>p.tg_id===swapDraft.second_id);return p ? [p.castle,...(p.castles||[])].map(c=><option key={c}>{c}</option>) : [];})()}</select></label>
+        <div className="grid2"><button className="btn ghost" disabled={swapBusy} onClick={()=>setSwapDraft(null)}>انصراف</button><button className="btn" disabled={swapBusy||!swapDraft.second_castle} onClick={async()=>{setSwapBusy(true);try{await api.adminSwapCastles(swapDraft);setSwapDraft(null);loadRoster();loadMapData();toast('مالکیت قلعه‌ها جابه‌جا شد');}catch(e){toast(e.message);}finally{setSwapBusy(false);}}}>تأیید جابجایی</button></div>
+      </div>}
+      {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
+      {tab === 'blacklist' && <>
+        <h2 className="page-title">لیست سیاه دائمی</h2><p className="page-sub">این فهرست با ریست فصل و ریست کلی پاک نمی‌شود؛ ثبت‌نام را خودکار مسدود نمی‌کند.</p>
+        {blacklistRows.length === 0 && <p>لیست سیاه خالی است.</p>}
+        {blacklistRows.map(p => <div className="card" key={p.tg_id}><strong>{p.name}</strong><p dir="ltr">{p.tg_id}</p><p>{p.reason}</p></div>)}
+        <h2 className="page-title">درخواست‌های ثبت‌نام</h2>
+        {auditRequests.map(p => <div className="card" key={p.tg_id}><strong>{p.name}</strong><p dir="ltr">{p.tg_id}</p><p>{p.blacklisted ? '⚠️ عضو لیست سیاه' : 'عضو لیست سیاه نیست'}</p></div>)}
+      </>}
       {tab === 'market-floors' && isFull && <div className="card">
         <h2 className="page-title">حداقل قیمت بازار بازیکنان</h2>
         <p className="page-sub">قیمت هر واحد به سکه؛ پیش‌فرض همهٔ کالاها ۱۰ است. آگهی‌های قدیمی زیر حداقل، تا لغو و ثبت مجدد قابل خرید نیستند.</p>

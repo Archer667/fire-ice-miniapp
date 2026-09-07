@@ -83,6 +83,8 @@ async def serialize_game_state(request: Request, call_next):
     if request.url.path.startswith('/api/') and request.url.path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
             await game_clock.load()
+            from character_records import recover_swaps
+            await recover_swaps()
             if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and request.url.path != '/api/admin/game-pause':
                 return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
             return await call_next(request)
@@ -90,6 +92,8 @@ async def serialize_game_state(request: Request, call_next):
 
 app.include_router(projects_router.router)
 app.include_router(pause_router.router)
+from routers import characters as characters_router
+app.include_router(characters_router.router)
 app.include_router(players.router)
 app.include_router(war.router)
 app.include_router(map_router.router)
@@ -119,7 +123,11 @@ async def _arrival_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from character_records import recover_swaps
+                await recover_swaps()
                 if not game_clock.paused():
+                    from character_records import deliver_announcements
+                    await deliver_announcements()
                     await notify_arrivals()
                     await notify_caravan_arrivals()
                     await notify_building_completions()
@@ -137,6 +145,8 @@ async def _project_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from character_records import recover_swaps
+                await recover_swaps()
                 if not game_clock.paused():
                     await tick_projects()
         except Exception:
@@ -149,6 +159,8 @@ async def _market_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from character_records import recover_swaps
+                await recover_swaps()
                 if not game_clock.paused():
                     await drift_market_prices()
         except Exception:

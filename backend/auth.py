@@ -37,6 +37,10 @@ async def get_user(
             raise HTTPException(401, "توکن تلگرام ارسال نشده")
         user = _validate_init_data(authorization[4:])
     if request and request.url.path != "/api/players/me":
+        if request.scope.get('method', 'GET') not in ('GET', 'HEAD', 'OPTIONS') and request.url.path != '/api/players/register':
+            retired = await players.find_one({'tg_id': user['id'], 'registration_reset': True}, {'_id': 1})
+            if retired and not await get_admin_role(user):
+                raise HTTPException(403, 'کاراکتر قبلی حذف شده؛ ابتدا درخواست شخصیت تازه ثبت کن')
         dead = await players.find_one({"tg_id": user["id"], "is_dead": True}, {"_id": 1})
         if dead and not await get_admin_role(user):
             raise HTTPException(403, "کشته شد — تا حذف خاندان توسط ادمین امکان بازی نداری", headers={"X-Player-Dead": "1"})

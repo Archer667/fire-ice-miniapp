@@ -18,7 +18,12 @@ async def _without_admins(rows: list) -> list:
     return [row for row in rows if row["player"]["tg_id"] not in admin_ids]
 
 async def with_dead_players(rows, weekly=False):
-    async for p in players.find({"is_dead": True}):
+    from character_records import archives
+    dead = await players.find({'is_dead': True}).to_list(None)
+    saved = await archives.find({}).to_list(None)
+    archived_keys = {str(p.get('tg_id')) + ':' + str(p.get('created_at')) for p in saved}
+    dead = [p for p in dead if str(p.get('tg_id')) + ':' + str(p.get('created_at')) not in archived_keys]
+    for p in dead + saved:
         snapshot = p.get("death_snapshot", {})
         profile = {**p, "castle": snapshot.get("castle"), "region": snapshot.get("region")}
         score = snapshot.get("score", 0)

@@ -112,10 +112,12 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
     else:
         await players.insert_one(doc)
     requested_text = "، ".join(requested) if requested else "بدون اولویت قلعه"
+    from character_records import blacklist
+    blacklisted = bool(await blacklist.find_one({'_id': user['id']}))
     await notify_admins(
         "new_player",
         "👤 بازیکن تازه منتظر تخصیص است",
-        f"{doc['name']} ثبت‌نام کرد. انتخاب‌های قلعه: {requested_text}",
+        f"{doc['name']} ثبت‌نام کرد. آیدی عددی: {user['id']}\nوضعیت لیست سیاه: {'⚠️ عضو لیست سیاه' if blacklisted else 'نیست'}\nانتخاب‌های قلعه: {requested_text}",
         dedupe_key=f"new-player:{user['id']}",
         priority="normal",
         player_name=doc["name"],
