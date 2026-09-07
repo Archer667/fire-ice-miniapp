@@ -73,9 +73,10 @@ export default function App() {
     </div><Toast /></div>;
   }
   const Page = PAGES[tab];
+  const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
-    <div className={`shell ${pauseState?.paused ? 'game-paused' : ''}`}>
-      {pauseState?.paused && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>مشاهدهٔ صفحات آزاد است؛ اقدامات، زمان بازی، تولید، مصرف و پرداخت‌ها متوقف‌اند. پس از ادامه، زمان باقی‌مانده حفظ می‌شود.</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
+    <div className={`shell ${showPauseBanner ? 'game-paused' : ''}`}>
+      {showPauseBanner && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>مشاهدهٔ صفحات آزاد است؛ اقدامات، زمان بازی، تولید، مصرف و پرداخت‌ها متوقف‌اند. پس از ادامه، زمان باقی‌مانده حفظ می‌شود.</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
       {!me.registered ? (
         <Onboarding />
       ) : (

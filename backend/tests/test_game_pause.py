@@ -71,3 +71,11 @@ class ClockTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 main.app.dependency_overrides.pop(owner_user,None)
                 main.app.dependency_overrides.pop(admin_user,None)
+
+    async def test_registration_reaches_auth_while_paused(self):
+        import main
+        with patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url='http://test', follow_redirects=True) as c:
+                for path in ['/api/players/register','/api/players/register/']:
+                    self.assertEqual((await c.post(path,json={})).status_code,401)
+                self.assertEqual((await c.post('/api/market/buy',json={})).status_code,423)
