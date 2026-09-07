@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -15,7 +16,7 @@ const TABS = [
 ];
 
 function fmtRemaining(iso) {
-  const ms = new Date(iso).getTime() - Date.now();
+  const ms = new Date(iso).getTime() - gameNow();
   if (ms <= 0) return 'به‌زودی منقضی می‌شود';
   const h = Math.floor(ms / 3600000);
   const m = Math.round((ms % 3600000) / 60000);

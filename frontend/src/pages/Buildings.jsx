@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -38,19 +39,19 @@ export default function Buildings() {
   const [castle, setCastle] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [tab, setTab] = useState(GROUPS[0].key);
-  const [clock, setClock] = useState(Date.now());
+  const [clock, setClock] = useState(gameNow());
 
   const load = useCallback((c) => api.buildings(c).then(d => {
     setData(d);
     setCastle(d.castle);
-    setClock(Date.now());
+    setClock(gameNow());
   }).catch(e => toast(e.message)), [toast]);
   useEffect(() => { load(null); }, [load]);
 
   // شمارش روی صفحه زنده می‌ماند؛ نزدیک‌ترین ارتقا هم دقیقاً پس از ready_at از
   // بک‌اند دوباره خوانده می‌شود تا level و بازدهی همان لحظه نهایی شوند.
   useEffect(() => {
-    const timer = setInterval(() => setClock(Date.now()), 1000);
+    const timer = setInterval(() => setClock(gameNow()), 1000);
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function Buildings() {
       .map(row => new Date(row.ready_at).getTime())
       .filter(Number.isFinite);
     if (!deadlines.length) return undefined;
-    const delay = Math.max(0, Math.min(...deadlines) - Date.now()) + 350;
+    const delay = Math.max(0, Math.min(...deadlines) - gameNow()) + 350;
     const timer = setTimeout(() => load(data.castle), Math.min(delay, 2_147_000_000));
     return () => clearTimeout(timer);
   }, [data, load]);

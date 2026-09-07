@@ -1,3 +1,5 @@
+import { gameNow } from '../gameClock.js';
+import { syncGameClock } from '../gameClock.js';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -264,6 +266,15 @@ export default function Admin() {
   const [marketListings, setMarketListings] = useState(null);
   const [marketFloors, setMarketFloors] = useState(null);
   const [floorsBusy, setFloorsBusy] = useState(false);
+  const [gamePause, setGamePause] = useState(null);
+  const [pauseReason, setPauseReason] = useState('بررسی و رسیدگی به وضعیت بازی');
+  const [pauseBusy, setPauseBusy] = useState(false);
+  useEffect(() => {
+    const receive = e => setGamePause(e.detail);
+    window.addEventListener('game-status', receive);
+    api.gameStatus().then(setGamePause).catch(() => {});
+    return () => window.removeEventListener('game-status', receive);
+  }, []);
   const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
   const [marketQty, setMarketQty] = useState('');
   const [marketPrice, setMarketPrice] = useState('');
@@ -1594,7 +1605,7 @@ export default function Admin() {
               .filter(x => notificationFilter === 'all' || !x.read)
               .map(n => {
                 const deadline = n.deadline ? new Date(n.deadline) : null;
-                const remainingMinutes = deadline ? Math.floor((deadline.getTime() - Date.now()) / 60000) : null;
+                const remainingMinutes = deadline ? Math.floor((deadline.getTime() - gameNow()) / 60000) : null;
                 return (
                   <article key={n.id} className={`admin-notification-card ${n.read ? 'read' : ''} priority-${n.priority || 'normal'}`}>
                     <header>
@@ -3549,6 +3560,17 @@ export default function Admin() {
           {isOwner && (
             <>
               <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
+              <div className="card up u3">
+                <h2 className="page-title">توقف و ادامهٔ بازی</h2>
+                <p className="page-sub">توقف زمان، تولید، مصرف، پرداخت‌ها و اقدامات؛ بازیکنان همچنان می‌توانند صفحات را ببینند.</p>
+                <p>{gamePause ? (gamePause.paused ? 'وضعیت: متوقف' : 'وضعیت: در حال اجرا') : 'در حال دریافت وضعیت…'}</p>
+                {!gamePause?.paused && <label className="f">دلیل توقف<textarea maxLength={500} value={pauseReason} onChange={e => setPauseReason(e.target.value)} /></label>}
+                <button className="btn" disabled={!gamePause || pauseBusy} onClick={async () => {
+                  setPauseBusy(true);
+                  try { const result = await api.setGamePause(!gamePause.paused, pauseReason); setGamePause(result); syncGameClock(result); toast(result.paused ? 'بازی متوقف شد' : 'بازی ادامه یافت'); }
+                  catch (e) { toast(e.message); } finally { setPauseBusy(false); }
+                }}>{pauseBusy ? 'در حال ثبت…' : gamePause?.paused ? '▶ ادامهٔ بازی' : '⏸ توقف بازی'}</button>
+              </div>
               <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فصل و شروع فصل تازه</div>
                 <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>

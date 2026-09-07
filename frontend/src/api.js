@@ -1559,6 +1559,8 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  gameStatus: () => MOCK ? Promise.resolve({ paused: false, reason: '', game_now: new Date().toISOString() }) : req('/api/game/status'),
+  setGamePause: (paused, reason) => req('/api/admin/game-pause', { method: 'POST', body: JSON.stringify({ paused, reason }) }),
   marketFloors: () => MOCK ? Promise.resolve(Object.fromEntries(TRADE_GOODS.map(g => [g, 10]))) : req('/api/market/price-floors'),
   adminMarketFloors: () => req('/api/admin/player-market-floors'),
   adminSaveMarketFloors: (prices) => req('/api/admin/player-market-floors', { method: 'POST', body: JSON.stringify({ prices }) }),

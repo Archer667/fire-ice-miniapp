@@ -39,6 +39,8 @@ from project_engine import game_state_lock, tick_projects
 from routers import projects as projects_router
 
 logger = logging.getLogger(__name__)
+import game_clock
+from routers import pause as pause_router
 
 # API deployment marker: battle-centered roleplay/admin endpoints are available.
 app = FastAPI(title="والریا : سیزن اول — API", version="1.0")
@@ -80,10 +82,14 @@ async def serialize_game_state(request: Request, call_next):
     # in this single-Uvicorn-worker deployment, including production-on-read routes.
     if request.url.path.startswith('/api/') and request.url.path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
+            await game_clock.load()
+            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and request.url.path != '/api/admin/game-pause':
+                return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
             return await call_next(request)
     return await call_next(request)
 
 app.include_router(projects_router.router)
+app.include_router(pause_router.router)
 app.include_router(players.router)
 app.include_router(war.router)
 app.include_router(map_router.router)
@@ -112,14 +118,16 @@ async def _arrival_watcher():
     while True:
         try:
             async with game_state_lock:
-                await notify_arrivals()
-                await notify_caravan_arrivals()
-                await notify_building_completions()
-                await notify_daily_rewards()
-                await notify_admin_deadlines()
-                await expire_unpaid_tributes()
-                await pay_daily_salaries()
-                await evaluate_rebellions()
+                await game_clock.load()
+                if not game_clock.paused():
+                    await notify_arrivals()
+                    await notify_caravan_arrivals()
+                    await notify_building_completions()
+                    await notify_daily_rewards()
+                    await notify_admin_deadlines()
+                    await expire_unpaid_tributes()
+                    await pay_daily_salaries()
+                    await evaluate_rebellions()
         except Exception:
             logger.exception("arrival watcher tick failed")
         await asyncio.sleep(30)
@@ -128,7 +136,9 @@ async def _project_watcher():
     while True:
         try:
             async with game_state_lock:
-                await tick_projects()
+                await game_clock.load()
+                if not game_clock.paused():
+                    await tick_projects()
         except Exception:
             logger.exception('project watcher tick failed')
         await asyncio.sleep(15)
@@ -138,7 +148,9 @@ async def _market_watcher():
     while True:
         try:
             async with game_state_lock:
-                await drift_market_prices()
+                await game_clock.load()
+                if not game_clock.paused():
+                    await drift_market_prices()
         except Exception:
             logger.exception("market watcher tick failed")
         await asyncio.sleep(300)
@@ -340,6 +352,7 @@ async def _migrate_castle_roster_v2():
 
 @app.on_event("startup")
 async def start_background_watchers():
+    await game_clock.load()
     await _ensure_indexes()
     from trade_pacts import migrate_legacy_groups
     await migrate_legacy_groups()

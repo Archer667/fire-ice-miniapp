@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -39,7 +40,7 @@ function noticeMeta(message) {
 }
 
 function timeAgo(iso) {
-  const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  const min = Math.max(0, Math.floor((gameNow() - new Date(iso).getTime()) / 60000));
   if (min < 60) return `${min.toLocaleString('fa-IR')} دقیقه پیش`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h.toLocaleString('fa-IR')} ساعت پیش`;
@@ -114,7 +115,7 @@ export default function Ravens() {
     try {
       await api.sendRaven(toTgIds, t);
       haptic('medium');
-      if (!composing) setThread(prev => [{ mine: true, text: t, at: new Date().toISOString() }, ...prev]);
+      if (!composing) setThread(prev => [{ mine: true, text: t, at: new Date(gameNow()).toISOString() }, ...prev]);
       setText('');
       if (composing) {
         setComposing(false); setComposeTargets([]);

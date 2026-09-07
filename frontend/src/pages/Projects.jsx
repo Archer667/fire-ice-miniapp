@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api.js';
 import '../projects.css';
@@ -59,14 +60,14 @@ export default function Projects({ admin = false }) {
   const [purchaseAccepted, setPurchaseAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(null);
-  const [clock, setClock] = useState(Date.now());
+  const [clock, setClock] = useState(gameNow());
   const busyRef = useRef(false);
   const load = async () => {
     try { const data = await (admin ? api.adminProjects() : api.projects(mine)); setRows(data); setError(''); }
     catch (e) { setError(e.message); }
   };
   useEffect(() => { api.projectRules().then(setRules).catch(e => setError(e.message)); }, []);
-  useEffect(() => { load(); const timer = setInterval(() => { load(); setClock(Date.now()); }, 15000); return () => clearInterval(timer); }, [admin, mine]);
+  useEffect(() => { load(); const timer = setInterval(() => { load(); setClock(gameNow()); }, 15000); return () => clearInterval(timer); }, [admin, mine]);
   const run = async action => {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true);
@@ -92,7 +93,7 @@ export default function Projects({ admin = false }) {
   };
   const openProject = p => {
     setSelected(p); setQuantity(1); setPurchaseKey(crypto.randomUUID()); setPurchaseAccepted(false);
-    const local = new Date(Date.now() + 3600000); local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
+    const local = new Date(gameNow() + 3600000); local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
     setReview({ publish_at: local.toISOString().slice(0, 16), funding_hours: 48, max_shares_per_player: '', reason: '', notification_terms: p.notification_terms || rules?.terms || '' });
   };
   const decide = action => run(async () => {

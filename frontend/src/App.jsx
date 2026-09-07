@@ -20,6 +20,7 @@ import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
 import Toast from './components/Toast.jsx';
 import BackgroundMusic from './components/BackgroundMusic.jsx';
+import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
@@ -31,6 +32,15 @@ export default function App() {
   const { me, setMe, toast } = useGame();
   const [tab, setTab] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pauseState, setPauseState] = useState(null);
+  useEffect(() => {
+    const onStatus = e => setPauseState(e.detail);
+    window.addEventListener('game-status', onStatus);
+    const refresh = () => api.gameStatus().then(syncGameClock).catch(() => {});
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => { clearInterval(timer); window.removeEventListener('game-status', onStatus); };
+  }, []);
 
   useEffect(() => {
     initTelegram();
@@ -64,7 +74,8 @@ export default function App() {
   }
   const Page = PAGES[tab];
   return (
-    <div className="shell">
+    <div className={`shell ${pauseState?.paused ? 'game-paused' : ''}`}>
+      {pauseState?.paused && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>مشاهدهٔ صفحات آزاد است؛ اقدامات، زمان بازی، تولید، مصرف و پرداخت‌ها متوقف‌اند. پس از ادامه، زمان باقی‌مانده حفظ می‌شود.</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
       {!me.registered ? (
         <Onboarding />
       ) : (

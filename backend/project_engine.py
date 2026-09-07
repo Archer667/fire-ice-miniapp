@@ -173,6 +173,9 @@ async def fail_owner_projects(tg_id):
 
 
 async def tick_project(project):
+    from game_clock import paused
+    if paused():
+        return project
     project = await recover(project)
     if project['status'] not in OPEN_STATES:
         return project

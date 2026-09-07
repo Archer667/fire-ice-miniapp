@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -19,7 +20,7 @@ const ALLIANCE_SEEN_KEY = 'valeria_public_alliances_seen';
 const loadSeenAllianceIds = () => { try { return new Set(JSON.parse(localStorage.getItem(ALLIANCE_SEEN_KEY)) || []); } catch { return new Set(); } };
 const TRIBUTE_STATUS_FA = { pending: 'در انتظار پرداخت', paid: 'پرداخت‌شده', expired: 'منقضی (پرداخت نشد)' };
 function hoursLeft(dueAt) {
-  return Math.max(0, Math.round((new Date(dueAt).getTime() - Date.now()) / 3600000));
+  return Math.max(0, Math.round((new Date(dueAt).getTime() - gameNow()) / 3600000));
 }
 
 export default function Diplomacy() {

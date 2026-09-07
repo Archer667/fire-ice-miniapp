@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Coliseum, Swords } from './Icons.jsx';
@@ -36,9 +37,9 @@ function utcMillis(value) {
  * نقشه برای گرفتن مختصات یک نقطهٔ خالی) به کار می‌رود.
  * مختصات هر قلعه درصدی از عرض/ارتفاع کامل تصویر است (۰ تا ۱۰۰) */
 function ArmyMarker({ campaign, coords, active, onToggle, zoom }) {
-  const [tick, setTick] = useState(() => Date.now());
+  const [tick, setTick] = useState(() => gameNow());
   useEffect(() => {
-    const timer = setInterval(() => setTick(Date.now()), 250);
+    const timer = setInterval(() => setTick(gameNow()), 250);
     return () => clearInterval(timer);
   }, []);
 

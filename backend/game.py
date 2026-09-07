@@ -11,7 +11,8 @@ def now():
     # naive UTC — با چیزی که MongoDB برای فیلدهای datetime برمی‌گرداند یکی است.
     # اگر aware باشد، تفریق با مقداری که از دیتابیس خوانده شده (naive) خطای
     # TypeError می‌دهد.
-    return datetime.utcnow()
+    from game_clock import now as game_now
+    return game_now()
 
 def normalize_datetime(value) -> datetime | None:
     """تاریخ‌های قدیمیِ رشته‌ای و timezone-aware را به UTC بدون timezone تبدیل می‌کند."""

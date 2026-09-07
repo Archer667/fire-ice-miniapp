@@ -5,8 +5,9 @@ import { GameProvider } from './store.jsx';
 import './index.css';
 import { api } from './api.js';
 import { applyRuntimeGamedata } from './gamedata.js';
+import { syncGameClock } from './gameClock.js';
 
-api.gamedata().then(applyRuntimeGamedata).catch(() => null).finally(() => {
+Promise.all([api.gamedata().then(applyRuntimeGamedata), api.gameStatus().then(syncGameClock)]).catch(() => null).finally(() => {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <GameProvider><App /></GameProvider>
   );

@@ -1,3 +1,4 @@
+import { gameNow } from '../gameClock.js';
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { api } from '../api.js';
@@ -27,10 +28,10 @@ function utcMillis(value) {
 }
 
 function ArrivalCountdown({ arrivalAt, arrived }) {
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => gameNow());
   useEffect(() => {
     if (arrived || !arrivalAt) return undefined;
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    const timer = setInterval(() => setNowMs(gameNow()), 1000);
     return () => clearInterval(timer);
   }, [arrivalAt, arrived]);
   if (arrived || !arrivalAt) return <>رسیده به مقصد</>;
