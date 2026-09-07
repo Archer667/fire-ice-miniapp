@@ -1329,3 +1329,15 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .clan-actions .clan-action:focus-visible { outline:2px solid var(--az); outline-offset:3px; }
 .clan-actions .clan-action:disabled { opacity:.45; }
 @media(min-width:640px) { .clan-actions { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+
+.character-overlay { position:fixed; inset:0; z-index:1000; display:flex; padding:12px; background:rgba(0,0,0,.75); overflow:auto; }
+.character-overlay .character-dialog { width:100%; max-width:520px; border-radius:4px; font-family:'Peyda',sans-serif; font-size:12px; }
+.character-dialog > .sect { margin:0 0 8px; letter-spacing:0; }
+.character-dialog textarea { margin-top:6px; cursor:text; user-select:text; -webkit-user-select:text; }
+.character-dialog .btn { font-size:12px; padding:12px 10px; }
+.blacklist-tag { display:inline-block; vertical-align:middle; margin-inline-start:6px; padding:2px 7px; border:1px solid #57514d; border-radius:4px; background:#080808; color:#ece7e4; font:600 10px/1.7 'Peyda',sans-serif; }
+.system-report-card { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.system-report-name { font-size:12.5px; font-weight:700; color:var(--az); }
+.system-report-meta { font-size:11px; color:var(--mid); margin-top:4px; line-height:1.8; }
+.system-report-card .btn { flex-shrink:0; width:auto; padding:10px 12px; font-size:12px; }
+@media(max-width:360px) { .system-report-card { flex-wrap:wrap; } }

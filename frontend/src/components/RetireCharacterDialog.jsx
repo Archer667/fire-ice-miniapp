@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -12,14 +13,26 @@ export default function RetireCharacterDialog({ player, action, onClose, onDone 
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    ref.current?.showModal();
+    const previousFocus = document.activeElement;
+    const root = document.getElementById('root');
+    const previousInert = root?.inert;
+    if (root) root.inert = true;
+    ref.current?.querySelector('textarea')?.focus();
     let active = true;
     if (action === 'death') api.adminGetPlayerProfile(player.tg_id).then(p => { if (active) setNarrative(p.backstory || ''); })
       .catch(e => { if (active) { setFailed(true); toast(e.message); } }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    return () => { active = false; if (root) root.inert = previousInert; previousFocus?.focus?.(); };
   }, []);
-  return <dialog ref={ref} className="character-dialog" onCancel={e => { e.preventDefault(); if (!busy) onClose(); }}>
-    <h2 className="page-title">{action === 'death' ? 'مرگ کاراکتر' : 'حذف بازیکن'} — {player.name}</h2>
+  return createPortal(<div className="character-overlay"><div ref={ref} className="character-dialog" role="dialog" aria-modal="true" aria-labelledby="retire-character-title" onKeyDown={e => {
+    if (e.key === 'Escape') { e.preventDefault(); if (!busy) onClose(); }
+    if (e.key === 'Tab') {
+      const fields = [...ref.current.querySelectorAll('button:not(:disabled), textarea:not(:disabled), input:not(:disabled), summary')].filter(el => el.getClientRects().length);
+      const first = fields[0], last = fields[fields.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    }
+  }}>
+    <h2 id="retire-character-title" className="sect">{action === 'death' ? 'مرگ کاراکتر' : 'حذف بازیکن'} — {player.name}</h2>
     <p className="page-sub">شناسهٔ تلگرام: {player.tg_id}</p>
     <p>همهٔ قلعه‌های فعلی آزاد می‌شوند و سطح ساختمان‌ها حفظ می‌شود. منابع به مقدار شروع بازی برمی‌گردند؛ لشکرها و فعالیت‌های این کاراکتر لغو می‌شوند.</p>
     <form onSubmit={async e => {
@@ -34,5 +47,5 @@ export default function RetireCharacterDialog({ player, action, onClose, onDone 
       <p className="page-sub">این علامت با ریست فصل یا ریست کلی پاک نمی‌شود. انتخاب نکردن آن، سابقهٔ لیست سیاه قبلی را حذف نمی‌کند.</p>
       <div className="grid2"><button type="button" className="btn ghost" disabled={busy} onClick={onClose}>انصراف</button><button className="btn" disabled={busy || loading || failed}>{busy ? 'در حال ثبت…' : action === 'death' ? 'ثبت مرگ و ارسال اعلان' : 'تأیید حذف بازیکن'}</button></div>
     </form>
-  </dialog>;
+  </div></div>, document.body);
 }

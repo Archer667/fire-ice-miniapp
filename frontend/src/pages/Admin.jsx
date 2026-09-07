@@ -97,7 +97,7 @@ const TAB_GROUPS = [
     key: 'players', label: 'بازیکنان و جهان',
     description: 'ثبت‌نام، قلمروها، منابع و نقشه',
     tabs: [
-      { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها', fullOnly: true },
+      { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
       { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
       { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین', fullOnly: true },
@@ -129,7 +129,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
-      { key: 'blacklist', label: 'لیست سیاه و درخواست‌ها', description: 'آیدی‌های ثبت‌شده و وضعیت درخواست‌ها' },
+      { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
   },
@@ -137,6 +137,8 @@ const TAB_GROUPS = [
 const TABS = TAB_GROUPS.flatMap(g => g.tabs);
 const TAB_BY_KEY = Object.fromEntries(TABS.map(t => [t.key, t]));
 const JUDGMENT_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'judgment').tabs.map(tab => tab.key));
+
+const LIMITED_TAB_KEYS = new Set([...JUDGMENT_TAB_KEYS, 'registration', 'system_reports']);
 
 const PLAYER_RES = [
   { key: 'gold',  label: 'طلا',  Icon: Coin },
@@ -156,14 +158,14 @@ export default function Admin() {
   const isFull = isOwner || me.admin_role === 'full';
   const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
   const availGroups = TAB_GROUPS
-    .filter(group => isFull || group.key === 'judgment')
-    .map(group => ({ ...group, tabs: group.tabs.filter(canAccessTab) }))
+    .filter(group => isFull || group.tabs.some(item => LIMITED_TAB_KEYS.has(item.key)))
+    .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || LIMITED_TAB_KEYS.has(item.key))) }))
     .filter(group => group.tabs.length);
   const [tab, setTab] = useState('overview');
   const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
 
   useEffect(() => {
-    if (!isFull && !JUDGMENT_TAB_KEYS.has(tab)) setTab('war');
+    if (!isFull && !LIMITED_TAB_KEYS.has(tab)) setTab('war');
   }, [isFull, tab]);
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
@@ -184,9 +186,20 @@ export default function Admin() {
   const [swapDraft, setSwapDraft] = useState(null);
   const [swapBusy, setSwapBusy] = useState(false);
   const [retireDialog, setRetireDialog] = useState(null);
-  const [blacklistRows, setBlacklistRows] = useState([]);
-  const [auditRequests, setAuditRequests] = useState([]);
-  useEffect(() => { if (tab === 'blacklist') { api.adminBlacklist().then(setBlacklistRows).catch(e => toast(e.message)); api.adminListPendingPlayers().then(setAuditRequests).catch(e => toast(e.message)); } }, [tab]);
+  const [reportBusy, setReportBusy] = useState(false);
+  const downloadBlacklist = async () => {
+    setReportBusy(true);
+    try {
+      const rows = await api.adminBlacklist();
+      const lines = ['لیست سیاه بازیکنان', 'تاریخ گزارش: ' + new Date().toLocaleString('fa-IR'), 'تعداد: ' + rows.length, ''];
+      rows.forEach((p, i) => lines.push(`${i + 1}. ${p.name || 'بدون نام'}`, `آیدی عددی تلگرام: ${p.tg_id}`, `دلیل: ${p.reason || 'ثبت نشده'}`, ''));
+      if (!rows.length) lines.push('لیست سیاه خالی است.');
+      const url = URL.createObjectURL(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8' }));
+      const link = document.createElement('a'); link.href = url; link.download = 'valyria-blacklist.txt';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { toast(e.message); } finally { setReportBusy(false); }
+  };
   const [addCastleOpenId, setAddCastleOpenId] = useState(null);
   const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
   const [addCastleBusyId, setAddCastleBusyId] = useState(null);
@@ -533,8 +546,9 @@ export default function Admin() {
     loadBattles();
     loadRebellions();
     api.adminRoleplayScoreSettings().then(r => setRoleplayScoreMax(r.max_score)).catch(e => toast(e.message));
+    loadPendingPlayers();
     if (isFull) {
-      loadPendingPlayers(); loadRegistrationSettings(); loadRoster(); loadAlliances(); loadMapData();
+      loadRegistrationSettings(); loadRoster(); loadAlliances(); loadMapData();
       loadPolls(); loadMarket(); loadBlackMarket(); loadItems();
       api.adminMarketFloors().then(setMarketFloors).catch(e => toast(e.message));
       api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
@@ -1468,7 +1482,7 @@ export default function Admin() {
 
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
-    if (!isFull && !JUDGMENT_TAB_KEYS.has(key)) {
+    if (!isFull && !LIMITED_TAB_KEYS.has(key)) {
       toast('ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
       return;
     }
@@ -1703,7 +1717,7 @@ export default function Admin() {
 
       {tab === 'registration' && (
         <>
-          <div className="sect up u1">ظرفیت ثبت‌نام اقلیم‌ها</div>
+          {isFull && <><div className="sect up u1">ظرفیت ثبت‌نام اقلیم‌ها</div>
           <div className="page-sub up u1" style={{ marginTop: -10 }}>
             وقتی تعداد بازیکن‌های تخصیص‌داده‌شده به سقف برسد، تمام قلعه‌های آن اقلیم در فرم ثبت‌نام قفل می‌شوند.
           </div>
@@ -1724,14 +1738,15 @@ export default function Admin() {
             {!isFull && <div className="page-sub" style={{ marginTop: 10 }}>تغییر ظرفیت فقط برای ادمین اصلی یا کامل باز است.</div>}
           </div>
 
+          </>}
           <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
             این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
           </div>
-          <button type="button" className="btn ghost up u2" disabled={telegramSyncBusy}
+          {isFull && <button type="button" className="btn ghost up u2" disabled={telegramSyncBusy}
                   style={{ width: 'auto', margin: '0 0 12px' }} onClick={syncTelegramUsernames}>
             {telegramSyncBusy ? 'در حال دریافت از تلگرام...' : 'بازیابی username پلیرهای قبلی'}
-          </button>
+          </button>}
           <div className="up u2">
             {(!pendingPlayers || pendingPlayers.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کسی منتظر نیست</div>
@@ -1744,8 +1759,8 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
-                      {p.blacklisted ? '⚠️ لیست سیاه · ' : ''}{p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
+                    <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
+                      {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
                       {p.telegram_username
                         ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
                         : <span>username ثبت نشده</span>}
@@ -1775,7 +1790,7 @@ export default function Admin() {
                       </div>
                     </div>
                   )}
-                  <label className="f">اقلیم (خاندان)</label>
+                  {isFull && <><label className="f">اقلیم (خاندان)</label>
                   <select value={regionId} onChange={e => {
                     setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
                     setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
@@ -1795,7 +1810,7 @@ export default function Admin() {
                             disabled={deletePendingBusyId === p.tg_id} onClick={() => deletePendingPlayer(p.tg_id, p.name)}>
                       {deletePendingBusyId === p.tg_id ? '...' : 'حذف درخواست'}
                     </button>
-                  </div>
+                  </div></>}
                 </div>
               );
             })}
@@ -1835,7 +1850,7 @@ export default function Admin() {
                 <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
                   <div className="res">
                     <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
+                    <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
                       {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
                       {p.telegram_username
                         ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
@@ -2908,13 +2923,10 @@ export default function Admin() {
         <div className="grid2"><button className="btn ghost" disabled={swapBusy} onClick={()=>setSwapDraft(null)}>انصراف</button><button className="btn" disabled={swapBusy||!swapDraft.second_castle} onClick={async()=>{setSwapBusy(true);try{await api.adminSwapCastles(swapDraft);setSwapDraft(null);loadRoster();loadMapData();toast('مالکیت قلعه‌ها جابه‌جا شد');}catch(e){toast(e.message);}finally{setSwapBusy(false);}}}>تأیید جابجایی</button></div>
       </div>}
       {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
-      {tab === 'blacklist' && <>
-        <h2 className="page-title">لیست سیاه دائمی</h2><p className="page-sub">این فهرست با ریست فصل و ریست کلی پاک نمی‌شود؛ ثبت‌نام را خودکار مسدود نمی‌کند.</p>
-        {blacklistRows.length === 0 && <p>لیست سیاه خالی است.</p>}
-        {blacklistRows.map(p => <div className="card" key={p.tg_id}><strong>{p.name}</strong><p dir="ltr">{p.tg_id}</p><p>{p.reason}</p></div>)}
-        <h2 className="page-title">درخواست‌های ثبت‌نام</h2>
-        {auditRequests.map(p => <div className="card" key={p.tg_id}><strong>{p.name}</strong><p dir="ltr">{p.tg_id}</p><p>{p.blacklisted ? '⚠️ عضو لیست سیاه' : 'عضو لیست سیاه نیست'}</p></div>)}
-      </>}
+      {tab === 'system_reports' && <div className="card system-report-card">
+        <div><div className="system-report-name">لیست سیاه بازیکنان</div><div className="system-report-meta">فایل TXT · نام، آیدی عددی و دلیل ثبت</div></div>
+        <button type="button" className="btn ghost" disabled={reportBusy} onClick={downloadBlacklist}>{reportBusy ? 'در حال دریافت…' : 'دانلود فایل'}</button>
+      </div>}
       {tab === 'market-floors' && isFull && <div className="card">
         <h2 className="page-title">حداقل قیمت بازار بازیکنان</h2>
         <p className="page-sub">قیمت هر واحد به سکه؛ پیش‌فرض همهٔ کالاها ۱۰ است. آگهی‌های قدیمی زیر حداقل، تا لغو و ثبت مجدد قابل خرید نیستند.</p>
