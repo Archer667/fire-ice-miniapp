@@ -1317,3 +1317,15 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .lbr.is-dead::after { content: ''; position: absolute; inset: 0; background: rgba(12, 8, 8, .22); pointer-events: none; border-radius: inherit; }
 .death-stamp { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-8deg); border: 2px solid #c96666; color: #f0a0a0; background: #211315e8; padding: 3px 18px; border-radius: 5px; font-weight: 900; white-space: nowrap; pointer-events: none; }
 .death-screen { margin: 60px 16px; text-align: center; line-height: 2; }
+
+/* Shared mobile controls for character management. */
+.clan-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; grid-auto-rows:1fr; }
+.clan-actions .clan-action { width:100%; min-width:0; min-height:46px; margin:0; padding:10px 8px; font-family:'Peyda',sans-serif; font-size:12px; font-weight:600; line-height:1.7; white-space:normal; border:1px solid var(--action-edge); color:var(--action-color); background:var(--action-bg); }
+.clan-action--delete { --action-color:#ffb8aa; --action-edge:#8d5147; --action-bg:#33201e; }
+.clan-action--transfer { --action-color:#e9c176; --action-edge:#80683d; --action-bg:#302a1e; }
+.clan-action--add { --action-color:#bed6a9; --action-edge:#586b46; --action-bg:#232b1f; }
+.clan-action--swap { --action-color:#b8cbd5; --action-edge:#506571; --action-bg:#212a30; }
+.clan-action--death { --action-color:#f0acac; --action-edge:#893d42; --action-bg:#401c22; }
+.clan-actions .clan-action:focus-visible { outline:2px solid var(--az); outline-offset:3px; }
+.clan-actions .clan-action:disabled { opacity:.45; }
+@media(min-width:640px) { .clan-actions { grid-template-columns:repeat(3,minmax(0,1fr)); } }

@@ -1860,19 +1860,19 @@ export default function Admin() {
                       ))}
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
+                  <div className="clan-actions">
+                    <button className="btn ghost clan-action clan-action--delete"
                             disabled={unassignBusyId === p.tg_id} onClick={() => setRetireDialog({ player:p, action:"delete" })}>
                       حذف بازیکن
                     </button>
-                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} disabled={p.is_dead} onClick={() => toggleReassign(p.tg_id)}>
+                    <button className="btn ghost clan-action clan-action--transfer" disabled={p.is_dead} onClick={() => toggleReassign(p.tg_id)}>
                       انتقال به خاندان دیگر
                     </button>
-                    <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} disabled={p.is_dead} onClick={() => toggleAddCastle(p.tg_id)}>
+                    <button className="btn ghost clan-action clan-action--add" disabled={p.is_dead} onClick={() => toggleAddCastle(p.tg_id)}>
                       افزودن قلعه
                     </button>
-                    {!p.is_dead && <button className="btn ghost" style={{width:'auto'}} onClick={() => setSwapDraft({first_id:p.tg_id,first_castle:p.castle,second_id:'',second_castle:''})}>جابجایی قلعه‌ها</button>}
-                    {!p.is_dead && <button className="btn ghost" style={{width:'auto'}} onClick={() => setRetireDialog({player:p,action:'death'})}>مرگ کاراکتر</button>}
+                    {!p.is_dead && <button className="btn ghost clan-action clan-action--swap" onClick={() => setSwapDraft({first_id:p.tg_id,first_castle:p.castle,second_id:'',second_castle:''})}>جابجایی قلعه‌ها</button>}
+                    {!p.is_dead && <button className="btn ghost clan-action clan-action--death" onClick={() => setRetireDialog({player:p,action:'death'})}>مرگ کاراکتر</button>}
                   </div>
                   {reassignOpenId === p.tg_id && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>

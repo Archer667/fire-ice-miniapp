@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from config import ADMIN_IDS, OWNER_ID, CORS_ORIGINS, CORS_ORIGIN_REGEX
@@ -76,16 +76,27 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         status_code=500, content={"detail": "خطای غیرمنتظرهٔ سرور — دوباره امتحان کن"}, headers=headers,
     )
 
+async def pause_admin_access(request: Request) -> bool:
+    # Authenticate server-side; endpoint permissions still restrict each admin role.
+    from auth import get_user, get_admin_role
+    try:
+        user = await get_user(request=request, authorization=request.headers.get('authorization', ''),
+                              x_dev_user=request.headers.get('x-dev-user', ''))
+        return bool(await get_admin_role(user))
+    except HTTPException:
+        return False
+
 @app.middleware("http")
 async def serialize_game_state(request: Request, call_next):
     # Legacy economy handlers use read/modify/write. Serialize with project wallets
     # in this single-Uvicorn-worker deployment, including production-on-read routes.
-    if request.url.path.startswith('/api/') and request.url.path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
+    path = request.scope['path']
+    if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
             await game_clock.load()
             from character_records import recover_swaps
             await recover_swaps()
-            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and request.url.path != '/api/admin/game-pause':
+            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and path != '/api/admin/game-pause' and not await pause_admin_access(request):
                 return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
             return await call_next(request)
     return await call_next(request)
