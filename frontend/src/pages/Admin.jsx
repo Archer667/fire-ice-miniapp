@@ -289,7 +289,7 @@ export default function Admin() {
   const [pauseReason, setPauseReason] = useState('بررسی و رسیدگی به وضعیت بازی');
   const [pauseBusy, setPauseBusy] = useState(false);
   useEffect(() => {
-    const receive = e => setGamePause(e.detail);
+    const receive = e => setGamePause(prev => ({...prev, ...e.detail}));
     window.addEventListener('game-status', receive);
     api.gameStatus().then(setGamePause).catch(() => {});
     return () => window.removeEventListener('game-status', receive);
@@ -1530,6 +1530,10 @@ export default function Admin() {
   return (
     <>
       <div className="page-title up">پنل ادمین</div>
+      <div className={`admin-game-strip ${gamePause?.paused ? 'is-paused' : ''}`} role="status">
+        <span>روز <b>{gamePause?.day ? gamePause.day.toLocaleString('fa-IR') : '—'}</b> بازی</span>
+        <span className="admin-game-state"><i aria-hidden="true" />{gamePause ? (gamePause.paused ? 'متوقف' : 'در حال اجرا') : 'در حال دریافت…'}</span>
+      </div>
       <div className="admin-role-card up">
         <div>
           <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : 'ادمین اجرایی'}</strong>
@@ -3574,7 +3578,7 @@ export default function Admin() {
                 {!gamePause?.paused && <label className="f">دلیل توقف<textarea maxLength={500} value={pauseReason} onChange={e => setPauseReason(e.target.value)} /></label>}
                 <button className="btn" disabled={!gamePause || pauseBusy} onClick={async () => {
                   setPauseBusy(true);
-                  try { const result = await api.setGamePause(!gamePause.paused, pauseReason); setGamePause(result); syncGameClock(result); toast(result.paused ? 'بازی متوقف شد' : 'بازی ادامه یافت'); }
+                  try { const result = await api.setGamePause(!gamePause.paused, pauseReason); setGamePause(prev => ({...prev, ...result})); syncGameClock(result); toast(result.paused ? 'بازی متوقف شد' : 'بازی ادامه یافت'); }
                   catch (e) { toast(e.message); } finally { setPauseBusy(false); }
                 }}>{pauseBusy ? 'در حال ثبت…' : gamePause?.paused ? '▶ ادامهٔ بازی' : '⏸ توقف بازی'}</button>
               </div>

@@ -1,3 +1,4 @@
+from public_audience import public_recipients, public_players
 from datetime import datetime, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -968,7 +969,7 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
                 f"🔴 {attacker_label}: {attacker_total:,} نفر · {attacker_equipment_total:,} ادوات\n"
                 f"🔵 {defender_label}: {defender_total:,} نفر · {defender_equipment_total:,} ادوات"
             )
-        async for player in players.find({}, {"tg_id": 1, "name": 1}):
+        async for player in public_players():
             await send_system_message(player["tg_id"], player["name"], public_text, kind="battle")
 
 async def defending_troops(castle_name: str, owner_tg_id: int) -> dict:

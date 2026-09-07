@@ -1341,3 +1341,9 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .system-report-meta { font-size:11px; color:var(--mid); margin-top:4px; line-height:1.8; }
 .system-report-card .btn { flex-shrink:0; width:auto; padding:10px 12px; font-size:12px; }
 @media(max-width:360px) { .system-report-card { flex-wrap:wrap; } }
+
+.admin-game-strip { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 12px; margin:10px 0 12px; border:1px solid var(--edge); border-radius:4px; background:linear-gradient(100deg,#20201f,#292419); color:var(--mid); font:500 11.5px/1.6 'Peyda',sans-serif; }
+.admin-game-strip b { color:var(--az); font-size:12.5px; }
+.admin-game-state { display:flex; align-items:center; gap:6px; color:#bed6a9; }
+.admin-game-state i { width:6px; height:6px; border-radius:50%; background:currentColor; }
+.admin-game-strip.is-paused .admin-game-state { color:var(--az); }

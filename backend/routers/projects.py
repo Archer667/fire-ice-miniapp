@@ -203,6 +203,9 @@ async def approve(project_id: str, body: Approval, user=Depends(manager)):
         excluded = set(ADMIN_IDS) | {a['tg_id'] async for a in admin_roles.find({})} | {OWNER_ID}
         recipients = [p['tg_id'] async for p in players.find({'castle': {'$ne': None}, 'is_dead': {'$ne': True}})
                       if p['tg_id'] not in excluded]
+        if doc['kind'] == 'shared':
+            from admin_notifications import _admin_ids
+            recipients = list(set(recipients) | await _admin_ids())
         await queue_notice(doc, 'approved', recipients if doc['kind'] == 'shared' else [doc['owner_id']], text)
         return public_project(doc, user['id'])
 

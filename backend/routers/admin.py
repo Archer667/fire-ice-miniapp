@@ -1,3 +1,4 @@
+from public_audience import public_recipients, public_players
 from typing import Literal
 import asyncio
 import random
@@ -1287,7 +1288,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     # شروع و پایان جنگ رویداد عمومی‌اند؛ گزینهٔ visibility برای رول‌های غیرجنگی
     # همچنان معتبر است، اما نتیجهٔ خودِ نبرد همیشه برای همه می‌رود.
     if body.visibility == "all" or (campaign and combat_outcome):
-        recipient_tg_ids = {p["tg_id"] async for p in players.find({}, {"tg_id": 1})}
+        recipient_tg_ids = {p["tg_id"] for p in await public_recipients()}
 
     cat_name = ROLEPLAY_CATEGORIES.get(r["category"], r["category"])
     prefix = "اعلامیهٔ عمومی" if body.visibility == "all" or (campaign and combat_outcome) else f"نتیجهٔ رول «{cat_name}»{'ِ نبرد' if r['category'] == 'war' else ''}"
@@ -1362,6 +1363,8 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     adjustment_line = ("\n\nتغییرات ثبت‌شده:\n" + "\n".join(adjustment_lines)) if adjustment_lines else ""
     for tg_id in recipient_tg_ids:
         player = await players.find_one({"tg_id": tg_id})
+        if not player and (body.visibility == "all" or (campaign and combat_outcome)):
+            player = {"tg_id": tg_id, "name": "ادمین"}
         if player:
             if battle_report_plain:
                 await send_system_message(
@@ -2382,7 +2385,7 @@ async def announce_event(body: AnnounceEventBody, user: dict = Depends(admin_use
         raise HTTPException(400, "عنوان و توضیحِ رویداد نمی‌توانند خالی باشند")
     image_url = _validated_message_image(body.image_url)
     text = f"🎉 رویداد: {title}\n\n{description}"
-    async for p in players.find({}, {"tg_id": 1, "name": 1}):
+    async for p in public_players():
         await send_system_message(p["tg_id"], p["name"], text, kind="event", image_url=image_url)
     return {"ok": True}
 
@@ -2412,7 +2415,7 @@ async def send_bot_message(body: SendBotMessageBody, user: dict = Depends(admin_
     image_url = _validated_message_image(body.image_url)
 
     if body.send_to_all:
-        targets = await players.find({}, {"tg_id": 1, "name": 1}).to_list(None)
+        targets = await public_recipients()
     else:
         to_ids = list(dict.fromkeys(body.to_tg_ids or []))
         if not to_ids:
@@ -2453,7 +2456,7 @@ async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(owner_u
         if body.open else
         "پنجرهٔ لشکرکشی بسته شد — تا اطلاع بعدی فرمان گسیل نیروی تازه ممکن نیست؛ لشکرهایی که در راهند دست‌نخورده می‌مانند."
     )
-    async for p in players.find({}, {"tg_id": 1, "name": 1}):
+    async for p in public_players():
         await send_system_message(p["tg_id"], p["name"], text)
     return {"ok": True, "open": body.open}
 

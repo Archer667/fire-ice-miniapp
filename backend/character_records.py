@@ -1,3 +1,4 @@
+from public_audience import public_recipients, public_players
 """Character history and castle buildings are independent of Telegram accounts."""
 from copy import deepcopy
 from datetime import datetime
@@ -66,7 +67,7 @@ async def retire(tg_id, body, actor):
         await archives.update_one({'_id': key}, {'$setOnInsert': archived}, upsert=True)
     if body.action == 'death':
         text = death_text(target, body.reason, body.narrative)
-        recipients = await players.find({}, {'tg_id': 1, 'name': 1}).to_list(None)
+        recipients = await public_recipients()
         await db.character_announcements.update_one({'_id': key}, {'$setOnInsert': {
             'text': text, 'recipients': recipients, 'delivered': [], 'ready': False,
         }}, upsert=True)

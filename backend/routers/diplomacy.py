@@ -1,3 +1,4 @@
+from public_audience import public_recipients, public_players
 from datetime import datetime, timedelta
 from uuid import uuid4
 from bson import ObjectId
@@ -173,7 +174,7 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
                 async for member in alliances.find({'group_id': a['group_id'], 'status': 'accepted'}):
                     members.add(member['to_name'])
                 text = f"📜 {to_label} به گروه {type_name}{pact_name} پیوست.\nاعضای پذیرفته‌شده: {'، '.join(sorted(members))}\nاعضای این گروه مجوز تجارت و عبور کاروان با یکدیگر دارند."
-            async for p in players.find({}, {"tg_id": 1, "name": 1}):
+            async for p in public_players():
                 if p["tg_id"] not in (a["from_id"], a["to_id"]):
                     await send_system_message(p["tg_id"], p["name"], text, kind="diplomacy")
     else:
