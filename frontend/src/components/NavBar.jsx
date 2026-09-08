@@ -1,3 +1,4 @@
+import FamilyIcon from './FamilyIcon.jsx';
 import { haptic } from '../telegram.js';
 import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart, Scroll, Warehouse } from './Icons.jsx';
 
@@ -19,6 +20,7 @@ export const EXTRA_PAGES = [
   { index: 8, Icon: Cart,   label: 'تجارت' },
   { index: 9, Icon: Scroll, label: 'رول‌ها' },
   { index: 10, Icon: Warehouse, label: 'دارایی‌ها' },
+  { index: 11, Icon: FamilyIcon, label: 'خاندان و خانواده' },
 ];
 
 export default function NavBar({ tab, onChange }) {

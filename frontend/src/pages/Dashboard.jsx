@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { Coin, Wheat, People, Pick, Rock, Wood, Wine, Build, Swords, Eye, Heart, Popularity, Blossom, SunIcon, Leaf, Snowflake, Gift } from '../components/Icons.jsx';
 import { SEASONS, seasonOf } from '../seasons.js';
 import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
+import { FamilySummary } from './Family.jsx';
 import ProfileImageModal from '../components/ProfileImageModal.jsx';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
@@ -191,6 +192,7 @@ export default function Dashboard({ goTo }) {
       <ProfileImageModal image={profileImageOpen ? me.profile_image : null} name={me.name}
                          onClose={() => setProfileImageOpen(false)} />
 
+      <FamilySummary goTo={goTo} />
       <div className="sect up u2">مدال‌ها و افتخارات</div>
       <div className="medal-showcase card up u2">
         {(me.medals || []).length ? me.medals.map(m => {

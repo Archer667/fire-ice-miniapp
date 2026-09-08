@@ -50,6 +50,15 @@ async def retire(tg_id, body, actor):
     key = f"{tg_id}:{target.get('created_at')}"
     if body.character_key and body.character_key != key:
         raise HTTPException(409, 'شخصیت این حساب تغییر کرده؛ فهرست را تازه کن')
+    if body.action == 'death' and not already_dead:
+        from family import preview, succeed, end_character
+        state = await preview(target)
+        if state['heir'] and not getattr(body, 'kill_heirs', False):
+            from family import children
+            heir = await children.find_one({'_id': state['heir']['id']})
+            return await succeed(target, heir, body, actor)
+    from family import end_character
+    await end_character(target, getattr(body, 'kill_heirs', False))
     await db.character_retirements.update_one({'_id': key}, {'$setOnInsert': {'snapshot': target}}, upsert=True)
     target = (await db.character_retirements.find_one({'_id': key}))['snapshot']
     if body.blacklisted:
@@ -88,6 +97,8 @@ async def retire(tg_id, body, actor):
     return {'ok': True}
 
 async def recover_swaps():
+    from family import recover
+    await recover()
     async for swap in db.castle_swaps.find({'complete': False}):
         for change in swap['changes']:
             await players.update_one({'tg_id': change['tg_id']}, {'$set': change['fields']})

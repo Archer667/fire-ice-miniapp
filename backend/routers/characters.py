@@ -18,6 +18,7 @@ class RetireBody(BaseModel):
     reason: str = Field(default='', max_length=500)
     narrative: str = Field(default='', max_length=2000)
     blacklisted: StrictBool = False
+    kill_heirs: StrictBool = False
 
 @router.get('/blacklist')
 async def list_blacklist(user=Depends(administrator)):

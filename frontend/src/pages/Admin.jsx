@@ -14,6 +14,7 @@ import AdminControlCenter from '../components/AdminControlCenter.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
 import Projects from './Projects.jsx';
+import { AdminFamily } from './Family.jsx';
 
 const NEW_CASTLE = '__new__';
 
@@ -98,6 +99,7 @@ const TAB_GROUPS = [
     description: 'ثبت‌نام، قلمروها، منابع و نقشه',
     tabs: [
       { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
+      { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
       { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
       { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین', fullOnly: true },
@@ -2936,6 +2938,7 @@ export default function Admin() {
         <div className="grid2"><button className="btn ghost" disabled={swapBusy} onClick={()=>setSwapDraft(null)}>انصراف</button><button className="btn" disabled={swapBusy||!swapDraft.second_castle} onClick={async()=>{setSwapBusy(true);try{await api.adminSwapCastles(swapDraft);setSwapDraft(null);loadRoster();loadMapData();toast('مالکیت قلعه‌ها جابه‌جا شد');}catch(e){toast(e.message);}finally{setSwapBusy(false);}}}>تأیید جابجایی</button></div>
       </div>}
       {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
+      {tab === 'family' && isFull && <AdminFamily />}
       {tab === 'system_reports' && <><div className="card system-report-card">
         <div><div className="system-report-name">لیست سیاه بازیکنان</div><div className="system-report-meta">فایل TXT · نام، آیدی عددی و دلیل ثبت</div></div>
         <button type="button" className="btn ghost" disabled={reportBusy} onClick={downloadBlacklist}>{reportBusy ? 'در حال دریافت…' : 'دانلود فایل'}</button>

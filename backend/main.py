@@ -110,6 +110,8 @@ async def serialize_game_state(request: Request, call_next):
     return await call_next(request)
 
 from system_reports import router as reports_router
+from routers import family as family_router
+app.include_router(family_router.router)
 app.include_router(reports_router)
 app.include_router(projects_router.router)
 app.include_router(pause_router.router)
@@ -146,9 +148,12 @@ async def _arrival_watcher():
                 await game_clock.load()
                 from character_records import recover_swaps
                 await recover_swaps()
+                from character_records import deliver_announcements
+                from family import tick as tick_family, flush_notices as flush_family_notices
+                await deliver_announcements()
+                await flush_family_notices()
                 if not game_clock.paused():
-                    from character_records import deliver_announcements
-                    await deliver_announcements()
+                    await tick_family()
                     await notify_arrivals()
                     await notify_caravan_arrivals()
                     await notify_building_completions()
@@ -191,6 +196,11 @@ async def _market_watcher():
 async def _ensure_indexes():
     from login_audit import ensure_indexes as ensure_login_indexes
     await ensure_login_indexes()
+    from db import db
+    await db.family_marriages.create_index([('parent_keys', 1), ('status', 1)])
+    await db.family_children.create_index([('patron_key', 1), ('status', 1)])
+    for collection in (db.family_operations, db.family_successions, db.family_notices):
+        await collection.create_index('complete')
     """ایندکس‌های یکتا برای جلوگیری از رکورد دوتایی زیر بار همزمان (race condition) —
     مثلاً دو ثبت‌نام هم‌زمان با یک قلعه، یا دو بار افزودن یک اسم به نقشه توسط ادمین"""
     try:

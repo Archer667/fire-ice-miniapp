@@ -1559,6 +1559,16 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  family: () => req('/api/family'),
+  familyCandidates: () => req('/api/family/candidates'),
+  familyPropose: (target_id, request_id) => req('/api/family/proposals',{method:'POST',body:JSON.stringify({target_id,request_id})}),
+  familyRespond: (id, accept) => req(`/api/family/proposals/${id}/respond`,{method:'POST',body:JSON.stringify({accept})}),
+  familyChild: (id, body) => req(`/api/family/children/${id}`,{method:'POST',body:JSON.stringify(body)}),
+  adminFamily: () => req('/api/admin/family'),
+  adminFamilyReview: (id, accept, reason) => req(`/api/admin/family/proposals/${id}`,{method:'POST',body:JSON.stringify({accept,reason})}),
+  adminFamilySettings: body => req('/api/admin/family/settings',{method:'POST',body:JSON.stringify(body)}),
+  adminFamilyName: (id,name) => req(`/api/admin/family/children/${id}/name`,{method:'POST',body:JSON.stringify({name})}),
+  successionPreview: id => req(`/api/admin/family/${id}/succession`),
   adminSwapCastles: body => req('/api/admin/castle-swap', { method:'POST', body:JSON.stringify(body) }),
   adminBlacklist: () => req('/api/admin/blacklist'),
   retireCharacter: (id, body) => req(`/api/admin/characters/${id}/retire`, { method:'POST', body:JSON.stringify(body) }),

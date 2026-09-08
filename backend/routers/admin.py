@@ -2530,6 +2530,8 @@ async def _clear_season_history():
     await db.character_announcements.delete_many({})
     await db.character_retirements.delete_many({})
     await db.castle_swaps.delete_many({})
+    for name in ('family_marriages', 'family_children', 'family_operations', 'family_successions', 'family_notices'):
+        await db[name].delete_many({})
     """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
     for collection in (
         campaigns, ambushes, spy_missions, messages, roleplays, rebellions, rebellion_checks,
@@ -2560,7 +2562,7 @@ async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
                 "castle_buildings": {}, "points": 100, "scoreboard_baseline": 0,
                 "popularity": POPULARITY_START, "tax_rate": int(control_settings.get("tax.default_rate", TAX_RATE_DEFAULT)),
                 "alliance_count": 0, "last_feast": None, "last_tick": started_at,
-                "season_started_at": started_at, "stats": blank["stats"], "medals": {},
+                "season_started_at": started_at, "stats": blank["stats"], "medals": {}, "family_child_id": None,
                 "title": title, "food_ration": rebellion_settings.get("default_ration", "normal"), "daily_streak": 0,
             },
             "$unset": {
