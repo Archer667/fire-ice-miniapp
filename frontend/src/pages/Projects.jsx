@@ -1,3 +1,4 @@
+import SubmissionQuota from '../components/SubmissionQuota.jsx';
 import { gameNow } from '../gameClock.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api.js';
@@ -104,6 +105,7 @@ export default function Projects({ admin = false }) {
   });
 
   return <section className="projects" dir="rtl">
+    {!admin && !me.admin_role && <SubmissionQuota kind="projects" />}
     <div className="project-toolbar"><h2>{admin ? 'مدیریت پروژه‌ها' : 'پروژه‌های قلمرو'}</h2>
       {!admin && !me.admin_role && <button className="btn" disabled={!rules || busy} onClick={() => setCreate(true)}>＋ طرح پروژه</button>}
     </div>

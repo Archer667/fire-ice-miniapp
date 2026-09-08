@@ -1347,3 +1347,5 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .admin-game-state { display:flex; align-items:center; gap:6px; color:#bed6a9; }
 .admin-game-state i { width:6px; height:6px; border-radius:50%; background:currentColor; }
 .admin-game-strip.is-paused .admin-game-state { color:var(--az); }
+
+.leader-pager {display:flex;align-items:center;justify-content:center;gap:16px;margin:12px 0;font-size:11px;color:var(--mid)} .leader-pager .rbtn {width:auto;padding:7px 12px;border:1px solid var(--edge);border-radius:4px;font:600 11px 'Peyda';color:var(--az)} .leader-pager .rbtn:disabled{opacity:.35}

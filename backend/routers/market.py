@@ -1,3 +1,4 @@
+from system_reports import market_start, market_done
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, StrictInt, Field
@@ -61,6 +62,7 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
 
     # به‌روزرسانیِ اتمیک و مشروط به موجودیِ واقعی — وگرنه دو خریدِ هم‌زمان می‌تونن
     # هردو رویِ همون خواندنِ قدیمیِ qty رد بشن و بازار رو منفی/بیش‌ازموجودی بفروشن
+    audit_id = await market_start(p, 'westeros', body.resource, body.qty, price)
     reference = max(1, listing.get("reference_qty", listing["qty"]))
     bumped = stock_price({**listing, "reference_qty": reference}, listing["qty"] - body.qty)
     result = await market_listings.update_one(
@@ -73,6 +75,7 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
     pay(p["resources"], {"gold": cost})
     add_resources(p, {body.resource: body.qty})
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    await market_done(audit_id)
     return {"ok": True, "resource": body.resource, "qty": body.qty, "cost": cost}
 
 @router.get("/players")
@@ -150,6 +153,7 @@ async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get
         raise HTTPException(403, "اول ثبت‌نام کن")
     p = apply_production(p)
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    audit_id = await market_start(p, 'players', listing['resource'], body.qty, listing.get('price',1), listing)
     buyer = await players.update_one(
         {"tg_id": user["id"], "resources.gold": {"$gte": cost}}, {"$inc": {"resources.gold": -cost}},
     )
@@ -163,6 +167,7 @@ async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get
         raise HTTPException(409, "این کالا همین الان فروخته شد")
     await players.update_one({"tg_id": user["id"]}, {"$inc": {f"resources.{listing['resource']}": body.qty}})
     await players.update_one({"tg_id": listing["seller_tg_id"]}, {"$inc": {"resources.gold": cost}})
+    await market_done(audit_id)
     return {"ok": True, "qty": body.qty, "cost": cost, "resource": listing["resource"]}
 
 @router.delete("/players/{listing_id}")
@@ -217,6 +222,7 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
 
+    audit_id = await market_start(p, 'black', m['resource'], body.qty, m['price'])
     # همون اتمیک‌سازیِ بازارِ وستروس، اینجا هم — تا دو خریدِ هم‌زمان بیشتر از
     # موجودیِ واقعیِ کالای محدود برنداره
     result = await black_market_listings.update_one(
@@ -229,6 +235,7 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
     pay(p["resources"], {"gold": cost})
     add_resources(p, {m["resource"]: body.qty})
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    await market_done(audit_id)
     return {"ok": True, "resource": m["resource"], "qty": body.qty, "cost": cost}
 
 async def drift_market_prices():

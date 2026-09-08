@@ -44,6 +44,9 @@ export default function Leaderboard() {
   const { toast } = useGame();
   const [tab, setTab] = useState('regions');
   const [regionRows, setRegionRows] = useState(null);
+  const [lordPage, setLordPage] = useState(1);
+  const [lordPages, setLordPages] = useState(1);
+  const [lordBusy, setLordBusy] = useState(false);
   const [lordRows, setLordRows] = useState(null);
   const [weeklyRows, setWeeklyRows] = useState(null);
   const [selectedMedal, setSelectedMedal] = useState(null);
@@ -63,13 +66,19 @@ export default function Leaderboard() {
     // محسوسی ایجاد می‌کردند.
     if (tab === 'regions' && regionRows === null) {
       api.regionLeaderboard().then(setRegionRows).catch(e => { setRegionRows([]); toast(e.message); });
-    } else if (tab === 'lords' && lordRows === null) {
-      api.leaderboard().then(setLordRows).catch(e => { setLordRows([]); toast(e.message); });
+
     } else if (tab === 'weekly' && weeklyRows === null) {
       api.weeklyLeaderboard().then(setWeeklyRows).catch(e => { setWeeklyRows([]); toast(e.message); });
     }
   }, [tab, regionRows, lordRows, weeklyRows, toast]);
 
+  useEffect(() => {
+    if (tab !== 'lords') return;
+    let active = true; setLordBusy(true);
+    api.leaderboardPage(lordPage).then(r => { if(active){setLordRows(r.items);setLordPages(r.pages);if(r.page!==lordPage)setLordPage(r.page);} }).catch(e=>toast(e.message)).finally(()=>{if(active)setLordBusy(false);});
+    return ()=>{active=false;};
+  },[tab,lordPage]);
+  const pager = <nav className="leader-pager" aria-label="صفحه‌بندی لردها"><button className="rbtn" disabled={lordBusy||lordPage<=1} onClick={()=>setLordPage(p=>p-1)}>قبلی</button><span>صفحهٔ {lordPage.toLocaleString('fa-IR')} از {lordPages.toLocaleString('fa-IR')}</span><button className="rbtn" disabled={lordBusy||lordPage>=lordPages} onClick={()=>setLordPage(p=>p+1)}>بعدی</button></nav>;
   return (
     <>
       <div className="page-title up">والریا : سیزن اول</div>
@@ -96,6 +105,7 @@ export default function Leaderboard() {
         )
       )}
 
+      {tab === 'lords' && pager}
       {tab === 'lords' && (
         lordRows === null ? <div className="loading">شمارش تاج‌ها...</div> : lordRows.length === 0 ? (
           <div className="empty up u2">هنوز لرد تأییدشده‌ای وارد جدول امتیازات نشده است.</div>
@@ -121,6 +131,7 @@ export default function Leaderboard() {
         )
       )}
 
+      {tab === 'lords' && pager}
       {tab === 'weekly' && (
         weeklyRows === null ? <div className="loading">شمارش این‌هفته...</div> : weeklyRows.length === 0 ? (
           <div className="empty up u2">هنوز امتیازی برای این هفته ثبت نشده است.</div>

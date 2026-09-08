@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from auth import get_user
 from db import admin_roles, players
 from medals import medal_rows, normalize_stats
@@ -33,10 +33,13 @@ async def with_dead_players(rows, weekly=False):
     return rows
 
 @router.get("")
-async def leaderboard(user: dict = Depends(get_user)):
+async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(default=None, ge=1)):
     rows = await _without_admins(await with_dead_players(await scored_players()))
     out = []
-    for i, row in enumerate(rows[:50]):
+    pages = max(1, (len(rows)+49)//50)
+    current = min(page or 1, pages)
+    offset = (current-1)*50
+    for i, row in enumerate(rows[offset:offset+50], start=offset):
         p = row["player"]
         out.append({
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
@@ -47,7 +50,7 @@ async def leaderboard(user: dict = Depends(get_user)):
             "rank_label": RANK_LABEL_FA.get(row["rank_label"]),
             "me": p["tg_id"] == user["id"],
         })
-    return out
+    return {"items":out,"page":current,"pages":pages,"total":len(rows)} if page is not None else out
 
 @router.get("/weekly")
 async def weekly_leaderboard(user: dict = Depends(get_user)):

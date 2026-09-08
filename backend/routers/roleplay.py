@@ -1,3 +1,4 @@
+from system_reports import check_quota, consume, CATEGORIES
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,6 +30,9 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     text = body.text.strip()
     if len(text) < TEXT_MIN_LEN:
         raise HTTPException(400, "رول خیلی کوتاه است — کمی بیشتر بنویس")
+
+    if body.category in CATEGORIES:
+        await check_quota(user['id'], 'roleplays')
 
     campaign_id = None
     target_player = None
@@ -107,6 +111,8 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     else:
         inserted = await roleplays.insert_one(doc)
         res_id = inserted.inserted_id
+    if body.category in CATEGORIES:
+        await consume(user['id'], 'roleplays', res_id)
     target_line = f"\nهدف: {target_player['name']}" if target_player else ""
     admin_detail = (
         f"فرستنده: {p['name']}\n"

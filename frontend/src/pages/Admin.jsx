@@ -129,6 +129,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      { key: 'submission_limits', label: 'سهمیه‌های هفتگی', description: 'سقف رول و درخواست پروژه', fullOnly:true },
       { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
@@ -186,6 +187,14 @@ export default function Admin() {
   const [swapDraft, setSwapDraft] = useState(null);
   const [swapBusy, setSwapBusy] = useState(false);
   const [retireDialog, setRetireDialog] = useState(null);
+  const [weeklyLimits, setWeeklyLimits] = useState(null);
+  const [limitsBusy, setLimitsBusy] = useState(false);
+  useEffect(()=>{if(tab==='submission_limits')api.submissionLimits().then(setWeeklyLimits).catch(e=>toast(e.message));},[tab]);
+  const downloadSystemReport = async kind => {
+    setReportBusy(true);
+    try { const result=await api.systemReport(kind); const url=URL.createObjectURL(new Blob(['\uFEFF'+result.text],{type:'text/plain;charset=utf-8'})); const a=document.createElement('a');a.href=url;a.download=result.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000); }
+    catch(e){toast(e.message);}finally{setReportBusy(false);}
+  };
   const [reportBusy, setReportBusy] = useState(false);
   const downloadBlacklist = async () => {
     setReportBusy(true);
@@ -2927,9 +2936,18 @@ export default function Admin() {
         <div className="grid2"><button className="btn ghost" disabled={swapBusy} onClick={()=>setSwapDraft(null)}>انصراف</button><button className="btn" disabled={swapBusy||!swapDraft.second_castle} onClick={async()=>{setSwapBusy(true);try{await api.adminSwapCastles(swapDraft);setSwapDraft(null);loadRoster();loadMapData();toast('مالکیت قلعه‌ها جابه‌جا شد');}catch(e){toast(e.message);}finally{setSwapBusy(false);}}}>تأیید جابجایی</button></div>
       </div>}
       {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
-      {tab === 'system_reports' && <div className="card system-report-card">
+      {tab === 'system_reports' && <><div className="card system-report-card">
         <div><div className="system-report-name">لیست سیاه بازیکنان</div><div className="system-report-meta">فایل TXT · نام، آیدی عددی و دلیل ثبت</div></div>
         <button type="button" className="btn ghost" disabled={reportBusy} onClick={downloadBlacklist}>{reportBusy ? 'در حال دریافت…' : 'دانلود فایل'}</button>
+      </div>
+      {isFull && [['admin-activity','فعالیت ادمین‌ها','اقدام، ادمین، زمان و تغییرات بازیکنان'],['market','معاملات بازار','خریدار، فروشنده، کالا، حجم و قیمت']].map(([kind,title,description])=><div className="card system-report-card" key={kind}><div><div className="system-report-name">{title}</div><div className="system-report-meta">TXT · {description}</div></div><button className="btn ghost" disabled={reportBusy} onClick={()=>downloadSystemReport(kind)}>دانلود فایل</button></div>)}
+      </>}
+      {tab === 'submission_limits' && isFull && <div className="card">
+        <div className="sect" style={{marginTop:0}}>سهمیه‌های هفتگی</div><p className="page-sub">از دوشنبه ساعت ۰۰:۰۰ به وقت UTCِ بازی؛ صفر یعنی ارسال این بخش بسته است. تغییر سقف، مصرف قبلی هفته را پاک نمی‌کند.</p>
+        {weeklyLimits && <form onSubmit={async e=>{e.preventDefault();setLimitsBusy(true);try{await api.saveSubmissionLimits({roleplays:Number(weeklyLimits.roleplays),projects:Number(weeklyLimits.projects)});toast('سهمیه‌ها ذخیره شد');}catch(err){toast(err.message);}finally{setLimitsBusy(false);}}}>
+          <label className="f">سهمیهٔ مشترک رول خرابکاری، آزاد، اقتصادی و دیپلماسی<input type="number" min="0" max="1000" required value={weeklyLimits.roleplays} onChange={e=>setWeeklyLimits(p=>({...p,roleplays:e.target.value}))}/></label>
+          <label className="f">درخواست پروژه در هفته<input type="number" min="0" max="1000" required value={weeklyLimits.projects} onChange={e=>setWeeklyLimits(p=>({...p,projects:e.target.value}))}/></label>
+          <button className="btn" disabled={limitsBusy}>ذخیره سهمیه‌ها</button></form>}
       </div>}
       {tab === 'market-floors' && isFull && <div className="card">
         <h2 className="page-title">حداقل قیمت بازار بازیکنان</h2>

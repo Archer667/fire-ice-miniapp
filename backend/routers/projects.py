@@ -79,6 +79,9 @@ async def submit(body: Proposal, user=Depends(get_user)):
         raise HTTPException(400, 'نام، هدف و توضیح نمی‌توانند خالی باشند')
     fingerprint = hashlib.sha256(json.dumps(body.model_dump(), sort_keys=True).encode()).hexdigest()
     async with project_lock:
+        from system_reports import check_quota, consume
+        if not await projects.find_one({'_id':pid}):
+            await check_quota(user['id'], 'projects')
         doc = {**body.model_dump(exclude={'request_id', 'accepted_terms'}), '_id': pid,
                'name': body.name.strip(), 'goal': body.goal.strip(), 'description': body.description.strip(),
                'budget': budget, 'period_return': output, 'owner_id': p['tg_id'], 'owner_name': p['name'],
@@ -95,6 +98,8 @@ async def submit(body: Proposal, user=Depends(get_user)):
         if doc['status'] == 'invalid':
             raise HTTPException(400, doc.get('reason', 'ثبت پروژه ناموفق بود؛ درخواست تازه بفرست'))
         doc = await recover(doc)
+        if doc['status'] != 'invalid':
+            await consume(user['id'], 'projects', pid)
         if doc['status'] == 'pending':
             admins = set(ADMIN_IDS) | {a['tg_id'] async for a in admin_roles.find({'role': {'$in': ['owner', 'full']}})}
             if OWNER_ID:

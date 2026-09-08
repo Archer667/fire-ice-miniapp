@@ -32,7 +32,7 @@ class ClockTests(unittest.IsolatedAsyncioTestCase):
         from routers.pause import owner_user as get_owner
         from fastapi import HTTPException
         from routers.pause import change_pause
-        with patch('routers.pause.season_day', AsyncMock(return_value={'day': 1, 'season_length': 30})), patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}):
+        with patch('system_reports.begin_admin', AsyncMock(return_value=None)), patch('routers.pause.season_day', AsyncMock(return_value={'day': 1, 'season_length': 30})), patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url='http://test') as client:
                 for method,path in [('POST','/api/market/players'),('POST','/api/war/send'),('DELETE','/api/market/players/test'),('POST','/api/admin/reset')]:
                     response = await client.request(method,path,json={})
@@ -57,7 +57,7 @@ class ClockTests(unittest.IsolatedAsyncioTestCase):
         from fastapi import HTTPException
         from routers.pause import owner_user
         from routers.admin import admin_user
-        with patch('routers.pause.season_day', AsyncMock(return_value={'day': 1, 'season_length': 30})), patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}), patch.object(auth, 'get_user', AsyncMock(return_value={'id': 123})), patch.object(auth, 'get_admin_role', AsyncMock(return_value='limited')):
+        with patch('system_reports.begin_admin', AsyncMock(return_value=None)), patch('routers.pause.season_day', AsyncMock(return_value={'day': 1, 'season_length': 30})), patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}), patch.object(auth, 'get_user', AsyncMock(return_value={'id': 123})), patch.object(auth, 'get_admin_role', AsyncMock(return_value='limited')):
             async def denied(): raise HTTPException(403, 'owner only')
             main.app.dependency_overrides[owner_user] = denied
             main.app.dependency_overrides[admin_user] = denied
@@ -74,7 +74,7 @@ class ClockTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_registration_reaches_auth_while_paused(self):
         import main
-        with patch('routers.pause.season_day', AsyncMock(return_value={'day': 1, 'season_length': 30})), patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}):
+        with patch('system_reports.begin_admin', AsyncMock(return_value=None)), patch('routers.pause.season_day', AsyncMock(return_value={'day': 1, 'season_length': 30})), patch('character_records.recover_swaps', AsyncMock()), patch.object(game_clock, 'load', AsyncMock()), patch.object(game_clock, '_state', {'paused_at': datetime.utcnow()}):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url='http://test', follow_redirects=True) as c:
                 for path in ['/api/players/register','/api/players/register/']:
                     self.assertEqual((await c.post(path,json={})).status_code,401)

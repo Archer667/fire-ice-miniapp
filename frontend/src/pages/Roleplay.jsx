@@ -1,3 +1,4 @@
+import SubmissionQuota from '../components/SubmissionQuota.jsx';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -60,6 +61,7 @@ export default function Roleplay() {
 
   return (
     <>
+      <SubmissionQuota kind="roleplays" />
       <div className="page-title up">رول‌ها</div>
       <div className="page-sub up">یک سناریوی آزاد بنویس و بفرست — شورای جنگ می‌خواند و نتیجه‌اش را برایت می‌فرستد</div>
 

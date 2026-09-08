@@ -98,9 +98,19 @@ async def serialize_game_state(request: Request, call_next):
             await recover_swaps()
             if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
                 return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
-            return await call_next(request)
+            from system_reports import begin_admin, finish_admin
+            ticket = await begin_admin(request)
+            try:
+                response = await call_next(request)
+            except Exception:
+                await finish_admin(ticket, 'error')
+                raise
+            await finish_admin(ticket, response.status_code)
+            return response
     return await call_next(request)
 
+from system_reports import router as reports_router
+app.include_router(reports_router)
 app.include_router(projects_router.router)
 app.include_router(pause_router.router)
 from routers import characters as characters_router
