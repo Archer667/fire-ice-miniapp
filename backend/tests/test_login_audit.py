@@ -41,7 +41,7 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
         self.db_patch.start()
         await self.client.drop_database('valyria_login_test')
         await audit.ensure_indexes()
-        await audit.db.players.insert_many([{'tg_id': i, 'name': f'Player {i}'} for i in [1, 2, 3]])
+        await audit.db.players.insert_many([{'tg_id': i, 'name': f'Player {i}', 'castle':'Castle', 'region':'north', 'created_at':datetime(2026,9,1)} for i in [1, 2, 3]])
 
     async def asyncTearDown(self):
         if hasattr(self, 'client'):
@@ -67,6 +67,22 @@ class LoginTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(send.call_count, 1)
             indexes = await audit.db.login_observations.index_information()
             self.assertEqual(indexes['expires_at_1']['expireAfterSeconds'], 0)
+
+    async def test_retired_and_recreated_characters_do_not_match_old_logins(self):
+        with patch.object(audit, 'OWNER_ID', 999), patch.object(audit.telegram_bot, 'push') as send:
+            await audit.record_login({'id': 1}, '8.8.8.8')
+            await audit.db.players.update_one({'tg_id':1},{'$set':{'is_dead':True}})
+            await audit.record_login({'id': 2}, '8.8.8.8')
+            self.assertEqual(send.call_count,0)
+            await audit.db.players.update_one({'tg_id':1},{'$set':{'is_dead':False,'registration_reset':True,'castle':None}})
+            await audit.record_login({'id': 1}, '1.1.1.1')
+            self.assertIsNone(await audit.db.login_observations.find_one({'tg_id':1,'ip':'1.1.1.1'}))
+            await audit.db.players.update_one({'tg_id':1},{'$set':{'registration_reset':False,'castle':'New Castle','created_at':datetime(2026,9,8),'name':'New Character'}})
+            await audit.record_login({'id': 2}, '8.8.8.8')
+            self.assertEqual(send.call_count,0)
+            await audit.record_login({'id': 1}, '8.8.8.8')
+            self.assertEqual(send.call_count,1)
+            self.assertIn('New Character',send.call_args.args[1])
 
 if __name__ == '__main__':
     unittest.main()

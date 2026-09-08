@@ -44,17 +44,24 @@ async def ensure_indexes():
     await db.login_alerts.create_index('expires_at', expireAfterSeconds=0)
 
 
+def active_character(player):
+    return bool(player and player.get('castle') and player.get('region') and not player.get('is_dead') and not player.get('registration_reset'))
+
+def character_key(player):
+    return str(player['tg_id']) + ':' + str(player.get('created_at'))
+
 async def record_login(user, address):
     if not address or not OWNER_ID:
         return
     try:
         now = datetime.now(timezone.utc)
-        player = await db.players.find_one({'tg_id': user['id']}, {'name': 1})
-        if not player:
+        player = await db.players.find_one({'tg_id': user['id']})
+        if not active_character(player):
             return
         uid = user['id']
         await db.login_observations.update_one(
             {'_id': f'{uid}:{address}'}, {'$set': {
+                'character_key': character_key(player),
                 'tg_id': uid, 'name': player.get('name', str(uid)), 'ip': address,
                 'last_seen': now, 'expires_at': now + timedelta(days=7),
             }}, upsert=True)
@@ -63,6 +70,9 @@ async def record_login(user, address):
             'last_seen': {'$gte': now - timedelta(hours=24)},
         })
         async for peer in peers:
+            current = await db.players.find_one({'tg_id': peer['tg_id']})
+            if not active_character(current) or peer.get('character_key') != character_key(current):
+                continue
             pair = ':'.join(map(str, sorted([uid, peer['tg_id']])))
             # Atomic claim across concurrent workers; one notification per pair / 24h.
             try:
@@ -76,7 +86,7 @@ async def record_login(user, address):
                 telegram_bot.push(OWNER_ID,
                     '🔎 هشدار ورود از IP مشترک\n'
                     f"بازیکن اول: {player.get('name', uid)} ({uid})\n"
-                    f"بازیکن دوم: {peer['name']} ({peer['tg_id']})\n"
+                    f"بازیکن دوم: {current.get('name', peer['tg_id'])} ({peer['tg_id']})\n"
                     f"IP مشترک: {address}\n"
                     f"زمان تشخیص: {now:%Y-%m-%d %H:%M} UTC\n"
                     'هر دو حساب در ۲۴ ساعت اخیر از یک IP وارد شده‌اند.\n'
