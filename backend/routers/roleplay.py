@@ -41,9 +41,12 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             raise HTTPException(400, "برای رول خرابکاری باید لرد هدف را مشخص کنی")
         if body.target_tg_id == user["id"]:
             raise HTTPException(400, "نمی‌توانی خودت را هدف خرابکاری قرار بدهی")
+        from marriage_pacts import spouses
         target_player = await players.find_one({"tg_id": body.target_tg_id})
         if not target_player:
             raise HTTPException(404, "لرد هدف پیدا نشد")
+        if await spouses(p, target_player):
+            raise HTTPException(403, "تا زمانی که ازدواج برقرار است، ارسال رول خرابکاری علیه همسر ممنوع است")
     if body.category == "war":
         if not body.campaign_id:
             raise HTTPException(400, "برای دستهٔ جنگ باید نبردت را انتخاب کنی")

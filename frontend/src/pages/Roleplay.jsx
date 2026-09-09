@@ -107,7 +107,7 @@ export default function Roleplay() {
             <>
               <label className="f">هدف خرابکاری</label>
               <PlayerPicker value={sabotageTarget} onChange={setSabotageTarget} single placeholder="نام لرد یا قلعهٔ هدف را جست‌وجو کن..." />
-              <div className="page-sub" style={{ margin: '7px 4px 0' }}>این هدف همراه رول ثبت می‌شود و ادمین وضعیت منابع و محبوبیت هر دو طرف را هنگام داوری می‌بیند.</div>
+              <div className="page-sub" style={{ margin: '7px 4px 0' }}>تا زمانی که ازدواج برقرار است، خرابکاری علیه همسر ممنوع است. این هدف همراه رول ثبت می‌شود و ادمین وضعیت منابع و محبوبیت هر دو طرف را هنگام داوری می‌بیند.</div>
             </>
           )}
 

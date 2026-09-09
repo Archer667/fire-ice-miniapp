@@ -112,7 +112,7 @@ async def mine(user: dict = Depends(get_user)):
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
             "name": a.get("name", ""),
             "public": a.get("public", True),
-            "penalty_gold": a.get("penalty_gold", 0),
+            "penalty_gold": a.get("penalty_gold", 0), "marriage_id": a.get("marriage_id"),
             "status": a["status"],
         })
     return out
@@ -142,6 +142,13 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         raise HTTPException(403, "این پیمان برای تو نیست")
     if a["status"] != "pending":
         raise HTTPException(400, "این پیمان قبلاً پاسخ داده شده")
+
+    if body.accept and a['type'] == 'full_alliance':
+        from marriage_pacts import spouses
+        first = await players.find_one({'tg_id': a['from_id']})
+        second = await players.find_one({'tg_id': a['to_id']})
+        if await spouses(first, second):
+            raise HTTPException(409, 'پیمان کامل ازدواج برقرار است؛ این درخواست قدیمی را رد کن تا هزینه‌اش برگردد')
 
     # اتمیک و مشروط به status=pending — وگرنه دو کلیکِ هم‌زمانِ پذیرفتن/ردکردن هردو از
     # رویِ همون خواندنِ قدیمی رد می‌شن و alliance_count دوبار می‌خوره یا شرابِ رد دوبار برمی‌گرده

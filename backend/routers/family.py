@@ -35,11 +35,21 @@ async def candidates(user=Depends(get_user)):
 class Proposal(BaseModel):
     target_id: int
     request_id: UUID
+    penalty_gold: int = Field(ge=1, le=1000000000, strict=True)
 
 @router.post('/family/proposals')
 async def proposal(body: Proposal, user=Depends(get_user)):
     await engine.tick()
-    return await engine.propose(await engine.person(user['id']), body.target_id, str(body.request_id))
+    return await engine.propose(await engine.person(user['id']), body.target_id, str(body.request_id), body.penalty_gold)
+
+class DivorceBody(BaseModel):
+    penalty_gold: int = Field(ge=1, le=1000000000, strict=True)
+
+@router.post('/family/marriages/{mid}/divorce')
+async def divorce(mid: str, body: DivorceBody, user=Depends(get_user)):
+    from marriage_pacts import divorce as end_marriage
+    await engine.tick()
+    return await end_marriage(await engine.person(user['id']), mid, body.penalty_gold)
 
 class Decision(BaseModel):
     accept: StrictBool

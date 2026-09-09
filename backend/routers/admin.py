@@ -2488,6 +2488,8 @@ async def admin_dissolve_alliance(alliance_id: str, user: dict = Depends(full_ad
     if a["status"] != "accepted":
         raise HTTPException(400, "فقط پیمان برقرار را می‌شود منحل کرد")
 
+    if a.get("marriage_id"):
+        raise HTTPException(409, "این پیمان وابسته به ازدواج است؛ فسخ از صفحهٔ خانواده و با پرداخت غرامت انجام می‌شود")
     await alliances.update_one({"_id": oid}, {"$set": {"status": "dissolved"}})
     await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
     await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})

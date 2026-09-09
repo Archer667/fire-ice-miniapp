@@ -102,7 +102,7 @@ class FamilyIntegration(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(current['name'],'ÙˆØ§Ø±Ø« Ø¢Ø²Ù…Ø§ÛŒØ´ÛŒ');self.assertNotEqual(current['created_at'],old['created_at'])
                 for field in ['castle','buildings','castle_buildings','points','stats','medals','troops']:
                     self.assertEqual(current[field],old[field],field)
-                self.assertEqual(base_score(current),expected)
+                self.assertEqual(base_score(current)-current.get('scoreboard_baseline',0),expected-old.get('scoreboard_baseline',0))
                 self.assertTrue((await db.campaigns.find_one({'tg_id':uid}))['active'])
                 project=await db.projects.find_one({'_id':'family-project'})
                 self.assertEqual(project['status'],'active')

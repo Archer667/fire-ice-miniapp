@@ -321,7 +321,8 @@ export default function Diplomacy() {
               <small>
                 {a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}
                 {a.public === false ? ' · خصوصی' : ''}
-                {a.type === 'non_aggression' && a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
+                {a.marriage_id ? ' · وابسته به ازدواج؛ فسخ از صفحهٔ خانواده با غرامت' : ''}
+                {(a.type === 'non_aggression' || a.marriage_id) && a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
               </small>
             </div>
             {!a.mine_proposed && a.status === 'pending' && (

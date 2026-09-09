@@ -89,7 +89,9 @@ async def recover():
 def change(collection, query, fields):
     return {'collection': collection, 'query': query, 'update': {'$set': fields}}
 
-async def propose(p, target_id, request_id):
+async def propose(p, target_id, request_id, penalty_gold=100):
+    if type(penalty_gold) is not int or not 1 <= penalty_gold <= 1000000000:
+        raise HTTPException(400, 'غرامت را به‌صورت عدد صحیح مثبت مشخص کن')
     old = await marriages.find_one({'_id': request_id})
     if old:
         if old['parents'][0]['key'] != key(p):
@@ -107,24 +109,27 @@ async def propose(p, target_id, request_id):
         raise HTTPException(400, 'ازدواج با والد، فرزند یا خواهر و برادر مجاز نیست')
     if await marriages.find_one({'parent_keys': {'$in': [key(p), key(target)]}, 'status': {'$in': OPEN}}):
         raise HTTPException(409, 'یکی از طرفین همسر یا درخواست باز دارد')
+    from marriage_pacts import TERMS
     s = await settings()
     half = {'gold': s['marriage_gold'] // 2, 'wine': s['marriage_wine'] // 2}
     parents = [{**member_for(v, 0), 'key': key(v), 'gender': v['gender']} for v in (p, target)]
     doc = {'_id': request_id, 'parents': parents, 'parent_keys': [v['key'] for v in parents],
-           'status': 'proposed', 'half_cost': half, 'paid': [p['tg_id']], 'created_at': now(),
+           'status': 'proposed', 'penalty_gold': penalty_gold, 'half_cost': half, 'paid': [p['tg_id']], 'created_at': now(),
            'expires_at': now() + timedelta(hours=48)}
     await commit({'_id': str(uuid4()), 'complete': False,
         'wallets': [{'member': parents[0], 'cost': half, 'debit': True}],
         'changes': [{'collection': 'family_marriages', 'query': {'_id': request_id}, 'update': {'$setOnInsert': doc}, 'upsert': True}],
         'notices': [{'event': request_id + ':proposal', 'recipients': [target_id],
-            'text': f"💍 {p['name']} درخواست ازدواج فرستاد. سهم هر طرف: {half['gold']} طلا و {half['wine']} شراب. تا ۴۸ ساعت بازی در «خاندان و خانواده» پاسخ بده."}]})
+            'text': f"💍 {p['name']} درخواست ازدواج فرستاد. سهم هر طرف: {half['gold']} طلا و {half['wine']} شراب. تا ۴۸ ساعت بازی در «خاندان و خانواده» پاسخ بده.\nغرامت فسخ: {penalty_gold:,} طلا، پرداخت به همسر.\n{TERMS}"}]})
     return clean(doc)
 
 async def close_marriage(m, status, reason):
+    from marriage_pacts import dissolve_changes
+    pact_changes = await dissolve_changes(m) if m['status'] == 'active' else []
     # Active weddings have consumed their cost; pending reservations are refunded.
     wallets = [{'member': p, 'cost': m['half_cost']} for p in m['parents'] if p['tg_id'] in m['paid']] if m['status'] != 'active' else []
     await commit({'_id': str(uuid4()), 'complete': False, 'wallets': wallets,
-        'changes': [change('family_marriages', {'_id': m['_id']}, {'status': status, 'reason': reason, 'ended_at': now()})],
+        'changes': [change('family_marriages', {'_id': m['_id']}, {'status': status, 'reason': reason, 'ended_at': now()})] + pact_changes,
         'notices': [{'event': m['_id'] + ':' + status, 'recipients': [p['tg_id'] for p in m['parents']],
                      'text': '💍 وضعیت ازدواج: ' + reason + ('\nآورده‌های رزروشده بازگشتند.' if wallets else '')}]})
 
@@ -157,6 +162,10 @@ async def approve(mid, accepted, reason):
         p = await person(parent['tg_id'])
         if key(p) != parent['key']:
             raise HTTPException(409, 'کاراکتر یکی از طرفین تغییر کرده است')
+    if not m.get('penalty_gold'):
+        raise HTTPException(409, 'درخواست قدیمی غرامت ندارد؛ آن را رد کنید تا با توافق جدید ثبت شود')
+    from marriage_pacts import pact_changes, TERMS
+    alliance_id, pact_updates = await pact_changes(m)
     count = secrets.choice([2, 3, 4])
     plan, at = [], now()
     for i in range(count):
@@ -171,10 +180,10 @@ async def approve(mid, accepted, reason):
     from public_audience import public_recipients
     recipients = [p['tg_id'] for p in await public_recipients()]
     await commit({'_id': str(uuid4()), 'complete': False, 'changes': [change('family_marriages', {'_id': mid}, {
-        'status': 'active', 'started_at': now(), 'birth_plan': plan, 'training_cost': {
-            'gold': (await settings())['training_gold'], 'food': (await settings())['training_food']}})],
+        'status': 'active', 'alliance_id': alliance_id, 'started_at': now(), 'birth_plan': plan, 'training_cost': {
+            'gold': (await settings())['training_gold'], 'food': (await settings())['training_food']}})] + pact_updates,
         'notices': [{'event': mid + ':wedding', 'recipients': recipients,
-                     'text': '💍 پیوند دو خاندان\n' + ' و '.join(p['name'] for p in m['parents']) + '\nبا رضایت دو طرف و تأیید مدیریت ازدواج کردند.'}]})
+                     'text': '💍 پیوند دو خاندان\n' + ' و '.join(p['name'] for p in m['parents']) + '\nبا رضایت دو طرف و تأیید مدیریت ازدواج کردند. پیمان کامل بدون هزینهٔ پیمان برقرار شد. تا پایان ازدواج، خرابکاری علیه همسر ممنوع است.'}]})
     return {'ok': True}
 
 async def tick():
@@ -292,6 +301,11 @@ async def succeed(p, heir, body, actor):
     fields = {**production_fields(p), 'created_at': stamp, 'name': heir['name'], 'gender': heir['gender'],
               'family_child_id': heir['_id'], 'title': DEFAULT_TITLE[heir['gender']], 'profile_image': None,
               'backstory': '', 'is_dead': False, 'registration_reset': False}
+    from config import SCORE_W_ALLIANCE
+    from control_settings import get as rule
+    linked = await db.alliances.count_documents({'marriage_id': {'$exists': True}, 'status': 'accepted', '$or': [{'from_id': p['tg_id']}, {'to_id': p['tg_id']}]})
+    if linked:
+        fields['scoreboard_baseline'] = p.get('scoreboard_baseline', 0) - linked * float(rule('scoring.alliance', SCORE_W_ALLIANCE))
     newkey = key({**p, **fields})
     text = death_text(p, body.reason, body.narrative).replace(
         '🏰 قلعه‌های این کاراکتر آزاد شدند؛ سطح ساختمان‌ها حفظ می‌شود.',
