@@ -2573,6 +2573,7 @@ export default function Admin() {
             <label className="f">لرد (باید الان بالادستی یکی از اقلیم‌های این والی‌نشین باشد)</label>
             <PlayerPicker value={wardenTarget} onChange={setWardenTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={setWarden}>ثبت والی</button>
+            <p className="page-sub">با ثبت والی، جایگاه بالادستی قبلی او آزاد می‌شود؛ جانشین را از بخش بالادستی تعیین کن.</p>
           </div>
 
           <div className="sect up u3">تعیین پادشاه/ملکه</div>
@@ -2580,6 +2581,7 @@ export default function Admin() {
             <label className="f" style={{ marginTop: 0 }}>لرد (باید الان یکی از سه والی باشد)</label>
             <PlayerPicker value={kingTarget} onChange={setKingTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={setKing}>ثبت پادشاه/ملکه</button>
+            <p className="page-sub">با ثبت پادشاه/ملکه، جایگاه والی قبلی او آزاد می‌شود؛ جانشین را از بخش والی تعیین کن. امتیاز و اختیارات مقام جدید حفظ می‌شود.</p>
           </div>
 
           <div className="sect up u3">تعیین عنوان (لقب)</div>

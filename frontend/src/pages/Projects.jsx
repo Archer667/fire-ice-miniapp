@@ -1,3 +1,4 @@
+import { WEAPON_NAMES } from '../gamedata.js';
 import SubmissionQuota from '../components/SubmissionQuota.jsx';
 import { gameNow } from '../gameClock.js';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -5,7 +6,7 @@ import { api } from '../api.js';
 import '../projects.css';
 import { useGame } from '../store.jsx';
 
-const LABELS = { gold: 'طلا', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
+const LABELS = { gold: 'طلا', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب', ...WEAPON_NAMES };
 const STATUS = { pending: 'منتظر تأیید ادمین', scheduled: 'زمان‌بندی‌شده', funding: 'در حال جذب سرمایه', active: 'در حال اجرا', completed: 'تکمیل‌شده', rejected: 'ردشده', unfunded: 'جذب سرمایه ناموفق', failed: 'شکست‌خورده', reserving: 'در حال رزرو آورده' };
 const number = v => Number(v || 0).toLocaleString('fa-IR', { maximumFractionDigits: 8 });
 const money = b => Object.entries(b || {}).filter(([, v]) => v !== 0).map(([k, v]) => `${number(v)} ${LABELS[k] || k}`).join(' + ') || '۰';

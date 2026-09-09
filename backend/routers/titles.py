@@ -73,6 +73,10 @@ async def set_overlord(body: OverlordBody, user: dict = Depends(admin_user)):
     if target["region"] != body.region:
         raise HTTPException(400, "این بازیکن لرد این اقلیم نیست")
 
+    h = await get_hierarchy_doc()
+    if h.get('king') == body.tg_id or body.tg_id in wardens_of(h):
+        raise HTTPException(400, 'این بازیکن مقام بالاتر دارد؛ برای جایگاه بالادستی فرد دیگری انتخاب کن')
+
     await hierarchy.update_one(
         {"_id": HIERARCHY_ID},
         {"$set": {f"overlords.{body.region}": body.tg_id}},
@@ -93,14 +97,18 @@ async def set_warden(body: WardenBody, user: dict = Depends(admin_user)):
         raise HTTPException(404, "بازیکن پیدا نشد")
 
     h = await get_hierarchy_doc()
+    if h.get('king') == body.tg_id:
+        raise HTTPException(400, 'پادشاه/ملکه نمی‌تواند هم‌زمان والی باشد؛ فرد دیگری انتخاب کن')
     is_overlord_of_group = any(
         h["overlords"].get(rid) == body.tg_id and group_of_region(rid) == body.group
         for rid in REGIONS
     )
-    if not is_overlord_of_group:
+    if not is_overlord_of_group and h.get(f'warden_{body.group}') != body.tg_id:
         raise HTTPException(400, "این بازیکن الان بالادستیِ هیچ‌کدام از اقلیم‌های این والی‌نشین نیست")
 
-    await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": {f"warden_{body.group}": body.tg_id}}, upsert=True)
+    changes = {f'warden_{body.group}': body.tg_id}
+    changes.update({f'overlords.{rid}': None for rid, holder in h['overlords'].items() if holder == body.tg_id})
+    await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": changes}, upsert=True)
     return {"ok": True}
 
 class KingBody(BaseModel):
@@ -109,9 +117,12 @@ class KingBody(BaseModel):
 @router.post("/king")
 async def set_king(body: KingBody, user: dict = Depends(admin_user)):
     h = await get_hierarchy_doc()
-    if body.tg_id not in wardens_of(h):
+    if body.tg_id not in wardens_of(h) and h.get('king') != body.tg_id:
         raise HTTPException(400, "پادشاه/ملکه فقط از بین والی‌های فعلی انتخاب می‌شود")
-    await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": {"king": body.tg_id}}, upsert=True)
+    changes = {'king': body.tg_id}
+    changes.update({f'warden_{gid}': None for gid in WARDEN_GROUPS if h.get(f'warden_{gid}') == body.tg_id})
+    changes.update({f'overlords.{rid}': None for rid, holder in h['overlords'].items() if holder == body.tg_id})
+    await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": changes}, upsert=True)
     return {"ok": True}
 
 class EpithetBody(BaseModel):

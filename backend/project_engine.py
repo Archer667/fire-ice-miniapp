@@ -16,12 +16,13 @@ from db import db, players, messages, admin_roles
 from game import now, apply_production, production_fields, can_afford, pay
 from config import ADMIN_IDS, OWNER_ID, SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME, MINI_APP_URL
 import telegram_bot
+from game_data import WEAPON_NAMES
 
 projects = db.projects
 game_state_lock = asyncio.Lock()
 project_lock = asyncio.Lock()
 logger = logging.getLogger(__name__)
-RESOURCES = {'gold': 'طلا', 'wood': 'چوب', 'stone': 'سنگ', 'iron': 'آهن', 'food': 'غذا', 'wine': 'شراب'}
+RESOURCES = {'gold': 'طلا', 'wood': 'چوب', 'stone': 'سنگ', 'iron': 'آهن', 'food': 'غذا', 'wine': 'شراب', **WEAPON_NAMES}
 TERMS = ('آوردهٔ طراح هنگام ثبت درخواست رزرو می‌شود؛ در صورت رد درخواست کامل بازمی‌گردد. '
          'اگر در مهلت مقرر تمام سهام فروش نرود، آوردهٔ سرمایه‌گذاران کامل بازمی‌گردد و طراح فقط نصف آوردهٔ خود را پس می‌گیرد. '
          'با اعلام شکست توسط ادمین یا مرگ طراح، سرمایه بازنمی‌گردد و پرداخت‌های آینده متوقف می‌شوند؛ دریافتی‌های قبلی محفوظ‌اند. '

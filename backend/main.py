@@ -397,6 +397,8 @@ async def _migrate_castle_roster_v2():
 async def start_background_watchers():
     await game_clock.load()
     await _ensure_indexes()
+    from ranks import migrate_exclusive_titles
+    await migrate_exclusive_titles()
     from trade_pacts import migrate_legacy_groups
     await migrate_legacy_groups()
     await _migrate_castle_roster_v2()

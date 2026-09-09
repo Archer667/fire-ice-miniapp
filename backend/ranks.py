@@ -12,6 +12,25 @@ from control_settings import get as rule
 
 HIERARCHY_ID = "main"
 
+async def migrate_exclusive_titles():
+    """Keep existing highest offices; release their obsolete lower seats."""
+    from db import db
+    from datetime import datetime
+    doc = await hierarchy.find_one({'_id': HIERARCHY_ID}) or {}
+    king = doc.get('king')
+    upper = wardens_of(doc) | ({king} if king else set())
+    changes = {f'overlords.{rid}': None for rid, holder in doc.get('overlords', {}).items() if holder and holder in upper}
+    changes.update({f'warden_{gid}': None for gid in WARDEN_GROUPS if king and doc.get(f'warden_{gid}') == king})
+    if not changes:
+        return
+    # Preserve an audit before applying the idempotent, single-document change.
+    await db.admin_activity.update_one({'_id': 'exclusive-titles-v1'}, {'$setOnInsert': {
+        'at': datetime.utcnow(), 'game_at': now(), 'actor_id': 0, 'actor_name': 'سامانه', 'role': 'system',
+        'method': 'MIGRATION', 'path': '/system/exclusive-titles', 'request': {'before': doc, 'released': list(changes)},
+        'status': 'started', 'changes': []}}, upsert=True)
+    await hierarchy.update_one({'_id': HIERARCHY_ID}, {'$set': changes})
+    await db.admin_activity.update_one({'_id': 'exclusive-titles-v1'}, {'$set': {'status': 200, 'finished_at': datetime.utcnow()}})
+
 def group_of_region(region_id: str):
     for gid, g in WARDEN_GROUPS.items():
         if region_id in g["regions"]:
