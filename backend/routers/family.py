@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
@@ -74,9 +75,10 @@ async def child(cid: str, body: ChildAction, user=Depends(get_user)):
 @router.get('/admin/family')
 async def admin_family(user=Depends(admin)):
     await engine.tick()
+    import family_admin
     return {'settings': await engine.settings(),
             'requests': [engine.clean(m) async for m in engine.marriages.find({'status': 'accepted'}).sort('created_at', 1)],
-            'children': [engine.clean(c) async for c in engine.children.find({'status': 'alive'}).sort('born_at', -1)]}
+            **(await family_admin.view())}
 
 @router.post('/admin/family/proposals/{mid}')
 async def review(mid: str, body: Decision, user=Depends(admin)):
@@ -106,3 +108,46 @@ async def rename(cid: str, body: ChildAction, user=Depends(admin)):
 async def succession(tg_id: int, user=Depends(admin)):
     await engine.tick()
     return await engine.preview(await engine.person(tg_id))
+
+
+class AdminOverride(BaseModel):
+    revision: int = Field(ge=0, strict=True)
+    reason: str = Field(min_length=1, max_length=500)
+
+class PenaltyOverride(AdminOverride):
+    penalty_gold: int = Field(ge=1, le=1000000000, strict=True)
+
+@router.post('/admin/family/marriages/{mid}/penalty')
+async def change_penalty(mid: str, body: PenaltyOverride, user=Depends(admin)):
+    import family_admin
+    return await family_admin.penalty(mid, body.revision, body.penalty_gold, body.reason, user['id'])
+
+class ForcedDivorce(AdminOverride):
+    payer_id: int | None = Field(default=None, strict=True)
+
+@router.post('/admin/family/marriages/{mid}/divorce')
+async def forced_divorce(mid: str, body: ForcedDivorce, user=Depends(admin)):
+    import family_admin
+    return await family_admin.force_divorce(mid, body.revision, body.payer_id, body.reason, user['id'])
+
+class BirthDate(BaseModel):
+    child_id: UUID
+    at: datetime
+
+class BirthSchedule(AdminOverride):
+    births: list[BirthDate] = Field(min_length=1, max_length=4)
+
+@router.post('/admin/family/marriages/{mid}/schedule')
+async def birth_schedule(mid: str, body: BirthSchedule, user=Depends(admin)):
+    import family_admin
+    return await family_admin.schedule(mid, body.revision, body.births, body.reason, user['id'])
+
+class ChildMove(AdminOverride):
+    expected_patron_key: str = Field(min_length=1, max_length=100)
+    parent_key: str = Field(min_length=1, max_length=100)
+    castle: str = Field(min_length=1, max_length=150)
+
+@router.post('/admin/family/children/{cid}/move')
+async def child_move(cid: str, body: ChildMove, user=Depends(admin)):
+    import family_admin
+    return await family_admin.move(cid, body, user['id'])
