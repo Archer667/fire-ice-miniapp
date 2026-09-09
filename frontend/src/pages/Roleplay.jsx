@@ -14,6 +14,7 @@ const TABS = [
 export default function Roleplay() {
   const { toast } = useGame();
   const [tab, setTab] = useState('send');
+  const [quotaVersion, setQuotaVersion] = useState(0);
   const [category, setCategory] = useState(Object.keys(ROLEPLAY_CATEGORIES)[0]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,6 +49,7 @@ export default function Roleplay() {
     setBusy(true);
     try {
       const sent = await api.sendRoleplay(category, text.trim(), isWar ? campaignId : undefined, sabotageTarget[0]?.tg_id);
+      setQuotaVersion(v => v + 1);
       haptic('medium');
       toast(category === 'scout' ? (sent.updated ? 'رول پیش‌قراولت اصلاح و دوباره برای امتیازدهی فرستاده شد' : 'رول پیش‌قراولت برای امتیازدهی فرستاده شد') : (sent.result_required === false ? 'رول امنیتی ثبت و در آرشیو ادمین ذخیره شد' : 'رول برای بررسی شورای جنگ فرستاده شد'));
       if (category !== 'scout') setText('');
@@ -61,7 +63,7 @@ export default function Roleplay() {
 
   return (
     <>
-      <SubmissionQuota kind="roleplays" />
+      <SubmissionQuota kind="roleplays" refreshKey={quotaVersion} />
       <div className="page-title up">رول‌ها</div>
       <div className="page-sub up">یک سناریوی آزاد بنویس و بفرست — شورای جنگ می‌خواند و نتیجه‌اش را برایت می‌فرستد</div>
 

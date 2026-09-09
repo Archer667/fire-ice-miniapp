@@ -153,7 +153,7 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
             "active_campaigns": 0, "points": 0, "alliance_count": 0,
             "popularity": 0, "medals": [], "stats": normalize_stats({}),
             "tax_rate": 0, "rank": None, "total_players": len(await scored_players()),
-            "day": 1, "season_length": SEASON_LENGTH_DAYS,
+            **await __import__("season_clock").season_day(),
         }
     if not p:
         return {"registered": False}
@@ -202,8 +202,8 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
     p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
-    season_start = p.get("season_started_at") or p["created_at"]
-    day = min(SEASON_LENGTH_DAYS, (((now() - season_start).days % SEASON_LENGTH_DAYS) + 1))
+    from season_clock import season_day
+    day = (await season_day())["day"]
     # موجودیِ واقعی تو دیتابیس اعشاریه (تا تولیدِ کم‌مقدار بینِ چک‌ها گم نشه) — برای
     # نمایش به بازیکن رند می‌شود
     display_resources = {k: (round(v) if isinstance(v, (int, float)) else v) for k, v in p["resources"].items()}
@@ -239,6 +239,7 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
         "house": p.get("house") or CASTLE_HOUSES.get(p["castle"]),
         "is_port": p["is_port"],
         "resources": display_resources,
+        "daily_production": __import__("game").daily_production(p),
         "resource_caps": effective_caps(p),
         "active_campaigns": active_campaigns,
         "points": score,

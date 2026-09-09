@@ -21,6 +21,24 @@ _GET_CHAT_API = "https://api.telegram.org/bot{token}/getChat"
 # اتمام garbage-collect کند
 _background_tasks: set[asyncio.Task] = set()
 
+async def send_report_document(chat_id: int, filename: str, text: str):
+    """Await Telegram acknowledgement; never claim a failed download succeeded."""
+    from fastapi import HTTPException
+    if not BOT_TOKEN or DEV_MODE:
+        raise HTTPException(503, 'ارسال فایل در این محیط فعال نیست')
+    content = ('\ufeff' + text).encode('utf-8')
+    if len(content) > 49 * 1024 * 1024:
+        raise HTTPException(413, 'گزارش برای ارسال در بات بیش از حد بزرگ است؛ از مرورگر دانلود کن')
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendDocument',
+                data={'chat_id': str(chat_id), 'caption': 'گزارش درخواستی پنل مدیریت'},
+                files={'document': (filename, content, 'text/plain')})
+        if response.status_code != 200 or not response.json().get('ok'):
+            raise HTTPException(502, 'ارسال فایل موفق نشد؛ بات را Start کن و مطمئن شو مسدودش نکرده‌ای')
+    except (httpx.HTTPError, ValueError):
+        raise HTTPException(502, 'ارتباط با تلگرام برقرار نشد؛ کمی بعد دوباره تلاش کن') from None
+
 # مقداری مخفی و ثابت (وابسته به خودِ BOT_TOKEN) که موقع setWebhook به تلگرام می‌دهیم
 # و تلگرام همان را در هر آپدیت واقعی برمی‌گرداند — جلوی جعل درخواست به آدرس webhook را می‌گیرد
 WEBHOOK_SECRET = hashlib.sha256(BOT_TOKEN.encode()).hexdigest()[:32] if BOT_TOKEN else ""

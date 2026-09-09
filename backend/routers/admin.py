@@ -2552,6 +2552,8 @@ async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
     if body.confirm.strip() != "NEWSEASON":
         raise HTTPException(400, "برای تایید، دقیقاً عبارت NEWSEASON را تایپ کن")
     started_at = now()
+    from season_clock import start_season
+    await start_season(started_at)
     rebellion_settings = await get_rebellion_settings()
     reset_count = 0
     async for player in players.find({}):
@@ -2632,6 +2634,8 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
     # اتحادها پاک شدند، پس شمارندهٔ اتحادِ ادمین‌هایی که نگه داشته شدند هم صفر شود
     await players.update_many({}, {"$set": {"alliance_count": 0}})
 
+    from season_clock import start_season
+    await start_season()
     return {"ok": True, "players_deleted": deleted.deleted_count}
 
 # ---- تعادل بازی — هزینه، رشد ارتقا، بازدهی و سقفِ سراسریِ ساختمان‌ها

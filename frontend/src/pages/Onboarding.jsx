@@ -111,6 +111,8 @@ export default function Onboarding() {
         </div>
       </div>
       <div className="page-sub up u2" style={{ margin: '4px 4px 0' }}>
+        برای تأیید درخواست، باید در تنظیمات حساب تلگرام خود نام کاربری (Username / @ID) تعیین کرده باشی. بعد از تنظیم، بازی را دوباره باز کن.
+        <br />
         اقلیم و قلعه‌ات را خودت نهایی نمی‌کنی — بعد از ثبت‌نام، ادمین بازی با توجه به درخواستت خاندان و قلعه‌ات را برایت مشخص می‌کند
       </div>
       <div className="up u2" style={{ marginTop: 16 }}>

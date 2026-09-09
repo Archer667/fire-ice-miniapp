@@ -34,7 +34,7 @@ export default function Header({ onOpenMenu, onOpenRavens }) {
           {TICKER_RES.map(({ key, Icon }) => (
             <span key={key}>
               <Icon s={12} />
-              {(me.resources[key] ?? 0).toLocaleString('fa-IR')}
+              {Math.floor(Number(me.resources[key] ?? 0)).toLocaleString('fa-IR')}
             </span>
           ))}
         </div>

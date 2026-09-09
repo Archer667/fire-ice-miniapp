@@ -86,6 +86,19 @@ async def save_limits(body:LimitsBody,user=Depends(full)):
     return await limits()
 @router.get('/admin/reports/{kind}')
 async def report(kind:str,user=Depends(full)):
+    if kind == 'caravans':
+        from game_data import TRADE_GOOD_NAMES
+        lines = ['گزارش کاروان‌های تجاری', 'سوابق موجود این سیزن؛ زمان‌ها بر اساس ساعت UTC بازی هستند.', '']
+        async for row in db.caravans.find({}).sort('created_at', 1):
+            status = 'تحویل ناموفق' if row.get('delivery_failed') else 'تحویل‌شده' if row.get('arrival_notified') else 'در راه' if row.get('active') else 'لغوشده'
+            lines += ['─' * 45, 'شناسه کاروان: ' + str(row['_id']),
+                      f"فرستنده: {row.get('player_name', '—')} | آیدی: {row.get('tg_id')}",
+                      f"گیرنده: {row.get('target_name', '—')} | آیدی: {row.get('target_tg_id')}",
+                      f"مبدأ: {row.get('origin_castle')} | مقصد: {row.get('target_castle')}",
+                      'مسیر: ' + ' ← '.join(row.get('route_path') or []),
+                      f"ارسال: {row.get('created_at')} | موعد رسیدن: {row.get('arrival_at')} | وضعیت: {status}",
+                      'محموله: ' + '، '.join(f'{TRADE_GOOD_NAMES.get(k,k)}: {v}' for k,v in row.get('resources',{}).items())]
+        return {'filename': 'caravans.txt', 'text': '\n'.join(lines)}
     if kind not in ('admin-activity','market'): raise HTTPException(404)
     col = db.admin_activity if kind=='admin-activity' else db.market_history
     title='گزارش فعالیت ادمین‌ها' if kind=='admin-activity' else 'گزارش معاملات بازار'
@@ -112,3 +125,20 @@ async def report(kind:str,user=Depends(full)):
                     if delta: lines.append(f"  {TRADE_GOOD_NAMES.get(resource,resource)}: {old.get(resource,0)} ← {new.get(resource,0)} | تغییر: {delta:+}")
 
     return {'filename':kind+'.txt','text':'\n'.join(lines)}
+
+@router.post('/admin/reports/{kind}/telegram')
+async def report_to_telegram(kind: str, user=Depends(admin)):
+    # Destination is always the authenticated admin, never supplied by the browser.
+    if kind == 'blacklist':
+        from routers.characters import list_blacklist
+        rows = await list_blacklist(user)
+        lines = ['لیست سیاه بازیکنان', 'تعداد: ' + str(len(rows)), '']
+        for row in rows:
+            lines += [f"نام: {row['name']} | آیدی عددی: {row['tg_id']}", 'دلیل: ' + row['reason'], '']
+        result = {'filename': 'valyria-blacklist.txt', 'text': '\n'.join(lines)}
+    else:
+        await get_full_admin(user)
+        result = await report(kind, user)
+    from telegram_bot import send_report_document
+    await send_report_document(user['id'], result['filename'], result['text'])
+    return {'ok': True}

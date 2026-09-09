@@ -1578,6 +1578,7 @@ export const api = {
   submissionLimits: () => req('/api/submission-limits'),
   saveSubmissionLimits: values => req('/api/admin/submission-limits', {method:'POST',body:JSON.stringify(values)}),
   systemReport: kind => req('/api/admin/reports/'+kind),
+  sendSystemReport: kind => req('/api/admin/reports/'+kind+'/telegram', {method:'POST'}),
   leaderboardPage: page => req('/api/leaderboard?page='+page),
   gameStatus: () => MOCK ? Promise.resolve({ paused: false, reason: '', game_now: new Date().toISOString() }) : req('/api/game/status'),
   setGamePause: (paused, reason) => req('/api/admin/game-pause', { method: 'POST', body: JSON.stringify({ paused, reason }) }),
