@@ -152,6 +152,15 @@ def validate(settings: dict) -> dict:
         no_negative(clean[section])
     return clean
 
+async def migrate_initial_wine_60():
+    """Apply the requested starting stock once; preserve later admin edits."""
+    from db import game_settings
+    await game_settings.update_one({'_id': DOC_ID, 'initial_wine_60_applied': {'$ne': True}},
+        {'$set': {'settings.economy.starting_resources.wine': 60, 'initial_wine_60_applied': True}})
+    if not await game_settings.find_one({'_id': DOC_ID}):
+        await game_settings.update_one({'_id': DOC_ID}, {'$setOnInsert': {
+            'settings': {'economy': {'starting_resources': {'wine': 60}}}, 'initial_wine_60_applied': True}}, upsert=True)
+
 async def load():
     from db import game_settings
     doc = await game_settings.find_one({"_id": DOC_ID}) or {}

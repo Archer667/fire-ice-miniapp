@@ -405,6 +405,7 @@ async def start_background_watchers():
     await _migrate_season_30_building_balance()
     await _load_building_overrides()
     await _load_gameplay_balance()
+    await control_settings.migrate_initial_wine_60()
     await control_settings.load()
     await drift_market_prices()
     await _fix_stonedance_region()

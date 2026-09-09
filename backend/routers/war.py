@@ -818,6 +818,7 @@ def battle_army_snapshot(campaign: dict) -> dict:
         "player_gender": campaign.get("player_gender"),
         "name": campaign.get("name", "لشکر"),
         "men": campaign.get("men_committed", sum(campaign.get("troops", {}).values())),
+        "power": campaign.get("power"),
         "troops": dict(campaign.get("troops", {})),
         "equipment": dict(campaign.get("equipment", {})),
         "equipment_power": int(campaign.get("equipment_power", 0) or 0),

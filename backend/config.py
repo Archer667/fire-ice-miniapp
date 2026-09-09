@@ -26,13 +26,13 @@ PUBLIC_BASE_URL  = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 TELEGRAM_WEBHOOK_PATH = "/api/telegram/webhook"
 
 # ---- ثابت‌های اقتصاد بازی ----
-# wine=30 عمدی است: DAILY_PRODUCTION.wine=0 (بدون می‌کده صفر تولید می‌شود) و هر سه نوع
+# wine=60 موجودی شروع است: DAILY_PRODUCTION.wine=0 (بدون می‌کده صفر تولید می‌شود) و هر سه نوع
 # پیمان دیپلماتیک هزینهٔ شراب دارند (حداقل «پیمان تجاری»=۳۰) — با شراب شروع صفر، بازیکن
 # تازه‌کار تا ساختن و بالغ‌شدن می‌کده اصلاً نمی‌توانست پیمانی (و در نتیجه کاروانی) ببندد
 # weapon_* یک استوک آغازین کوچک دارند تا بازیکن تازه‌کار قبل از ساختن کارگاه تسلیحات هم
 # بتواند اولین لشکرش را بفرستد؛ بعد از آن فقط از تولید روزانهٔ کارگاه تسلیحات پر می‌شود
 STARTING_RESOURCES = {
-    "gold": 1000, "food": 800, "men": 500, "iron": 100, "stone": 100, "wood": 150, "wine": 30,
+    "gold": 1000, "food": 800, "men": 500, "iron": 100, "stone": 100, "wood": 150, "wine": 60,
     "weapon_sword": 20, "weapon_spear": 20, "weapon_archer": 20, "weapon_lcav": 20, "weapon_hcav": 20,
 }
 DAILY_PRODUCTION   = {"gold": 200,  "food": 300, "men": 50,  "iron": 40,  "stone": 40,  "wood": 50,  "wine": 0}

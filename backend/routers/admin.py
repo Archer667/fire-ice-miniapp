@@ -319,6 +319,32 @@ async def cleanup_data(body: CleanupBody, user: dict = Depends(owner_user)):
     return {"ok": True, "deleted": deleted, "label": label}
 
 
+async def _admin_army_metrics(army):
+    power = army.get('power')
+    if power is None:
+        raw_id = army.get('campaign_id') or army.get('_id')
+        if raw_id and ObjectId.is_valid(str(raw_id)):
+            live = await campaigns.find_one({'_id': ObjectId(str(raw_id))})
+            # Do not attach today's power to a different historical troop roster.
+            if live and live.get('troops', {}) == army.get('troops', {}):
+                power = live.get('power')
+    return {
+        'power': power,
+        'equipment_power': army.get('equipment_power', sum(SIEGE_EQUIPMENT.get(k, {}).get('siege_power', 0) * n for k, n in army.get('equipment', {}).items())),
+    }
+
+async def _admin_castle_defenses(root):
+    from routers.war import defensive_infrastructure
+    location = root.get('battle_location') or root.get('target_castle', '')
+    if location.startswith('مسیر '):
+        return {'defense_infrastructure': [], 'defense_infrastructure_current': [], 'defense_infrastructure_source': 'field'}
+    owner = await owner_of_castle(location)
+    current = defensive_infrastructure(owner, location)
+    snapshot = root.get('battle_defense_infrastructure')
+    return {'defense_infrastructure': snapshot if snapshot is not None else current,
+            'defense_infrastructure_current': current,
+            'defense_infrastructure_source': 'snapshot' if snapshot is not None else 'current'}
+
 @router.get("/campaigns")
 async def list_campaigns(user: dict = Depends(admin_user)):
     """اطلاعات کامل لشکرکشی‌ها برای ادمین — فقط نمایشی، بدون تایید/رد"""
@@ -340,7 +366,8 @@ async def list_campaigns(user: dict = Depends(admin_user)):
             "target_player": target_owner["name"] if target_owner else None,
             "op_type": s["op_type"], "op_name": OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
             "name": s.get("name") or OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
-            "troops": troops, "power": s.get("power", 0),
+            "troops": troops, **await _admin_army_metrics(s),
+            **await _admin_castle_defenses(s),
             "gold_cost": s["gold_cost"], "men_committed": s["men_committed"], "food_per_day": s["food_per_day"],
             "travel_minutes": s.get("travel_minutes", 0),
             "arrived": (now() >= arrival_at) if arrival_at else True,
@@ -833,10 +860,11 @@ async def list_open_battles(user: dict = Depends(admin_user)):
         rolls = []
         async for rp in roleplays.find({"category": "war", "campaign_id": engagement_id}):
             rolls.append({"id": str(rp["_id"]), "tg_id": rp["tg_id"], "player": rp["player_name"], "text": rp["text"]})
-        army_row = lambda a: {
+        async def army_row(a): return {
             "campaign_id": a.get("campaign_id") or str(a.get("_id", "")), "name": a.get("name", "لشکر"),
             "tg_id": a.get("tg_id"), "player_name": a.get("player_name", "مهاجم"),
-            "men": a.get("men_committed", sum(a.get("troops", {}).values())),
+            "men": a.get("men_committed", a.get('men', sum(a.get("troops", {}).values()))),
+            **await _admin_army_metrics(a),
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
             "equipment": [{"id": eid, "name": SIEGE_EQUIPMENT.get(eid, {}).get("name", eid), "count": n} for eid, n in a.get("equipment", {}).items() if n and n > 0],
         }
@@ -856,12 +884,12 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "attacker_tg_id": root["tg_id"], "attacker_name": attacker["name"] if attacker else root.get("player_name", "طرف اول"),
             "defender_tg_id": defender["tg_id"] if defender else None,
             "defender_name": defender["name"] if defender else root.get("battle_defender_name", "بدون مدافع"),
-            "attacker_army": army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [army_row(a) for a in defender_armies],
-            "attacker_armies": [army_row(a) for a in attacker_snapshots],
+            "attacker_army": await army_row(root.get("battle_attacker_snapshot") or root), "defender_armies": [await army_row(a) for a in defender_armies],
+            "attacker_armies": [await army_row(a) for a in attacker_snapshots],
             "attacker_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_attacker_joins", [])],
             "defender_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_defender_joins", [])],
             "battle_joins": [{**j, "joined_at": j["joined_at"].isoformat() if j.get("joined_at") else None} for j in root.get("battle_joins", [])],
-            "defense_infrastructure": root.get("battle_defense_infrastructure", []),
+            **await _admin_castle_defenses(root),
             "rolls": rolls, "started_at": root.get("battle_started_at", root.get("arrival_at")).isoformat() if (root.get("battle_started_at") or root.get("arrival_at")) else None,
             "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
         }

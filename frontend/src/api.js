@@ -139,7 +139,7 @@ const mockBlackMarket = [
 ];
 let mockBlackMarketSeq = 2;
 const DEFAULT_MOCK_PLAYER_RESOURCES = {
-  gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 30, men: 500,
+  gold: 1000, wood: 150, stone: 100, iron: 100, food: 800, wine: 60, men: 500,
   weapon_sword: 20, weapon_spear: 20, weapon_archer: 20, weapon_lcav: 20, weapon_hcav: 20,
 };
 const mockPlayerResources = {}; // tg_id -> {gold,wood,stone,iron,food,wine,men} — برای تست ویرایش منابع در پنل ادمین
@@ -402,7 +402,7 @@ const M = {
       is_port: mockCastleTerrain(castle) !== 'land',
       admin_role: 'full', // حالت mock تک‌بازیکنه — پنل ادمین همیشه برای تست محلی در دسترسه
       resources: mockMe.resources || {
-        gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 30,
+        gold: 1000, food: 800, men: 500, iron: 100, stone: 100, wood: 150, wine: 60,
         weapon_sword: 20, weapon_spear: 20, weapon_archer: 20, weapon_lcav: 20, weapon_hcav: 20,
       },
       points: mockMe.points ?? 100, alliance_count: mockMe.alliance_count ?? 0,
