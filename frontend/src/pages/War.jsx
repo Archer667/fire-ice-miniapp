@@ -399,6 +399,7 @@ export default function War() {
           </div>
 
           <div className="sect up u3">ساخت لشکر</div>
+          <p className="page-sub">هنگام درگیری در نبرد یا محاصره، ساخت لشکر تازه از تمام قلعه‌ها، حتی برای دفاع، تا پایان درگیری متوقف است.</p>
           <div className="card up u3">
             {movingLegion && (
               <div style={{ marginBottom: 12, padding: 10, borderRadius: 12, background: 'rgba(77,163,255,.08)', color: 'var(--az2)', fontSize: 12 }}>

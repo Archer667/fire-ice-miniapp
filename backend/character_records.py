@@ -23,7 +23,11 @@ async def save_castles(player):
 
 async def vacant_buildings(castle):
     row = await vacant.find_one({'_id': castle}) or {}
-    return deepcopy(row.get('buildings', {}))
+    from routers.war import all_castle_names_and_ports
+    from castle_defaults import harbor_default
+    _, ports = await all_castle_names_and_ports()
+    buildings = deepcopy(row.get('buildings', {}))
+    return harbor_default(buildings) if castle in ports else buildings
 
 def death_text(player, reason, narrative):
     title = 'لیدی' if player.get('gender') == 'lady' else 'لرد'
@@ -97,6 +101,8 @@ async def retire(tg_id, body, actor):
     return {'ok': True}
 
 async def recover_swaps():
+    from naval_loot import recover as recover_loot
+    await recover_loot()
     from family import recover
     await recover()
     async for swap in db.castle_swaps.find({'complete': False}):

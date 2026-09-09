@@ -221,6 +221,7 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
             break
 
     popularity = p.get("popularity", POPULARITY_START)
+    army_food_per_day = sum([float(c.get("food_per_day", 0)) async for c in campaigns.find({"tg_id": user["id"], "active": True})])
     active_campaigns = await campaigns.count_documents({"tg_id": user["id"], "active": True})
     return {
         "registered": True,
@@ -240,6 +241,7 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
         "is_port": p["is_port"],
         "resources": display_resources,
         "daily_production": __import__("game").daily_production(p),
+        "army_food_per_day": army_food_per_day,
         "resource_caps": effective_caps(p),
         "active_campaigns": active_campaigns,
         "points": score,

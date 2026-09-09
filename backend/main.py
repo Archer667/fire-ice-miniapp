@@ -407,6 +407,8 @@ async def start_background_watchers():
     await _load_gameplay_balance()
     await control_settings.migrate_initial_wine_60()
     await control_settings.load()
+    from castle_defaults import ensure_coastal_harbors
+    await ensure_coastal_harbors()
     await drift_market_prices()
     await _fix_stonedance_region()
     await _detach_admin_players()

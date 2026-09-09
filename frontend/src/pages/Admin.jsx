@@ -258,6 +258,8 @@ export default function Admin() {
   const [spyResultsView, setSpyResultsView] = useState('pending'); // 'pending' | 'resolved'
   const [overlordTarget, setOverlordTarget] = useState([]);
   const [overlordRegion, setOverlordRegion] = useState('north');
+  const [officeHolders, setOfficeHolders] = useState(null);
+  useEffect(() => { if (tab === 'titles') api.titles().then(setOfficeHolders).catch(e => toast(e.message)); }, [tab]);
   const [wardenTarget, setWardenTarget] = useState([]);
   const [wardenGroup, setWardenGroup] = useState('south');
   const [kingTarget, setKingTarget] = useState([]);
@@ -345,6 +347,8 @@ export default function Admin() {
   const [battles, setBattles] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
   const [battleResultImages, setBattleResultImages] = useState({});
+  const [battleLoot, setBattleLoot] = useState({});
+  const [lootBusy, setLootBusy] = useState(null);
   const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
   const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
   const [roleplayWinners, setRoleplayWinners] = useState({}); // battleId -> winner tg_id[]
@@ -1122,7 +1126,7 @@ export default function Admin() {
   const setOverlord = async () => {
     if (!overlordTarget.length) { toast('یک لرد را انتخاب کن'); return; }
     try {
-      await api.adminSetOverlord(overlordRegion, overlordTarget[0].tg_id);
+      await api.adminSetOverlord(overlordRegion, overlordTarget[0].tg_id); api.titles().then(setOfficeHolders);
       haptic('medium');
       toast('بالادستی تعیین شد');
       setOverlordTarget([]);
@@ -1132,7 +1136,7 @@ export default function Admin() {
   const setWarden = async () => {
     if (!wardenTarget.length) { toast('یک لرد را انتخاب کن'); return; }
     try {
-      await api.adminSetWarden(wardenGroup, wardenTarget[0].tg_id);
+      await api.adminSetWarden(wardenGroup, wardenTarget[0].tg_id); api.titles().then(setOfficeHolders);
       haptic('medium');
       toast('والی تعیین شد');
       setWardenTarget([]);
@@ -1142,7 +1146,7 @@ export default function Admin() {
   const setKing = async () => {
     if (!kingTarget.length) { toast('یک والی را انتخاب کن'); return; }
     try {
-      await api.adminSetKing(kingTarget[0].tg_id);
+      await api.adminSetKing(kingTarget[0].tg_id); api.titles().then(setOfficeHolders);
       haptic('medium');
       toast('پادشاه/ملکه تعیین شد');
       setKingTarget([]);
@@ -2051,6 +2055,18 @@ export default function Admin() {
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
                 </div>)}
+                {b.op_type === 'naval_raid' && b.defender_tg_id && !b.location?.startsWith('مسیر ') && <details className="naval-loot-panel">
+                  <summary>غنیمت دریایی <span>{b.loot_applied ? 'ثبت شده' : 'انتقال منابع مدافع'}</span></summary>
+                  <p className="page-sub">برداشت از خزانهٔ مشترک {b.defender_name} و واریز به مهاجم؛ هر نبرد یک بار. این انتقال مستقل از ثبت تلفات انجام می‌شود.</p>
+                  {!b.loot_applied && <>
+                    <label className="f">دریافت‌کنندهٔ غنیمت</label>
+                    <select value={battleLoot[b.campaign_id]?.recipient || b.attacker_tg_id} onChange={e => setBattleLoot(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], recipient: Number(e.target.value)}}))}>
+                      {[{tg_id: b.attacker_tg_id, player_name: b.attacker_name}, ...(b.attacker_armies || [])].filter((a,i,rows) => rows.findIndex(x => x.tg_id === a.tg_id) === i).map(a => <option key={a.tg_id} value={a.tg_id}>{a.player_name}</option>)}
+                    </select>
+                    <div className="grid2">{Object.entries({gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غلات', wine: 'شراب', ...WEAPON_NAMES}).map(([key,name]) => <label className="f" key={key}>{name}<small className="page-sub"> · موجودی {Number(b.loot_resources?.[key] || 0).toLocaleString('fa-IR')}</small><input type="number" min="0" step="1" max={b.loot_resources?.[key] || 0} value={battleLoot[b.campaign_id]?.amounts?.[key] ?? ''} placeholder="۰" onChange={e => setBattleLoot(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], amounts: {...p[b.campaign_id]?.amounts, [key]: Math.max(0, Math.floor(Number(e.target.value) || 0))}}}))} /></label>)}</div>
+                    <button className="btn ghost" disabled={lootBusy === b.campaign_id} onClick={async () => {if (!window.confirm('منابع انتخاب‌شده از مدافع به مهاجم منتقل شود؟')) return; setLootBusy(b.campaign_id); try {await api.adminNavalLoot(b.campaign_id, battleLoot[b.campaign_id]?.recipient || b.attacker_tg_id, battleLoot[b.campaign_id]?.amounts || {}); toast('غنیمت منتقل شد'); loadBattles();} catch(e) {toast(e.message);} finally {setLootBusy(null);}}}>{lootBusy === b.campaign_id ? 'در حال انتقال…' : 'ثبت و انتقال غنیمت'}</button>
+                  </>}
+                </details>}
                 <label className="f">برنده‌ها</label>
                 <div className="page-sub" style={{ margin: '0 0 8px' }}>می‌توانی هر تعداد لرد را از هر دو سمت انتخاب کنی؛ پاداش هر برنده براساس نقش واقعی او در نبرد محاسبه می‌شود.</div>
                 <div className="grid2">{[
@@ -2561,9 +2577,11 @@ export default function Admin() {
             <select value={overlordRegion} onChange={e => setOverlordRegion(e.target.value)}>
               {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
             </select>
+            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.overlords?.[overlordRegion]?.name || 'بدون دارنده'}</p>
             <label className="f">لرد (باید اهل همین اقلیم باشد — معمولاً برندهٔ رای‌گیری)</label>
             <PlayerPicker value={overlordTarget} onChange={setOverlordTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={setOverlord}>ثبت بالادستی</button>
+            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام بالادستی پس گرفته شود؟')) return; try { await api.adminSetOverlord(overlordRegion, null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن بالادستی</button>
           </div>
 
           <div className="sect up u2">تعیین والی</div>
@@ -2572,17 +2590,21 @@ export default function Admin() {
             <select value={wardenGroup} onChange={e => setWardenGroup(e.target.value)}>
               {Object.entries(WARDEN_GROUPS).map(([gid, g]) => <option key={gid} value={gid}>{g.name}</option>)}
             </select>
-            <label className="f">لرد (باید الان بالادستی یکی از اقلیم‌های این والی‌نشین باشد)</label>
+            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.wardens?.[wardenGroup]?.name || 'بدون دارنده'}</p>
+            <label className="f">بازیکن فعال؛ بدون شرط مقام یا اقلیم قبلی</label>
             <PlayerPicker value={wardenTarget} onChange={setWardenTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={setWarden}>ثبت والی</button>
-            <p className="page-sub">با ثبت والی، جایگاه بالادستی قبلی او آزاد می‌شود؛ جانشین را از بخش بالادستی تعیین کن.</p>
+            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام والی پس گرفته شود؟')) return; try { await api.adminSetWarden(wardenGroup, null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن والی</button>
+            <p className="page-sub">با ثبت والی، مقام حاکمیتی قبلی او آزاد می‌شود؛ جانشین را از بخش بالادستی تعیین کن.</p>
           </div>
 
           <div className="sect up u3">تعیین پادشاه/ملکه</div>
           <div className="card up u3">
-            <label className="f" style={{ marginTop: 0 }}>لرد (باید الان یکی از سه والی باشد)</label>
+            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.king?.name || 'بدون دارنده'}</p>
+            <label className="f" style={{ marginTop: 0 }}>بازیکن فعال؛ بدون شرط مقام قبلی</label>
             <PlayerPicker value={kingTarget} onChange={setKingTarget} single />
             <button className="btn" style={{ marginTop: 14 }} onClick={setKing}>ثبت پادشاه/ملکه</button>
+            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام پادشاه/ملکه پس گرفته شود؟')) return; try { await api.adminSetKing(null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن پادشاه/ملکه</button>
             <p className="page-sub">با ثبت پادشاه/ملکه، جایگاه والی قبلی او آزاد می‌شود؛ جانشین را از بخش والی تعیین کن. امتیاز و اختیارات مقام جدید حفظ می‌شود.</p>
           </div>
 

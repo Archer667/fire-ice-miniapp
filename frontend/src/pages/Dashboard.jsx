@@ -219,10 +219,10 @@ export default function Dashboard({ goTo }) {
           const cap = me.resource_caps?.[k] ?? m.max;
           const pct = Math.round((v / cap) * 100);
           return (
-            <div className="res" key={k}>
+            <div className="res resource-status" key={k}>
               <div className="ic"><m.Icon s={18} /></div>
-              <div className="n">{m.name}<small>{m.d}</small>{me.daily_production && <small>تولید ناخالص فعلی: {Number(me.daily_production[k] || 0).toLocaleString('fa-IR', {maximumFractionDigits: 2})} در روز</small>}</div>
-              <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: pct + '%' }} /></div>
+              <div className="n">{m.name}<small>{m.d}</small>{me.daily_production && <small className="resource-income">↑ تولید {Number(me.daily_production[k] || 0).toLocaleString('fa-IR', {maximumFractionDigits: 1})} / روز</small>}{k === 'food' && <small className="resource-expense">↓ مصرف مردم: {rebellion ? Number(rebellion.ration_food_per_day || 0).toLocaleString('fa-IR') : '…'} · لشکرها: {Number(me.army_food_per_day || 0).toLocaleString('fa-IR', {maximumFractionDigits: 1})} / روز</small>}</div>
+              <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: Math.max(0, Math.min(100, pct)) + '%' }} /></div>
               <div className="val">{v.toLocaleString('fa-IR')} / {cap.toLocaleString('fa-IR')}</div>
             </div>
           );
@@ -236,10 +236,10 @@ export default function Dashboard({ goTo }) {
           const cap = me.resource_caps?.[k] ?? m.max;
           const pct = Math.round((v / cap) * 100);
           return (
-            <div className="res" key={k}>
+            <div className="res resource-status" key={k}>
               <div className="ic"><Swords s={18} /></div>
-              <div className="n">{WEAPON_NAMES[k]}<small>{m.d}</small>{me.daily_production && <small>تولید ناخالص فعلی: {Number(me.daily_production[k] || 0).toLocaleString('fa-IR', {maximumFractionDigits: 2})} در روز</small>}</div>
-              <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: pct + '%' }} /></div>
+              <div className="n">{WEAPON_NAMES[k]}<small>{m.d}</small>{me.daily_production && <small className="resource-income">↑ تولید {Number(me.daily_production[k] || 0).toLocaleString('fa-IR', {maximumFractionDigits: 1})} / روز</small>}{k === 'food' && <small className="resource-expense">↓ مصرف مردم: {rebellion ? Number(rebellion.ration_food_per_day || 0).toLocaleString('fa-IR') : '…'} · لشکرها: {Number(me.army_food_per_day || 0).toLocaleString('fa-IR', {maximumFractionDigits: 1})} / روز</small>}</div>
+              <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: Math.max(0, Math.min(100, pct)) + '%' }} /></div>
               <div className="val">{v.toLocaleString('fa-IR')} / {cap.toLocaleString('fa-IR')}</div>
             </div>
           );

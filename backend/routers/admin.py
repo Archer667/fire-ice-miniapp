@@ -880,6 +880,9 @@ async def list_open_battles(user: dict = Depends(admin_user)):
                 attacker_snapshots.insert(0, root_snapshot)
         battle_row = {
             "campaign_id": engagement_id, "name": root.get("name", "نبرد"),
+            "op_type": root.get("op_type"),
+            "loot_applied": bool(await __import__('naval_loot').transfers.find_one({'_id': engagement_id})),
+            "loot_resources": {k: int(v) for k, v in (defender or {}).get('resources', {}).items() if k in ROLEPLAY_RESOURCE_NAMES and k != 'men'},
             "location": root.get("battle_location") or root["target_castle"],
             "attacker_tg_id": root["tg_id"], "attacker_name": attacker["name"] if attacker else root.get("player_name", "طرف اول"),
             "defender_tg_id": defender["tg_id"] if defender else None,
@@ -905,6 +908,18 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             action="در پنل ادمین ← نبردها، پرونده را بررسی یا منحل کن.",
         )
     return out
+
+class NavalLootBody(BaseModel):
+    recipient_tg_id: StrictInt
+    amounts: dict[str, StrictInt]
+
+@router.post("/battles/{campaign_id}/loot")
+async def grant_naval_loot(campaign_id: str, body: NavalLootBody, user: dict = Depends(admin_user)):
+    from naval_loot import transfer
+    root = await _battle_root(campaign_id)
+    if not root:
+        raise HTTPException(404, "نبرد پیدا نشد")
+    return await transfer(root, body.recipient_tg_id, body.amounts, user['id'])
 
 class RoleplayResultBody(BaseModel):
     result: str
@@ -1800,6 +1815,8 @@ async def add_map_castle(body: MapCastleBody, user: dict = Depends(full_admin_us
         "region": body.region, "name": name, "kind": body.kind, "terrain": body.terrain,
         "x": body.x, "y": body.y, "custom": custom, "created_at": now(),
     })
+    from castle_defaults import ensure_coastal_harbors
+    await ensure_coastal_harbors()
     return {"ok": True, "name": name}
 
 @router.delete("/map/castles/{name}")
@@ -1835,6 +1852,8 @@ async def edit_map_castle(name: str, body: EditMapCastleBody, user: dict = Depen
     if body.region is not None:
         player_fields["region"] = body.region
     await players.update_one({"castle": name}, {"$set": player_fields})
+    from castle_defaults import ensure_coastal_harbors
+    await ensure_coastal_harbors()
     return {"ok": True}
 
 @router.get("/admins")
@@ -2604,6 +2623,8 @@ async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
         })
         reset_count += 1
     await _clear_season_history()
+    from castle_defaults import ensure_coastal_harbors
+    await ensure_coastal_harbors()
     return {"ok": True, "players_reset": reset_count}
 
 @router.post("/reset-scoreboard")

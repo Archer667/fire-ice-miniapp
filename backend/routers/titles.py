@@ -60,14 +60,17 @@ async def admin_user(user: dict = Depends(get_user)):
 
 class OverlordBody(BaseModel):
     region: str
-    tg_id: int
+    tg_id: int | None = None
 
 @router.post("/overlord")
 async def set_overlord(body: OverlordBody, user: dict = Depends(admin_user)):
     """بالادستی هر اقلیم دستی و توسط ادمین تعیین می‌شود — معمولاً بعد از رای‌گیری بازیکن‌ها"""
     if body.region not in REGIONS:
         raise HTTPException(400, "اقلیم نامعتبر")
-    target = await players.find_one({"tg_id": body.tg_id})
+    if body.tg_id is None:
+        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": {f"overlords.{body.region}": None}}, upsert=True)
+        return {"ok": True}
+    target = await players.find_one({"tg_id": body.tg_id, "is_dead": {"$ne": True}, "castle": {"$nin": [None, ""]}})
     if not target:
         raise HTTPException(404, "بازیکن پیدا نشد")
     if target["region"] != body.region:
@@ -86,39 +89,40 @@ async def set_overlord(body: OverlordBody, user: dict = Depends(admin_user)):
 
 class WardenBody(BaseModel):
     group: str        # "south" | "central" | "north"
-    tg_id: int
+    tg_id: int | None = None
 
 @router.post("/warden")
 async def set_warden(body: WardenBody, user: dict = Depends(admin_user)):
     if body.group not in WARDEN_GROUPS:
         raise HTTPException(400, "والی‌نشین نامعتبر")
-    target = await players.find_one({"tg_id": body.tg_id})
+    if body.tg_id is None:
+        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": {f"warden_{body.group}": None}}, upsert=True)
+        return {"ok": True}
+    target = await players.find_one({"tg_id": body.tg_id, "is_dead": {"$ne": True}, "castle": {"$nin": [None, ""]}})
     if not target:
         raise HTTPException(404, "بازیکن پیدا نشد")
 
     h = await get_hierarchy_doc()
-    if h.get('king') == body.tg_id:
-        raise HTTPException(400, 'پادشاه/ملکه نمی‌تواند هم‌زمان والی باشد؛ فرد دیگری انتخاب کن')
-    is_overlord_of_group = any(
-        h["overlords"].get(rid) == body.tg_id and group_of_region(rid) == body.group
-        for rid in REGIONS
-    )
-    if not is_overlord_of_group and h.get(f'warden_{body.group}') != body.tg_id:
-        raise HTTPException(400, "این بازیکن الان بالادستیِ هیچ‌کدام از اقلیم‌های این والی‌نشین نیست")
-
     changes = {f'warden_{body.group}': body.tg_id}
+    if h.get('king') == body.tg_id:
+        changes['king'] = None
+    changes.update({f'warden_{gid}': None for gid in WARDEN_GROUPS if gid != body.group and h.get(f'warden_{gid}') == body.tg_id})
     changes.update({f'overlords.{rid}': None for rid, holder in h['overlords'].items() if holder == body.tg_id})
     await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": changes}, upsert=True)
     return {"ok": True}
 
 class KingBody(BaseModel):
-    tg_id: int
+    tg_id: int | None = None
 
 @router.post("/king")
 async def set_king(body: KingBody, user: dict = Depends(admin_user)):
     h = await get_hierarchy_doc()
-    if body.tg_id not in wardens_of(h) and h.get('king') != body.tg_id:
-        raise HTTPException(400, "پادشاه/ملکه فقط از بین والی‌های فعلی انتخاب می‌شود")
+    if body.tg_id is None:
+        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$set": {"king": None}}, upsert=True)
+        return {"ok": True}
+    target = await players.find_one({"tg_id": body.tg_id, "is_dead": {"$ne": True}, "castle": {"$nin": [None, ""]}})
+    if not target:
+        raise HTTPException(404, "بازیکن فعال پیدا نشد")
     changes = {'king': body.tg_id}
     changes.update({f'warden_{gid}': None for gid in WARDEN_GROUPS if h.get(f'warden_{gid}') == body.tg_id})
     changes.update({f'overlords.{rid}': None for rid, holder in h['overlords'].items() if holder == body.tg_id})
@@ -158,7 +162,7 @@ async def set_small_council(body: CouncilBody, user: dict = Depends(get_user)):
 
     if body.tg_id == user["id"]:
         raise HTTPException(400, "پادشاه/ملکه نمی‌تواند خودش را عضو شورای کوچک کند")
-    target = await players.find_one({"tg_id": body.tg_id})
+    target = await players.find_one({"tg_id": body.tg_id, "is_dead": {"$ne": True}, "castle": {"$nin": [None, ""]}})
     if not target:
         raise HTTPException(404, "لرد پیدا نشد")
 

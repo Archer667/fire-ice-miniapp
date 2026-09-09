@@ -391,6 +391,7 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
         raise HTTPException(403, "اول ثبت‌نام کن")
     if not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است و کمین تازه ساخته نمی‌شود")
+    await ensure_recruitment_allowed(p)
     if body.origin_castle not in owned_castles(p):
         raise HTTPException(400, "کمین فقط باید از یکی از قلعه‌های خودت ساخته شود")
     if body.target_castle not in TRAVEL_GRAPH.get(body.origin_castle, {}):
@@ -434,6 +435,24 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     )
     return {"ok": True, "id": str(res.inserted_id), "status": "pending_score"}
 
+async def ensure_recruitment_allowed(player):
+    castles = owned_castles(player)
+    open_battle = await campaigns.find_one({
+        "battle_open": True, "combat_resolved_at": {"$exists": False},
+        "battle_cancelled_at": {"$exists": False},
+        "$or": [{"battle_participant_tg_ids": player["tg_id"]},
+                {"tg_id": player["tg_id"]}, {"battle_defender_tg_id": player["tg_id"]},
+                {"battle_location": {"$in": castles}}, {"target_castle": {"$in": castles}}],
+    })
+    arrived_attack = await campaigns.find_one({
+        "active": True, "tg_id": {"$ne": player["tg_id"]},
+        "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": {"$in": castles},
+        "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
+        "battle_cancelled_at": {"$exists": False},
+    })
+    if open_battle or arrived_attack:
+        raise HTTPException(403, "تا پایان نبرد یا محاصره، ساخت لشکر تازه، حتی لشکر دفاعی و کمین، ممکن نیست")
+
 @router.post("/submit")
 async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     if not feature_enabled("war"):
@@ -441,6 +460,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
+
+    await ensure_recruitment_allowed(p)
 
     op = OP_TYPES.get(body.op_type)
     if not op:
@@ -450,19 +471,6 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         raise HTTPException(403, "پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی")
 
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
-
-    # قلعه‌ای که دشمن به آن رسیده و هنوز نتیجهٔ حمله/محاصره‌اش مشخص نشده، فقط
-    # اجازهٔ ساخت لشکر دفاعی دارد؛ نه گسیل یک لشکر تازه و نه جای‌گیری در بیرون.
-    origin_owner = await owner_of_castle(body.origin_castle)
-    if body.op_type != "defense" and origin_owner and origin_owner["tg_id"] == user["id"]:
-        besieged = await campaigns.find_one({
-            "tg_id": {"$ne": user["id"]}, "active": True,
-            "op_type": {"$in": list(ATTACK_OP_TYPES)},
-            "target_castle": body.origin_castle, "arrival_at": {"$lte": now()},
-            "combat_resolved_at": {"$exists": False},
-        })
-        if besieged:
-            raise HTTPException(403, "این قلعه زیر حمله یا محاصره است — فعلاً فقط می‌توانی برای همین قلعه لشکر دفاعی بسازی")
 
     valid_origins = {p["castle"]} | set(p.get("castle_buildings", {})) | await stationed_origins(user["id"])
     if body.origin_castle not in valid_origins:
