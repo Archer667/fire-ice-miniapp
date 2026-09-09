@@ -442,7 +442,8 @@ async def ensure_recruitment_allowed(player):
         "battle_cancelled_at": {"$exists": False},
         "$or": [{"battle_participant_tg_ids": player["tg_id"]},
                 {"tg_id": player["tg_id"]}, {"battle_defender_tg_id": player["tg_id"]},
-                {"battle_location": {"$in": castles}}, {"target_castle": {"$in": castles}}],
+                {"battle_location": {"$in": castles}},
+                {"battle_location": {"$in": [None, ""]}, "target_castle": {"$in": castles}}],
     })
     arrived_attack = await campaigns.find_one({
         "active": True, "tg_id": {"$ne": player["tg_id"]},
