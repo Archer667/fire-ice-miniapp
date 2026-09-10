@@ -176,7 +176,7 @@ export default function Dashboard({ goTo }) {
             {me.rank != null ? (
               <div className="rk">
                 رتبهٔ {me.rank.toLocaleString('fa-IR')} از {me.total_players.toLocaleString('fa-IR')} لرد
-                {me.rank_label && RANK_LABEL_FA[me.rank_label] ? ` · ${RANK_LABEL_FA[me.rank_label]}` : ''}
+                {me.rank_label && RANK_LABEL_FA[me.rank_label] ? ` · ${me.rank_label === 'overlord' ? (me.gender === 'lady' ? 'لیدی ارشد' : 'لرد ارشد') : RANK_LABEL_FA[me.rank_label]}` : ''}
               </div>
             ) : null}
           </div>

@@ -47,13 +47,28 @@ class DisplayTests(unittest.IsolatedAsyncioTestCase):
             @staticmethod
             def is_valid(value): return len(value) == 24
         collection = types.SimpleNamespace(find_one=AsyncMock(return_value={'troops':{'infantry':100}, 'power':700}))
-        ns = {'campaigns':collection, 'ObjectId':Identity, 'SIEGE_EQUIPMENT':{'ram':{'siege_power':50}}}
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('test_game_data', ROOT / 'game_data.py')
+        data = importlib.util.module_from_spec(spec); spec.loader.exec_module(data)
+        owner = {'castle': 'home', 'castle_buildings': {'origin': {}}, 'buildings': {}}
+        ns = {'campaigns':collection, 'ObjectId':Identity, 'SIEGE_EQUIPMENT':{'ram':{'siege_power':50}},
+              'game_data':data, 'players':types.SimpleNamespace(find_one=AsyncMock(return_value=owner)),
+              'building_levels_for':lambda p,c: {'barracks':2}, 'owned_castles':lambda p:['home','origin'],
+              'control_settings':types.SimpleNamespace(get=lambda k,d:d)}
         functions('routers/admin.py', {'_admin_army_metrics'}, ns)
         f = ns['_admin_army_metrics']
-        self.assertEqual((await f({'power':123,'troops':{},'equipment':{'ram':2}})), {'power':123,'equipment_power':100})
+        self.assertEqual((await f({'power':123,'troops':{},'equipment':{'ram':2}})), {'power':123,'equipment_power':100,'power_calculated':False})
         self.assertEqual((await f({'campaign_id':'a'*24,'troops':{'infantry':100}}))['power'],700)
-        self.assertIsNone((await f({'campaign_id':'a'*24,'troops':{'infantry':50}}))['power'])
-        self.assertIsNone((await f({'troops':{}}))['power'])
+        self.assertEqual((await f({'campaign_id':'a'*24,'troops':{'infantry':50}}))['power'], data.campaign_power({'infantry':50}, {}))
+        self.assertEqual((await f({'troops':{}}))['power'],0)
+        roster = {next(iter(data.COMMON_TROOPS)): 100, next(iter(data.NAVAL_TROOPS)): 2}
+        army = {'tg_id':1, 'origin_castle':'origin', 'troops':roster, 'commander_present':True}
+        result = await f(army)
+        self.assertEqual(result['power'],round(data.campaign_power(roster, {'barracks':2})*1.1))
+        self.assertTrue(result['power_calculated'])
+        army['power_building_levels']={'port':3}
+        army['commander_power_bonus_percent']=20
+        self.assertEqual((await f(army))['power'], round(data.campaign_power(roster, {'port':3})*1.2))
         ns = {};functions('routers/war.py', {'battle_army_snapshot'}, ns)
         self.assertEqual(ns['battle_army_snapshot']({'power':321,'men_committed':100,'troops':{'infantry':100}})['power'],321)
 

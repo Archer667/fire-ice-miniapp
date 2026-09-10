@@ -10,6 +10,11 @@ router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
 RANK_LABEL_FA = {"overlord": "بالادستی", "warden": "والی", "king": "پادشاه/ملکه"}
 
+def display_rank(rank, player):
+    if rank == 'overlord':
+        return 'لیدی ارشد' if player.get('gender') == 'lady' else 'لرد ارشد'
+    return RANK_LABEL_FA.get(rank)
+
 async def _without_admins(rows: list) -> list:
     """ادمین‌ها (چه از env، چه نقش‌داده‌شده در admin_roles) در لیدربرد نمی‌آیند"""
     admin_ids = set(ADMIN_IDS) | {a["tg_id"] async for a in admin_roles.find({}, {"tg_id": 1})}
@@ -47,7 +52,7 @@ async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(d
             "castle": p["castle"], "region": REGIONS.get(p.get("region"), {}).get("name", ""),
             "points": row["score"],
             "stats": normalize_stats(p), "medals": medal_rows(p),
-            "rank_label": RANK_LABEL_FA.get(row["rank_label"]),
+            "rank_label": display_rank(row["rank_label"], p),
             "me": p["tg_id"] == user["id"],
         })
     return {"items":out,"page":current,"pages":pages,"total":len(rows)} if page is not None else out
@@ -65,7 +70,7 @@ async def weekly_leaderboard(user: dict = Depends(get_user)):
             "castle": p["castle"], "region": REGIONS.get(p.get("region"), {}).get("name", ""),
             "points": row["weekly_score"],
             "stats": normalize_stats(p), "medals": medal_rows(p),
-            "rank_label": RANK_LABEL_FA.get(row["rank_label"]),
+            "rank_label": display_rank(row["rank_label"], p),
             "me": p["tg_id"] == user["id"],
         })
     return out

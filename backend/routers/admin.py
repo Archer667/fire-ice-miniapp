@@ -321,6 +321,8 @@ async def cleanup_data(body: CleanupBody, user: dict = Depends(owner_user)):
 
 async def _admin_army_metrics(army):
     power = army.get('power')
+    live = None
+    calculated = False
     if power is None:
         raw_id = army.get('campaign_id') or army.get('_id')
         if raw_id and ObjectId.is_valid(str(raw_id)):
@@ -328,8 +330,23 @@ async def _admin_army_metrics(army):
             # Do not attach today's power to a different historical troop roster.
             if live and live.get('troops', {}) == army.get('troops', {}):
                 power = live.get('power')
+    if power is None:
+        context = {**(live or {}), **army}
+        levels = context.get('power_building_levels')
+        if levels is None:
+            owner = await players.find_one({'tg_id': context.get('tg_id')}) if context.get('tg_id') else None
+            origin = context.get('origin_castle')
+            levels = dict(building_levels_for(owner, origin)) if owner and origin in owned_castles(owner) else {}
+        power = game_data.campaign_power(army.get('troops', {}), levels)
+        if context.get('commander_present'):
+            bonus = context.get('commander_power_bonus_percent')
+            if bonus is None:
+                bonus = control_settings.get('movement.commander_power_bonus_percent', 10)
+            power = round(power * (1 + float(bonus) / 100))
+        calculated = True
     return {
         'power': power,
+        'power_calculated': calculated,
         'equipment_power': army.get('equipment_power', sum(SIEGE_EQUIPMENT.get(k, {}).get('siege_power', 0) * n for k, n in army.get('equipment', {}).items())),
     }
 

@@ -19,6 +19,15 @@ def load(path, names, ns):
     return ns
 
 class CastleRules(unittest.IsolatedAsyncioTestCase):
+    def test_senior_lord_and_lady_display(self):
+        ns={'RANK_LABEL_FA':{'warden':'والی','king':'پادشاه/ملکه'}}
+        f=load('routers/leaderboard.py', {'display_rank'}, ns)['display_rank']
+        self.assertEqual(f('overlord',{'gender':'lady'}),'لیدی ارشد')
+        self.assertEqual(f('overlord',{'gender':'lord'}),'لرد ارشد')
+        self.assertEqual(f('overlord',{}),'لرد ارشد')
+        self.assertEqual(f('warden',{'gender':'lady'}),'والی')
+        self.assertIsNone(f(None,{}))
+
     def test_harbor_preserves_upgrades_and_other_buildings(self):
         ns={'deepcopy': copy.deepcopy}
         load('game.py', {'normalize_building_state'}, ns)
