@@ -19,6 +19,20 @@ def load(path, names, ns):
     return ns
 
 class CastleRules(unittest.IsolatedAsyncioTestCase):
+    def test_home_cancellation_requires_arrival_and_current_ownership(self):
+        from datetime import datetime, timedelta
+        current = datetime(2026, 9, 10)
+        ns = {'now': lambda: current, 'normalize_datetime': lambda v: v,
+              'owned_castles': lambda p: p['castles']}
+        f = load('routers/war.py', {'stationed_in_own_castle'}, ns)['stationed_in_own_castle']
+        player = {'castles': ['main', 'secondary']}
+        army = {'origin_castle': 'main', 'target_castle': 'secondary', 'arrival_at': current}
+        self.assertTrue(f(army, player))
+        self.assertFalse(f({**army, 'arrival_at': current + timedelta(seconds=1)}, player))
+        self.assertFalse(f(army, {'castles': ['main']}))
+        self.assertFalse(f({**army, 'arrival_at': None}, player))
+        self.assertTrue(f({'origin_castle': 'main', 'target_castle': 'main'}, player))
+
     def test_senior_lord_and_lady_display(self):
         ns={'RANK_LABEL_FA':{'warden':'والی','king':'پادشاه/ملکه'}}
         f=load('routers/leaderboard.py', {'display_rank'}, ns)['display_rank']

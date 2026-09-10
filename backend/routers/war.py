@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, ambushes, map_castles, roleplays, game_settings, alliances
-from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for
+from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for, normalize_datetime, effective_caps
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
@@ -586,9 +586,17 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "route_path": route_path, "penalty_charged": penalty_charged,
     }
 
+def stationed_in_own_castle(campaign, player):
+    if not player or campaign.get('target_castle') not in owned_castles(player):
+        return False
+    arrival = normalize_datetime(campaign.get('arrival_at'))
+    if arrival is not None:
+        return arrival <= now()
+    return campaign.get('origin_castle') == campaign.get('target_castle') and not campaign.get('travel_minutes')
+
 @router.post("/{campaign_id}/cancel")
 async def cancel(campaign_id: str, user: dict = Depends(get_user)):
-    """لغو تا پنج دقیقه بدون جریمه؛ پس از آن فقط نیمی از هزینه و نفرات برمی‌گردد."""
+    """لغو در قلعهٔ فعلی خود یا مهلت اولیه رایگان است؛ بیرون قلعه تابع جریمهٔ تنظیم‌شده است."""
     c = await campaigns.find_one({"_id": ObjectId(campaign_id)})
     if not c or c["tg_id"] != user["id"]:
         raise HTTPException(404, "لشکر پیدا نشد")
@@ -598,13 +606,10 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
     if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قابل لغو یا حرکت نیست")
 
-    # اتمیک و مشروط به active=True — وگرنه دو کلیکِ هم‌زمانِ لغو هردو از رویِ همون
-    # خواندنِ قدیمی رد می‌شن و منابع/تسلیحات دوبار برمی‌گردن
-    result = await campaigns.update_one(
-        {"_id": c["_id"], "active": True}, {"$set": {"active": False, "status": "cancelled"}},
-    )
-    if result.matched_count == 0:
-        raise HTTPException(400, "این لشکر دیگر فعال نیست")
+    p = await players.find_one({"tg_id": user["id"]})
+    if not p:
+        raise HTTPException(404, "بازیکن پیدا نشد")
+    at_home = stationed_in_own_castle(c, p)
 
     weapons_refund = {}
     for tid, n in c.get("troops", {}).items():
@@ -617,22 +622,31 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
     grace_started_at = c.get("moved_at") or c.get("created_at") or now()
     grace_minutes = float(rule("war.cancel_grace_minutes", 5))
     penalty_percent = max(0, min(100, float(rule("war.cancel_penalty_percent", 50))))
-    penalty_applied = (now() - grace_started_at) > timedelta(minutes=grace_minutes)
+    penalty_applied = not at_home and (now() - grace_started_at) > timedelta(minutes=grace_minutes)
     refund_ratio = (1 - penalty_percent / 100) if penalty_applied else 1.0
     def refundable(value):
         return max(0, int(int(value or 0) * refund_ratio))
 
-    p = await players.find_one({"tg_id": user["id"]})
     if p:
         equipment_refund = {k: refundable(v) for k, v in c.get("equipment_cost", {}).items()}
         weapons_refund = {k: refundable(v) for k, v in weapons_refund.items()}
         deltas = {"men": refundable(c["men_committed"]), "gold": refundable(c["gold_cost"]), **weapons_refund}
         for resource, amount in equipment_refund.items():
             deltas[resource] = deltas.get(resource, 0) + amount
+        if at_home:
+            caps = effective_caps(p)
+            if any(amount > 0 and p['resources'].get(key, 0) + amount > caps.get(key, 10 ** 9) for key, amount in deltas.items()):
+                raise HTTPException(409, "برای بازگشت کامل هزینهٔ لشکر، ظرفیت خزانه و انبار را خالی کن یا افزایش بده؛ لشکر هنوز لغو نشده است")
+        # Validate the full refund before deactivating; repeated clicks cannot credit twice.
+        result = await campaigns.update_one(
+            {"_id": c["_id"], "active": True}, {"$set": {"active": False, "status": "cancelled"}},
+        )
+        if result.matched_count == 0:
+            raise HTTPException(400, "این لشکر دیگر فعال نیست")
         add_resources(p, deltas)
         await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
     return {
-        "ok": True, "penalty_applied": penalty_applied, "refund_ratio": refund_ratio,
+        "ok": True, "penalty_applied": penalty_applied, "refund_ratio": refund_ratio, "cancelled_at_own_castle": at_home,
         "men_refunded": refundable(c["men_committed"]), "gold_refunded": refundable(c["gold_cost"]),
         "weapons_refunded": weapons_refund, "equipment_refunded": equipment_refund,
     }

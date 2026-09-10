@@ -328,9 +328,11 @@ export default function War() {
       const res = await api.cancelCampaign(c.id);
       haptic('medium');
       api.me().then(setMe);
-      toast(res.penalty_applied
-        ? 'لشکر لغو شد؛ چون بیشتر از ۵ دقیقه گذشته بود، فقط ۵۰٪ نفرات و هزینه‌ها برگشت'
-        : 'لشکر در مهلت ۵ دقیقه‌ای لغو شد و تمام نفرات و هزینه‌ها برگشت');
+      toast(res.cancelled_at_own_castle
+        ? 'لشکر داخل قلعهٔ خودت لغو شد؛ نفرات و هزینه‌های قابل بازپرداخت بدون جریمه برگشت'
+        : res.penalty_applied
+          ? `لشکر لغو شد؛ ${Math.round(Number(res.refund_ratio) * 100).toLocaleString('fa-IR')}٪ نفرات و هزینه‌های قابل بازپرداخت برگشت`
+          : 'لشکر در مهلت لغو رایگان لغو شد و هزینه‌های قابل بازپرداخت برگشت');
       loadMine(); loadMap(); loadLegions();
     } catch (e) { toast(e.message); }
     setCancelBusyId(null);
@@ -578,7 +580,7 @@ export default function War() {
       {tab === 'legions' && (
         <div className="up u2">
           <div className="page-sub" style={{ margin: '0 4px 10px' }}>
-            همهٔ لشکرهای فعالت — از جمله دفاعی و جای‌گیری‌ها؛ لغو کردن، طلا و نفرات و تسلیحات مصرف‌شده (منهای غلهٔ خرج‌شده) را برمی‌گرداند
+            لشکر مستقر در یکی از قلعه‌های فعلی خودت، بدون جریمه لغو می‌شود؛ در نبرد قابل لغو نیست. هزینه‌های قابل بازپرداخت کامل برمی‌گردد؛ غلهٔ مصرف‌شده برنمی‌گردد.
           </div>
           {legions === null && <div className="loading">در حال بارگذاری...</div>}
           {legions && legions.length === 0 && (
