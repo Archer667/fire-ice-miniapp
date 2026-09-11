@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
 from db import players, campaigns, ambushes, map_castles, roleplays, game_settings, alliances
-from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for, normalize_datetime, effective_caps
+from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for, normalize_datetime, effective_caps, apply_production, production_fields
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
     NAVAL_TROOPS, NAVAL_CAMP_BUILDING, TROOP_WEAPON_KEY, WEAPON_PER_SOLDIER, WEAPON_NAMES, MAP_TERRAINS, travel_routes,
@@ -413,12 +413,12 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
         raise HTTPException(400, f"هر کمین باید حداقل {minimum_ambush_men()} سرباز داشته باشد؛ کشتی جزو نفرات حساب نمی‌شود")
     if is_sea and land_men > naval_capacity:
         raise HTTPException(400, f"این مسیر دریایی است؛ کشتی‌ها فقط ظرفیت حمل {naval_capacity} نفر را دارند")
-    cost = {"gold": gold, **weapons}
-    if not can_afford(p["resources"], cost) or p["resources"].get("men", 0) < men:
+    p = apply_production(p)
+    cost = {"gold": gold, "men": men, **weapons}
+    if not can_afford(p["resources"], cost):
         raise HTTPException(400, "منابع، نفرات، سکه یا سلاح کافی برای این کمین نداری")
     pay(p["resources"], cost)
-    p["resources"]["men"] -= men
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "player_gender": p.get("gender", "lord"), "origin_castle": body.origin_castle,
         "target_castle": body.target_castle, "edge_key": edge_key, "sea": is_sea,
@@ -471,6 +471,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     if not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی")
 
+    p = apply_production(p)
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
 
     valid_origins = {p["castle"]} | set(p.get("castle_buildings", {})) | await stationed_origins(user["id"])
@@ -505,11 +506,12 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     equipment_cost, equipment_power, equipment_slowdown = equipment_cost_and_effect(body.equipment, origin_buildings)
     if not can_afford(p["resources"], {"gold": gold}):
         raise HTTPException(400, "خزانه کافی نیست")
-    if p["resources"].get("men", 0) < men:
+    if not can_afford(p["resources"], {"men": men}):
         raise HTTPException(400, "نفرات کافی نداری")
     for weapon_key, needed in weapons.items():
-        if p["resources"].get(weapon_key, 0) < needed:
-            raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری — کارگاه تسلیحاتش را بساز یا صبر کن بیشتر تولید شود")
+        if not can_afford(p["resources"], {weapon_key: needed}):
+            available = round(p["resources"].get(weapon_key, 0))
+            raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری؛ نیاز: {needed}، موجودی قابل استفاده: {available}، کمبود: {needed - available}. می‌توانی تولید یا خرید کنی")
     combined_cost = {"gold": gold, **weapons}
     for resource, amount in equipment_cost.items():
         combined_cost[resource] = combined_cost.get(resource, 0) + amount
@@ -554,14 +556,13 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         commander_power = float(rule("movement.commander_power_bonus_percent", float(game_data.GAME_RULES["commander_power_bonus"]) * 100)) / 100
         power = round(power * (1 + commander_power))
 
-    pay(p["resources"], combined_cost)
-    p["resources"]["men"] = p["resources"].get("men", 0) - men
+    pay(p["resources"], {**combined_cost, "men": men})
 
     # فرمان خصمانه علیه عدم‌تجاوز/اتحاد کامل بالاتر کاملاً مسدود شده است.
     # این فیلد فقط برای سازگاری پاسخ با نسخه‌های قدیمی باقی می‌ماند.
     penalty_charged = 0
 
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"], "points": p.get("points", 0)}})
+    await players.update_one({"tg_id": user["id"]}, {"$set": {**production_fields(p), "points": p.get("points", 0)}})
 
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "player_gender": p.get("gender", "lord"),
@@ -902,7 +903,46 @@ async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str
                 army["player_gender"] = gender_by_id.get(army.get("tg_id"), "lord")
     attacker_text = "\n".join(battle_army_public_line(a) for a in attackers) or "لشکر فعالی ثبت نشده"
     defender_text = "\n".join(battle_army_public_line(a) for a in defenders) or "لشکر دفاعی مستقلی ثبت نشده"
-    return f"{intro}\n\n🔴 مهاجمان\n{attacker_text}\n\n🔵 مدافعان\n{defender_text}"
+    def totals(armies):
+        men = sum(int(a.get('men_committed', sum(a.get('troops', {}).values())) or 0) for a in armies)
+        equipment = sum(sum(int(n or 0) for n in a.get('equipment', {}).values()) for a in armies)
+        return f"جمع: {men:,} نفر · {equipment:,} ادوات"
+    return f"{intro}\n\n🔴 مهاجمان — {totals(attackers)}\n{attacker_text}\n\n🔵 مدافعان — {totals(defenders)}\n{defender_text}"
+
+async def queue_battle_roster(root, event, intro):
+    from battle_notices import enqueue
+    root = await campaigns.find_one({'_id': root['_id']}) or root
+    ids = set(root.get('battle_participant_tg_ids') or []) | {root.get('tg_id'), root.get('battle_defender_tg_id')}
+    ids.discard(None)
+    recipients = await players.find({'tg_id': {'$in': list(ids)}, 'is_dead': {'$ne': True}}).to_list(None)
+    text = await battle_full_roster_text(root, root['engagement_campaign_id'], intro)
+    await enqueue(event, recipients, text)
+
+async def repair_open_battle_rosters():
+    """Repair only proven membership: own defender already locked to this open battle."""
+    async for root in campaigns.find({'battle_is_root': True, 'battle_open': True,
+            'combat_resolved_at': {'$exists': False}, 'battle_cancelled_at': {'$exists': False}}):
+        battle_id = root.get('engagement_campaign_id')
+        defender = root.get('battle_defender_tg_id')
+        if not battle_id or not defender:
+            continue
+        known = set(root.get('battle_attacker_army_ids', []) + root.get('battle_defender_army_ids', []))
+        async for army in campaigns.find({'tg_id': defender, 'active': True,
+                'engagement_campaign_id': battle_id, 'engagement_locked': True,
+                'target_castle': root.get('battle_location')}):
+            army_id = str(army['_id'])
+            if army_id in known:
+                continue
+            joined = army.get('battle_started_at') or root.get('battle_started_at') or now()
+            join = {'campaign_id': army_id, 'tg_id': defender, 'player_name': army['player_name'], 'side': 'defender', 'joined_at': joined}
+            result = await campaigns.update_one({'_id': root['_id'], 'battle_open': True,
+                    'battle_defender_army_ids': {'$ne': army_id}}, {'$push': {
+                'battle_defender_army_ids': army_id, 'battle_defender_snapshot': battle_army_snapshot(army),
+                'battle_defender_joins': join, 'battle_joins': join}, '$addToSet': {'battle_participant_tg_ids': defender}})
+            if result.modified_count:
+                await campaigns.update_one({'_id': army['_id']}, {'$set': {'battle_location': root['battle_location'], 'battle_started_at': joined}})
+                await queue_battle_roster(root, f'roster-repair:{battle_id}:{army_id}',
+                    f"اصلاح آمار نبرد {root['battle_location']}: لشکر «{army.get('name', 'لشکر')}» مدافع از آمار جا افتاده بود؛ اکنون در فهرست و داوری نبرد محاسبه می‌شود.")
 
 async def battle_admin_roster_text(root: dict, battle_id: str, intro: str) -> str:
     """ترکیب و سناریوی دقیق تمام لشکرهای نبرد؛ مخصوص بات و پنل ادمین."""
@@ -1206,10 +1246,7 @@ async def detect_route_encounters():
             })
             side_name = "مدافعان" if joins_defender else "مهاجمان"
             text = f"⚔️ لشکر {army['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {root['battle_location']} پیوست."
-            roster_text = await battle_full_roster_text(root, battle_id, text)
-            participant_ids = set(root.get("battle_participant_tg_ids") or []) | {root.get("tg_id"), root.get("battle_defender_tg_id"), army.get("tg_id")}
-            async for participant in players.find({"tg_id": {"$in": list(participant_ids - {None})}}):
-                await send_system_message(participant["tg_id"], participant["name"], roster_text, kind="battle")
+            await queue_battle_roster(root, f"battle-join:{battle_id}:{army['_id']}", text)
             admin_text = await battle_admin_roster_text(root, battle_id, text)
             await notify_admins("battle_attacker_joined", "⚔️ نیروی تازه وارد نبرد شد", admin_text,
                 dedupe_key=f"battle-join:{battle_id}:{army['_id']}", priority="urgent", player_name=army["player_name"], player_tg_id=army["tg_id"], source_id=battle_id)
@@ -1288,6 +1325,7 @@ async def notify_arrivals():
     یک‌بار برای هر لشکر، دقیقاً وقتی اولین بار به arrival_at می‌رسد. برای نبردهای واقعی
     (حمله/محاصره/غارت دریایی) آمار نیروهای مهاجم و مدافع هم برای هر دو طرف فرستاده می‌شود
     تا هر دو تا ۶ ساعت بعد سناریوی جنگ را از صفحهٔ رول‌ها بفرستند"""
+    await repair_open_battle_rosters()
     await process_route_ambushes()
     await detect_route_encounters()
     cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}})
@@ -1357,11 +1395,7 @@ async def notify_arrivals():
             await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {"$push": pushes, "$addToSet": {"battle_participant_tg_ids": c["tg_id"]}})
             side_name = "مدافعان" if joins_defender else "مهاجمان"
             join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد."
-            roster_text = await battle_full_roster_text(open_battle, engagement_id, join_text)
-            participant_ids = set(open_battle.get("battle_participant_tg_ids") or []) | {open_battle.get("tg_id"), open_battle.get("battle_defender_tg_id"), c.get("tg_id")}
-            participant_ids.discard(None)
-            async for participant in players.find({"tg_id": {"$in": list(participant_ids)}}):
-                await send_system_message(participant["tg_id"], participant["name"], roster_text, kind="battle")
+            await queue_battle_roster(open_battle, f"battle-join:{engagement_id}:{c['_id']}", join_text)
             admin_join_text = await battle_admin_roster_text(open_battle, engagement_id, join_text)
             await notify_admins(
                 "battle_attacker_joined", "⚔️ مهاجم تازه به نبرد اضافه شد", admin_join_text,
@@ -1376,13 +1410,15 @@ async def notify_arrivals():
             if not battle_defender and opposing_army:
                 battle_defender = await players.find_one({"tg_id": opposing_army["tg_id"]})
             defender_armies = [opposing_army] if opposing_army else []
-            if battle_defender and not opposing_army:
+            if battle_defender:
                 defender_armies = [d async for d in campaigns.find({
                     "tg_id": battle_defender["tg_id"], "active": True,
                     "engagement_locked": {"$ne": True},
-                    "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
+                    "target_castle": target, "_id": {"$ne": c["_id"]},
                     "arrival_at": {"$lte": now()},
                 })]
+                if opposing_army and all(d['_id'] != opposing_army['_id'] for d in defender_armies):
+                    defender_armies.append(opposing_army)
             defense_infrastructure = defensive_infrastructure(battle_defender, target) if target_owner else []
             engagement_update = {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
@@ -1416,14 +1452,12 @@ async def notify_arrivals():
                     "opponent_campaign_id": str(c["_id"]), "opponent_tg_id": c["tg_id"],
                     "battle_location": target,
                 }})
-            if target_owner and target_owner["tg_id"] != c["tg_id"]:
+            if defender_armies:
                 await campaigns.update_many({
-                    "tg_id": target_owner["tg_id"], "active": True,
-                    "engagement_locked": {"$ne": True},
-                    "op_type": {"$in": list(DEFENSE_OP_TYPES)}, "target_castle": target,
-                    "arrival_at": {"$lte": now()},
+                    "_id": {"$in": [a['_id'] for a in defender_armies]}, "active": True,
                 }, {"$set": {"engagement_locked": True, "engagement_campaign_id": engagement_id,
-                              "battle_root_campaign_id": str(c["_id"]), "battle_is_root": False}})
+                              "battle_root_campaign_id": str(c["_id"]), "battle_is_root": False,
+                              "battle_location": target, "battle_started_at": engagement_update['battle_started_at']}})
 
         if creates_battle and battle_defender:
             attacker_summary = int(c.get("men_committed", sum(c.get("troops", {}).values())) or 0)
@@ -1438,7 +1472,7 @@ async def notify_arrivals():
                 for eid, count in army.get("equipment", {}).items():
                     defender_equipment_totals[eid] = defender_equipment_totals.get(eid, 0) + int(count or 0)
             defender_equipment_summary = sum(max(0, int(v or 0)) for v in defender_equipment_totals.values())
-            defender_power = opposing_army.get("power", 0) if opposing_army else campaign_power(defense_troops, _building_levels(battle_defender, target))
+            defender_power = sum(a.get('power') if a.get('power') is not None else campaign_power(a.get('troops', {}), _building_levels(battle_defender, target)) for a in defender_armies)
             attacker_power = c.get("power", 0)
             stats_text = (
                 f"آمار نبرد «{name}» در {target}:\n"

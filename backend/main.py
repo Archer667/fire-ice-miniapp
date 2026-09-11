@@ -416,6 +416,8 @@ async def start_background_watchers():
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
     asyncio.create_task(_project_watcher())
+    from battle_notices import watcher as battle_notice_watcher
+    asyncio.create_task(battle_notice_watcher())
 
 @app.get("/api/health")
 async def health():

@@ -2596,7 +2596,7 @@ async def _clear_season_history():
     await db.character_announcements.delete_many({})
     await db.character_retirements.delete_many({})
     await db.castle_swaps.delete_many({})
-    for name in ('family_marriages', 'family_children', 'family_operations', 'family_successions', 'family_notices'):
+    for name in ('family_marriages', 'family_children', 'family_operations', 'family_successions', 'family_notices', 'battle_notice_outbox'):
         await db[name].delete_many({})
     """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
     for collection in (

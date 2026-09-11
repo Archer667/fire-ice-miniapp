@@ -9,7 +9,7 @@ import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
   NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, WEAPON_NAMES, castleLabel,
-  SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING,
+  SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING, WEAPON_PER_SOLDIER,
 } from '../gamedata.js';
 
 const TABS = [
@@ -20,6 +20,11 @@ const TABS = [
 const SEEN_KEY = 'fireice_war_reports_seen';
 const RESOURCE_NAMES_FA = { gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب' };
 const loadSeenIds = () => { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); } };
+
+export function troopCount(value) {
+  const digits = String(value).replace(/[۰-۹]/g, c => String(c.charCodeAt(0) - 1776)).replace(/[٠-٩]/g, c => String(c.charCodeAt(0) - 1632));
+  return /^\d*$/.test(digits) ? Math.min(1000000, Number(digits)) : null;
+}
 
 function utcMillis(value) {
   if (!value) return NaN;
@@ -99,11 +104,11 @@ export default function War() {
   }, [buildings]);
 
   const stationedOrigins = useMemo(
-    () => (mine || []).filter(c => c.active && c.op_type === 'garrison' && c.arrived).map(c => c.target),
-    [mine]
+    () => (legions || []).filter(c => c.mine && c.op_type === 'garrison' && c.arrived && !c.engagement_locked).map(c => c.target),
+    [legions]
   );
   const myCastles = [me.castle, ...(me.castles || [])];
-  const originOptions = [...new Set([...myCastles, ...stationedOrigins])];
+  const originOptions = [...new Set([...myCastles, ...stationedOrigins])].filter(Boolean);
 
   const [origin, setOrigin] = useState(me.castle);
   const [opType, setOpType] = useState(OP_TYPES[0].id);
@@ -192,7 +197,7 @@ export default function War() {
 
   const goldCost = useMemo(
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * t.cost, 0),
-    [counts]
+    [counts, allTroops]
   );
   const equipmentCost = useMemo(() => {
     const total = {};
@@ -204,11 +209,11 @@ export default function War() {
   }, [equipmentCounts]);
   const menCommitted = useMemo(
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0), 0),
-    [counts]
+    [counts, allTroops]
   );
   const foodPerDay = useMemo(
     () => allTroops.reduce((s, t) => s + (counts[t.id] || 0) * (t.food ?? ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR)), 0),
-    [counts]
+    [counts, allTroops]
   );
   const weaponsNeeded = useMemo(() => {
     const need = {};
@@ -216,10 +221,10 @@ export default function War() {
       const n = counts[t.id] || 0;
       if (n <= 0 || t.special || t.naval) continue;
       const weaponKey = TROOP_UNIT_BUILDINGS[t.id]?.weapon;
-      if (weaponKey) need[weaponKey] = (need[weaponKey] || 0) + n;
+      if (weaponKey) need[weaponKey] = (need[weaponKey] || 0) + n * WEAPON_PER_SOLDIER;
     }
     return need;
-  }, [counts]);
+  }, [counts, allTroops]);
   const shortWeapon = Object.entries(weaponsNeeded).find(([wkey, n]) => n > (me.resources[wkey] ?? 0));
   const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
   const totalGoldCost = goldCost + (equipmentCost.gold || 0);
@@ -230,11 +235,11 @@ export default function War() {
   const badPortTarget = op.portOnly && target && !target.port;
   const seaCapacity = useMemo(
     () => NAVAL_TROOP_IDS.reduce((s, tid) => s + (counts[tid] || 0) * NAVAL_TROOPS.find(t => t.id === tid).capacity, 0),
-    [counts]
+    [counts, allTroops]
   );
   const seaLandMen = useMemo(
     () => allTroops.reduce((s, t) => s + (t.naval ? 0 : (counts[t.id] || 0)), 0),
-    [counts]
+    [counts, allTroops]
   );
   const overSeaCapacity = originIsSeaOnly && seaLandMen > seaCapacity;
   const overSeaRoute = !!chosenRoute?.via_sea && seaLandMen > seaCapacity;
@@ -500,14 +505,14 @@ export default function War() {
 
           {!movingLegion && <><div className="sect up u3">گسیل نیرو</div>
           <div className="page-sub up u3" style={{ margin: '0 4px 10px' }}>
-            هر نیروی عمومی به پادگانِ همان یگان نیاز دارد؛ کارگاه تسلیحاتش هم لازم است اما فقط برای تولید تسلیحات — هر سرباز موقع اعزام یک واحد از تسلیحاتِ همان یگان مصرف می‌کند. کشتی جنگی فقط در قلعه/شهر بندری و بعد از ساخت بندر ممکن است.
+            هر نیروی عمومی به پادگان همان یگان نیاز دارد و {WEAPON_PER_SOLDIER.toLocaleString('fa-IR')} واحد سلاح مصرف می‌کند. سلاح را می‌توانی تولید یا خرید کنی؛ داشتن کارگاه شرط اعزام نیست. کشتی به بندر نیاز دارد.
           </div>
           <div className="card up u3">
             {allTroops.map(t => {
               const ok = unlocked(t);
               const weaponKey = !t.special && !t.naval && TROOP_UNIT_BUILDINGS[t.id]?.weapon;
               const weaponStock = weaponKey ? (me.resources[weaponKey] ?? 0) : null;
-              const weaponShort = weaponKey && (counts[t.id] || 0) > weaponStock;
+              const weaponShort = weaponKey && (counts[t.id] || 0) * WEAPON_PER_SOLDIER > weaponStock;
               return (
                 <div className="troop" key={t.id}>
                   <div className="tn">
@@ -522,8 +527,9 @@ export default function War() {
                     {!ok && t.naval && <small className="troop-locked">نیاز به ساختن بندر</small>}
                     {ok && weaponShort && <small className="troop-locked">{WEAPON_NAMES[weaponKey]} کافی نیست</small>}
                   </div>
-                  <input type="number" min="0" value={counts[t.id] || ''} disabled={!ok} placeholder="۰"
-                         onChange={e => setCounts({ ...counts, [t.id]: Math.max(0, parseInt(e.target.value, 10) || 0) })} />
+                  <input type="text" inputMode="numeric" aria-label={`تعداد ${t.name}`} value={counts[t.id] || ''} disabled={!ok} placeholder="۰"
+                         onInput={e => { const n = troopCount(e.currentTarget.value); if (n !== null) setCounts(prev => ({ ...prev, [t.id]: n })); }}
+                         onChange={e => { const n = troopCount(e.target.value); if (n !== null) setCounts(prev => ({ ...prev, [t.id]: n })); }} />
                 </div>
               );
             })}
@@ -570,6 +576,7 @@ export default function War() {
           </div></>}
 
           <div className="up u3">
+            <p className="page-sub" role="status">{formIssue || 'آمادهٔ ثبت فرمان'}</p>
             <button className="btn" disabled={!!formIssue || busy} onClick={send}>
               {formIssue || (busy ? 'در حال ارسال...' : movingLegion ? 'صدور فرمان حرکت همین لشکر' : 'مُهر و ارسال فرمان')}
             </button>
