@@ -1748,6 +1748,7 @@ export const api = {
   payTribute: (id) => MOCK ? Promise.resolve(M.payTribute(id))
     : req(`/api/tribute/${id}/pay`, { method: 'POST' }),
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
+  diplomacyInvite: (id, toTgIds) => req(`/api/diplomacy/${id}/invite`, { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds }) }),
   diplomacyPublic: () => MOCK ? Promise.resolve(M.diplomacyPublic()) : req('/api/diplomacy/public'),
   diplomacyPropose: (toTgIds, type, name, isPrivate, penaltyGold) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate, penaltyGold))
     : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate, penalty_gold: penaltyGold || 0 }) }),

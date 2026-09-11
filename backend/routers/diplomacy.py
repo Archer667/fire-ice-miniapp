@@ -20,22 +20,37 @@ class ProposeBody(BaseModel):
     type: str
     name: str = ""
     private: bool = False
+    existing_alliance_id: str | None = None
     penalty_gold: int = 0   # فقط برای «پیمان عدم‌تجاوز» — غرامتی که خیانت‌کننده باید بپردازد
 
 @router.post("/propose")
 async def propose(body: ProposeBody, user: dict = Depends(get_user)):
+    source = None
+    if body.existing_alliance_id:
+        if not ObjectId.is_valid(body.existing_alliance_id):
+            raise HTTPException(400, 'شناسهٔ پیمان نامعتبر است')
+        source = await alliances.find_one({'_id': ObjectId(body.existing_alliance_id)})
+        if not source or source['from_id'] != user['id']:
+            raise HTTPException(403, 'فقط سازندهٔ پیمان می‌تواند عضو جدید دعوت کند')
+        if source['status'] != 'accepted' or source.get('marriage_id'):
+            raise HTTPException(409, 'فقط پیمان برقرار و مستقل از ازدواج قابل گسترش است')
+        body = body.model_copy(update={'type': source['type'], 'name': source.get('name', ''),
+            'private': not source.get('public', True), 'penalty_gold': source.get('penalty_gold', 0)})
     if body.type not in ALLIANCE_TYPES:
         raise HTTPException(400, "نوع پیمان نامعتبر")
     if body.type == "non_aggression" and body.penalty_gold <= 0:
         raise HTTPException(400, "برای پیمان عدم‌تجاوز باید مقدار غرامت (طلا) را مشخص کنی")
     me = await players.find_one({"tg_id": user["id"]})
-    if not me:
+    if not me or not me.get('castle') or me.get('is_dead') or me.get('registration_reset'):
         raise HTTPException(403, "اول ثبت‌نام کن")
 
     target_ids = [tid for tid in dict.fromkeys(body.to_tg_ids) if tid != user["id"]]
     if not target_ids:
         raise HTTPException(400, "هیچ گیرنده‌ای انتخاب نشده")
-    targets = await players.find({"tg_id": {"$in": target_ids}}).to_list(len(target_ids))
+    if len(target_ids) > 50:
+        raise HTTPException(400, 'هر بار حداکثر ۵۰ بازیکن را دعوت کن')
+    targets = await players.find({"tg_id": {"$in": target_ids}, 'castle': {'$exists': True, '$nin': [None, '']},
+        'is_dead': {'$ne': True}, 'registration_reset': {'$ne': True}}).to_list(len(target_ids))
     if not targets:
         raise HTTPException(404, "هیچ‌کدام از گیرنده‌های انتخابی پیدا نشدند")
 
@@ -66,9 +81,19 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
 
     pact_name = body.name.strip()[:60]
     penalty_gold = body.penalty_gold if body.type == "non_aggression" else 0
-    group_id = str(uuid4()) if body.type in ("trade", "full_alliance") else None
+    group_id = (source.get('group_id') or 'pact-' + str(source['_id'])) if source else (str(uuid4()) if body.type in ('trade', 'full_alliance') else None)
+    if source and not source.get('group_id'):
+        # Extend this exact invitation batch, never unrelated pacts sharing a name.
+        batch = {'_id': source['_id']}
+        if source.get('created_at'):
+            batch = {'from_id': source['from_id'], 'type': source['type'],
+                'name': source.get('name', ''), 'public': source.get('public', True),
+                'created_at': source['created_at'], 'group_id': {'$exists': False}}
+        await alliances.update_many(batch, {'$set': {'group_id': group_id}})
+        await alliances.update_one({'_id': source['_id']}, {'$set': {'group_id': group_id}})
     await alliances.insert_many([{
         **({"group_id": group_id} if group_id else {}),
+        **({'invited_via': str(source['_id'])} if source else {}),
         "from_id": user["id"], "from_name": me["name"],
         "from_gender": me.get("gender", "lord"),
         "to_id": t["tg_id"], "to_name": t["name"], "to_gender": t.get("gender", "lord"),
@@ -83,10 +108,17 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     for t in valid_targets:
         await send_system_message(
             t["tg_id"], t["name"],
-            f"{titled_name(me)} پیشنهاد «{type_name}»{f' («{pact_name}»)' if pact_name else ''} داد{penalty_note} — از تب دیپلماسی پاسخ بده.",
+            f"{titled_name(me)} {'دعوت به عضویت در' if source else 'پیشنهاد'} «{type_name}»{f' («{pact_name}»)' if pact_name else ''} فرستاد{penalty_note} — از تب دیپلماسی بپذیر یا رد کن. عضویت فقط پس از پذیرش فعال می‌شود.",
             kind="diplomacy",
         )
-    return {"ok": True, "sent_to": len(valid_targets), "skipped": len(targets) - len(valid_targets)}
+    return {"ok": True, "sent_to": len(valid_targets), "skipped": len(target_ids) - len(valid_targets), 'wine_spent': total_cost['wine']}
+
+class InviteBody(BaseModel):
+    to_tg_ids: list[int]
+
+@router.post('/{alliance_id}/invite')
+async def invite(alliance_id: str, body: InviteBody, user: dict = Depends(get_user)):
+    return await propose(ProposeBody(to_tg_ids=body.to_tg_ids, type='', existing_alliance_id=alliance_id), user)
 
 @router.get("/mine")
 async def mine(user: dict = Depends(get_user)):
@@ -105,6 +137,9 @@ async def mine(user: dict = Depends(get_user)):
         out.append({
             "id": str(a["_id"]),
             "mine_proposed": mine_proposed,
+            'can_invite': mine_proposed and a['status'] == 'accepted' and not a.get('marriage_id'),
+            'invite_wine_cost': round(int(rule('diplomacy.pact_costs', {}).get(a['type'], ALLIANCE_TYPES[a['type']]['wine_cost'])) *
+                (float(rule('diplomacy.private_multiplier', PRIVATE_ALLIANCE_MULTIPLIER)) if not a.get('public', True) else 1)),
             "group_id": a.get("group_id"),
             "group_members": group_members.get(gid, []) if a['status'] in ('pending', 'accepted') else [],
             "other_id": a["to_id"] if mine_proposed else a["from_id"],
@@ -143,6 +178,12 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
     if a["status"] != "pending":
         raise HTTPException(400, "این پیمان قبلاً پاسخ داده شده")
 
+    if body.accept and a.get('invited_via'):
+        proposer = await players.find_one({'tg_id': a['from_id']})
+        active = await alliances.find_one({'group_id': a.get('group_id'), 'from_id': a['from_id'], 'status': 'accepted'})
+        if not active or not proposer or proposer.get('is_dead') or not proposer.get('castle') or proposer.get('registration_reset'):
+            raise HTTPException(409, 'این پیمان دیگر فعال نیست؛ دعوت را رد کن تا هزینهٔ آن به سازنده برگردد')
+
     if body.accept and a['type'] == 'full_alliance':
         from marriage_pacts import spouses
         first = await players.find_one({'tg_id': a['from_id']})
@@ -180,7 +221,8 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
                 members = {a['from_name']}
                 async for member in alliances.find({'group_id': a['group_id'], 'status': 'accepted'}):
                     members.add(member['to_name'])
-                text = f"📜 {to_label} به گروه {type_name}{pact_name} پیوست.\nاعضای پذیرفته‌شده: {'، '.join(sorted(members))}\nاعضای این گروه مجوز تجارت و عبور کاروان با یکدیگر دارند."
+                access_note = '\nاعضای این گروه مجوز تجارت و عبور کاروان با یکدیگر دارند.' if a['type'] in ('trade', 'full_alliance') else '\nشرایط عدم‌تجاوز و غرامت بین سازنده و هر عضو برقرار است.'
+                text = f"📜 {to_label} به گروه {type_name}{pact_name} پیوست.\nاعضای پذیرفته‌شده: {'، '.join(sorted(members))}{access_note}"
             async for p in public_players():
                 if p["tg_id"] not in (a["from_id"], a["to_id"]):
                     await send_system_message(p["tg_id"], p["name"], text, kind="diplomacy")

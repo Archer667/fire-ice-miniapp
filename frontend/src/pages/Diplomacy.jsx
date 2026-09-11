@@ -38,6 +38,9 @@ export default function Diplomacy() {
   const [penaltyGold, setPenaltyGold] = useState(500);
   const [busy, setBusy] = useState(false);
   const [respondBusyId, setRespondBusyId] = useState(null);
+  const [invitePact, setInvitePact] = useState(null);
+  const [inviteTargets, setInviteTargets] = useState([]);
+  const [inviteBusy, setInviteBusy] = useState(false);
   const [feastBusy, setFeastBusy] = useState(false);
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
   const [councilTarget, setCouncilTarget] = useState([]);
@@ -132,6 +135,18 @@ export default function Diplomacy() {
       load();
     } catch (e) { toast(e.message); }
     setBusy(false);
+  };
+
+  const inviteMembers = async () => {
+    if (inviteBusy || !invitePact || !inviteTargets.length) return;
+    setInviteBusy(true);
+    try {
+      const result = await api.diplomacyInvite(invitePact.id, inviteTargets.map(p => p.tg_id));
+      toast(`دعوت ${result.sent_to.toLocaleString('fa-IR')} نفر به همین پیمان ارسال شد؛ ${result.wine_spent.toLocaleString('fa-IR')} شراب مصرف شد${result.skipped ? `؛ ${result.skipped.toLocaleString('fa-IR')} انتخاب نامعتبر یا تکراری کنار گذاشته شد` : ''}`);
+      setInvitePact(null); setInviteTargets([]); load();
+      api.me().then(setMe).catch(() => {});
+    } catch (e) { toast(e.message); }
+    finally { setInviteBusy(false); }
   };
 
   const respond = async (id, accept) => {
@@ -314,7 +329,7 @@ export default function Diplomacy() {
           <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5, padding: '6px 0' }}>هنوز هیچ پیمانی نبسته‌ای</div>
         )}
         {alliances && alliances.map(a => (
-          <div className="troop" key={a.id}>
+          <div key={a.id}><div className="troop">
             <div className="tn">
               {a.name ? <>{a.name} <small style={{ display: 'inline' }}>— {a.other_name}</small></> : a.other_name}
               {a.group_members?.length > 2 && <small>اعضای پذیرفته‌شدهٔ گروه: {a.group_members.join('، ')}</small>}
@@ -324,6 +339,9 @@ export default function Diplomacy() {
                 {a.marriage_id ? ' · وابسته به ازدواج؛ فسخ از صفحهٔ خانواده با غرامت' : ''}
                 {(a.type === 'non_aggression' || a.marriage_id) && a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
               </small>
+              {a.can_invite && !alliances.some(b => b.can_invite && b.group_id && b.group_id === a.group_id && alliances.indexOf(b) < alliances.indexOf(a)) && (
+                <button type="button" className="rbtn" style={{ marginTop: 8 }} disabled={inviteBusy} onClick={() => { setInvitePact(a); setInviteTargets([]); }}>دعوت عضو جدید</button>
+              )}
             </div>
             {!a.mine_proposed && a.status === 'pending' && (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -336,6 +354,17 @@ export default function Diplomacy() {
                 {a.type === 'non_aggression' ? `ترک با پرداخت ${(a.penalty_gold || 0).toLocaleString('fa-IR')} سکه` : a.group_members?.length > 2 ? (a.mine_proposed ? `قطع عضویت ${a.other_name}` : 'خروج از گروه') : 'ترک پیمان'}
               </button>
             )}
+          </div>
+          {invitePact?.id === a.id && <div className="card" style={{ marginBottom: 12 }}>
+            <div className="sect" style={{ marginTop: 0 }}>دعوت به {a.name || a.type_name}</div>
+            <p className="page-sub">{a.type_name} · {a.public ? 'عمومی' : 'خصوصی'}{a.penalty_gold ? ` · غرامت ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}. شرایط پیمان تغییر نمی‌کند؛ عضویت فقط با پذیرش دعوت فعال می‌شود.</p>
+            <PlayerPicker value={inviteTargets} onChange={setInviteTargets} placeholder="بازیکن جدید را جست‌وجو کن..." />
+            <p className="page-sub">هزینهٔ هر دعوت: {Number(a.invite_wine_cost || 0).toLocaleString('fa-IR')} شراب · مجموع انتخاب‌ها: {(Number(a.invite_wine_cost || 0) * inviteTargets.length).toLocaleString('fa-IR')} شراب. اعضای فعلی و دعوت‌های تکراری هزینه ندارند؛ رد دعوت مانند پیشنهاد عادی بازپرداخت می‌شود.</p>
+            <div className="grid2">
+              <button type="button" className="btn" disabled={inviteBusy || !inviteTargets.length} onClick={inviteMembers}>{inviteBusy ? 'در حال ارسال…' : 'ارسال دعوت'}</button>
+              <button type="button" className="btn ghost" disabled={inviteBusy} onClick={() => setInvitePact(null)}>بستن</button>
+            </div>
+          </div>}
           </div>
         ))}
       </div>
