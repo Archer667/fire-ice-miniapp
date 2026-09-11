@@ -152,6 +152,9 @@ async def _arrival_watcher():
                 from family import tick as tick_family, flush_notices as flush_family_notices
                 await deliver_announcements()
                 await flush_family_notices()
+                # Repair persisted membership even while gameplay is paused.
+                from routers.war import repair_open_battle_rosters
+                await repair_open_battle_rosters()
                 if not game_clock.paused():
                     await tick_family()
                     await notify_arrivals()
