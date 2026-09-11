@@ -1159,6 +1159,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     if not r.get("admin_generated") and r.get("admin_score") is None:
         raise HTTPException(400, "قبل از ثبت نتیجه، امتیاز این رول را ثبت کن")
 
+    # Sabotage outcomes contain covert identities and must remain author-only.
+    if r["category"] == "sabotage":
+        body = body.model_copy(update={"visibility": "participants", "other_lords": []})
+
     ids_to_resolve = [r["_id"]]
     recipient_tg_ids = {r["tg_id"]}
     campaign = None
@@ -1292,7 +1296,6 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
     if r["category"] == "sabotage":
         target_tg_id = r.get("target_tg_id")
         if target_tg_id:
-            recipient_tg_ids.add(target_tg_id)
             adjustment_results.append(await _apply_roleplay_player_adjustments(
                 target_tg_id, body.target_resource_deltas, body.target_popularity_delta,
             ))

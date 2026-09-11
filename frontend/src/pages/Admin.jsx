@@ -2324,6 +2324,7 @@ export default function Admin() {
                 <textarea value={roleplayResults[r.id] ?? ''}
                           onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
                           placeholder="نتیجهٔ این رول چه شد..." />
+                {r.category === 'sabotage' ? <div className="page-sub">نتیجهٔ خرابکاری محرمانه است و فقط برای فرستنده می‌رود؛ هدف و سایر بازیکنان اعلان دریافت نمی‌کنند.</div> : <>
                 <label className="f">این رول بین این لرد و چه لردهای دیگری بوده؟ (اختیاری)</label>
                 <PlayerPicker value={roleplayOtherLords[r.id] || []}
                               onChange={(v) => setRoleplayOtherLords(prev => ({ ...prev, [r.id]: v }))} />
@@ -2342,6 +2343,7 @@ export default function Admin() {
                     <div className="c">اعلامیهٔ عمومی</div>
                   </button>
                 </div>
+                </>}
                 <button className="btn" style={{ marginTop: 14 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
                   {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
                 </button>
