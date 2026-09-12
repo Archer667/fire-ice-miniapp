@@ -71,11 +71,58 @@ async def repair_stale_engagement_lock(campaign: dict) -> dict:
     battle_is_open = bool(root and root.get("battle_open") and not root.get("combat_resolved_at") and not root.get("battle_cancelled_at"))
     if battle_is_open:
         return campaign
+    closure = {"engagement_locked": False, "battle_open": False}
+    if root and root.get("combat_resolved_at"):
+        closure["combat_resolved_at"] = root["combat_resolved_at"]
+    else:
+        closure["battle_cancelled_at"] = (root or {}).get("battle_cancelled_at") or now()
     await campaigns.update_one({"_id": campaign["_id"]}, {
-        "$set": {"engagement_locked": False},
+        "$set": closure,
         "$unset": {"engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "", "opponent_campaign_id": "", "opponent_tg_id": ""},
     })
-    return {**campaign, "engagement_locked": False, "engagement_campaign_id": None, "battle_root_campaign_id": None}
+    return {**campaign, **closure, "engagement_campaign_id": None, "battle_root_campaign_id": None}
+
+async def reconcile_battle_locks():
+    """Close peaceful encounters and repair historical locks before exposing war state."""
+    from routers.admin import _battle_members_query, _dismiss_battle_record
+    async for root in campaigns.find({"battle_open": True,
+            "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False}}):
+        battle_id = root.get("engagement_campaign_id") or str(root["_id"])
+        members = await campaigns.find(_battle_members_query(root, battle_id)).to_list(None)
+        attackers, defenders = set(), set()
+        defender_ids = set(root.get("battle_defender_army_ids") or [])
+        attacker_ids = set(root.get("battle_attacker_army_ids") or [])
+        for member in members:
+            if not member.get("active"):
+                continue
+            mid = str(member["_id"])
+            if mid in defender_ids or mid == root.get("opponent_campaign_id"):
+                defenders.add(member["tg_id"])
+            elif mid in attacker_ids or (not attacker_ids and mid == str(root["_id"])):
+                attackers.add(member["tg_id"])
+        if root.get("battle_defender_tg_id"):
+            defenders.add(root["battle_defender_tg_id"])
+        if attackers and defenders:
+            peaceful = True
+            for a in attackers:
+                for d in defenders:
+                    if not await players_are_friendly(a, d):
+                        peaceful = False
+            if peaceful:
+                await _dismiss_battle_record(root, battle_id,
+                    "پروندهٔ نبرد به‌دلیل پیمان صلح میان طرف‌های درگیر بسته شد؛ قفل تمام لشکرهای این نبرد آزاد شد.")
+    async for army in campaigns.find({"engagement_locked": True}):
+        await repair_stale_engagement_lock(army)
+    # A hostile order may have arrived after a pact and never formed a battle.
+    async for army in campaigns.find({"active": True, "op_type": {"$in": list(ATTACK_OP_TYPES)},
+            "arrival_at": {"$lte": now()}, "engagement_locked": {"$ne": True},
+            "battle_open": {"$ne": True}, "combat_resolved_at": {"$exists": False},
+            "battle_cancelled_at": {"$exists": False}}):
+        owner = await owner_of_castle(army["target_castle"])
+        if owner and await players_are_friendly(army["tg_id"], owner["tg_id"]):
+            await campaigns.update_one({"_id": army["_id"]}, {"$set": {
+                "battle_cancelled_at": now(), "battle_open": False, "engagement_locked": False,
+                "battle_close_reason": "peace_pact"}})
 
 # ۲۴ ساعت بعد از رسیدن، گزارش لشکرکشی از تب گزارش‌های بازیکن پاک می‌شود
 REPORT_VISIBLE_HOURS = 24
@@ -1318,10 +1365,11 @@ async def notify_arrivals():
     یک‌بار برای هر لشکر، دقیقاً وقتی اولین بار به arrival_at می‌رسد. برای نبردهای واقعی
     (حمله/محاصره/غارت دریایی) آمار نیروهای مهاجم و مدافع هم برای هر دو طرف فرستاده می‌شود
     تا هر دو تا ۶ ساعت بعد سناریوی جنگ را از صفحهٔ رول‌ها بفرستند"""
+    await reconcile_battle_locks()
     await repair_open_battle_rosters()
     await process_route_ambushes()
     await detect_route_encounters()
-    cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}})
+    cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False}})
     async for c in cur:
         origin, target = c["origin_castle"], c["target_castle"]
         same_castle = origin == target
@@ -1340,6 +1388,7 @@ async def notify_arrivals():
             "_id": {"$ne": c["_id"]}, "tg_id": {"$ne": c["tg_id"]}, "active": True,
             "target_castle": target, "arrival_at": {"$lte": now()},
             "combat_resolved_at": {"$exists": False},
+            "battle_cancelled_at": {"$exists": False},
             "engagement_locked": {"$ne": True},
         }).sort("arrival_at", 1):
             if not await players_are_friendly(c["tg_id"], other["tg_id"]):
