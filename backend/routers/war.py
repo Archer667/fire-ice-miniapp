@@ -683,6 +683,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
             "tg_id": {"$ne": user["id"]}, "active": True,
             "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": origin,
             "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
+            "battle_cancelled_at": {"$exists": False},
         })
         if besieged:
             raise HTTPException(403, "این قلعه زیر حمله یا محاصره است و هیچ لشکری نمی‌تواند از آن خارج شود")
