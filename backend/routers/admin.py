@@ -1,3 +1,4 @@
+from army_upkeep import food_rate, campaign_food
 from public_audience import public_recipients, public_players
 from typing import Literal
 import asyncio
@@ -385,7 +386,7 @@ async def list_campaigns(user: dict = Depends(admin_user)):
             "name": s.get("name") or OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
             "troops": troops, **await _admin_army_metrics(s),
             **await _admin_castle_defenses(s),
-            "gold_cost": s["gold_cost"], "men_committed": s["men_committed"], "food_per_day": s["food_per_day"],
+            "gold_cost": s["gold_cost"], "men_committed": s["men_committed"], "food_per_day": campaign_food(s),
             "travel_minutes": s.get("travel_minutes", 0),
             "arrived": (now() >= arrival_at) if arrival_at else True,
             "active": s.get("active", False),
@@ -1005,7 +1006,7 @@ async def _apply_campaign_losses(campaign: dict, losses: dict[str, int]):
     men = sum(max(0, int(n or 0)) for n in troops.values())
     owner = await players.find_one({"tg_id": campaign["tg_id"]})
     levels = dict(building_levels_for(owner, campaign.get("origin_castle"))) if owner else {}
-    update = {"troops": troops, "men_committed": men, "power": campaign_power(troops, levels)}
+    update = {"troops": troops, "men_committed": men, "power": campaign_power(troops, levels), "food_per_day": food_rate(troops)}
     if men == 0:
         update.update({"active": False, "status": "destroyed", "engagement_locked": False})
     await campaigns.update_one({"_id": campaign["_id"]}, {"$set": update})
@@ -2414,7 +2415,7 @@ async def admin_reduce_campaign(campaign_id: str, body: ReduceCampaignBody, user
     old_men = max(1, int(c.get("men_committed", 0) or 0))
     men = sum(int(v or 0) for v in current.values())
     campaign_update = {
-        "troops": current, "men_committed": men,
+        "troops": current, "men_committed": men, "food_per_day": food_rate(current),
         "power": round(float(c.get("power", 0)) * men / old_men, 2), "admin_losses_at": now(),
     }
     if men == 0:

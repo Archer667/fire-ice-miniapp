@@ -1,3 +1,4 @@
+from army_upkeep import food_rate, campaign_food
 from public_audience import public_recipients, public_players
 from datetime import datetime, timedelta
 from bson import ObjectId
@@ -323,9 +324,9 @@ async def apply_campaign_upkeep(tg_id: int, resources: dict) -> dict:
         days = int((now() - last).total_seconds() // 86400)
         if days <= 0:
             continue
-        cost = c["food_per_day"] * days
+        cost = campaign_food(c) * days
         resources["food"] = max(0, resources.get("food", 0) - cost)
-        await campaigns.update_one({"_id": c["_id"]}, {"$set": {"last_food_tick": last + timedelta(days=days)}})
+        await campaigns.update_one({"_id": c["_id"]}, {"$set": {"last_food_tick": last + timedelta(days=days), "food_per_day": campaign_food(c)}})
     return resources
 
 @router.get("/routes")
@@ -1134,7 +1135,7 @@ async def process_route_ambushes():
             remaining = sum(updated_troops.values())
             destroyed = sum(v for k, v in updated_troops.items() if k not in NAVAL_TROOPS) <= 0
             await campaigns.update_one({"_id": army["_id"], "active": True}, {"$set": {
-                "troops": updated_troops, "men_committed": remaining,
+                "troops": updated_troops, "men_committed": remaining, "food_per_day": food_rate(updated_troops),
                 "power": round(float(army.get("power", 0)) * remaining / old_men, 2),
                 "active": not destroyed, "status": "ambush_destroyed" if destroyed else army.get("status", "active"),
             }})

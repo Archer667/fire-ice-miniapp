@@ -1,3 +1,4 @@
+from army_upkeep import campaign_food
 import re
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from login_audit import request_ip, record_login
@@ -221,7 +222,7 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
             break
 
     popularity = p.get("popularity", POPULARITY_START)
-    army_food_per_day = sum([float(c.get("food_per_day", 0)) async for c in campaigns.find({"tg_id": user["id"], "active": True})])
+    army_food_per_day = sum([campaign_food(c) async for c in campaigns.find({"tg_id": user["id"], "active": True})])
     active_campaigns = await campaigns.count_documents({"tg_id": user["id"], "active": True})
     return {
         "registered": True,
