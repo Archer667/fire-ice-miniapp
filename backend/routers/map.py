@@ -31,6 +31,10 @@ async def get_map(user: dict = Depends(get_user)):
         if prev is None or PACT_PRIORITY.index(a["type"]) < PACT_PRIORITY.index(prev):
             pact_by_tgid[other_id] = a["type"]
 
+    from peace_pacts import peace_partners
+    for uid, pact in (await peace_partners(alliances, user['id'])).items():
+        pact_by_tgid[uid] = pact['type']
+
     # اقلیمِ واقعیِ هر قلعه — از رویِ خودِ پینِ نقشه‌اش (نه اقلیمِ خانگیِ صاحبش)؛ قلعه‌های
     # استاتیکِ بدون پینِ اختصاصی هم از دیتای ثابت پیش‌فرض می‌گیرن. لازمه چون یه لرد
     # می‌تونه قلعهٔ دومی در اقلیمِ دیگه‌ای داشته باشه — بالادستیِ اون پین باید بالادستیِ

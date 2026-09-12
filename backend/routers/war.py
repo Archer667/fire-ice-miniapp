@@ -168,15 +168,8 @@ async def region_of_castle(castle: str) -> str | None:
 PASSAGE_ALLIANCE_TYPES = ["non_aggression", "full_alliance"]  # پیمان تجاری فقط برای کاروان/مناسبات تجاریه، ربطی به عبورِ لشکر نداره
 
 async def allied_tg_ids(tg_id: int) -> set:
-    """هرکسی که با tg_id پیمانِ پذیرفته‌شدهٔ عدم‌تجاوز یا اتحاد کامل دارد — این دو
-    اجازهٔ عبورِ لشکر از قلمرو را می‌دهند، پیمان تجاری نه"""
-    out = set()
-    async for a in alliances.find({
-        "status": "accepted", "type": {"$in": PASSAGE_ALLIANCE_TYPES},
-        "$or": [{"from_id": tg_id}, {"to_id": tg_id}],
-    }):
-        out.add(a["to_id"] if a["from_id"] == tg_id else a["from_id"])
-    return out
+    from peace_pacts import peace_partners
+    return set(await peace_partners(alliances, tg_id))
 
 async def players_are_friendly(a_id: int, b_id: int) -> bool:
     """فقط عدم‌تجاوز و اتحاد کامل جلوی ساخته‌شدن پروندهٔ نبرد را می‌گیرند."""
@@ -185,10 +178,8 @@ async def players_are_friendly(a_id: int, b_id: int) -> bool:
     return b_id in await allied_tg_ids(a_id)
 
 async def active_peace_pact(a_id: int, b_id: int):
-    return await alliances.find_one({
-        "status": "accepted", "type": {"$in": PASSAGE_ALLIANCE_TYPES},
-        "$or": [{"from_id": a_id, "to_id": b_id}, {"from_id": b_id, "to_id": a_id}],
-    })
+    from peace_pacts import peace_partners
+    return (await peace_partners(alliances, a_id)).get(b_id)
 
 async def reject_hostile_order_during_pact(attacker_tg_id: int, target_castle: str, op_type: str):
     """در عدم‌تجاوز و اتحاد کامل، فقط فرمان غیرخصمانهٔ جای‌گیری مجاز است."""

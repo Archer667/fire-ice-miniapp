@@ -8,7 +8,7 @@ TRADE_TYPES = ['trade', 'full_alliance']
 
 async def migrate_legacy_groups():
     batches = {}
-    async for row in alliances.find({'type': {'$in': TRADE_TYPES}, '$or': [
+    async for row in alliances.find({'type': {'$in': list(ALLIANCE_TYPES)}, '$or': [
             {'group_id': {'$exists': False}}, {'group_id': {'$regex': '^legacy-'}}]}):
         if not row.get('created_at'):
             continue
