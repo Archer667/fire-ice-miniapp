@@ -253,6 +253,10 @@ export default function Admin() {
   const [specialMedalReason, setSpecialMedalReason] = useState('');
   const [specialMedalBusy, setSpecialMedalBusy] = useState(false);
   const [alliancesList, setAlliancesList] = useState(null);
+  const [allianceSearch, setAllianceSearch] = useState('');
+  const normalizePactSearch = value => String(value || '').toLowerCase().replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[@\s\u200c]/g,'');
+  const filteredAlliances = (alliancesList || []).filter(a => !allianceSearch.trim() || normalizePactSearch([a.name,a.from,a.to,...(a.members || []).flatMap(m=>[m.name,m.current_name,m.username,m.tg_id])].join(' ')).includes(normalizePactSearch(allianceSearch)));
+
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
   const [spyResolved, setSpyResolved] = useState(null);
   const [spyResultsView, setSpyResultsView] = useState('pending'); // 'pending' | 'resolved'
@@ -2389,11 +2393,12 @@ export default function Admin() {
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
             اعضای هر پیمان، دعوت‌های در انتظار و اعضای خارج‌شده؛ اخراج با غرامت یا انحلال کامل بدون غرامت
           </div>
+          <div className="card up u2"><label className="f">جست‌وجوی پیمان</label><input value={allianceSearch} onChange={e=>setAllianceSearch(e.target.value)} placeholder="نام لرد/لیدی، آیدی عددی، @username یا نام پیمان" /><div className="page-sub">{filteredAlliances.length.toLocaleString('fa-IR')} پیمان</div></div>
           <div className="up u2">
-            {(!alliancesList || alliancesList.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز پیمانی بسته نشده</div>
+            {(alliancesList && filteredAlliances.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>پیمانی مطابق جست‌وجو پیدا نشد</div>
             )}
-            {alliancesList && alliancesList.map(a => (
+            {filteredAlliances.map(a => (
               <div className="card" key={a.id} style={{ marginBottom: 10 }}>
                 <div className="res">
                   <div className="ic"><Scroll s={16} /></div>
@@ -2403,7 +2408,7 @@ export default function Admin() {
                   </div>
                 </div>
                 {a.members?.map(m => <div className="res" key={m.tg_id} style={{ flexWrap: 'wrap', gap: 8 }}>
-                  <div className="n">{m.name}<small>{m.tg_id} · {m.creator ? 'سازنده · ' : ''}{{accepted: 'عضو', pending: 'منتظر پاسخ', left: 'خارج‌شده', dissolved: 'منحل‌شده', rejected: 'ردشده', cancelled: 'لغوشده'}[m.status] || m.status}</small></div>
+                  <div className="n">{m.current_name || m.name}<small>{m.tg_id}{m.username ? ` · @${m.username}` : ''} · {m.creator ? 'سازنده · ' : ''}{{accepted: 'عضو', pending: 'منتظر پاسخ', left: 'خارج‌شده', dissolved: 'منحل‌شده', rejected: 'ردشده', cancelled: 'لغوشده'}[m.status] || m.status}</small><small>غرامت خروج/اخراج: {(m.penalty_gold || 0).toLocaleString('fa-IR')} سکه</small></div>
                   {m.status === 'accepted' && !a.marriage_id && isFull && <button className="rbtn" style={{ color: 'var(--danger)' }} disabled={dissolveBusyId === a.id} onClick={() => expelAlliance(a, m)}>اخراج{m.creator ? ' و انحلال' : ''}</button>}
                 </div>)}
                 {a.marriage_id && <div className="page-sub">پیمان ازدواج؛ مدیریت فسخ از بخش خانواده</div>}

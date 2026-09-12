@@ -2530,6 +2530,7 @@ async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(owner_u
 @router.get("/alliances")
 async def admin_list_alliances(user: dict = Depends(full_admin_user)):
     """Return complete explicit groups, including pending and former members."""
+    profiles = {p['tg_id']: p async for p in players.find({}, {'tg_id': 1, 'name': 1, 'telegram_username': 1})}
     groups = {}
     async for row in alliances.find({}).sort("created_at", -1):
         key = row.get("group_id") or str(row["_id"])
@@ -2545,6 +2546,12 @@ async def admin_list_alliances(user: dict = Depends(full_admin_user)):
             if not old or (r["status"] in ("accepted", "pending") and old["status"] not in ("accepted", "pending")):
                 members[r["to_id"]] = {"tg_id": r["to_id"], "name": r["to_name"], "creator": False,
                     "status": r["status"], "alliance_id": str(r["_id"]), "penalty_gold": r.get("penalty_gold", 0)}
+        for member in members.values():
+            profile = profiles.get(member['tg_id'], {})
+            member['current_name'] = profile.get('name', member['name'])
+            member['username'] = profile.get('telegram_username') or ''
+            if member['creator']:
+                member['penalty_gold'] = a.get('penalty_gold', 0)
         out.append({"id": str(a["_id"]), "group_id": a.get("group_id"),
             "from": a["from_name"], "from_tg_id": a["from_id"], "to": a["to_name"], "to_tg_id": a["to_id"],
             "members": list(members.values()), "marriage_id": a.get("marriage_id"),

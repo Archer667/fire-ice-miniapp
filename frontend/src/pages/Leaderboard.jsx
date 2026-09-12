@@ -48,14 +48,25 @@ export default function Leaderboard() {
   const [lordPages, setLordPages] = useState(1);
   const [lordBusy, setLordBusy] = useState(false);
   const [lordRows, setLordRows] = useState(null);
+  const [lordError, setLordError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const [pictureBusy, setPictureBusy] = useState(false);
   const [weeklyRows, setWeeklyRows] = useState(null);
   const [selectedMedal, setSelectedMedal] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
 
+  const openPicture = async r => {
+    if (pictureBusy) return;
+    haptic(); setPictureBusy(true);
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000);
+    try { const data = r.profile_key ? await api.leaderboardPicture(r.profile_key, controller.signal) : {image:r.profile_image}; setSelectedProfile({image:data.image || r.profile_image,name:r.name}); }
+    catch(e) { toast(e.name === 'AbortError' ? 'دریافت تصویر طول کشید؛ دوباره تلاش کن' : e.message); }
+    finally { clearTimeout(timer); setPictureBusy(false); }
+  };
   const playerPicture = r => r.profile_image ? (
     <button type="button" className="leader-profile-trigger"
             aria-label={`نمایش تصویر پروفایل ${r.name}`}
-            onClick={() => { haptic(); setSelectedProfile({ image: r.profile_image, name: r.name }); }}>
+            disabled={pictureBusy} onClick={() => openPicture(r)}>
       <img src={r.profile_image} alt="" loading="lazy" decoding="async" />
     </button>
   ) : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'));
@@ -74,10 +85,13 @@ export default function Leaderboard() {
 
   useEffect(() => {
     if (tab !== 'lords') return;
-    let active = true; setLordBusy(true);
-    api.leaderboardPage(lordPage).then(r => { if(active){setLordRows(r.items);setLordPages(r.pages);if(r.page!==lordPage)setLordPage(r.page);} }).catch(e=>toast(e.message)).finally(()=>{if(active)setLordBusy(false);});
-    return ()=>{active=false;};
-  },[tab,lordPage]);
+    let active = true; setLordBusy(true); setLordError('');
+    const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 25000);
+    api.leaderboardPage(lordPage, controller.signal).then(r => { if(active){setLordRows(r.items);setLordPages(r.pages);if(r.page!==lordPage)setLordPage(r.page);} })
+      .catch(e=>{if(active)setLordError(e.name === 'AbortError' ? 'دریافت جدول طول کشید؛ دوباره تلاش کن.' : e.message);})
+      .finally(()=>{clearTimeout(timer);if(active)setLordBusy(false);});
+    return ()=>{active=false;clearTimeout(timer);controller.abort();};
+  },[tab,lordPage,retry]);
   const pager = <nav className="leader-pager" aria-label="صفحه‌بندی لردها"><button className="rbtn" disabled={lordBusy||lordPage<=1} onClick={()=>setLordPage(p=>p-1)}>قبلی</button><span>صفحهٔ {lordPage.toLocaleString('fa-IR')} از {lordPages.toLocaleString('fa-IR')}</span><button className="rbtn" disabled={lordBusy||lordPage>=lordPages} onClick={()=>setLordPage(p=>p+1)}>بعدی</button></nav>;
   return (
     <>
@@ -107,7 +121,7 @@ export default function Leaderboard() {
 
       {tab === 'lords' && pager}
       {tab === 'lords' && (
-        lordRows === null ? <div className="loading">شمارش تاج‌ها...</div> : lordRows.length === 0 ? (
+        lordError ? <div className="card"><p className="page-sub">{lordError}</p><button className="rbtn" onClick={()=>setRetry(n=>n+1)}>تلاش مجدد</button></div> : lordBusy || lordRows === null ? <div className="loading">شمارش تاج‌ها...</div> : lordRows.length === 0 ? (
           <div className="empty up u2">هنوز لرد تأییدشده‌ای وارد جدول امتیازات نشده است.</div>
         ) : (
           <div className="up u2">

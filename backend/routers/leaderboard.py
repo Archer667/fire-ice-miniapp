@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from auth import get_user
 from db import admin_roles, players
+from portrait_thumbnails import thumbnail
 from medals import medal_rows, normalize_stats
 from game_data import REGIONS
 from config import ADMIN_IDS, OWNER_ID
@@ -41,14 +42,15 @@ async def with_dead_players(rows, weekly=False):
 async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(default=None, ge=1)):
     rows = await _without_admins(await with_dead_players(await scored_players()))
     out = []
-    pages = max(1, (len(rows)+49)//50)
+    pages = max(1, (len(rows)+24)//25)
     current = min(page or 1, pages)
-    offset = (current-1)*50
-    for i, row in enumerate(rows[offset:offset+50], start=offset):
+    offset = (current-1)*25
+    for i, row in enumerate(rows[offset:offset+25], start=offset):
         p = row["player"]
         out.append({
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
-            "profile_image": p.get("profile_image"),
+            "profile_image": thumbnail(p.get("profile_image")),
+            "profile_key": str(p["tg_id"]) + ":" + str(p.get("created_at")),
             "castle": p["castle"], "region": REGIONS.get(p.get("region"), {}).get("name", ""),
             "points": row["score"],
             "stats": normalize_stats(p), "medals": medal_rows(p),
@@ -66,7 +68,8 @@ async def weekly_leaderboard(user: dict = Depends(get_user)):
         p = row["player"]
         out.append({
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
-            "profile_image": p.get("profile_image"),
+            "profile_image": thumbnail(p.get("profile_image")),
+            "profile_key": str(p["tg_id"]) + ":" + str(p.get("created_at")),
             "castle": p["castle"], "region": REGIONS.get(p.get("region"), {}).get("name", ""),
             "points": row["weekly_score"],
             "stats": normalize_stats(p), "medals": medal_rows(p),
@@ -97,3 +100,18 @@ async def region_leaderboard(user: dict = Depends(get_user)):
             "mine": rid == my_region,
         })
     return out
+
+
+@router.get('/profile-image')
+async def profile_image(key: str = Query(max_length=200), user: dict = Depends(get_user)):
+    from character_records import archives
+    try:
+        uid=int(key.split(':',1)[0])
+    except ValueError:
+        raise HTTPException(400,'شناسهٔ تصویر نامعتبر است')
+    p=await players.find_one({'tg_id':uid})
+    if not p or str(p['tg_id'])+':'+str(p.get('created_at'))!=key:
+        p=await archives.find_one({'_id':key})
+    if not p or not p.get('castle'):
+        raise HTTPException(404,'تصویر پیدا نشد')
+    return {'image':p.get('profile_image')}
