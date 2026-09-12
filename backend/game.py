@@ -227,4 +227,4 @@ def can_afford(resources: dict, cost: dict) -> bool:
 
 def pay(resources: dict, cost: dict):
     for k, v in cost.items():
-        resources[k] = max(0, round(resources.get(k, 0)) - v)
+        resources[k] = max(min(0, round(resources.get(k, 0))), round(resources.get(k, 0)) - v)

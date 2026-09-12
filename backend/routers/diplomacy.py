@@ -36,6 +36,8 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
             raise HTTPException(409, 'فقط پیمان برقرار و مستقل از ازدواج قابل گسترش است')
         body = body.model_copy(update={'type': source['type'], 'name': source.get('name', ''),
             'private': not source.get('public', True), 'penalty_gold': source.get('penalty_gold', 0)})
+    if not 0 <= body.penalty_gold <= 1000000000:
+        raise HTTPException(400, "غرامت باید بین صفر و یک میلیارد سکه باشد")
     if body.type not in ALLIANCE_TYPES:
         raise HTTPException(400, "نوع پیمان نامعتبر")
     if body.type == "non_aggression" and body.penalty_gold <= 0:
@@ -80,8 +82,8 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
 
     pact_name = body.name.strip()[:60]
-    penalty_gold = body.penalty_gold if body.type == "non_aggression" else 0
-    group_id = (source.get('group_id') or 'pact-' + str(source['_id'])) if source else (str(uuid4()) if body.type in ('trade', 'full_alliance') else None)
+    penalty_gold = max(0, body.penalty_gold)
+    group_id = (source.get('group_id') or 'pact-' + str(source['_id'])) if source else str(uuid4())
     if source and not source.get('group_id'):
         # Extend this exact invitation batch, never unrelated pacts sharing a name.
         batch = {'_id': source['_id']}
@@ -236,46 +238,8 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
 
 @router.post("/{alliance_id}/leave")
 async def leave(alliance_id: str, user: dict = Depends(get_user)):
-    """تجاری رایگان ترک می‌شود؛ عدم‌تجاوز فقط با پرداخت کامل غرامت به طرف مقابل."""
-    a = await alliances.find_one({"_id": ObjectId(alliance_id)})
-    if not a:
-        raise HTTPException(404, "پیمان پیدا نشد")
-    if user["id"] not in (a["from_id"], a["to_id"]):
-        raise HTTPException(403, "این پیمان مال تو نیست")
-    if a["type"] not in ("trade", "non_aggression"):
-        raise HTTPException(400, "اتحاد کامل را فقط ادمین می‌تواند منحل کند")
-    if a["status"] != "accepted":
-        raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
-
-    penalty = int(a.get("penalty_gold", 0) or 0) if a["type"] == "non_aggression" else 0
-    me = await players.find_one({"tg_id": user["id"]})
-    if not me:
-        raise HTTPException(404, "بازیکن پیدا نشد")
-    me = apply_production(me)
-    if penalty and me.get("resources", {}).get("gold", 0) < penalty:
-        raise HTTPException(400, f"برای ترک این پیمان باید {penalty:,} سکه غرامت بدهی؛ طلای کافی نداری")
-
-    guard = await alliances.update_one(
-        {"_id": a["_id"], "status": "accepted"}, {"$set": {"status": "left", "left_by": user["id"], "ended_at": now()}},
-    )
-    if guard.matched_count == 0:
-        raise HTTPException(400, "فقط پیمان برقرار را می‌شود ترک کرد")
-    if penalty:
-        me["resources"]["gold"] -= penalty
-        await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
-    await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
-    await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
-    other_id = a["to_id"] if a["from_id"] == user["id"] else a["from_id"]
-    other_name = a["to_name"] if other_id == a["to_id"] else a["from_name"]
-    if penalty:
-        other = await players.find_one({"tg_id": other_id})
-        if other:
-            add_resources(other, {"gold": penalty})
-            await players.update_one({"tg_id": other_id}, {"$set": {"resources": other["resources"]}})
-    type_name = ALLIANCE_TYPES.get(a["type"], {}).get("name", "پیمان")
-    penalty_note = f" و {penalty:,} سکه غرامت به تو پرداخت کرد" if penalty else ""
-    await send_system_message(other_id, other_name, f"{titled_name(me)} از {type_name} خارج شد{penalty_note}.", kind="diplomacy")
-    return {"ok": True, "penalty_paid": penalty}
+    from pact_exits import exit_pact
+    return await exit_pact(alliance_id, departing=user['id'])
 
 @router.post("/feast")
 async def feast(user: dict = Depends(get_user)):

@@ -912,12 +912,22 @@ export default function Admin() {
     setSpyBusyId(null);
   };
 
+  const expelAlliance = async (a, member) => {
+    const penalty = member.penalty_gold || a.members?.find(m => !m.creator && m.status === 'accepted')?.penalty_gold || 0;
+    if (!window.confirm(`اخراج ${member.name}؟ غرامت ${penalty.toLocaleString('fa-IR')} سکه بین سایر اعضا تقسیم می‌شود و موجودی ناکافی منفی می‌شود.${member.creator ? ' کل گروه منحل می‌شود.' : ''}`)) return;
+    setDissolveBusyId(a.id);
+    try { await api.adminExpelAlliance(a.id, member.tg_id); toast('اخراج و تسویهٔ غرامت انجام شد'); loadAlliances(); }
+    catch (e) { toast(e.message); }
+    setDissolveBusyId(null);
+  };
+
   const dissolveAlliance = async (id) => {
+    if (!window.confirm("کل پیمان و دعوت‌های باز آن بدون غرامت منحل شوند؟ برای جریمهٔ بازیکن از اخراج استفاده کن.")) return;
     setDissolveBusyId(id);
     try {
       await api.adminDissolveAlliance(id);
       haptic('medium');
-      toast('پیمان منحل شد و به هر دو طرف اطلاع داده شد');
+      toast('کل پیمان منحل شد؛ اعلان اعضا ثبت شد');
       loadAlliances();
     } catch (e) { toast(e.message); }
     setDissolveBusyId(null);
@@ -2377,7 +2387,7 @@ export default function Admin() {
         <>
           <div className="sect up u2">اتحادهای بازی</div>
           <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            همهٔ پیمان‌های پیشنهادشده بین بازیکنان — پیمان‌های برقرار را در صورت نیاز می‌توانی زورکی منحل کنی
+            اعضای هر پیمان، دعوت‌های در انتظار و اعضای خارج‌شده؛ اخراج با غرامت یا انحلال کامل بدون غرامت
           </div>
           <div className="up u2">
             {(!alliancesList || alliancesList.length === 0) && (
@@ -2388,15 +2398,20 @@ export default function Admin() {
                 <div className="res">
                   <div className="ic"><Scroll s={16} /></div>
                   <div className="n">
-                    {a.from} ← {a.to}
+                    {a.name || `${a.from} ← ${a.to}`}
                     <small>{a.type_name}{a.name ? ` · «${a.name}»` : ''} · {a.public ? 'عمومی' : 'خصوصی'}</small>
                   </div>
                 </div>
+                {a.members?.map(m => <div className="res" key={m.tg_id} style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <div className="n">{m.name}<small>{m.tg_id} · {m.creator ? 'سازنده · ' : ''}{{accepted: 'عضو', pending: 'منتظر پاسخ', left: 'خارج‌شده', dissolved: 'منحل‌شده', rejected: 'ردشده', cancelled: 'لغوشده'}[m.status] || m.status}</small></div>
+                  {m.status === 'accepted' && !a.marriage_id && isFull && <button className="rbtn" style={{ color: 'var(--danger)' }} disabled={dissolveBusyId === a.id} onClick={() => expelAlliance(a, m)}>اخراج{m.creator ? ' و انحلال' : ''}</button>}
+                </div>)}
+                {a.marriage_id && <div className="page-sub">پیمان ازدواج؛ مدیریت فسخ از بخش خانواده</div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {{ pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده' }[a.status] || a.status}
                   </div>
-                  {a.status === 'accepted' && isFull && (
+                  {a.status === 'accepted' && !a.marriage_id && isFull && (
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
                             disabled={dissolveBusyId === a.id} onClick={() => dissolveAlliance(a.id)}>
                       {dissolveBusyId === a.id ? 'در حال انحلال...' : 'منحل کن'}

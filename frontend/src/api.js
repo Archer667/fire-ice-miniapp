@@ -1756,6 +1756,7 @@ export const api = {
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   diplomacyLeave: (id) => MOCK ? Promise.resolve(M.diplomacyLeave(id))
     : req(`/api/diplomacy/${id}/leave`, { method: 'POST' }),
+  adminExpelAlliance: (id, tgId) => req(`/api/admin/alliances/${id}/expel`, { method: 'POST', body: JSON.stringify({ tg_id: tgId }) }),
   adminListAlliances: () => MOCK ? Promise.resolve(M.adminListAlliances()) : req('/api/admin/alliances'),
   adminDissolveAlliance: (id) => MOCK ? Promise.resolve(M.adminDissolveAlliance(id))
     : req(`/api/admin/alliances/${id}/dissolve`, { method: 'POST' }),

@@ -2529,48 +2529,43 @@ async def admin_set_war_window(body: WarWindowBody, user: dict = Depends(owner_u
 
 @router.get("/alliances")
 async def admin_list_alliances(user: dict = Depends(full_admin_user)):
-    """همهٔ پیمان‌ها — از جمله خصوصی و رد/در انتظار — برای مرور و در صورت نیاز انحلال"""
+    """Return complete explicit groups, including pending and former members."""
+    groups = {}
+    async for row in alliances.find({}).sort("created_at", -1):
+        key = row.get("group_id") or str(row["_id"])
+        groups.setdefault(key, []).append(row)
     out = []
-    cur = alliances.find({}).sort("created_at", -1).limit(100)
-    async for a in cur:
-        out.append({
-            "id": str(a["_id"]), "from": a["from_name"], "from_tg_id": a["from_id"],
-            "to": a["to_name"], "to_tg_id": a["to_id"],
+    for key, rows in groups.items():
+        a = next((r for r in rows if r["status"] == "accepted"), rows[0])
+        members = {}
+        for r in rows:
+            members.setdefault(r["from_id"], {"tg_id": r["from_id"], "name": r["from_name"],
+                "creator": True, "status": "accepted" if any(x["status"] == "accepted" for x in rows) else a["status"]})
+            old = members.get(r["to_id"])
+            if not old or (r["status"] in ("accepted", "pending") and old["status"] not in ("accepted", "pending")):
+                members[r["to_id"]] = {"tg_id": r["to_id"], "name": r["to_name"], "creator": False,
+                    "status": r["status"], "alliance_id": str(r["_id"]), "penalty_gold": r.get("penalty_gold", 0)}
+        out.append({"id": str(a["_id"]), "group_id": a.get("group_id"),
+            "from": a["from_name"], "from_tg_id": a["from_id"], "to": a["to_name"], "to_tg_id": a["to_id"],
+            "members": list(members.values()), "marriage_id": a.get("marriage_id"),
             "type": a["type"], "type_name": ALLIANCE_TYPES.get(a["type"], {}).get("name", a["type"]),
             "name": a.get("name") or "", "status": a["status"], "public": a.get("public", True),
-            "created_at": a["created_at"].isoformat(),
-        })
+            "created_at": a["created_at"].isoformat()})
     return out
 
 @router.post("/alliances/{alliance_id}/dissolve")
 async def admin_dissolve_alliance(alliance_id: str, user: dict = Depends(full_admin_user)):
-    """ادمین یک پیمانِ برقرار را زورکی منحل می‌کند — شمار اتحاد هر دو طرف کم می‌شود و هر دو باخبر می‌شوند"""
-    try:
-        oid = ObjectId(alliance_id)
-    except Exception:
-        raise HTTPException(400, "شناسهٔ پیمان نامعتبر است")
-    a = await alliances.find_one({"_id": oid})
-    if not a:
-        raise HTTPException(404, "این پیمان پیدا نشد")
-    if a["status"] != "accepted":
-        raise HTTPException(400, "فقط پیمان برقرار را می‌شود منحل کرد")
+    from pact_exits import exit_pact
+    return await exit_pact(alliance_id, forced=True, actor=user['id'])
 
-    if a.get("marriage_id"):
-        raise HTTPException(409, "این پیمان وابسته به ازدواج است؛ فسخ از صفحهٔ خانواده و با پرداخت غرامت انجام می‌شود")
-    await alliances.update_one({"_id": oid}, {"$set": {"status": "dissolved"}})
-    await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": -1}})
-    await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": -1}})
-    party_rows = await players.find(
-        {"tg_id": {"$in": [a["from_id"], a["to_id"]]}}, {"tg_id": 1, "name": 1, "gender": 1},
-    ).to_list(2)
-    party_by_id = {p["tg_id"]: p for p in party_rows}
-    for tg_id, name, other_id, other_name, other_gender in [
-        (a["from_id"], a["from_name"], a["to_id"], a["to_name"], a.get("to_gender")),
-        (a["to_id"], a["to_name"], a["from_id"], a["from_name"], a.get("from_gender")),
-    ]:
-        other_label = titled_name(party_by_id.get(other_id), name=other_name, gender=other_gender)
-        await send_system_message(tg_id, name, f"پیمانت با {other_label} به فرمان ادمین منحل شد.")
-    return {"ok": True}
+class ExpelPactMemberBody(BaseModel):
+    tg_id: int
+
+@router.post('/alliances/{alliance_id}/expel')
+async def admin_expel_pact_member(alliance_id: str, body: ExpelPactMemberBody, user: dict = Depends(full_admin_user)):
+    from pact_exits import exit_pact
+    return await exit_pact(alliance_id, departing=body.tg_id, forced=True, actor=user['id'])
+
 
 async def _current_admin_ids() -> set:
     admin_ids = set(ADMIN_IDS)

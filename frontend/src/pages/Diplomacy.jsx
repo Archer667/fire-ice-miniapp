@@ -127,7 +127,7 @@ export default function Diplomacy() {
     if (type === 'non_aggression' && (!penaltyGold || penaltyGold <= 0)) { toast('مقدار غرامتِ خیانت را مشخص کن'); return; }
     setBusy(true);
     try {
-      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate, type === 'non_aggression' ? penaltyGold : 0);
+      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate, penaltyGold);
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - unitCost * (res.sent_to || targets.length) } });
       toast(`پیشنهاد پیمان با کلاغ به ${res.sent_to || targets.length} لرد ارسال شد`);
@@ -163,8 +163,8 @@ export default function Diplomacy() {
 
   const leaveAlliance = async (alliance) => {
     if (respondBusyId) return;
-    const penalty = alliance.type === 'non_aggression' ? (alliance.penalty_gold || 0) : 0;
-    if (penalty && !window.confirm(`برای ترک این پیمان باید ${penalty.toLocaleString('fa-IR')} سکه غرامت بدهی. ادامه می‌دهی؟`)) return;
+    const penalty = alliance.penalty_gold || 0;
+    if (!window.confirm(`خروج با ${penalty.toLocaleString('fa-IR')} سکه غرامت برای سایر اعضا؟${alliance.mine_proposed ? ' خروج سازنده کل گروه را منحل می‌کند.' : ''}`)) return;
     setRespondBusyId(alliance.id);
     try {
       await api.diplomacyLeave(alliance.id);
@@ -290,15 +290,14 @@ export default function Diplomacy() {
             <option key={id} value={id}>{t.name} — {t.wine_cost.toLocaleString('fa-IR')} شراب هرکدام</option>
           ))}
         </select>
-        {type === 'non_aggression' && (
+        {(
           <>
-            <label className="f">غرامتِ خیانت (طلا)</label>
-            <input type="number" min={1} value={penaltyGold}
+            <label className="f">غرامت خروج یا اخراج (سکه)</label>
+            <input type="number" min={0} value={penaltyGold}
                    onChange={e => setPenaltyGold(Math.max(0, parseInt(e.target.value, 10) || 0))}
                    placeholder="مثلاً ۵۰۰" />
             <div className="page-sub" style={{ margin: '4px 4px 0' }}>
-              اگه یکی از طرفین با وجود این پیمان به اون یکی حمله/غارت/محاصره کنه، همین مقدار طلا
-              (یا اگه طلا کم بود، به همون میزان از امتیازش) ازش کم می‌شه.
+              غرامت بین اعضای باقی‌مانده تقسیم می‌شه. خروج سازنده کل گروه رو منحل می‌کنه. خروج اختیاری سکهٔ کافی می‌خواد؛ اخراج ادمین می‌تونه موجودی رو منفی کنه.
             </div>
           </>
         )}
@@ -337,7 +336,7 @@ export default function Diplomacy() {
                 {a.type_name} · {STATUS_FA[a.status]}{a.mine_proposed ? ' · پیشنهاد تو' : ' · پیشنهاد او'}
                 {a.public === false ? ' · خصوصی' : ''}
                 {a.marriage_id ? ' · وابسته به ازدواج؛ فسخ از صفحهٔ خانواده با غرامت' : ''}
-                {(a.type === 'non_aggression' || a.marriage_id) && a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
+                {a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
               </small>
               {a.can_invite && !alliances.some(b => b.can_invite && b.group_id && b.group_id === a.group_id && alliances.indexOf(b) < alliances.indexOf(a)) && (
                 <button type="button" className="rbtn" style={{ marginTop: 8 }} disabled={inviteBusy} onClick={() => { setInvitePact(a); setInviteTargets([]); }}>دعوت عضو جدید</button>
@@ -349,9 +348,9 @@ export default function Diplomacy() {
                 <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => respond(a.id, false)}>رد</button>
               </div>
             )}
-            {(a.type === 'trade' || a.type === 'non_aggression') && a.status === 'accepted' && (
+            {!a.marriage_id && a.status === 'accepted' && (
               <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }} disabled={respondBusyId === a.id} onClick={() => leaveAlliance(a)}>
-                {a.type === 'non_aggression' ? `ترک با پرداخت ${(a.penalty_gold || 0).toLocaleString('fa-IR')} سکه` : a.group_members?.length > 2 ? (a.mine_proposed ? `قطع عضویت ${a.other_name}` : 'خروج از گروه') : 'ترک پیمان'}
+                {`خروج با ${(a.penalty_gold || 0).toLocaleString('fa-IR')} سکه${a.mine_proposed ? ' و انحلال پیمان' : ''}`}
               </button>
             )}
           </div>
