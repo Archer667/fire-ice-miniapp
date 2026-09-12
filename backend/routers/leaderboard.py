@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from auth import get_user
 from db import admin_roles, players
 from portrait_thumbnails import thumbnail
+from rank_history import player_key, baseline, movement
 from medals import medal_rows, normalize_stats
 from game_data import REGIONS
 from config import ADMIN_IDS, OWNER_ID
@@ -35,12 +36,13 @@ async def with_dead_players(rows, weekly=False):
         score = snapshot.get("score", 0)
         weekly_score = snapshot.get("weekly_score", 0) if snapshot.get("week_start") == current_week_start() else 0
         rows.append({"player": profile, "score": score, "weekly_score": weekly_score, "rank_label": snapshot.get("rank_label")})
-    rows.sort(key=lambda row: row["weekly_score" if weekly else "score"], reverse=True)
+    rows.sort(key=lambda row: (-row["weekly_score" if weekly else "score"], player_key(row["player"])))
     return rows
 
 @router.get("")
 async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(default=None, ge=1)):
     rows = await _without_admins(await with_dead_players(await scored_players()))
+    prior = await baseline("lords")
     out = []
     pages = max(1, (len(rows)+24)//25)
     current = min(page or 1, pages)
@@ -48,6 +50,7 @@ async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(d
     for i, row in enumerate(rows[offset:offset+25], start=offset):
         p = row["player"]
         out.append({
+            "movement": movement(prior, player_key(p), i + 1),
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
             "profile_image": thumbnail(p.get("profile_image")),
             "profile_key": str(p["tg_id"]) + ":" + str(p.get("created_at")),
@@ -63,10 +66,12 @@ async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(d
 async def weekly_leaderboard(user: dict = Depends(get_user)):
     """رقابت تازهٔ همین هفته — امتیاز کسب‌شده از دوشنبه تا الان، نه انباشت کل بازی"""
     rows = await _without_admins(await with_dead_players(await weekly_scored_players(), weekly=True))
+    prior = await baseline("weekly")
     out = []
     for i, row in enumerate(rows[:50]):
         p = row["player"]
         out.append({
+            "movement": movement(prior, player_key(p), i + 1),
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
             "profile_image": thumbnail(p.get("profile_image")),
             "profile_key": str(p["tg_id"]) + ":" + str(p.get("created_at")),
@@ -91,10 +96,12 @@ async def region_leaderboard(user: dict = Depends(get_user)):
         if p["tg_id"] == user["id"]:
             my_region = p["region"]
 
+    prior = await baseline("regions")
     ranked = sorted(REGIONS.keys(), key=lambda rid: totals[rid]["total"], reverse=True)
     out = []
     for i, rid in enumerate(ranked):
         out.append({
+            "movement": movement(prior, rid, i + 1),
             "rank": i + 1, "region": rid, "name": REGIONS[rid]["name"],
             "total_score": totals[rid]["total"], "lord_count": totals[rid]["count"],
             "mine": rid == my_region,

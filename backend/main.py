@@ -421,6 +421,8 @@ async def start_background_watchers():
     asyncio.create_task(_arrival_watcher())
     asyncio.create_task(_market_watcher())
     asyncio.create_task(_project_watcher())
+    from rank_history import watcher as rank_history_watcher
+    asyncio.create_task(rank_history_watcher())
     from battle_notices import watcher as battle_notice_watcher
     asyncio.create_task(battle_notice_watcher())
 

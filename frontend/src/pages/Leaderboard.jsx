@@ -28,6 +28,16 @@ const MEDAL_GUIDE = [
   { key: 'crown_enemy', icon: '🗡️', name: 'دشمن تاج', desc: 'افتخار ویژهٔ دشمنان تاج‌وتخت', rule: 'اعطای دستی ادمین' },
 ];
 
+function RankMovement({ value }) {
+  const delta = value?.delta;
+  const known = value?.state === 'known';
+  const label = !known ? (value?.state === 'new' ? 'جدید' : '—') : delta ? Math.abs(delta).toLocaleString('fa-IR') : '—';
+  const title = !known ? (value?.state === 'new' ? 'در جدول ۲۴ ساعت قبل حضور نداشته' : 'هنوز سابقهٔ کافی برای مقایسهٔ ۲۴ساعته وجود ندارد') : delta ? `${Math.abs(delta).toLocaleString('fa-IR')} پله ${delta > 0 ? 'صعود' : 'نزول'} نسبت به ۲۴ ساعت قبل` : 'بدون تغییر نسبت به ۲۴ ساعت قبل';
+  return <span title={title} aria-label={title} style={{display:'inline-flex',alignItems:'center',gap:2,fontSize:11,fontWeight:500,color:known && delta ? (delta > 0 ? '#78c69b' : 'var(--danger)') : 'var(--low)',marginInlineStart:6,whiteSpace:'nowrap'}}>
+    {known && !!delta && <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d={delta > 0 ? 'M3 10 L8 5 L13 10' : 'M3 6 L8 11 L13 6'} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}{label}
+  </span>;
+}
+
 function MedalChips({ medals, onSelect, player }) {
   if (!medals?.length) return null;
   return <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
@@ -105,13 +115,14 @@ export default function Leaderboard() {
                onClick={() => { haptic(); setTab(t.id); }}>{t.label}</button>
         ))}
       </div>
+      <div className="page-sub">تغییر رتبه نسبت به ۲۴ ساعت قبل</div>
       {tab === 'regions' && (
         !regionRows ? <div className="loading">شمارش اقلیم‌ها...</div> : (
           <div className="up u2">
             {regionRows.map(r => (
               <div key={r.region} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.mine ? 'me' : ''}`}>
                 <div className="rk">{MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR')}</div>
-                <div className="n">{r.name}{r.mine ? ' — اقلیم تو' : ''}<small>{r.lord_count.toLocaleString('fa-IR')} لرد</small></div>
+                <div className="n">{r.name}<RankMovement value={r.movement} />{r.mine ? ' — اقلیم تو' : ''}<small>{r.lord_count.toLocaleString('fa-IR')} لرد</small></div>
                 <div className="p">{r.total_score.toLocaleString('fa-IR')}</div>
               </div>
             ))}
@@ -130,7 +141,7 @@ export default function Leaderboard() {
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
                 <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
                 <div className="n">
-                  {r.name}{r.me ? ' — تو' : ''}
+                  {r.name}<RankMovement value={r.movement} />{r.me ? ' — تو' : ''}
                   {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
                   <small>{castleLabel(r.castle)} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
                   <small style={{ display: 'block', marginTop: 4 }}>
@@ -158,7 +169,7 @@ export default function Leaderboard() {
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
                   <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
                   <div className="n">
-                    {r.name}{r.me ? ' — تو' : ''}
+                    {r.name}<RankMovement value={r.movement} />{r.me ? ' — تو' : ''}
                     {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
                     <small>{castleLabel(r.castle)} · {r.region}{r.title ? ` · ${r.title}` : ''}</small>
                   <small style={{ display: 'block', marginTop: 4 }}>

@@ -7,7 +7,7 @@ from routers import leaderboard as lb
 class LeaderboardTests(unittest.IsolatedAsyncioTestCase):
  async def test_pages_keep_ranks_and_last_page(self):
   rows=[{'player':{'tg_id':i,'name':str(i),'castle':'A','region':'north'},'score':100-i,'rank_label':None} for i in range(61)]
-  with patch.object(lb,'scored_players',AsyncMock(return_value=rows)),patch.object(lb,'with_dead_players',AsyncMock(side_effect=lambda r:r)),patch.object(lb,'_without_admins',AsyncMock(side_effect=lambda r:r)):
+  with patch.object(lb,'baseline',AsyncMock(return_value=None)),patch.object(lb,'scored_players',AsyncMock(return_value=rows)),patch.object(lb,'with_dead_players',AsyncMock(side_effect=lambda r:r)),patch.object(lb,'_without_admins',AsyncMock(side_effect=lambda r:r)):
    first=await lb.leaderboard({'id':0},page=1);second=await lb.leaderboard({'id':0},page=2);last=await lb.leaderboard({'id':0},page=999)
    self.assertEqual((len(first['items']),first['pages']),(25,3))
    self.assertEqual(second['items'][0]['rank'],26)
