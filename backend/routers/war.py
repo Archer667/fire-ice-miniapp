@@ -89,6 +89,15 @@ async def reconcile_battle_locks():
             "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False}}):
         battle_id = root.get("engagement_campaign_id") or str(root["_id"])
         members = await campaigns.find(_battle_members_query(root, battle_id)).to_list(None)
+        active_members = [m for m in members if m.get("active")]
+        if (root.get("op_type") in DEFENSE_OP_TYPES and active_members
+                and all(m.get("op_type") in DEFENSE_OP_TYPES for m in active_members)
+                and root.get("battle_defender_tg_id")
+                and not str(root.get("battle_location", "")).startswith("مسیر ")
+                and await players_are_friendly(root["tg_id"], root["battle_defender_tg_id"])):
+            await _dismiss_battle_record(root, battle_id,
+                "اصلاح خطای سیستم: حضور لشکرهای جای‌گیری و دفاعی به‌اشتباه نبرد ایجاد کرده بود. پرونده بدون تلفات و غرامت بسته شد و قفل لشکرهای آن آزاد شد.")
+            continue
         attackers, defenders = set(), set()
         defender_ids = set(root.get("battle_defender_army_ids") or [])
         attacker_ids = set(root.get("battle_attacker_army_ids") or [])
@@ -228,6 +237,32 @@ async def players_are_friendly(a_id: int, b_id: int) -> bool:
 async def active_peace_pact(a_id: int, b_id: int):
     from peace_pacts import peace_partners
     return (await peace_partners(alliances, a_id)).get(b_id)
+
+async def castle_armies_are_hostile(incoming, other, owner):
+    if await players_are_friendly(incoming["tg_id"], other["tg_id"]):
+        return False
+    # Presence alone is not an attack; both peaceful guests can share a castle.
+    for army in (incoming, other):
+        if army.get("op_type") not in ATTACK_OP_TYPES:
+            continue
+        if not owner or not await players_are_friendly(army["tg_id"], owner["tg_id"]):
+            return True
+    return False
+
+async def may_join_battle(root, tg_id, side):
+    opposite = "defender" if side == "attacker" else "attacker"
+    opponents = set()
+    for raw in root.get(f"battle_{opposite}_army_ids") or []:
+        army = await campaigns.find_one({"_id": ObjectId(raw), "active": True})
+        if army:
+            opponents.add(army["tg_id"])
+    leader = root.get("battle_defender_tg_id") if opposite == "defender" else root.get("tg_id")
+    if leader:
+        opponents.add(leader)
+    for uid in opponents:
+        if await players_are_friendly(tg_id, uid):
+            return False
+    return True
 
 async def reject_hostile_order_during_pact(attacker_tg_id: int, target_castle: str, op_type: str):
     """در عدم‌تجاوز و اتحاد کامل، فقط فرمان غیرخصمانهٔ جای‌گیری مجاز است."""
@@ -1270,6 +1305,8 @@ async def detect_route_encounters():
                 and await players_are_friendly(army["tg_id"], root["battle_defender_tg_id"])
             )
             side = "defender" if joins_defender else "attacker"
+            if not await may_join_battle(root, army["tg_id"], side):
+                continue
             await campaigns.update_one({"_id": army["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
                 "engagement_locked": True, "engagement_campaign_id": battle_id,
                 "battle_root_campaign_id": str(root["_id"]), "battle_is_root": False,
@@ -1391,7 +1428,7 @@ async def notify_arrivals():
             "battle_cancelled_at": {"$exists": False},
             "engagement_locked": {"$ne": True},
         }).sort("arrival_at", 1):
-            if not await players_are_friendly(c["tg_id"], other["tg_id"]):
+            if await castle_armies_are_hostile(c, other, target_owner):
                 opposing_army = other
                 break
         if target_owner and target_owner["tg_id"] != c["tg_id"]:
@@ -1418,6 +1455,10 @@ async def notify_arrivals():
             if not (creates_battle or friendly_to_attacker or friendly_to_defender):
                 open_battle = None
         if open_battle:
+            joins_defender = bool(open_battle.get("battle_defender_tg_id") and await players_are_friendly(c["tg_id"], open_battle["battle_defender_tg_id"]))
+            if not await may_join_battle(open_battle, c["tg_id"], "defender" if joins_defender else "attacker"):
+                await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
+                continue
             engagement_id = open_battle["engagement_campaign_id"]
             joined_at = now()
             snapshot = battle_army_snapshot(c)
@@ -1448,7 +1489,7 @@ async def notify_arrivals():
             continue
         if creates_battle:
             engagement_id = str(ObjectId())
-            battle_defender = target_owner if target_owner and target_owner["tg_id"] != c["tg_id"] else None
+            battle_defender = target_owner if target_owner and not owner_is_friendly else None
             if not battle_defender and opposing_army:
                 battle_defender = await players.find_one({"tg_id": opposing_army["tg_id"]})
             defender_armies = [opposing_army] if opposing_army else []
@@ -1461,7 +1502,7 @@ async def notify_arrivals():
                 })]
                 if opposing_army and all(d['_id'] != opposing_army['_id'] for d in defender_armies):
                     defender_armies.append(opposing_army)
-            defense_infrastructure = defensive_infrastructure(battle_defender, target) if target_owner else []
+            defense_infrastructure = defensive_infrastructure(battle_defender, target) if target_owner and battle_defender and battle_defender["tg_id"] == target_owner["tg_id"] else []
             engagement_update = {
                 "engagement_locked": True, "engagement_campaign_id": engagement_id,
                 "battle_root_campaign_id": str(c["_id"]), "battle_is_root": True,
