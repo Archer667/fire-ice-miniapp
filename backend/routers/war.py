@@ -957,6 +957,7 @@ def battle_army_stats_line(army: dict) -> str:
     men = int(army.get("men_committed", sum(army.get("troops", {}).values())) or 0)
     return (
         f"{titled_name(name=army.get('player_name', 'نامشخص'), gender=army.get('player_gender'))} · «{army.get('name', 'لشکر')}» · {men} نفر\n"
+        f"فرمانده: {'همراه لشکر است' if army.get('commander_present') else 'همراه لشکر نیست'}\n"
         f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}"
     )
 

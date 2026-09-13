@@ -881,6 +881,7 @@ async def list_open_battles(user: dict = Depends(admin_user)):
         async def army_row(a): return {
             "campaign_id": a.get("campaign_id") or str(a.get("_id", "")), "name": a.get("name", "لشکر"),
             "tg_id": a.get("tg_id"), "player_name": a.get("player_name", "مهاجم"),
+            "commander_present": bool(a.get("commander_present", False)),
             "men": a.get("men_committed", a.get('men', sum(a.get("troops", {}).values()))),
             **await _admin_army_metrics(a),
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],
