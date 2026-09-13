@@ -200,7 +200,7 @@ GAME_RULES = {
     "default_max_building_level": 8,
     "equipment_slowdown_cap": 1.0,
     "commander_power_bonus": 0.10,
-    "commander_speed_bonus": 0.05,
+    "commander_speed_bonus": 0.10,
 }
 
 # نسخه‌های دست‌نخورده برای «بازگشت به پیش‌فرض» پنل ادمین.

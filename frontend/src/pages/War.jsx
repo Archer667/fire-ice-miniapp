@@ -418,7 +418,7 @@ export default function War() {
             <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
             {!movingLegion && <button type="button" className={`rbtn pick ${commanderPresent ? 'sel' : ''}`} style={{ marginTop: 10, width: '100%', textAlign: 'right' }} onClick={() => setCommanderPresent(v => !v)}>
               <div className="n">{commanderPresent ? 'فرمانده همراه لشکر می‌رود' : 'فرمانده در قلعه می‌ماند'}</div>
-              <div className="c">حضور کاراکتر: ۱۰٪ قدرت بیشتر و ۵٪ حرکت سریع‌تر؛ این ضرایب در پنل ادمین قابل تغییرند.</div>
+              <div className="c">حضور کاراکتر: {Number(warWindow?.commander_power_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ قدرت بیشتر و {Number(warWindow?.commander_speed_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ کاهش زمان حرکت؛ این ضرایب در پنل ادمین قابل تغییرند.</div>
             </button>}
 
             <label className="f">مبدا</label>

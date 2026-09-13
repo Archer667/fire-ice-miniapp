@@ -154,7 +154,11 @@ async def get_war_window() -> dict:
 async def war_window(user: dict = Depends(get_user)):
     """وضعیت فعلی پنجرهٔ لشکرکشی — پلیر باید بتواند قبل از پرکردن فرم ببیند بسته است یا باز"""
     w = await get_war_window()
-    return {"open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None}
+    return {
+        "open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None,
+        "commander_speed_bonus_percent": float(rule("movement.commander_speed_bonus_percent", 10)),
+        "commander_power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 10)),
+    }
 
 def _building_levels(player: dict, castle: str | None = None) -> dict:
     """سطحِ ساختمان‌های یک قلعهٔ مشخصِ این بازیکن — پیش‌فرض قلعهٔ اصلی‌اش. برای قدرتِ
