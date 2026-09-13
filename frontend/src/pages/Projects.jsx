@@ -54,6 +54,7 @@ export default function Projects({ admin = false }) {
   const [mine, setMine] = useState(false);
   const [status, setStatus] = useState('all');
   const [create, setCreate] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [form, setForm] = useState(initial);
   const [terms, setTerms] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -84,9 +85,11 @@ export default function Projects({ admin = false }) {
   const submit = e => {
     e.preventDefault();
     if (!previewValid) { toast('هر منبع بودجه باید بر تعداد سهام بخش‌پذیر باشد'); return; }
+    setCreateError('');
     run(async () => {
       try { await api.submitProject({ ...form, owner_shares: ownerShares }); }
       catch (error) {
+        setCreateError(error.message || 'ثبت پروژه انجام نشد؛ دوباره تلاش کن.');
         if (error.status >= 400 && error.status < 500) setForm(prev => ({ ...prev, request_id: crypto.randomUUID() }));
         throw error;
       }
@@ -133,7 +136,7 @@ export default function Projects({ admin = false }) {
     </article>)}</div>
 
     {create && <Modal title="طرح پروژهٔ تازه" close={() => !busy && setCreate(false)}>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} onInvalidCapture={e => setCreateError(`فیلد «${e.target.closest('label')?.textContent?.trim() || 'مشخصات پروژه'}» را کامل و با مقدار معتبر وارد کن.`)}>
         <fieldset disabled={busy} className="project-fieldset">
           <h3 className="project-step">۱. هویت و هدف پروژه</h3>
           <label className="f">نوع پروژه<select value={form.kind} onChange={e => field('kind', e.target.value)}><option value="shared">مشترک — با سرمایه‌گذار</option><option value="personal">شخصی — تمام سرمایه با خودم</option></select></label>
@@ -156,6 +159,9 @@ export default function Projects({ admin = false }) {
           {previewValid && <><Economics project={form} shares={1} title="محاسبات هر سهم" /><Economics project={form} shares={ownerShares} title={`محاسبات شما — ${number(ownerShares)} سهم`} /></>}
           <button type="button" className="btn ghost" onClick={() => setTerms(true)}>مطالعهٔ شرایط سرمایه‌گذاری</button>
           <label className="project-check"><input required type="checkbox" checked={form.accepted_terms} onChange={e => field('accepted_terms', e.target.checked)} />شرایط رزرو، جریمه و شکست پروژه را خواندم و می‌پذیرم.</label>
+          {form.kind === 'personal' && <p className="page-sub">در پروژهٔ شخصی، کل بودجه هنگام ثبت از موجودی خودت رزرو می‌شود.</p>}
+          {createError && <p role="alert" className="project-error">{createError}</p>}
+          {!form.accepted_terms && <p className="page-sub">برای فعال‌شدن ثبت، شرایط سرمایه‌گذاری را بپذیر.</p>}
           <button className="btn" disabled={!previewValid || !form.accepted_terms}>{busy ? 'در حال ثبت...' : 'ثبت درخواست و رزرو آوردهٔ من'}</button>
         </fieldset>
       </form>
