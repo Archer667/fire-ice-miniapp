@@ -249,20 +249,40 @@ async def castle_armies_are_hostile(incoming, other, owner):
             return True
     return False
 
-async def may_join_battle(root, tg_id, side):
-    opposite = "defender" if side == "attacker" else "attacker"
-    opponents = set()
-    for raw in root.get(f"battle_{opposite}_army_ids") or []:
+async def battle_side_players(root, side):
+    ids = root.get(f"battle_{side}_army_ids")
+    members = set()
+    for raw in ids or []:
         army = await campaigns.find_one({"_id": ObjectId(raw), "active": True})
         if army:
-            opponents.add(army["tg_id"])
-    leader = root.get("battle_defender_tg_id") if opposite == "defender" else root.get("tg_id")
-    if leader:
-        opponents.add(leader)
-    for uid in opponents:
+            members.add(army["tg_id"])
+    if side == "defender" and root.get("battle_defender_tg_id"):
+        members.add(root["battle_defender_tg_id"])
+    elif side == "attacker" and ids is None and root.get("tg_id"):
+        members.add(root["tg_id"])
+    return members
+
+async def may_join_battle(root, tg_id, side):
+    opposite = "defender" if side == "attacker" else "attacker"
+    for uid in await battle_side_players(root, opposite):
         if await players_are_friendly(tg_id, uid):
             return False
     return True
+
+async def choose_battle_side(root, army):
+    friendly = {}
+    for side in ("attacker", "defender"):
+        friendly[side] = False
+        for uid in await battle_side_players(root, side):
+            if await players_are_friendly(army["tg_id"], uid):
+                friendly[side] = True
+    if friendly["attacker"] and friendly["defender"]:
+        return None
+    if friendly["defender"]:
+        return "defender"
+    if friendly["attacker"]:
+        return "attacker"
+    return "attacker" if army.get("op_type") in ATTACK_OP_TYPES else None
 
 async def reject_hostile_order_during_pact(attacker_tg_id: int, target_castle: str, op_type: str):
     """در عدم‌تجاوز و اتحاد کامل، فقط فرمان غیرخصمانهٔ جای‌گیری مجاز است."""
@@ -1300,13 +1320,10 @@ async def detect_route_encounters():
                 continue
             battle_id, joined_at = root["engagement_campaign_id"], now()
             snapshot = battle_army_snapshot(army)
-            joins_defender = bool(
-                root.get("battle_defender_tg_id")
-                and await players_are_friendly(army["tg_id"], root["battle_defender_tg_id"])
-            )
-            side = "defender" if joins_defender else "attacker"
-            if not await may_join_battle(root, army["tg_id"], side):
+            side = await choose_battle_side(root, army)
+            if side is None:
                 continue
+            joins_defender = side == "defender"
             await campaigns.update_one({"_id": army["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
                 "engagement_locked": True, "engagement_campaign_id": battle_id,
                 "battle_root_campaign_id": str(root["_id"]), "battle_is_root": False,
@@ -1332,8 +1349,15 @@ async def detect_route_encounters():
             break
         if joined:
             continue
+    claimed = set()
     for i, a in enumerate(moving):
+        if a["_id"] in claimed:
+            continue
         for b in moving[i + 1:]:
+            if b["_id"] in claimed:
+                continue
+            if a.get("op_type") not in ATTACK_OP_TYPES and b.get("op_type") not in ATTACK_OP_TYPES:
+                continue
             if a["tg_id"] == b["tg_id"] or await players_are_friendly(a["tg_id"], b["tg_id"]):
                 continue
             pa, pb = a.get("route_path", []), b.get("route_path", [])
@@ -1396,6 +1420,8 @@ async def detect_route_encounters():
             await send_system_message(root["tg_id"], root["player_name"], msg, kind="battle")
             await send_system_message(opponent["tg_id"], opponent["player_name"], msg, kind="battle")
             await notify_battle_admins(engagement_id, location, root, opponent, dict(opponent.get("troops", {})))
+            claimed.update((a["_id"], b["_id"]))
+            break
 
 async def notify_arrivals():
     """کلاغی به مبدا که «لشکرت رسید» و کلاغی به صاحب مقصد که «لشکری به قلعه‌ات رسید» —
@@ -1408,6 +1434,12 @@ async def notify_arrivals():
     await detect_route_encounters()
     cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False}})
     async for c in cur:
+        c = await campaigns.find_one({"_id": c["_id"]})
+        if not c or not c.get("active") or c.get("arrival_notified"):
+            continue
+        if c.get("engagement_locked") or c.get("combat_resolved_at") or c.get("battle_cancelled_at"):
+            await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
+            continue
         origin, target = c["origin_castle"], c["target_castle"]
         same_castle = origin == target
         name = c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])
@@ -1448,17 +1480,11 @@ async def notify_arrivals():
             "_id": {"$ne": c["_id"]},
         })
         if open_battle:
-            friendly_to_attacker = await players_are_friendly(c["tg_id"], open_battle["tg_id"])
-            friendly_to_defender = bool(open_battle.get("battle_defender_tg_id") and await players_are_friendly(c["tg_id"], open_battle["battle_defender_tg_id"]))
-            # نیرویی که واقعاً وارد صحنه شده یا با یکی از طرفین هم‌پیمان است به
-            # پروندهٔ باز می‌پیوندد؛ عبور/جای‌گیری بی‌طرف، جنگ تصادفی نمی‌سازد.
-            if not (creates_battle or friendly_to_attacker or friendly_to_defender):
-                open_battle = None
-        if open_battle:
-            joins_defender = bool(open_battle.get("battle_defender_tg_id") and await players_are_friendly(c["tg_id"], open_battle["battle_defender_tg_id"]))
-            if not await may_join_battle(open_battle, c["tg_id"], "defender" if joins_defender else "attacker"):
+            side = await choose_battle_side(open_battle, c)
+            if side is None:
                 await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
                 continue
+            joins_defender = side == "defender"
             engagement_id = open_battle["engagement_campaign_id"]
             joined_at = now()
             snapshot = battle_army_snapshot(c)
@@ -1467,8 +1493,6 @@ async def notify_arrivals():
                 "battle_root_campaign_id": str(open_battle["_id"]), "battle_is_root": False,
                 "battle_location": target, "battle_started_at": joined_at,
             }})
-            joins_defender = bool(open_battle.get("battle_defender_tg_id") and await players_are_friendly(c["tg_id"], open_battle["battle_defender_tg_id"]))
-            side = "defender" if joins_defender else "attacker"
             join = {"campaign_id": str(c["_id"]), "tg_id": c["tg_id"], "player_name": c["player_name"], "side": side, "joined_at": joined_at}
             pushes = {"battle_joins": join}
             if joins_defender:
