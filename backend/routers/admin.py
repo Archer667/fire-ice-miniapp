@@ -826,6 +826,8 @@ async def _remove_campaign_from_battle(campaign: dict, reason: str) -> dict:
 @router.get("/battles")
 async def list_open_battles(user: dict = Depends(admin_user)):
     """پرونده‌های نبرد مستقل از رول؛ بنابراین حتی با صفر رول هم قابل داوری‌اند."""
+    from display_clock import display_clock
+    display = await display_clock()
     out = []
     seen = set()
     cur = campaigns.find({
@@ -915,6 +917,10 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "rolls": rolls, "started_at": root.get("battle_started_at", root.get("arrival_at")).isoformat() if (root.get("battle_started_at") or root.get("arrival_at")) else None,
             "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
         }
+        battle_row['started_at_real'] = display.iso(root.get('battle_started_at') or root.get('arrival_at'))
+        for key, stored in [('battle_joins','battle_joins'), ('attacker_joins','battle_attacker_joins'), ('defender_joins','battle_defender_joins')]:
+            for item, source in zip(battle_row[key], root.get(stored, [])):
+                item['joined_at_real'] = display.iso(source.get('joined_at'))
         out.append(battle_row)
         # repair اعلان: اگر پرونده در نسخهٔ قدیمی ساخته شده و اعلان لحظه‌ای‌اش جا افتاده،
         # اولین بار که پنل آن را بازیابی می‌کند فقط یک اعلان ماندگار/تلگرامی ساخته می‌شود.

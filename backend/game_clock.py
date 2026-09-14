@@ -32,8 +32,12 @@ async def change(stop, reason, actor):
     offset = _state.get('offset_seconds', 0)
     if not stop:
         offset += max(0, (current - _state['paused_at']).total_seconds())
+    checkpoints = list(_state.get('display_checkpoints', []))
+    if not stop:
+        checkpoints.append({'game_at': current - timedelta(seconds=offset), 'offset_seconds': offset})
     state = {'paused_at': current if stop else None, 'offset_seconds': offset,
-             'reason': reason if stop else '', 'changed_by': actor, 'changed_at': current}
+             'reason': reason if stop else '', 'changed_by': actor, 'changed_at': current,
+             'display_checkpoints': checkpoints}
     await game_settings.update_one({'_id': 'game_clock'}, {'$set': state}, upsert=True)
     _state = state
     return status()

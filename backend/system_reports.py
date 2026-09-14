@@ -99,9 +99,11 @@ async def save_limits(body:LimitsBody,user=Depends(full)):
     return await limits()
 @router.get('/admin/reports/{kind}')
 async def report(kind:str,user=Depends(full)):
+    from display_clock import display_clock, tehran_text
+    display = await display_clock()
     if kind == 'caravans':
         from game_data import TRADE_GOOD_NAMES
-        lines = ['گزارش کاروان‌های تجاری', 'سوابق موجود این سیزن؛ زمان‌ها بر اساس ساعت UTC بازی هستند.', '']
+        lines = ['گزارش کاروان‌های تجاری', 'زمان‌ها به وقت تهران هستند؛ برای سوابق فاقد زمان واقعی، زمان داخلی بازی مشخص شده است.', '']
         async for row in db.caravans.find({}).sort('created_at', 1):
             status = 'تحویل ناموفق' if row.get('delivery_failed') else 'تحویل‌شده' if row.get('arrival_notified') else 'در راه' if row.get('active') else 'لغوشده'
             lines += ['─' * 45, 'شناسه کاروان: ' + str(row['_id']),
@@ -109,15 +111,15 @@ async def report(kind:str,user=Depends(full)):
                       f"گیرنده: {row.get('target_name', '—')} | آیدی: {row.get('target_tg_id')}",
                       f"مبدأ: {row.get('origin_castle')} | مقصد: {row.get('target_castle')}",
                       'مسیر: ' + ' ← '.join(row.get('route_path') or []),
-                      f"ارسال: {row.get('created_at')} | موعد رسیدن: {row.get('arrival_at')} | وضعیت: {status}",
+                      f"ارسال: {display.text(row.get('created_at'))} | موعد رسیدن: {display.text(row.get('arrival_at'))} | وضعیت: {status}",
                       'محموله: ' + '، '.join(f'{TRADE_GOOD_NAMES.get(k,k)}: {v}' for k,v in row.get('resources',{}).items())]
         return {'filename': 'caravans.txt', 'text': '\n'.join(lines)}
     if kind not in ('admin-activity','market'): raise HTTPException(404)
     col = db.admin_activity if kind=='admin-activity' else db.market_history
     title='گزارش فعالیت ادمین‌ها' if kind=='admin-activity' else 'گزارش معاملات بازار'
-    lines=[title,'این گزارش فقط سوابق ثبت‌شده از زمان فعال‌سازی گزارش‌گیری را شامل می‌شود.','زمان at میلادی UTC است؛ game_at زمان بازی است.','started یعنی عملیات آغاز شده و تکمیل آن تأیید نشده؛ completed یا کد 2xx یعنی تکمیل موفق.','']
+    lines=[title,'این گزارش فقط سوابق ثبت‌شده از زمان فعال‌سازی گزارش‌گیری را شامل می‌شود.','زمان رویدادها به وقت تهران است.','started یعنی عملیات آغاز شده و تکمیل آن تأیید نشده؛ completed یا کد 2xx یعنی تکمیل موفق.','']
     async for row in col.find({}).sort('at',1):
-        lines += ['─'*45, 'زمان: '+str(row.get('at')), 'وضعیت: '+str(row.get('status'))]
+        lines += ['─'*45, 'زمان: '+tehran_text(row.get('at')), 'وضعیت: '+str(row.get('status'))]
         if kind == 'market':
             from game_data import TRADE_GOOD_NAMES
             lines += ['بازار: '+{'players':'بین بازیکنان','westeros':'وستروس','black':'بلک مارکت'}.get(row['source'],row['source']),

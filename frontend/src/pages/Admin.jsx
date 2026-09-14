@@ -1,3 +1,4 @@
+import { battleTime } from '../battleExport.js';
 import BattleExport from '../components/BattleExport.jsx';
 import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
 import { gameNow } from '../gameClock.js';
@@ -2056,7 +2057,7 @@ export default function Admin() {
               return <div className="card" key={b.campaign_id} style={{ marginBottom: 12 }}>
                 <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.attacker_name} در برابر {b.defender_name} · {castleLabel(b.location)}</small></div></div>
                 <BattleExport battle={b} toast={toast} />
-                <div className="notice-guide" style={{ marginTop: 10 }}><strong>زمان نبرد و ورود نیروها</strong><span>شروع: {b.started_at ? new Date(b.started_at).toLocaleString('fa-IR') : 'نامشخص'}{(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).length ? `\n${(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).map(j => `${j.player_name} · ${j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${new Date(j.joined_at).toLocaleString('fa-IR')}`).join('\n')}` : ''}</span></div>
+                <div className="notice-guide" style={{ marginTop: 10 }}><strong>زمان نبرد و ورود نیروها</strong><span>شروع: {battleTime(b.started_at_real, b.started_at)}{(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).length ? `\n${(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).map(j => `${j.player_name} · ${j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)}`).join('\n')}` : ''}</span></div>
                 <div className="notice-guide" style={{ marginTop: 10 }}><strong>رول‌های جنگ</strong><span>{b.rolls.length ? b.rolls.map(r => `${r.player}: ${r.text}`).join('\n') : 'هیچ‌کدام از طرفین هنوز رول نفرستاده‌اند؛ داوری همچنان باز است.'}</span></div>
                 <div className="sect" style={{ margin: '14px 0 7px' }}>نیروها و تلفات</div>
                 <div className="notice-guide" style={{ marginBottom: 10 }}><strong>زیرساخت‌های دفاعی قلعه · {b.defense_infrastructure_source === 'snapshot' ? 'ثبت‌شده در آغاز نبرد' : 'وضعیت فعلی'}</strong><span>{b.defense_infrastructure_source === 'field' ? 'این نبرد در مسیر است؛ زیرساخت قلعه در آن کاربرد ندارد' : b.defense_infrastructure?.length ? b.defense_infrastructure.map(x => `${x.name} سطح ${x.level.toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>
