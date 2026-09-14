@@ -1,28 +1,40 @@
 """Persistent audit history; never included in game reset collections."""
 import json, re
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, StrictInt, Field
 from db import db, players, game_settings
 from auth import get_user, get_admin, get_full_admin, get_admin_role
 from game import now
-from ranks import current_week_start
+from season_clock import season_day
 
 CATEGORIES = ['sabotage','other','economy','diplomacy']
 async def limits():
     row = await game_settings.find_one({'_id':'weekly_submission_limits'}) or {}
     return {k: row.get(k,v) for k,v in {'roleplays':3,'projects':1}.items()}
 
-async def usage(uid, kind):
-    start = current_week_start()
+async def quota_window():
+    # Use the same shared season epoch and paused game clock as the day counter.
+    await season_day()
+    season = await game_settings.find_one({'_id': 'season_clock'}) or {}
+    epoch = season.get('started_at') or now()
+    index = max(0, (now() - epoch).days) // 7
+    start = epoch + timedelta(days=index * 7)
+    return {'week_start': start, 'week_end': start + timedelta(days=7),
+            'week_number': index + 1, 'week_start_day': index * 7 + 1,
+            'week_end_day': index * 7 + 7}
+
+async def usage(uid, kind, window=None):
+    window = window or await quota_window()
+    span = {'$gte': window['week_start'], '$lt': window['week_end']}
     collection = db.roleplays if kind == 'roleplays' else db.projects
-    query = {'tg_id' if kind == 'roleplays' else 'owner_id':uid, 'created_at':{'$gte':start}}
+    query = {'tg_id' if kind == 'roleplays' else 'owner_id':uid, 'created_at':span}
     if kind == 'roleplays': query['category'] = {'$in': CATEGORIES}
     else: query['status'] = {'$ne':'invalid'}
     async for row in collection.find(query, {'_id':1,'created_at':1}):
         await db.submission_usage.update_one({'_id':kind+':'+str(row['_id'])},{'$setOnInsert':{'uid':uid,'kind':kind,'created_at':row['created_at']}},upsert=True)
-    return await db.submission_usage.count_documents({'uid':uid,'kind':kind,'created_at':{'$gte':start}})
+    return await db.submission_usage.count_documents({'uid':uid,'kind':kind,'created_at':span})
 
 async def check_quota(uid, kind):
     maximum = (await limits())[kind]
@@ -79,7 +91,8 @@ class LimitsBody(BaseModel):
     projects: StrictInt = Field(ge=0,le=1000)
 @router.get('/submission-limits')
 async def read_limits(user=Depends(get_user)):
-    return {**await limits(),'roleplays_used':await usage(user['id'],'roleplays'),'projects_used':await usage(user['id'],'projects'),'week_start':current_week_start()}
+    window = await quota_window()
+    return {**await limits(), **window, 'roleplays_used':await usage(user['id'],'roleplays',window),'projects_used':await usage(user['id'],'projects',window)}
 @router.post('/admin/submission-limits')
 async def save_limits(body:LimitsBody,user=Depends(full)):
     await game_settings.update_one({'_id':'weekly_submission_limits'},{'$set':body.model_dump()},upsert=True)
