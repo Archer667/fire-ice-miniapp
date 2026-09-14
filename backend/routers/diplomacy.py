@@ -56,20 +56,32 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     if not targets:
         raise HTTPException(404, "هیچ‌کدام از گیرنده‌های انتخابی پیدا نشدند")
 
-    # حذف کسانی که همین الان پیمانی از همین نوع باهاشون در جریان است
+    # Existing pairwise treaties do not imply membership of this exact group.
     valid_targets = []
     for t in targets:
-        existing = await alliances.find_one({
+        query = {
             "type": body.type, "status": {"$in": ["pending", "accepted"]},
             "$or": [
                 {"from_id": user["id"], "to_id": t["tg_id"]},
                 {"from_id": t["tg_id"], "to_id": user["id"]},
             ],
-        })
+        }
+        if source:
+            if source.get('group_id'):
+                query['group_id'] = source['group_id']
+            else:
+                query.update({'from_id': source['from_id'], 'name': source.get('name', ''),
+                              'public': source.get('public', True), 'group_id': {'$exists': False}})
+                if source.get('created_at'):
+                    query['created_at'] = source['created_at']
+                else:
+                    query['_id'] = source['_id']
+        existing = await alliances.find_one(query)
         if not existing:
             valid_targets.append(t)
     if not valid_targets:
-        raise HTTPException(409, "با همهٔ گیرنده‌های انتخابی، پیمانی از همین نوع از قبل داری")
+        raise HTTPException(409, "همهٔ انتخاب‌شده‌ها عضو همین پیمان‌اند یا دعوت فعال همین پیمان را دارند" if source
+                            else "با همهٔ گیرنده‌های انتخابی، پیمانی از همین نوع از قبل داری")
 
     me = apply_production(me)
     pact_costs = rule("diplomacy.pact_costs", {})
