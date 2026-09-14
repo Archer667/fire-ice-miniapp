@@ -2,7 +2,10 @@ import random
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
+from public_audience import public_recipients
+from player_labels import titled_name
 from auth import get_user, get_admin, get_full_admin, get_owner
 from config import POPULARITY_START, tax_yield_multiplier
 from db import players, rebellions, rebellion_checks, game_settings
@@ -235,12 +238,12 @@ class SettingsBody(BaseModel):
     settings: dict
 
 class ResolveBody(BaseModel):
-    result: str
+    result: str = Field(min_length=1, max_length=3500)
     popularity_delta: int = 0
     gold_delta: int = 0
     food_delta: int = 0
     men_delta: int = 0
-    outcome: str = "resolved"
+    outcome: Literal["resolved", "suppressed", "negotiated", "rebels_won"] = "resolved"
     image_url: str | None = None
 
 @router.get("/status")
@@ -364,6 +367,8 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
     p = await players.find_one({"tg_id": r["tg_id"]})
     if not p:
         raise HTTPException(404, "بازیکن پیدا نشد")
+    if not body.result.strip():
+        raise HTTPException(400, "نتیجه شورش را بنویس")
     popularity = max(0, min(100, int(p.get("popularity", POPULARITY_START)) + body.popularity_delta))
     resources = p.get("resources", {})
     for key, delta in (("gold", body.gold_delta), ("food", body.food_delta), ("men", body.men_delta)):
@@ -375,5 +380,12 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
         "resolved_at": now(), "resolved_by": user["id"],
     }})
     image = body.image_url if body.image_url and body.image_url.startswith(("https://", "data:image/")) and len(body.image_url) <= 3_500_000 else None
-    await send_system_message(p["tg_id"], p["name"], f"نتیجه شورش: {result_text}", image_url=image, kind="rebellion")
+    outcome_label = {"resolved": "شورش پایان یافت", "suppressed": "شورش سرکوب شد",
+                     "negotiated": "شورش با مذاکره پایان یافت", "rebels_won": "شورشیان پیروز شدند"}[body.outcome]
+    text = (f"🔥 نتیجهٔ شورش\n\n📍 قلعه: {r.get('castle') or 'نامشخص'}\n"
+            f"👤 فرمانروای قلعه: {titled_name(p, name=r.get('player_name'))}\n\n"
+            f"📜 نتیجه: {result_text}\n\n⚖️ وضعیت نهایی: {outcome_label}")
+    for recipient in await public_recipients():
+        await send_system_message(recipient["tg_id"], recipient.get("name", "ادمین"), text,
+                                  image_url=image, kind="rebellion_result")
     return {"ok": True, "popularity": popularity, "resources": resources}

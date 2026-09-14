@@ -3319,7 +3319,7 @@ export default function Admin() {
                       <option value="rebels_won">شورشیان پیروز شدند</option>
                     </select>
                     <button className="btn" style={{ marginTop: 12 }} disabled={rebellionBusyId === row.id} onClick={() => resolveRebellion(row)}>
-                      {rebellionBusyId === row.id ? 'در حال ثبت...' : 'ثبت نتیجه و ارسال به بازیکن'}
+                      {rebellionBusyId === row.id ? 'در حال ثبت...' : 'ثبت نتیجه و اعلان همگانی'}
                     </button>
                   </>
                 )}
