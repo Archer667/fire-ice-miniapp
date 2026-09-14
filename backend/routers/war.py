@@ -390,7 +390,9 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
     return gold, men, food, weapons
 
 def equipment_cost_and_effect(equipment: dict, buildings: dict):
-    workshop_level = normalize_building_state(buildings.get(SIEGE_WORKSHOP_BUILDING))["level"]
+    raw_level = buildings.get(SIEGE_WORKSHOP_BUILDING)
+    # _building_levels supplies integer levels; legacy raw states are also accepted.
+    workshop_level = max(0, raw_level) if isinstance(raw_level, int) else normalize_building_state(raw_level)["level"]
     cost, siege_power, slowdown = {}, 0, 0.0
     for eid, raw in equipment.items():
         count = max(0, int(raw or 0))
