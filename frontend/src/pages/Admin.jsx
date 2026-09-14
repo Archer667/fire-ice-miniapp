@@ -1,3 +1,4 @@
+import BattleExport from '../components/BattleExport.jsx';
 import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
 import { gameNow } from '../gameClock.js';
 import { syncGameClock } from '../gameClock.js';
@@ -2054,6 +2055,7 @@ export default function Admin() {
             {battles && battles.map(b => {
               return <div className="card" key={b.campaign_id} style={{ marginBottom: 12 }}>
                 <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.attacker_name} در برابر {b.defender_name} · {castleLabel(b.location)}</small></div></div>
+                <BattleExport battle={b} toast={toast} />
                 <div className="notice-guide" style={{ marginTop: 10 }}><strong>زمان نبرد و ورود نیروها</strong><span>شروع: {b.started_at ? new Date(b.started_at).toLocaleString('fa-IR') : 'نامشخص'}{(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).length ? `\n${(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).map(j => `${j.player_name} · ${j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${new Date(j.joined_at).toLocaleString('fa-IR')}`).join('\n')}` : ''}</span></div>
                 <div className="notice-guide" style={{ marginTop: 10 }}><strong>رول‌های جنگ</strong><span>{b.rolls.length ? b.rolls.map(r => `${r.player}: ${r.text}`).join('\n') : 'هیچ‌کدام از طرفین هنوز رول نفرستاده‌اند؛ داوری همچنان باز است.'}</span></div>
                 <div className="sect" style={{ margin: '14px 0 7px' }}>نیروها و تلفات</div>
