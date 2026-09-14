@@ -48,5 +48,5 @@ export function battleExportText(b, navalIds, conditions = arrivalText(b), deadl
   // Count actual players, not armies: several armies owned by two players
   // must not turn a duel into a multiplayer report.
   const individual = participants.size > 2 ? `\n\n${divider}\n\nآمار هر لرد و لیدی\n\n` + [...participants.values()].map(p => side(p.armies, p.name, '👤', [...p.sides].join(' / '))).join('\n\n') : '';
-  return `⚔️ نبرد ${b.location || b.name || 'نامشخص'}\n\n${divider}\n\n${side(attackers, b.attacker_name, '🗡', 'مهاجمین')}\n\n🆚\n${side(b.defender_armies || [], b.defender_name, '🛡', 'مدافعین')}${individual}\n\n${divider}\n\n🗺 شرایط نبرد:\n${conditions.trim() || 'توسط ادمین اعلام می‌شود.'}\n\n${divider}\n\n⏳ زمان ارسال سناریو: ${deadline.trim() || 'مهلت توسط ادمین اعلام می‌شود.'}\nلردها و لیدی‌ها به زمان رسیدن نیروها توجه کنن.`;
+  return `⚔️ نبرد ${b.location || b.name || 'نامشخص'}\n📍 محل نبرد: ${b.location || 'نامشخص'}\n\n${divider}\n\n${side(attackers, b.attacker_name, '🗡', 'مهاجمین')}\n\n🆚\n${side(b.defender_armies || [], b.defender_name, '🛡', 'مدافعین')}${individual}\n\n${divider}\n\n🗺 شرایط نبرد:\n${conditions.trim() || 'توسط ادمین اعلام می‌شود.'}\n\n${divider}\n\n⏳ زمان ارسال سناریو: ${deadline.trim() || 'مهلت توسط ادمین اعلام می‌شود.'}\nلردها و لیدی‌ها به زمان رسیدن نیروها توجه کنن.`;
 }
