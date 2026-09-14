@@ -4,10 +4,24 @@ export function battleTime(real, internal) {
   if (real && Number.isFinite(Date.parse(real))) return new Date(real).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }) + ' (به وقت تهران)';
   return internal ? String(internal).replace('T', ' ') + ' (زمان داخلی بازی؛ ساعت واقعی ثبت نشده)' : 'نامشخص';
 }
+// Narrative scale only; campaign travel times and game timers stay unchanged.
+export function arrivalDelay(b, j) {
+  const parseUtc = value => value ? Date.parse(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(value) ? value : value + 'Z') : NaN;
+  const realStart = parseUtc(b.started_at_real), realJoin = parseUtc(j.joined_at_real);
+  const useReal = Number.isFinite(realStart) && Number.isFinite(realJoin);
+  const start = useReal ? realStart : parseUtc(b.started_at);
+  const joined = useReal ? realJoin : parseUtc(j.joined_at);
+  if (!Number.isFinite(start) || !Number.isFinite(joined)) return 'تأخیر نامشخص';
+  const minutes = Math.floor(Math.max(0, joined - start) / 60000 * 18);
+  if (!minutes) return joined <= start ? 'بدون تأخیر به نبرد رسید' : 'با کمتر از یک دقیقه تأخیر به نبرد رسید';
+  const hours = Math.floor(minutes / 60), remainder = minutes % 60;
+  const duration = [hours ? `${fa(hours)} ساعت` : '', remainder ? `${fa(remainder)} دقیقه` : ''].filter(Boolean).join(' و ');
+  return `با ${duration} تأخیر به نبرد رسید`;
+}
 export function arrivalText(b) {
   const rows = b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])];
   const dated = rows.filter(j => j.joined_at && Number.isFinite(Date.parse(j.joined_at))).sort((a, z) => Date.parse(a.joined_at) - Date.parse(z.joined_at));
-  return [b.started_at ? `شروع نبرد: ${battleTime(b.started_at_real, b.started_at)}` : '', ...dated.map(j => `لشکر ${j.player_name || 'بی‌نام'} — ${j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)}`)].filter(Boolean).join('\n') || 'زمان ورود نیروها ثبت نشده است.';
+  return [b.started_at ? `شروع نبرد: ${battleTime(b.started_at_real, b.started_at)}` : '', ...dated.map(j => `لشکر ${j.player_name || 'بی‌نام'} — ${j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)} | ${arrivalDelay(b, j)}`)].filter(Boolean).join('\n') || 'زمان ورود نیروها ثبت نشده است.';
 }
 export function battleExportText(b, navalIds, conditions = arrivalText(b), deadline = '') {
   const side = (armies, fallback, icon, title) => {
