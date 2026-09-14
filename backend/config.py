@@ -76,7 +76,7 @@ PRIVATE_ALLIANCE_MULTIPLIER = 2
 # ---- شایعات — کارزار عمومی علیه یک بازیکن؛ همه می‌بینند، محبوبیت هدف کم می‌شود ----
 RUMOR_GOLD_COST = 100
 RUMOR_POPULARITY_DAMAGE = 3
-RUMOR_COOLDOWN_HOURS = 6   # یک نفر نمی‌تواند علیه همان هدف زودتر از این دوباره شایعه بسازد
+RUMOR_COOLDOWN_HOURS = 12  # محافظت هدف در برابر تمام فرستنده‌ها
 
 # ---- امتیاز ترکیبی ----
 SCORE_W_ECONOMY    = 4     # به‌ازای هر سطح ساختمان اقتصادی

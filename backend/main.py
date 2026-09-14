@@ -414,6 +414,7 @@ async def start_background_watchers():
     await _load_building_overrides()
     await _load_gameplay_balance()
     await control_settings.migrate_initial_wine_60()
+    await control_settings.migrate_tweet_target_protection_12()
     await control_settings.load()
     from castle_defaults import ensure_coastal_harbors
     await ensure_coastal_harbors()

@@ -36,12 +36,16 @@ async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
     if not target:
         raise HTTPException(404, "این لرد پیدا نشد")
 
+    protection_hours = float(rule('tweets.cooldown_hours', RUMOR_COOLDOWN_HOURS))
+    at = now()
     recent = await rumors.find_one({
-        "author_tg_id": user["id"], "target_tg_id": body.target_tg_id,
-        "created_at": {"$gt": now() - timedelta(hours=float(rule('tweets.cooldown_hours', RUMOR_COOLDOWN_HOURS)))},
-    })
+        "target_tg_id": body.target_tg_id,
+        "created_at": {"$gt": at - timedelta(hours=protection_hours)},
+    }, sort=[('created_at', -1)])
     if recent:
-        raise HTTPException(400, f"هنوز کول‌داون توییت تمام نشده است")
+        import math
+        remaining = max(1, math.ceil((recent['created_at'] + timedelta(hours=protection_hours) - at).total_seconds() / 60))
+        raise HTTPException(400, f"این بازیکن پس از توییت قبلی {protection_hours:g} ساعت محافظت دارد؛ {remaining} دقیقه تا امکان انتشار توییت تازه علیه او باقی مانده است.")
 
     me = apply_production(me)
     tweet_cost = int(rule("tweets.gold_cost", RUMOR_GOLD_COST))

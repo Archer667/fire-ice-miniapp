@@ -178,3 +178,9 @@ async def save(settings: dict, *, user_id: int):
 
 async def reset(*, user_id: int):
     return await save(deepcopy(DEFAULTS), user_id=user_id)
+
+async def migrate_tweet_target_protection_12():
+    from db import game_settings
+    await game_settings.update_one({'_id': DOC_ID}, {'$setOnInsert': {'settings': {}}}, upsert=True)
+    await game_settings.update_one({'_id': DOC_ID, 'tweet_target_protection_12_applied': {'$ne': True}},
+        {'$set': {'settings.tweets.cooldown_hours': 12, 'tweet_target_protection_12_applied': True}})
