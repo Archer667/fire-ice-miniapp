@@ -133,6 +133,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
       { key: 'submission_limits', label: 'سهمیه‌های هفتگی', description: 'سقف رول و درخواست پروژه', fullOnly:true },
       { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
@@ -2726,7 +2727,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'control_center' && isOwner && <AdminControlCenter data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
+      {['control_center','population_growth'].includes(tab) && isOwner && <AdminControlCenter populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
 
       {tab === 'balance' && isFull && (
         <>

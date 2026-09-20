@@ -52,9 +52,17 @@ function Numeric({ label, unit, value, onChange, step = 1 }) {
   return <label className="control-field"><span>{label}</span><div><input type="number" step={step} value={value ?? 0} onChange={e => onChange(Number(e.target.value))} /><small>{unit}</small></div></label>;
 }
 
-export default function AdminControlCenter({ data, onChange, onSave, onReset, busy }) {
+export default function AdminControlCenter({ data, onChange, onSave, onReset, busy, populationOnly = false }) {
   if (!data) return <div className="loading">در حال بارگذاری قوانین بازی...</div>;
   const set = (path, value) => onChange(updateAt(data, path, value));
+  const populationFields = (<div className="control-sub"><b>رشد جمعیت</b><p>رشد پایه × ضریب محبوبیت × ضریب کلی × (۱ + تعداد قلعه‌های اضافه × ضریب هر قلعه). صفر برای ضریب قلعهٔ اضافه، اثر قلعه‌های بیشتر را غیرفعال می‌کند؛ سقف جمعیت پابرجاست.</p><div className="control-grid">
+        <Numeric label="ضریب کلی رشد جمعیت" unit="برابر" step={.1} value={data.economy.population_growth_multiplier ?? 2} onChange={v=>set(['economy','population_growth_multiplier'],v)} />
+        <Numeric label="ضریب هر قلعهٔ اضافه" unit="برابر" step={.1} value={data.economy.population_extra_castle_multiplier ?? 1} onChange={v=>set(['economy','population_extra_castle_multiplier'],v)} />
+        <Numeric label="ضریب رشد در محبوبیت صفر" unit="ضریب" step={.05} value={data.economy.population_min_multiplier} onChange={v=>set(['economy','population_min_multiplier'],v)} />
+        <Numeric label="ضریب رشد در محبوبیت صد" unit="ضریب" step={.05} value={data.economy.population_max_multiplier} onChange={v=>set(['economy','population_max_multiplier'],v)} />
+        <Numeric label="محبوبیت معمول" unit="محبوبیت" value={data.economy.population_normal_popularity} onChange={v=>set(['economy','population_normal_popularity'],v)} />
+      </div></div>);
+  if (populationOnly) return <section className="card control-section"><h3>کنترل رشد جمعیت</h3>{populationFields}<div className="control-actions"><button className="btn" disabled={busy} onClick={onSave}>{busy ? 'در حال ذخیره...' : 'ذخیره تنظیمات رشد جمعیت'}</button></div></section>;
   return <>
     <div className="notice-guide"><strong>مرکز کنترل قوانین بازی</strong><span>تمام تغییرات این صفحه سراسری و زنده‌اند. هر بخش را جداگانه بخوان و در پایان «ذخیره همه تغییرات» را بزن.</span></div>
 
@@ -65,13 +73,7 @@ export default function AdminControlCenter({ data, onChange, onSave, onReset, bu
 
     <section className="card control-section"><h3>اقتصاد پایه</h3><p>منابع شروع فقط برای ثبت‌نام‌ها و شروع فصل بعدی است؛ تولید و سقف‌ها بلافاصله در محاسبه بازی استفاده می‌شوند.</p>
       {[['starting_resources','منابع اولیه'],['daily_production','تولید پایه روزانه'],['base_caps','سقف اولیه انبارها']].map(([key,title]) => <div key={key} className="control-sub"><b>{title}</b><div className="control-grid">{Object.entries(data.economy?.[key] || {}).map(([res,value]) => <Numeric key={res} label={RESOURCES[res] || res} unit="واحد" value={value} onChange={v => set(['economy',key,res],v)} />)}</div></div>)}
-      <div className="control-sub"><b>رشد جمعیت</b><p>رشد پایه × ضریب محبوبیت × ضریب کلی × (۱ + تعداد قلعه‌های اضافه × ضریب هر قلعه). صفر برای ضریب قلعهٔ اضافه، اثر قلعه‌های بیشتر را غیرفعال می‌کند؛ سقف جمعیت پابرجاست.</p><div className="control-grid">
-        <Numeric label="ضریب کلی رشد جمعیت" unit="برابر" step={.1} value={data.economy.population_growth_multiplier ?? 2} onChange={v=>set(['economy','population_growth_multiplier'],v)} />
-        <Numeric label="ضریب هر قلعهٔ اضافه" unit="برابر" step={.1} value={data.economy.population_extra_castle_multiplier ?? 1} onChange={v=>set(['economy','population_extra_castle_multiplier'],v)} />
-        <Numeric label="ضریب رشد در محبوبیت صفر" unit="ضریب" step={.05} value={data.economy.population_min_multiplier} onChange={v=>set(['economy','population_min_multiplier'],v)} />
-        <Numeric label="ضریب رشد در محبوبیت صد" unit="ضریب" step={.05} value={data.economy.population_max_multiplier} onChange={v=>set(['economy','population_max_multiplier'],v)} />
-        <Numeric label="محبوبیت معمول" unit="محبوبیت" value={data.economy.population_normal_popularity} onChange={v=>set(['economy','population_normal_popularity'],v)} />
-      </div></div>
+      {populationFields}
     </section>
 
     <section className="card control-section"><h3>دیپلماسی و ضیافت</h3><p>هزینه پیمان برای هر گیرنده حساب می‌شود و پیمان خصوصی در ضریب خصوصی ضرب می‌شود.</p>
