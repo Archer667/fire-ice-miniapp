@@ -151,7 +151,7 @@ def daily_production(player: dict) -> dict:
     low = float(rule("economy.population_min_multiplier", .5))
     high = float(rule("economy.population_max_multiplier", 1.5))
     growth_multiplier = low + (high - low) * min(1, popularity / max(1, normal * 2))
-    prod["men"] = round(prod.get("men", 0) * growth_multiplier, 2)
+    prod["men"] = round(prod.get("men", 0) * growth_multiplier * 2 * len(owned_castles(player)), 2)
 
     men = player["resources"].get("men", 0)
     tax_rate = max(0, int(player.get("tax_rate", rule("tax.default_rate", TAX_RATE_DEFAULT))))
