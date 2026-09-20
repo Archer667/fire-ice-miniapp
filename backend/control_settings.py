@@ -26,6 +26,7 @@ DEFAULTS = {
         "base_caps": deepcopy(RESOURCE_CAPS),
         "population_min_multiplier": .5, "population_max_multiplier": 1.5,
         "population_normal_popularity": POPULARITY_START,
+        "population_growth_multiplier": 2.0, "population_extra_castle_multiplier": 1.0,
     },
     "tax": {
         "default_rate": TAX_RATE_DEFAULT, "income_population_factor": 1.0,
@@ -150,6 +151,11 @@ def validate(settings: dict) -> dict:
             elif isinstance(value, (int, float)) and value < 0:
                 raise ValueError(f"مقادیر بخش {section} نمی‌توانند منفی باشند")
         no_negative(clean[section])
+    economy = clean["economy"]
+    if not 0 <= float(economy["population_min_multiplier"]) <= float(economy["population_max_multiplier"]):
+        raise ValueError("ضریب رشد محبوبیت صد نباید کمتر از محبوبیت صفر باشد")
+    if not 1 <= float(economy["population_normal_popularity"]) <= 100:
+        raise ValueError("محبوبیت معمول باید بین ۱ و ۱۰۰ باشد")
     return clean
 
 async def migrate_initial_wine_60():
@@ -170,6 +176,13 @@ async def save(settings: dict, *, user_id: int):
     from db import game_settings
     from game import now
     clean = validate(settings)
+    if clean["economy"] != snapshot()["economy"]:
+        from db import players
+        from game import apply_production, production_fields
+        async for player in players.find({"is_dead": {"$ne": True}, "castle": {"$nin": [None, ""]}}):
+            if "resources" in player and "created_at" in player:
+                apply_production(player)
+                await players.update_one({"_id": player["_id"]}, {"$set": production_fields(player)})
     replace(clean)
     await game_settings.update_one(
         {"_id": DOC_ID}, {"$set": {"settings": clean, "updated_at": now(), "updated_by": user_id}}, upsert=True,

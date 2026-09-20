@@ -59,8 +59,8 @@ export let CAMP_POWER_STEP = 0.05;  // هر سطح پادگانِ یک یگان�
 // را بالا می‌برد. «capacity» یعنی هر کشتی چند سرباز را می‌تواند حمل کند — برای قلعه‌های
 // کاملاً دریایی (بدون راه خشکی) الزامی است (نگاه کن به mapCoords/War.jsx)
 export const NAVAL_TROOPS = [
-  { id: 'ship',       name: 'کشتی جنگی',       cost: 5, power: 10, capacity: 250, food: 2 },
-  { id: 'cargo_ship', name: 'کشتی سادهٔ چوبی', cost: 3, power: 0,  capacity: 100, food: 2 },
+  { id: 'ship',       name: 'کشتی جنگی',       cost: 150, wood_cost: 100, iron_cost: 50, power: 10, capacity: 250, food: 2 },
+  { id: 'cargo_ship', name: 'کشتی سادهٔ چوبی', cost: 50, wood_cost: 50, iron_cost: 0, power: 0,  capacity: 100, food: 2 },
 ];
 export const NAVAL_TROOP_IDS = NAVAL_TROOPS.map(t => t.id);
 export const NAVAL_CAMP_BUILDING = 'port';

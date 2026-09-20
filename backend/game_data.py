@@ -88,8 +88,8 @@ SPECIAL_TROOP_POWER = 5   # نیروهای ویژهٔ اقلیمی پادگان 
 # برای قلعه‌های کاملاً دریایی (بدون راه خشکی) الزامی است: کل نیروی غیردریاییِ هر فرمان
 # باید زیرِ مجموعِ ظرفیتِ کشتی‌های همان فرمان بماند
 NAVAL_TROOPS = {
-    "ship":       {"name": "کشتی جنگی",       "cost": 5, "power": 10, "capacity": 250, "food": 2},
-    "cargo_ship": {"name": "کشتی سادهٔ چوبی", "cost": 3, "power": 0,  "capacity": 100, "food": 2},
+    "ship":       {"name": "کشتی جنگی",       "cost": 150, "wood_cost": 100, "iron_cost": 50, "power": 10, "capacity": 250, "food": 2},
+    "cargo_ship": {"name": "کشتی سادهٔ چوبی", "cost": 50, "wood_cost": 50, "iron_cost": 0, "power": 0,  "capacity": 100, "food": 2},
 }
 NAVAL_CAMP_BUILDING = "port"
 

@@ -11,14 +11,15 @@ export default function PlayerPicker({ value, onChange, placeholder = 'اسم ل
   const timer = useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
     clearTimeout(timer.current);
     if (query.trim().length < 2) { setResults([]); return; }
     timer.current = setTimeout(() => {
       api.searchPlayers(query.trim())
-        .then(rows => setResults(rows.filter(r => !value.some(v => v.tg_id === r.tg_id))))
-        .catch(() => setResults([]));
+        .then(rows => { if (!cancelled) setResults(rows.filter(r => !value.some(v => v.tg_id === r.tg_id))); })
+        .catch(() => { if (!cancelled) setResults([]); });
     }, 300);
-    return () => clearTimeout(timer.current);
+    return () => { cancelled = true; clearTimeout(timer.current); };
   }, [query, value]);
 
   const pick = (p) => {

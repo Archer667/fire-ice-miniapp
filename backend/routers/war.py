@@ -1,3 +1,4 @@
+from troop_materials import snapshot as naval_material_snapshot, refund as naval_material_refund
 from army_upkeep import food_rate, campaign_food
 from public_audience import public_recipients, public_players
 from datetime import datetime, timedelta
@@ -375,6 +376,9 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
             port_level = normalize_building_state(buildings.get(NAVAL_CAMP_BUILDING))["level"]
             if port_level <= 0:
                 raise HTTPException(400, f"برای ساخت {NAVAL_TROOPS[tid]['name']} باید {BUILDINGS[NAVAL_CAMP_BUILDING]['name']} را بنا کرده باشی")
+            for resource in ("wood", "iron"):
+                amount = float(NAVAL_TROOPS[tid].get(resource + "_cost", 0)) * n
+                if amount: weapons[resource] = weapons.get(resource, 0) + amount
             gold += NAVAL_TROOPS[tid]["cost"] * n
             food += float(NAVAL_TROOPS[tid].get("food", game_data.GAME_RULES["food_cost_special"])) * n
         elif tid in specials:
@@ -530,7 +534,7 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
         "tg_id": user["id"], "player_name": p["name"], "player_gender": p.get("gender", "lord"), "origin_castle": body.origin_castle,
         "target_castle": body.target_castle, "edge_key": edge_key, "sea": is_sea,
         "troops": {k: int(v or 0) for k, v in body.troops.items() if int(v or 0) > 0},
-        "men_committed": men, "soldiers_committed": land_men, "gold_cost": gold, "weapons_cost": weapons,
+        "men_committed": men, "soldiers_committed": land_men, "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "weapons_cost": weapons,
         "food_per_day": food_per_day, "scenario": scenario[:4000], "status": "pending_score", "created_at": now(),
     }
     res = await ambushes.insert_one(doc)
@@ -619,7 +623,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     for weapon_key, needed in weapons.items():
         if not can_afford(p["resources"], {weapon_key: needed}):
             available = round(p["resources"].get(weapon_key, 0))
-            raise HTTPException(400, f"{WEAPON_NAMES[weapon_key]} کافی نداری؛ نیاز: {needed}، موجودی قابل استفاده: {available}، کمبود: {needed - available}. می‌توانی تولید یا خرید کنی")
+            raise HTTPException(400, f"{WEAPON_NAMES.get(weapon_key, {"wood": "چوب", "iron": "آهن"}.get(weapon_key, weapon_key))} کافی نداری؛ نیاز: {needed}، موجودی قابل استفاده: {available}، کمبود: {needed - available}. می‌توانی تولید یا خرید کنی")
     combined_cost = {"gold": gold, **weapons}
     for resource, amount in equipment_cost.items():
         combined_cost[resource] = combined_cost.get(resource, 0) + amount
@@ -677,7 +681,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "origin_castle": body.origin_castle,
         "op_type": body.op_type, "target_castle": target_castle,
         "name": body.name.strip()[:60] or op["name"], "troops": body.troops, "power": power,
-        "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
+        "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "men_committed": men, "food_per_day": food_per_day,
         "equipment": {k: int(v or 0) for k, v in body.equipment.items() if k in SIEGE_EQUIPMENT and int(v or 0) > 0},
         "equipment_cost": equipment_cost, "equipment_power": equipment_power,
         "travel_minutes": travel, "arrival_at": arrival_at, "route_path": route_path,
@@ -691,7 +695,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     }
     res = await campaigns.insert_one(doc)
     return {
-        "ok": True, "id": str(res.inserted_id), "gold_cost": gold, "men_committed": men, "power": power,
+        "ok": True, "id": str(res.inserted_id), "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "men_committed": men, "power": power,
         "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
         "route_path": route_path, "penalty_charged": penalty_charged,
     }
@@ -732,6 +736,7 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         if weapon_key:
             weapons_refund[weapon_key] = weapons_refund.get(weapon_key, 0) + n * int(game_data.GAME_RULES["weapon_per_soldier"])
 
+    weapons_refund.update(naval_material_refund(c))
     grace_started_at = c.get("moved_at") or c.get("created_at") or now()
     grace_minutes = float(rule("war.cancel_grace_minutes", 5))
     penalty_percent = max(0, min(100, float(rule("war.cancel_penalty_percent", 50))))
@@ -1317,6 +1322,7 @@ async def process_route_ambushes():
                 weapon_key = TROOP_WEAPON_KEY.get(tid)
                 if weapon_key and count:
                     refund[weapon_key] = refund.get(weapon_key, 0) + count * int(game_data.GAME_RULES["weapon_per_soldier"])
+            refund.update(naval_material_refund(ambush, surviving_troops))
             ambusher = await players.find_one({"tg_id": ambush["tg_id"]})
             if ambusher:
                 add_resources(ambusher, refund)

@@ -2936,6 +2936,8 @@ async def set_gameplay_balance(body: GameplayBalanceBody, user: dict = Depends(o
             raise HTTPException(400, "نوع کشتی نامعتبر است")
         naval[tid] = {
             "name": game_data.DEFAULT_NAVAL_TROOPS[tid]["name"],
+            "wood_cost": _num(row.get("wood_cost", game_data.NAVAL_TROOPS[tid].get("wood_cost", 0)), f"چوب {tid}"),
+            "iron_cost": _num(row.get("iron_cost", game_data.NAVAL_TROOPS[tid].get("iron_cost", 0)), f"آهن {tid}"),
             "cost": _num(row.get("cost"), f"هزینه {tid}"),
             "power": _num(row.get("power"), f"قدرت {tid}"),
             "capacity": int(_num(row.get("capacity"), f"ظرفیت {tid}", 0, 100000)),

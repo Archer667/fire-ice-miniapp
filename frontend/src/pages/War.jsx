@@ -219,6 +219,10 @@ export default function War() {
     const need = {};
     for (const t of allTroops) {
       const n = counts[t.id] || 0;
+      if (t.naval && n > 0) for (const resource of ['wood','iron']) {
+        const amount = (t[resource + '_cost'] || 0) * n;
+        if (amount) need[resource] = (need[resource] || 0) + amount;
+      }
       if (n <= 0 || t.special || t.naval) continue;
       const weaponKey = TROOP_UNIT_BUILDINGS[t.id]?.weapon;
       if (weaponKey) need[weaponKey] = (need[weaponKey] || 0) + n * WEAPON_PER_SOLDIER;
@@ -229,7 +233,7 @@ export default function War() {
   const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
   const totalGoldCost = goldCost + (equipmentCost.gold || 0);
   const overGold = totalGoldCost > gold;
-  const shortEquipmentResource = Object.entries(equipmentCost).find(([resource, amount]) => resource !== 'gold' && amount > (me.resources[resource] || 0));
+  const shortEquipmentResource = Object.entries(equipmentCost).find(([resource, amount]) => resource !== 'gold' && amount + (weaponsNeeded[resource] || 0) > (me.resources[resource] || 0));
   const overMen = menCommitted > men;
   const soldierMen = useMemo(() => allTroops.reduce((s, t) => s + (t.naval ? 0 : (counts[t.id] || 0)), 0), [counts, allTroops]);
   const badPortTarget = op.portOnly && target && !target.port;
@@ -253,7 +257,7 @@ export default function War() {
     : movingLegion ? null
     : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
-    : shortWeapon ? `${WEAPON_NAMES[shortWeapon[0]]} کافی نیست`
+    : shortWeapon ? `${(WEAPON_NAMES[shortWeapon[0]] || RESOURCE_NAMES_FA[shortWeapon[0]])} کافی نیست`
     : shortEquipmentResource ? `${shortEquipmentResource[0]} کافی برای ساخت ادوات نداری`
     : (op.needsTarget && !target) ? 'مقصد را انتخاب کن'
     : hostileAgainstPact ? 'با صاحب این قلعه پیمان داری؛ فقط جای‌گیری مجاز است'
@@ -296,7 +300,7 @@ export default function War() {
     if (menCommitted <= 0) { toast('هیچ نیرویی گسیل نکرده‌ای'); return; }
     if (overGold) { toast('خزانه کافی نیست'); return; }
     if (overMen) { toast('نفرات کافی نداری'); return; }
-    if (shortWeapon) { toast(`${WEAPON_NAMES[shortWeapon[0]]} کافی نداری`); return; }
+    if (shortWeapon) { toast(`${(WEAPON_NAMES[shortWeapon[0]] || RESOURCE_NAMES_FA[shortWeapon[0]])} کافی نداری`); return; }
     setBusy(true);
     try {
       if (opType === 'ambush') {
@@ -525,6 +529,7 @@ export default function War() {
                     {t.naval && <span className="troop-tag">ویژهٔ بندر</span>}
                     <small>
                       {t.cost.toLocaleString('fa-IR')} طلا/نفر · {(t.food ?? ((t.special || t.naval) ? FOOD_COST_SPECIAL : FOOD_COST_REGULAR)).toLocaleString('fa-IR')} غله/روز · توان {(t.special ? SPECIAL_POWER : t.power).toLocaleString('fa-IR')}
+                      {t.naval && ` · ${t.wood_cost || 0} چوب · ${t.iron_cost || 0} آهن / کشتی`}
                       {weaponKey && ok && ` · ${weaponStock.toLocaleString('fa-IR')} ${WEAPON_NAMES[weaponKey]} موجود`}
                     </small>
                     {!ok && weaponKey && <small className="troop-locked">نیاز به پادگانِ این یگان</small>}
@@ -571,6 +576,7 @@ export default function War() {
                 <b>{foodPerDay.toLocaleString('fa-IR')}</b>
                 <small>غله/روز</small>
               </div>
+              {['wood','iron'].map(resource => { const amount = (weaponsNeeded[resource] || 0) + (equipmentCost[resource] || 0); return amount > 0 && <div className={`cost-item ${amount > (me.resources[resource] || 0) ? 'over' : ''}`} key={resource}><b>{amount.toLocaleString('fa-IR')}</b><small>{RESOURCE_NAMES_FA[resource]}</small></div>; })}
               <div className="cost-item">
                 <Swords s={16} />
                 <b>{estPower.toLocaleString('fa-IR')}</b>

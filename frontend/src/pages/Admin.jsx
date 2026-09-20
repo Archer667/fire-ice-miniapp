@@ -2892,6 +2892,8 @@ export default function Admin() {
                   <div className="res"><div className="n">{row.name}<small>هزینه، قدرت و ظرفیت حمل هر کشتی</small></div></div>
                   <div className="grid2">
                     <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('naval_troops', row.id, 'cost', e.target.value)} /></div>
+                    <div><label className="f">هزینه چوب</label><input type="number" min="0" value={row.wood_cost ?? 0} onChange={e => setGameplayRow('naval_troops', row.id, 'wood_cost', e.target.value)} /></div>
+                    <div><label className="f">هزینه آهن</label><input type="number" min="0" value={row.iron_cost ?? 0} onChange={e => setGameplayRow('naval_troops', row.id, 'iron_cost', e.target.value)} /></div>
                     <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('naval_troops', row.id, 'power', e.target.value)} /></div>
                     <div><label className="f">ظرفیت حمل سرباز</label><input type="number" min="0" value={row.capacity} onChange={e => setGameplayRow('naval_troops', row.id, 'capacity', e.target.value)} /></div>
                     <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('naval_troops', row.id, 'food', e.target.value)} /></div>

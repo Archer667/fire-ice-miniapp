@@ -271,19 +271,11 @@ async def search(q: str = "", user: dict = Depends(get_user)):
     q = q.strip()
     if len(q) < 2:
         return []
-    pattern = re.escape(q)
-    cur = players.find(
-        {"tg_id": {"$ne": user["id"]}, "$or": [
-            {"name": {"$regex": pattern, "$options": "i"}},
-            {"castle": {"$regex": pattern, "$options": "i"}},
-        ]},
-        {"tg_id": 1, "name": 1, "castle": 1, "region": 1, "title": 1},
-    ).limit(20)
-    return [{
-        "tg_id": p["tg_id"], "name": p["name"], "castle": p["castle"],
-        "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
-        "title": p.get("title"),
-    } async for p in cur]
+    from player_search import find_matches
+    rows = await players.find({"tg_id": {"$ne": user["id"]}, "is_dead": {"$ne": True}},
+        {"tg_id":1,"name":1,"castle":1,"castle_buildings":1,"region":1,"title":1,"username":1}).to_list(None)
+    return find_matches(rows, q)
+
 
 class TaxBody(BaseModel):
     rate: int
