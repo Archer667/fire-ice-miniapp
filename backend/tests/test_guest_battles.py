@@ -4,9 +4,9 @@ from bson import ObjectId
 from routers import war,admin
 from tests.test_battle_lifecycle import DB
 class GuestBattleTests(unittest.IsolatedAsyncioTestCase):
- async def test_two_guests_do_not_fight_without_direct_pact(self):
+ async def test_two_guests_fight_without_peace_pact(self):
   with patch.object(war,'players_are_friendly',AsyncMock(return_value=False)):
-   self.assertFalse(await war.castle_armies_are_hostile({'tg_id':1,'op_type':'garrison'},{'tg_id':2,'op_type':'defense'},{'tg_id':3}))
+   self.assertTrue(await war.castle_armies_are_hostile({'tg_id':1,'op_type':'garrison'},{'tg_id':2,'op_type':'defense'},{'tg_id':3}))
  async def test_pact_prevents_army_combat(self):
   with patch.object(war,'players_are_friendly',AsyncMock(return_value=True)):
    self.assertFalse(await war.castle_armies_are_hostile({'tg_id':1,'op_type':'attack'},{'tg_id':2,'op_type':'defense'},{'tg_id':2}))
@@ -18,10 +18,26 @@ class GuestBattleTests(unittest.IsolatedAsyncioTestCase):
   async def friendly(a,b):return b==3
   with patch.object(war,'campaigns',DB([{'_id':oid,'active':True,'tg_id':3}])),patch.object(war,'players_are_friendly',AsyncMock(side_effect=friendly)):
    self.assertFalse(await war.may_join_battle(root,4,'attacker'))
- async def test_twins_guest_battle_is_dismissed(self):
+ async def test_friendship_with_owner_does_not_close_enemy_guests_battle(self):
   rid=ObjectId();did=ObjectId()
   root={'_id':rid,'tg_id':1,'active':True,'op_type':'garrison','battle_open':True,'battle_location':'تویینز','battle_defender_tg_id':3,'battle_attacker_army_ids':[str(rid)],'battle_defender_army_ids':[str(did)]}
   db=DB([root,{'_id':did,'tg_id':2,'active':True,'op_type':'defense'}])
   async def friendly(a,b):return b==3
   with patch.object(war,'campaigns',db),patch.object(war,'players_are_friendly',AsyncMock(side_effect=friendly)),patch.object(admin,'_dismiss_battle_record',AsyncMock()) as close:
-   await war.reconcile_battle_locks();close.assert_awaited_once()
+   await war.reconcile_battle_locks();close.assert_not_awaited()
+
+ async def test_third_enemy_joins_as_independent(self):
+  root={'tg_id':1,'battle_defender_tg_id':2}
+  with patch.object(war,'players_are_friendly',AsyncMock(return_value=False)):
+   self.assertEqual(await war.choose_battle_side(root,{'tg_id':3,'op_type':'garrison'}),'independent')
+ async def test_peaceful_to_everyone_does_not_join(self):
+  root={'tg_id':1,'battle_defender_tg_id':2}
+  with patch.object(war,'players_are_friendly',AsyncMock(return_value=True)):
+   self.assertIsNone(await war.choose_battle_side(root,{'tg_id':3,'op_type':'attack'}))
+ async def test_partial_friendship_does_not_put_friends_in_opposing_teams(self):
+  ids=[ObjectId() for _ in range(3)]
+  root={'tg_id':1,'battle_attacker_army_ids':[str(ids[0]),str(ids[1])],'battle_defender_army_ids':[str(ids[2])],'battle_defender_tg_id':3}
+  rows=[{'_id':oid,'active':True,'tg_id':uid} for oid,uid in zip(ids,[1,2,3])]
+  async def peace(a,b):return b in [1,3]
+  with patch.object(war,'campaigns',DB(rows)),patch.object(war,'players_are_friendly',AsyncMock(side_effect=peace)):
+   self.assertEqual(await war.choose_battle_side(root,{'tg_id':4,'op_type':'garrison'}),'independent')

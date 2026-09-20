@@ -1608,8 +1608,8 @@ export const api = {
   adminSendBotMessage: (text, sendToAll, toTgIds = [], viaBot = true, viaRaven = false, imageUrl = null) => MOCK ? Promise.resolve(M.adminSendBotMessage(text, sendToAll, toTgIds))
     : req('/api/admin/send-bot-message', { method: 'POST', body: JSON.stringify({ text, send_to_all: sendToAll, to_tg_ids: toTgIds, via_bot: viaBot, via_raven: viaRaven, image_url: imageUrl }) }),
   submitCampaign: (b) => MOCK ? Promise.resolve(M.submitCampaign(b)) : req('/api/war/submit', { method: 'POST', body: JSON.stringify(b) }),
-  warRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
-    : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
+  warRoutes: (origin, target, campaignId) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
+    : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}${campaignId ? `&campaign_id=${encodeURIComponent(campaignId)}` : ''}`),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   moveCampaign: (id, b) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/move`, { method: 'POST', body: JSON.stringify(b) }),
   orderSiegeAttack: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/attack`, { method: 'POST' }),
@@ -1625,7 +1625,7 @@ export const api = {
   caravanPartners: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/trade/caravan/partners'),
   sendCaravan: (b) => MOCK ? Promise.resolve(M.sendCaravan(b)) : req('/api/trade/caravan', { method: 'POST', body: JSON.stringify(b) }),
   caravanRoutes: (origin, target) => MOCK ? Promise.resolve(M.warRoutes(origin, target))
-    : req(`/api/trade/caravan/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}`),
+    : req(`/api/trade/caravan/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}${campaignId ? `&campaign_id=${encodeURIComponent(campaignId)}` : ''}`),
   playerCastles: (tgId) => MOCK ? Promise.resolve(M.playerCastles(tgId)) : req(`/api/players/${tgId}/castles`),
   myCaravans: () => MOCK ? Promise.resolve(M.myCaravans()) : req('/api/trade/caravans/mine'),
   market: () => MOCK ? Promise.resolve(M.market()) : req('/api/market'),

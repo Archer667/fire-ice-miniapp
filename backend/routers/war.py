@@ -90,36 +90,11 @@ async def reconcile_battle_locks():
         battle_id = root.get("engagement_campaign_id") or str(root["_id"])
         members = await campaigns.find(_battle_members_query(root, battle_id)).to_list(None)
         active_members = [m for m in members if m.get("active")]
-        if (root.get("op_type") in DEFENSE_OP_TYPES and active_members
-                and all(m.get("op_type") in DEFENSE_OP_TYPES for m in active_members)
-                and root.get("battle_defender_tg_id")
-                and not str(root.get("battle_location", "")).startswith("مسیر ")
-                and await players_are_friendly(root["tg_id"], root["battle_defender_tg_id"])):
+        from battle_parties import has_hostility
+        parties = await battle_relations(root)
+        if len(parties) > 1 and not has_hostility(parties):
             await _dismiss_battle_record(root, battle_id,
-                "اصلاح خطای سیستم: حضور لشکرهای جای‌گیری و دفاعی به‌اشتباه نبرد ایجاد کرده بود. پرونده بدون تلفات و غرامت بسته شد و قفل لشکرهای آن آزاد شد.")
-            continue
-        attackers, defenders = set(), set()
-        defender_ids = set(root.get("battle_defender_army_ids") or [])
-        attacker_ids = set(root.get("battle_attacker_army_ids") or [])
-        for member in members:
-            if not member.get("active"):
-                continue
-            mid = str(member["_id"])
-            if mid in defender_ids or mid == root.get("opponent_campaign_id"):
-                defenders.add(member["tg_id"])
-            elif mid in attacker_ids or (not attacker_ids and mid == str(root["_id"])):
-                attackers.add(member["tg_id"])
-        if root.get("battle_defender_tg_id"):
-            defenders.add(root["battle_defender_tg_id"])
-        if attackers and defenders:
-            peaceful = True
-            for a in attackers:
-                for d in defenders:
-                    if not await players_are_friendly(a, d):
-                        peaceful = False
-            if peaceful:
-                await _dismiss_battle_record(root, battle_id,
-                    "پروندهٔ نبرد به‌دلیل پیمان صلح میان طرف‌های درگیر بسته شد؛ قفل تمام لشکرهای این نبرد آزاد شد.")
+                "پروندهٔ نبرد به‌دلیل پیمان صلح میان تمام طرف‌های درگیر بسته شد؛ قفل تمام لشکرهای این نبرد آزاد شد.")
     async for army in campaigns.find({"engagement_locked": True}):
         await repair_stale_engagement_lock(army)
     # A hostile order may have arrived after a pact and never formed a battle.
@@ -129,6 +104,15 @@ async def reconcile_battle_locks():
             "battle_cancelled_at": {"$exists": False}}):
         owner = await owner_of_castle(army["target_castle"])
         if owner and await players_are_friendly(army["tg_id"], owner["tg_id"]):
+            neighbors = await campaigns.find({'active': True, 'target_castle': army['target_castle'],
+                'arrival_at': {'$lte': now()}, '_id': {'$ne': army['_id']}}).to_list(None)
+            hostile_presence = False
+            for neighbor in neighbors:
+                if not await players_are_friendly(army['tg_id'], neighbor['tg_id']):
+                    hostile_presence = True
+                    break
+            if hostile_presence:
+                continue
             await campaigns.update_one({"_id": army["_id"]}, {"$set": {
                 "battle_cancelled_at": now(), "battle_open": False, "engagement_locked": False,
                 "battle_close_reason": "peace_pact"}})
@@ -243,15 +227,27 @@ async def active_peace_pact(a_id: int, b_id: int):
     return (await peace_partners(alliances, a_id)).get(b_id)
 
 async def castle_armies_are_hostile(incoming, other, owner):
-    if await players_are_friendly(incoming["tg_id"], other["tg_id"]):
-        return False
-    # Presence alone is not an attack; both peaceful guests can share a castle.
-    for army in (incoming, other):
-        if army.get("op_type") not in ATTACK_OP_TYPES:
-            continue
-        if not owner or not await players_are_friendly(army["tg_id"], owner["tg_id"]):
-            return True
-    return False
+    # The command and the castle owner do not establish peace between armies.
+    return not await players_are_friendly(incoming["tg_id"], other["tg_id"])
+
+
+async def battle_relations(root):
+    from battle_parties import build_parties
+    ids = set((root.get("battle_attacker_army_ids") or []) + (root.get("battle_defender_army_ids") or []))
+    if not ids and root.get("_id") and "battle_attacker_army_ids" not in root and "battle_defender_army_ids" not in root:
+        ids.add(str(root["_id"]))
+    rows = await campaigns.find({"_id": {"$in": [ObjectId(x) for x in ids]}, "active": True}).to_list(None)
+    extra = []
+    if root.get("battle_defender_tg_id"):
+        extra.append({"tg_id": root["battle_defender_tg_id"], "name": root.get("battle_defender_name", "مدافع")})
+    uids = sorted({r['tg_id'] for r in rows} | {r['tg_id'] for r in extra})
+    peace = []
+    for i, uid in enumerate(uids):
+        for other in uids[i+1:]:
+            if await players_are_friendly(uid, other):
+                peace.append((uid, other))
+    return build_parties(rows, peace, extra)
+
 
 async def battle_side_players(root, side):
     ids = root.get(f"battle_{side}_army_ids")
@@ -266,6 +262,7 @@ async def battle_side_players(root, side):
         members.add(root["tg_id"])
     return members
 
+
 async def may_join_battle(root, tg_id, side):
     opposite = "defender" if side == "attacker" else "attacker"
     for uid in await battle_side_players(root, opposite):
@@ -273,20 +270,19 @@ async def may_join_battle(root, tg_id, side):
             return False
     return True
 
+
 async def choose_battle_side(root, army):
-    friendly = {}
-    for side in ("attacker", "defender"):
-        friendly[side] = False
-        for uid in await battle_side_players(root, side):
-            if await players_are_friendly(army["tg_id"], uid):
-                friendly[side] = True
-    if friendly["attacker"] and friendly["defender"]:
+    sides = {side: await battle_side_players(root, side) for side in ("attacker", "defender")}
+    members = sides['attacker'] | sides['defender']
+    peaceful = {uid for uid in members if await players_are_friendly(army['tg_id'], uid)}
+    if not members - peaceful:
         return None
-    if friendly["defender"]:
-        return "defender"
-    if friendly["attacker"]:
-        return "attacker"
-    return "attacker" if army.get("op_type") in ATTACK_OP_TYPES else None
+    # Join a legacy side only when ALL of its members are friendly and no
+    # opponent is friendly. Otherwise this player is an independent party.
+    for side, opposite in (("attacker", "defender"), ("defender", "attacker")):
+        if sides[side] and sides[side] <= peaceful and not sides[opposite] & peaceful:
+            return side
+    return "independent"
 
 async def reject_hostile_order_during_pact(attacker_tg_id: int, target_castle: str, op_type: str):
     """در عدم‌تجاوز و اتحاد کامل، فقط فرمان غیرخصمانهٔ جای‌گیری مجاز است."""
@@ -418,7 +414,7 @@ async def stationed_origins(tg_id: int) -> set:
     origins = set()
     async for c in campaigns.find({"tg_id": tg_id, "active": True, "op_type": "garrison"}):
         arrival_at = c.get("arrival_at")
-        if arrival_at and now() >= arrival_at:
+        if arrival_at and now() >= arrival_at and not c.get("stationed_edge") and not c.get("engagement_locked"):
             origins.add(c["target_castle"])
     return origins
 
@@ -438,9 +434,19 @@ async def apply_campaign_upkeep(tg_id: int, resources: dict) -> dict:
     return resources
 
 @router.get("/routes")
-async def routes(origin_castle: str, target_castle: str, user: dict = Depends(get_user)):
+async def routes(origin_castle: str, target_castle: str, user: dict = Depends(get_user), campaign_id: str | None = None):
     """گزینه‌های مسیرِ واقعیِ بین دو قلعه (۱ یا ۲ تا) — قبل از فرستادنِ فرمان، برای
     اینکه بازیکن ببینه از کجاها رد می‌شود و اگه چند مسیر بود انتخاب کند"""
+    if campaign_id:
+        try:
+            army = await campaigns.find_one({'_id': ObjectId(campaign_id), 'tg_id': user['id'], 'active': True})
+        except Exception:
+            army = None
+        if not army:
+            raise HTTPException(404, 'لشکر فعال پیدا نشد')
+        if army.get('stationed_edge'):
+            from road_positions import endpoint_route
+            return {'routes': [endpoint_route(army, target_castle, await all_castle_terrain())]}
     if origin_castle == target_castle:
         return {"routes": [{"minutes": 0, "path": [origin_castle]}]}
     terrain = await all_castle_terrain()
@@ -491,6 +497,7 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
         raise HTTPException(403, "اول ثبت‌نام کن")
     if not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است و کمین تازه ساخته نمی‌شود")
+    await detect_route_encounters()
     await ensure_recruitment_allowed(p)
     if body.origin_castle not in owned_castles(p):
         raise HTTPException(400, "کمین فقط باید از یکی از قلعه‌های خودت ساخته شود")
@@ -562,6 +569,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
 
+    await detect_route_encounters()
     await ensure_recruitment_allowed(p)
 
     op = OP_TYPES.get(body.op_type)
@@ -673,6 +681,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "equipment": {k: int(v or 0) for k, v in body.equipment.items() if k in SIEGE_EQUIPMENT and int(v or 0) > 0},
         "equipment_cost": equipment_cost, "equipment_power": equipment_power,
         "travel_minutes": travel, "arrival_at": arrival_at, "route_path": route_path,
+        "route_edge_minutes": [TRAVEL_GRAPH[a][b] for a, b in zip(route_path, route_path[1:])],
         "penalty_charged": penalty_charged,
         "commander_present": body.commander_present,
         "power_building_levels": _building_levels(p, body.origin_castle),
@@ -703,6 +712,9 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
         raise HTTPException(404, "لشکر پیدا نشد")
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
+    if c.get('route_path') and c.get('created_at'):
+        await detect_route_encounters()
+        c = await campaigns.find_one({'_id': c['_id']})
     c = await repair_stale_engagement_lock(c)
     if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قابل لغو یا حرکت نیست")
@@ -762,6 +774,9 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     c = await campaigns.find_one({"_id": oid, "tg_id": user["id"], "active": True})
     if not c:
         raise HTTPException(404, "لشکر فعال پیدا نشد")
+    if c.get('route_path') and c.get('created_at'):
+        await detect_route_encounters()
+        c = await campaigns.find_one({'_id': c['_id']})
     c = await repair_stale_engagement_lock(c)
     if c.get("engagement_locked") or campaign_waiting_for_result(c):
         raise HTTPException(409, "این لشکر درگیر نبرد است و تا ثبت نتیجه توسط ادمین قفل می‌ماند")
@@ -772,6 +787,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     if not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است")
 
+    road_point = c.get("stationed_edge")
     origin = c["target_castle"]
     if body.target_castle == origin:
         raise HTTPException(400, "مقصد جدید باید با محل فعلی لشکر فرق داشته باشد")
@@ -780,7 +796,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
         raise HTTPException(400, "مقصد در نقشه شناخته‌شده نیست")
     if body.op_type == "siege" and body.target_castle in ports:
         raise HTTPException(400, "محاصره فقط برای قلعه‌های غیربندری است")
-    if body.op_type == "naval_raid" and (origin not in ports or body.target_castle not in ports):
+    if body.op_type == "naval_raid" and ((not road_point and origin not in ports) or body.target_castle not in ports):
         raise HTTPException(400, "غارت دریایی باید از یک بندر به بندر دیگر باشد")
     await reject_hostile_order_during_pact(user["id"], body.target_castle, body.op_type)
 
@@ -798,7 +814,11 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
 
     terrain = await all_castle_terrain()
     blocked = await blocked_castles_for(user["id"])
-    opts = travel_routes(origin, body.target_castle, blocked, terrain=terrain)
+    if road_point:
+        from road_positions import endpoint_route
+        opts = [endpoint_route(c, body.target_castle, terrain)]
+    else:
+        opts = travel_routes(origin, body.target_castle, blocked, terrain=terrain)
     if not opts:
         raise HTTPException(400, await blocked_route_message(origin, body.target_castle, blocked))
     chosen = next((r for r in opts if r["path"] == body.via), None) if body.via else None
@@ -806,6 +826,8 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     troops = {k: max(0, int(v or 0)) for k, v in c.get("troops", {}).items()}
     naval_capacity = sum(NAVAL_TROOPS[t]["capacity"] * n for t, n in troops.items() if t in NAVAL_TROOPS)
     land_men = sum(n for t, n in troops.items() if t not in NAVAL_TROOPS)
+    if road_point and body.op_type == "naval_raid" and not chosen.get("via_sea"):
+        raise HTTPException(400, "غارت دریایی از مسیر خشکی ممکن نیست")
     if chosen.get("via_sea") and land_men > naval_capacity:
         raise HTTPException(400, f"کشتی‌های این لشکر فقط ظرفیت جابه‌جایی {naval_capacity} نیروی زمینی را دارند")
 
@@ -824,8 +846,13 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
             "op_type": body.op_type, "travel_minutes": move_minutes,
             "route_path": chosen["path"], "arrival_at": arrival_at,
             "arrival_notified": False, "moved_at": now(),
+            "route_edge_minutes": ([chosen['minutes']] if road_point else [TRAVEL_GRAPH[a][b] for a, b in zip(chosen['path'], chosen['path'][1:])]),
+            **({'route_start_position': road_point} if road_point else {}),
         },
+        "$push": {"movement_history": {**{k: c.get(k) for k in ('origin_castle', 'target_castle', 'route_path', 'route_edge_minutes', 'route_start_position', 'moved_at', 'arrival_at')}, 'ended_at': now(), 'reason': 'new_order'}},
         "$unset": {
+            "stationed_edge": "", "stationed_at": "", "battle_contact": "",
+            **({"route_start_position": ""} if not road_point else {}),
             "combat_resolved_at": "", "combat_outcome": "", "winner_tg_id": "",
             "medal_outcome_recorded": "", "engagement_campaign_id": "",
             "battle_root_campaign_id": "", "battle_is_root": "", "battle_cancelled_at": "",
@@ -891,6 +918,7 @@ async def legions(user: dict = Depends(get_user)):
             "engagement_locked": bool(c.get("engagement_locked") or waiting_result),
             "waiting_for_result": waiting_result,
             "can_move": arrived and not c.get("engagement_locked") and not waiting_result,
+            "stationed_edge": c.get("stationed_edge"),
             "can_attack": c["op_type"] == "siege" and arrived and not c.get("engagement_locked"),
             "created_at": c["created_at"].isoformat(),
             "arrival_at": arrival_at.isoformat() if arrival_at else None,
@@ -1009,6 +1037,18 @@ async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str
         men = sum(int(a.get('men_committed', sum(a.get('troops', {}).values())) or 0) for a in armies)
         equipment = sum(sum(int(n or 0) for n in a.get('equipment', {}).values()) for a in armies)
         return f"جمع: {men:,} نفر · {equipment:,} ادوات"
+    parties = await battle_relations(refreshed)
+    if len(parties) > 2:
+        names = {p['tg_id']: p['player_name'] for p in parties}
+        sections = []
+        for party in parties:
+            armies = [a for a in army_rows if a['tg_id'] == party['tg_id']]
+            enemies = '، '.join(names[uid] for uid in party['hostile_to']) or 'ندارد'
+            peace = '، '.join(names[uid] for uid in party['peace_with']) or 'ندارد'
+            sections.append(f"👤 {party['player_name']} — {totals(armies)}\n" +
+                '\n'.join(battle_army_public_line(a) for a in armies) +
+                f"\nدرگیر با: {enemies}\nپیمان صلح با: {peace}")
+        return intro + '\n\n⚔️ پروندهٔ چندطرفه\n\n' + '\n\n'.join(sections)
     return f"{intro}\n\n🔴 مهاجمان — {totals(attackers)}\n{attacker_text}\n\n🔵 مدافعان — {totals(defenders)}\n{defender_text}"
 
 async def queue_battle_roster(root, event, intro):
@@ -1075,6 +1115,11 @@ async def battle_admin_roster_text(root: dict, battle_id: str, intro: str) -> st
         f"{row.get('player_name', 'نامشخص')}:\n{(row.get('text') or '')[:900]}"
         for row in submitted_rolls
     ) or "هنوز رولی برای این نبرد ارسال نشده"
+    parties = await battle_relations(refreshed)
+    if len(parties) > 2:
+        sections = [f"👤 {p['player_name']}\n{side_text(p['army_ids'])}" for p in parties]
+        return (intro + '\n\n⚔️ پروندهٔ چندطرفه\n\n' + '\n\n'.join(sections) +
+                '\n\n📜 رول‌های ثبت‌شده\n' + rolls_text)[:3800]
     return (
         f"{intro}\n\n🔴 مهاجمان (تفکیک کامل)\n{side_text(refreshed.get('battle_attacker_army_ids') or [])}"
         f"\n\n🔵 مدافعان (تفکیک کامل)\n{side_text(refreshed.get('battle_defender_army_ids') or [])}"
@@ -1301,134 +1346,9 @@ async def process_route_ambushes():
             break
 
 async def detect_route_encounters():
-    """برخورد دو لشکرِ بی‌پیمان روی یک یالِ مشترک و در جهت مخالف.
-    زمان عبور هر قطعه متناسب با تعداد قطعه‌های مسیر محاسبه می‌شود؛ واچر در اولین
-    تیک بعد از زمان تلاقی، هر دو لشکر را روی همان پروندهٔ نبرد قفل می‌کند."""
-    moving = [c async for c in campaigns.find({
-        "active": True, "engagement_locked": {"$ne": True}, "arrival_at": {"$gt": now()},
-        "route_path.1": {"$exists": True},
-    }).sort("arrival_at", 1).limit(100)]
-    # لشکر تازه‌ای که وارد یالِ یک نبرد باز می‌شود، به همان پرونده می‌پیوندد؛
-    # نبرد مسیر هم مثل نبرد قلعه گروهی است و پروندهٔ موازی نمی‌سازد.
-    for army in list(moving):
-        path = army.get("route_path", [])
-        started, arrival = army.get("moved_at") or army.get("created_at"), army.get("arrival_at")
-        if not started or not arrival:
-            continue
-        joined = False
-        for i in range(len(path) - 1):
-            edge_start = started + (arrival - started) * (i / (len(path) - 1))
-            edge_end = started + (arrival - started) * ((i + 1) / (len(path) - 1))
-            if not (edge_start <= now() <= edge_end):
-                continue
-            locations = [f"مسیر {path[i]} — {path[i + 1]}", f"مسیر {path[i + 1]} — {path[i]}"]
-            root = await campaigns.find_one({"battle_is_root": True, "battle_open": True, "battle_location": {"$in": locations}})
-            if not root:
-                continue
-            battle_id, joined_at = root["engagement_campaign_id"], now()
-            snapshot = battle_army_snapshot(army)
-            side = await choose_battle_side(root, army)
-            if side is None:
-                continue
-            joins_defender = side == "defender"
-            await campaigns.update_one({"_id": army["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
-                "engagement_locked": True, "engagement_campaign_id": battle_id,
-                "battle_root_campaign_id": str(root["_id"]), "battle_is_root": False,
-                "battle_location": root["battle_location"], "battle_started_at": joined_at,
-            }})
-            join = {"campaign_id": str(army["_id"]), "tg_id": army["tg_id"], "player_name": army["player_name"], "side": side, "joined_at": joined_at}
-            pushes = {"battle_joins": join}
-            if joins_defender:
-                pushes.update({"battle_defender_snapshot": snapshot, "battle_defender_army_ids": str(army["_id"]), "battle_defender_joins": join})
-            else:
-                pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(army["_id"]), "battle_attacker_joins": join})
-            await campaigns.update_one({"_id": root["_id"], "battle_open": True}, {
-                "$push": pushes, "$addToSet": {"battle_participant_tg_ids": army["tg_id"]},
-            })
-            side_name = "مدافعان" if joins_defender else "مهاجمان"
-            text = f"⚔️ لشکر {army['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {root['battle_location']} پیوست."
-            await queue_battle_roster(root, f"battle-join:{battle_id}:{army['_id']}", text)
-            admin_text = await battle_admin_roster_text(root, battle_id, text)
-            await notify_admins("battle_attacker_joined", "⚔️ نیروی تازه وارد نبرد شد", admin_text,
-                dedupe_key=f"battle-join:{battle_id}:{army['_id']}", priority="urgent", player_name=army["player_name"], player_tg_id=army["tg_id"], source_id=battle_id)
-            moving.remove(army)
-            joined = True
-            break
-        if joined:
-            continue
-    claimed = set()
-    for i, a in enumerate(moving):
-        if a["_id"] in claimed:
-            continue
-        for b in moving[i + 1:]:
-            if b["_id"] in claimed:
-                continue
-            if a.get("op_type") not in ATTACK_OP_TYPES and b.get("op_type") not in ATTACK_OP_TYPES:
-                continue
-            if a["tg_id"] == b["tg_id"] or await players_are_friendly(a["tg_id"], b["tg_id"]):
-                continue
-            pa, pb = a.get("route_path", []), b.get("route_path", [])
-            shared = None
-            for ai in range(len(pa) - 1):
-                for bi in range(len(pb) - 1):
-                    if pa[ai] == pb[bi + 1] and pa[ai + 1] == pb[bi]:
-                        sa, ea = a.get("moved_at") or a.get("created_at"), a.get("arrival_at")
-                        sb, eb = b.get("moved_at") or b.get("created_at"), b.get("arrival_at")
-                        if not (sa and ea and sb and eb):
-                            continue
-                        a0 = sa + (ea - sa) * (ai / (len(pa) - 1)); a1 = sa + (ea - sa) * ((ai + 1) / (len(pa) - 1))
-                        b0 = sb + (eb - sb) * (bi / (len(pb) - 1)); b1 = sb + (eb - sb) * ((bi + 1) / (len(pb) - 1))
-                        meet_at = max(a0, b0)
-                        if meet_at <= min(a1, b1) and now() >= meet_at:
-                            shared = (pa[ai], pa[ai + 1], meet_at)
-                            break
-                if shared:
-                    break
-            if not shared:
-                continue
-            root, opponent = (a, b) if str(a["_id"]) < str(b["_id"]) else (b, a)
-            engagement_id = str(ObjectId())
-            location = f"مسیر {shared[0]} — {shared[1]}"
-            await campaigns.update_one({"_id": root["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
-                "engagement_locked": True, "engagement_campaign_id": engagement_id,
-                "battle_root_campaign_id": str(root["_id"]), "battle_is_root": True,
-                "opponent_campaign_id": str(opponent["_id"]), "opponent_tg_id": opponent["tg_id"],
-                "battle_location": location, "battle_started_at": now(),
-                "battle_open": True,
-                "battle_attacker_snapshot": battle_army_snapshot(root),
-                "battle_attacker_snapshots": [battle_army_snapshot(root)],
-                "battle_attacker_army_ids": [str(root["_id"])],
-                "battle_attacker_joins": [{"campaign_id": str(root["_id"]), "tg_id": root["tg_id"], "player_name": root["player_name"], "side": "attacker", "joined_at": now()}],
-                "battle_defender_snapshot": [battle_army_snapshot(opponent)],
-                "battle_defender_army_ids": [str(opponent["_id"])],
-                "battle_defender_joins": [{"campaign_id": str(opponent["_id"]), "tg_id": opponent["tg_id"], "player_name": opponent["player_name"], "side": "defender", "joined_at": now()}],
-                "battle_joins": [
-                    {"campaign_id": str(root["_id"]), "tg_id": root["tg_id"], "player_name": root["player_name"], "side": "attacker", "joined_at": now()},
-                    {"campaign_id": str(opponent["_id"]), "tg_id": opponent["tg_id"], "player_name": opponent["player_name"], "side": "defender", "joined_at": now()},
-                ],
-                "battle_participant_tg_ids": [root["tg_id"], opponent["tg_id"]],
-                "battle_defender_tg_id": opponent["tg_id"],
-                "battle_defender_name": opponent.get("player_name", "طرف مقابل"),
-            }})
-            await campaigns.update_one({"_id": opponent["_id"], "engagement_locked": {"$ne": True}}, {"$set": {
-                "engagement_locked": True, "engagement_campaign_id": engagement_id,
-                "battle_root_campaign_id": str(root["_id"]), "battle_is_root": False,
-                "opponent_campaign_id": str(root["_id"]), "opponent_tg_id": root["tg_id"],
-                "battle_location": location, "battle_started_at": now(),
-            }})
-            root_eq = sum(max(0, int(v or 0)) for v in root.get("equipment", {}).values())
-            opponent_eq = sum(max(0, int(v or 0)) for v in opponent.get("equipment", {}).values())
-            msg = (
-                f"لشکرهای شما در {location} با هم روبه‌رو شدند و تا اعلام نتیجهٔ ادمین قفل‌اند.\n"
-                f"{root['player_name']}: {int(root.get('men_committed', 0)):,} نفر · {root_eq:,} ادوات\n"
-                f"{opponent['player_name']}: {int(opponent.get('men_committed', 0)):,} نفر · {opponent_eq:,} ادوات\n"
-                f"تا {roleplay_window_hours():g} ساعت فرصت ارسال رول جنگ دارید."
-            )
-            await send_system_message(root["tg_id"], root["player_name"], msg, kind="battle")
-            await send_system_message(opponent["tg_id"], opponent["player_name"], msg, kind="battle")
-            await notify_battle_admins(engagement_id, location, root, opponent, dict(opponent.get("troops", {})))
-            claimed.update((a["_id"], b["_id"]))
-            break
+    import sys
+    from encounter_runtime import detect
+    await detect(sys.modules[__name__])
 
 async def notify_arrivals():
     """کلاغی به مبدا که «لشکرت رسید» و کلاغی به صاحب مقصد که «لشکری به قلعه‌ات رسید» —
@@ -1507,7 +1427,7 @@ async def notify_arrivals():
             else:
                 pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(c["_id"]), "battle_attacker_joins": join})
             await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {"$push": pushes, "$addToSet": {"battle_participant_tg_ids": c["tg_id"]}})
-            side_name = "مدافعان" if joins_defender else "مهاجمان"
+            side_name = "طرف مستقل" if side == "independent" else ("مدافعان" if joins_defender else "مهاجمان")
             join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد."
             await queue_battle_roster(open_battle, f"battle-join:{engagement_id}:{c['_id']}", join_text)
             admin_join_text = await battle_admin_roster_text(open_battle, engagement_id, join_text)

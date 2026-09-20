@@ -718,7 +718,7 @@ def _battle_member_ids(root: dict) -> list[ObjectId]:
 
 def _battle_members_query(root: dict, battle_id: str) -> dict:
     root_id = str(root["_id"])
-    return {"$or": [
+    return {"engagement_campaign_id": {"$in": [None, battle_id]}, "$or": [
         {"_id": {"$in": _battle_member_ids(root)}},
         {"engagement_campaign_id": battle_id},
         {"battle_root_campaign_id": root_id},
@@ -727,8 +727,10 @@ def _battle_members_query(root: dict, battle_id: str) -> dict:
 async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False):
     """پرونده را برای همهٔ اعضا یک‌جا می‌بندد تا هیچ قفل یا ریشهٔ یتیمی باقی نماند."""
     timestamp = now()
+    members = await campaigns.find(_battle_members_query(root, battle_id), {'_id': 1}).to_list(None)
     state = {
         "engagement_locked": False, "battle_open": False,
+        "released_with_army_ids": [str(a['_id']) for a in members],
         "battle_cancelled_at" if cancelled else "combat_resolved_at": timestamp,
     }
     return await campaigns.update_many(
@@ -812,10 +814,17 @@ async def _remove_campaign_from_battle(campaign: dict, reason: str) -> dict:
     remaining = await campaigns.find({"engagement_campaign_id": battle_id, "active": True}, {"tg_id": 1}).to_list(None)
     remaining_tg_ids = list({row["tg_id"] for row in remaining})
     await campaigns.update_one({"_id": root["_id"]}, {"$set": {"battle_participant_tg_ids": remaining_tg_ids}})
-    battle_closed = active_attackers == 0 or active_defenders == 0
+    # A legacy column becoming empty does not end a multi-party conflict.
+    # Remove a field opponent who has actually left; a castle owner remains.
+    if not (castle_owner and castle_owner.get('tg_id') == root.get('battle_defender_tg_id')) and not any(a.get('tg_id') == root.get('battle_defender_tg_id') for a in remaining):
+        root.pop('battle_defender_tg_id', None)
+        await campaigns.update_one({'_id': root['_id']}, {'$unset': {'battle_defender_tg_id': ''}})
+    from routers.war import battle_relations
+    from battle_parties import has_hostility
+    battle_closed = not has_hostility(await battle_relations(root))
     message = f"لشکر «{campaign.get('name', 'بی‌نام')}» از نبرد خارج شد. {reason}"
     if battle_closed:
-        message += " چون یکی از طرفین دیگر لشکر فعالی نداشت، پروندهٔ نبرد بدون نتیجه بسته شد."
+        message += " چون دیگر طرف‌های متخاصمی در پرونده باقی نماندند، نبرد بدون نتیجه بسته شد."
         await _dismiss_battle_record(root, battle_id, message)
     else:
         recipients = set(remaining_tg_ids) | {campaign.get("tg_id")}
@@ -917,6 +926,9 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "rolls": rolls, "started_at": root.get("battle_started_at", root.get("arrival_at")).isoformat() if (root.get("battle_started_at") or root.get("arrival_at")) else None,
             "arrival_at": root["arrival_at"].isoformat() if root.get("arrival_at") else None,
         }
+        from routers.war import battle_relations
+        battle_row['parties'] = await battle_relations(root)
+        battle_row['multi_party'] = len(battle_row['parties']) > 2
         battle_row['started_at_real'] = display.iso(root.get('battle_started_at') or root.get('arrival_at'))
         for key, stored in [('battle_joins','battle_joins'), ('attacker_joins','battle_attacker_joins'), ('defender_joins','battle_defender_joins')]:
             for item, source in zip(battle_row[key], root.get(stored, [])):
@@ -1413,6 +1425,35 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             f"🩸 {defender_name}: {defender_men_lost:,} نفر از {defender_men_before:,} نفر کشته شدند؛ "
             f"{defender_equipment_lost:,} ادوات از {defender_equipment_total:,} ادوات از بین رفت."
         )
+        if len(combat_tg_ids) > 2:
+            # Report each player separately: legacy loss-input columns are not teams.
+            by_player = {}
+            for army, is_attacker in [(a, True) for a in attacker_campaigns] + [(a, False) for a in defender_campaigns]:
+                uid, aid = army['tg_id'], str(army['_id'])
+                counts = by_player.setdefault(uid, {'men': 0, 'men_lost': 0, 'ships': 0, 'ships_lost': 0, 'equipment': 0, 'equipment_lost': 0})
+                if is_attacker:
+                    losses = body.attacker_army_losses.get(aid, body.attacker_losses if aid == str(campaign['_id']) else {})
+                    equipment_losses = body.attacker_army_equipment_losses.get(aid, body.attacker_equipment_losses if aid == str(campaign['_id']) else {})
+                else:
+                    fallback = bool(opponent_campaign and aid == str(opponent_campaign['_id']) and not body.defender_army_losses and not body.defender_army_equipment_losses)
+                    losses = body.defender_army_losses.get(aid, body.defender_losses if fallback else {})
+                    equipment_losses = body.defender_army_equipment_losses.get(aid, body.defender_equipment_losses if fallback else {})
+                for tid, amount in army.get('troops', {}).items():
+                    key = 'ships' if tid in game_data.NAVAL_TROOPS else 'men'
+                    counts[key] += int(amount or 0)
+                    counts[key + '_lost'] += int(losses.get(tid, 0) or 0)
+                counts['equipment'] += sum(int(n or 0) for n in army.get('equipment', {}).values())
+                counts['equipment_lost'] += sum(int(n or 0) for n in equipment_losses.values())
+            casualty_lines = []
+            for uid, values in by_player.items():
+                name = titled_name(combat_player_map.get(uid), name=str(uid))
+                casualty_lines.append(f"👤 {name}\n"
+                    f"سرباز: {values['men']:,}؛ تلفات: {values['men_lost']:,}؛ باقی‌مانده: {values['men'] - values['men_lost']:,}\n"
+                    f"ادوات: {values['equipment']:,}؛ منهدم: {values['equipment_lost']:,}؛ باقی‌مانده: {values['equipment'] - values['equipment_lost']:,}\n"
+                    f"کشتی: {values['ships']:,}؛ منهدم: {values['ships_lost']:,}؛ باقی‌مانده: {values['ships'] - values['ships_lost']:,}")
+            battle_report_rest = (f"⚔️ نبرد چندطرفه\n📍 محل نبرد: {location}\n\n"
+                f"📜 نتیجهٔ داوری\n{result}\n\n🏆 برنده‌ها: {'، '.join(winner_names)}\n"
+                f"🏳️ بازنده‌ها: {'، '.join(loser_names) or 'ندارد'}\n\n" + '\n\n'.join(casualty_lines))
         battle_report_plain = f"⚔️ {battle_title}\n\n{battle_report_rest}"
         battle_report_bot = f"<b>⚔️ {html.escape(battle_title)}</b>\n\n{html.escape(battle_report_rest)}"
     elif r["category"] == "sabotage" and r.get("target_player_name"):

@@ -104,7 +104,7 @@ export default function War() {
   }, [buildings]);
 
   const stationedOrigins = useMemo(
-    () => (legions || []).filter(c => c.mine && c.op_type === 'garrison' && c.arrived && !c.engagement_locked).map(c => c.target),
+    () => (legions || []).filter(c => c.mine && c.op_type === 'garrison' && c.arrived && !c.engagement_locked && !c.stationed_edge).map(c => c.target),
     [legions]
   );
   const myCastles = [me.castle, ...(me.castles || [])];
@@ -165,7 +165,7 @@ export default function War() {
 
   const sameCastle = !op.needsTarget || (target && target.name === origin);
   const targetName = op.needsTarget && target ? target.name : origin;
-  const badOriginForNaval = op.portOnly && !isPortCastle(origin);
+  const badOriginForNaval = op.portOnly && !movingLegion?.stationed_edge && !isPortCastle(origin);
   const originIsSeaOnly = !sameCastle && isSeaOnlyCastle(origin);
 
   const [routeOptions, setRouteOptions] = useState(null); // [{minutes, path}] | null
@@ -176,11 +176,11 @@ export default function War() {
     let cancelled = false;
     setRouteOptions(null);
     setRouteError('');
-    api.warRoutes(origin, targetName).then(res => {
+    api.warRoutes(origin, targetName, movingLegion?.id).then(res => {
       if (!cancelled) { setRouteOptions(res.routes || []); setRouteChoice(0); }
     }).catch(e => { if (!cancelled) { setRouteOptions([]); setRouteError(e.message || 'مسیری پیدا نشد'); } });
     return () => { cancelled = true; };
-  }, [origin, targetName, sameCastle]);
+  }, [origin, targetName, sameCastle, movingLegion?.id]);
 
   const chosenRoute = routeOptions && routeOptions[routeChoice];
   const equipmentSlowdown = Math.min(1, SIEGE_EQUIPMENT.reduce((s, e) => s + (equipmentCounts[e.id] || 0) * e.slowdown, 0));
@@ -248,6 +248,8 @@ export default function War() {
   const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
     : movingLegion && !target ? 'مقصد را انتخاب کن'
     : movingLegion && target?.name === movingLegion.target ? 'مقصد جدید باید متفاوت باشد'
+    : movingLegion?.stationed_edge && target && ![movingLegion.stationed_edge.a, movingLegion.stationed_edge.b].includes(target.name) ? 'یکی از دو سرِ همین مسیر را انتخاب کن'
+    : movingLegion && routeError ? routeError
     : movingLegion ? null
     : overGold ? 'خزانه کافی نیست'
     : overMen ? 'نفرات کافی نیست'
@@ -411,6 +413,8 @@ export default function War() {
             {movingLegion && (
               <div style={{ marginBottom: 12, padding: 10, borderRadius: 12, background: 'rgba(77,163,255,.08)', color: 'var(--az2)', fontSize: 12 }}>
                 در حال جابه‌جایی همان لشکر «{movingLegion.name}» با {movingLegion.men_committed.toLocaleString('fa-IR')} نفر؛ هیچ نفر، طلا یا سلاح تازه‌ای کم نمی‌شود.
+                {movingLegion.stationed_edge && <><p className="page-sub">لشکر در محل نبرد مانده است. ابتدا به یکی از دو سرِ همین مسیر حرکت کن؛ زمان فقط برای فاصلهٔ باقی‌مانده حساب می‌شود.</p><div className="grid2">{[movingLegion.stationed_edge.a, movingLegion.stationed_edge.b].map(endpoint => <button type="button" className="btn ghost" key={endpoint} onClick={() => setTarget({name: endpoint, ...(castleInfo[endpoint] || {})})}>{castleLabel(endpoint)}</button>)}</div></>}
+
                 <button className="btn ghost" style={{ marginTop: 8, padding: 8 }} onClick={() => { setMovingLegion(null); setTarget(null); }}>لغو فرمان حرکت</button>
               </div>
             )}
