@@ -176,16 +176,17 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     base_food = max(1, round(men * float(settings["base_food_per_100_men"]) / 100))
     wanted = max(0, round(base_food * float(ration["multiplier"])))
     available = max(0, int(player.get("resources", {}).get("food", 0)))
-    consumed = min(wanted, available)
+    settlement = player.get("food_settlement_summary", {})
+    consumed = settlement.get("consumed", 0)
     ration_delta = int(ration["popularity"])
-    if consumed < wanted:
+    if settlement.get("shortage", 0) > 0:
         ration_delta = int(settings["starvation_popularity"])
     old_popularity = int(player.get("popularity", POPULARITY_START))
     tax_delta = _tax_delta(int(player.get("tax_rate", 10)), settings, old_popularity)
     popularity = max(0, min(100, old_popularity + ration_delta + tax_delta))
     await players.update_one({"tg_id": player["tg_id"]}, {
         "$set": {
-            "resources.food": available - consumed, "popularity": popularity,
+            "popularity": popularity,
             "rebellion_last_check": day_key,
         },
         "$push": {"popularity_history": {"$each": [{

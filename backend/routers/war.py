@@ -423,18 +423,7 @@ async def stationed_origins(tg_id: int) -> set:
     return origins
 
 async def apply_campaign_upkeep(tg_id: int, resources: dict) -> dict:
-    """تیک تنبل: آذوقهٔ هر لشکرِ فعال را از آخرین بار تا الان، روزانه کم می‌کند"""
-    cur = campaigns.find({"tg_id": tg_id, "active": True})
-    async for c in cur:
-        last = c.get("last_food_tick") or c["created_at"]
-        if isinstance(last, str):
-            last = datetime.fromisoformat(last)
-        days = int((now() - last).total_seconds() // 86400)
-        if days <= 0:
-            continue
-        cost = campaign_food(c) * days
-        resources["food"] = max(0, resources.get("food", 0) - cost)
-        await campaigns.update_one({"_id": c["_id"]}, {"$set": {"last_food_tick": last + timedelta(days=days), "food_per_day": campaign_food(c)}})
+    # Food is settled once per game day by food_settlement.tick, never on login.
     return resources
 
 @router.get("/routes")
@@ -502,7 +491,7 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     if not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است و کمین تازه ساخته نمی‌شود")
     await detect_route_encounters()
-    await ensure_recruitment_allowed(p)
+    await ensure_recruitment_allowed(p, body.origin_castle)
     if body.origin_castle not in owned_castles(p):
         raise HTTPException(400, "کمین فقط باید از یکی از قلعه‌های خودت ساخته شود")
     if body.target_castle not in TRAVEL_GRAPH.get(body.origin_castle, {}):
@@ -546,24 +535,26 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     )
     return {"ok": True, "id": str(res.inserted_id), "status": "pending_score"}
 
-async def ensure_recruitment_allowed(player):
-    castles = owned_castles(player)
+async def ensure_recruitment_allowed(player, origin_castle):
     open_battle = await campaigns.find_one({
         "battle_open": True, "combat_resolved_at": {"$exists": False},
         "battle_cancelled_at": {"$exists": False},
-        "$or": [{"battle_participant_tg_ids": player["tg_id"]},
-                {"tg_id": player["tg_id"]}, {"battle_defender_tg_id": player["tg_id"]},
-                {"battle_location": {"$in": castles}},
-                {"battle_location": {"$in": [None, ""]}, "target_castle": {"$in": castles}}],
+        "$or": [{"battle_location": origin_castle},
+                {"battle_location": {"$in": [None, ""]}, "target_castle": origin_castle}],
     })
-    arrived_attack = await campaigns.find_one({
+    arrived_attacks = campaigns.find({
         "active": True, "tg_id": {"$ne": player["tg_id"]},
-        "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": {"$in": castles},
+        "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": origin_castle,
         "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
         "battle_cancelled_at": {"$exists": False},
     })
-    if open_battle or arrived_attack:
-        raise HTTPException(403, "تا پایان نبرد یا محاصره، ساخت لشکر تازه، حتی لشکر دفاعی و کمین، ممکن نیست")
+    blocked = bool(open_battle)
+    async for army in arrived_attacks:
+        if not await players_are_friendly(player['tg_id'], army['tg_id']):
+            blocked = True
+            break
+    if blocked:
+        raise HTTPException(403, "قلعهٔ مبدأ درگیر نبرد یا محاصره است؛ از قلعهٔ آزاد دیگری نیرو بساز")
 
 @router.post("/submit")
 async def submit(body: CampaignBody, user: dict = Depends(get_user)):
@@ -574,7 +565,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         raise HTTPException(403, "اول ثبت‌نام کن")
 
     await detect_route_encounters()
-    await ensure_recruitment_allowed(p)
+    await ensure_recruitment_allowed(p, body.origin_castle)
 
     op = OP_TYPES.get(body.op_type)
     if not op:

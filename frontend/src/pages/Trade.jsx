@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -35,7 +35,7 @@ function MarketCard({ item, kind, value, onQuantity, onBuy, onCancel, busy }) {
 
 const emptyAmounts = () => Object.fromEntries(CARAVAN_GOODS.map(g => [g, 0]));
 
-export default function Trade() {
+function TradeContent() {
   const { me, setMe, toast } = useGame();
   const [tab, setTab] = useState('market');
 
@@ -63,8 +63,8 @@ export default function Trade() {
     let cancelled = false;
     api.playerCastles(Number(target)).then(list => {
       if (cancelled) return;
-      setTargetCastles(list);
-      setTargetCastle(list[0] || '');
+      setTargetCastles(Array.isArray(list) ? list : []);
+      setTargetCastle(Array.isArray(list) ? list[0] || '' : '');
     }).catch(() => { if (!cancelled) { setTargetCastles([]); setTargetCastle(''); } });
     return () => { cancelled = true; };
   }, [target]);
@@ -77,7 +77,7 @@ export default function Trade() {
     setRouteOptions(null); setRouteError('');
     api.caravanRoutes(originCastle, targetCastle).then(res => {
       if (cancelled) return;
-      const routes = res.routes || [];
+      const routes = (Array.isArray(res?.routes) ? res.routes : []).filter(r => r && Array.isArray(r.path) && Number.isFinite(Number(r.minutes)));
       setRouteOptions(routes);
       const firstAvailable = routes.findIndex(r => r.available !== false);
       setRouteChoice(firstAvailable >= 0 ? firstAvailable : 0);
@@ -100,8 +100,8 @@ export default function Trade() {
   const [blackQty, setBlackQty] = useState({});
   const [blackBusy, setBlackBusy] = useState(null);
 
-  const loadAlliances = () => api.caravanPartners().then(setAlliances).catch(e => toast(e.message));
-  const loadCaravans = () => api.myCaravans().then(setCaravans).catch(e => toast(e.message));
+  const loadAlliances = () => api.caravanPartners().then(rows => setAlliances(Array.isArray(rows) ? rows.filter(Boolean) : [])).catch(e => toast(e.message));
+  const loadCaravans = () => api.myCaravans().then(rows => setCaravans(Array.isArray(rows) ? rows.filter(Boolean) : [])).catch(e => toast(e.message));
   useEffect(() => { api.marketFloors().then(setPriceFloors).catch(e => toast(e.message)); }, []);
   useEffect(() => { setSellPrice(v => Math.max(Number(v) || 0, priceFloors[sellResource] || 10)); }, [sellResource, priceFloors]);
   const loadMarket = () => api.market().then(setMarket).catch(e => toast(e.message));
@@ -120,7 +120,7 @@ export default function Trade() {
     try {
       await api.playerMarketSell(sellResource, Number(sellQty), Number(sellPrice));
       haptic('medium'); toast(`${fa(sellQty)} واحد کالا، هر واحد ${fa(sellPrice)} سکه برای فروش ثبت شد`);
-      api.me().then(setMe); loadPlayerMarket();
+      api.me().then(setMe).catch(e => toast(e.message)); loadPlayerMarket();
     } catch (e) { toast(e.message); }
     setPlayerMarketBusy(null);
   };
@@ -131,14 +131,14 @@ export default function Trade() {
     try {
       await api.playerMarketBuy(listing.id, qty); haptic('medium');
       toast(`${fa(qty)} واحد خریدی؛ ${fa(qty * listing.price)} سکه پرداخت شد`);
-      api.me().then(setMe); loadPlayerMarket();
+      api.me().then(setMe).catch(e => toast(e.message)); loadPlayerMarket();
     } catch (e) { toast(e.message); }
     setPlayerMarketBusy(null);
   };
 
   const cancelPlayerSale = async (listing) => {
     setPlayerMarketBusy(listing.id);
-    try { await api.playerMarketCancel(listing.id); toast('آگهی برداشته شد و باقی کالا برگشت'); api.me().then(setMe); loadPlayerMarket(); }
+    try { await api.playerMarketCancel(listing.id); toast('آگهی برداشته شد و باقی کالا برگشت'); api.me().then(setMe).catch(e => toast(e.message)); loadPlayerMarket(); }
     catch (e) { toast(e.message); }
     setPlayerMarketBusy(null);
   };
@@ -166,8 +166,8 @@ export default function Trade() {
         via: selectedRoute.path,
       });
       haptic('medium');
-      api.me().then(setMe);
-      toast(`کاروان فرستاده شد — حدود ${res.travel_minutes.toLocaleString('fa-IR')} دقیقه تا رسیدن`);
+      api.me().then(setMe).catch(e => toast(e.message));
+      toast(`کاروان فرستاده شد — حدود ${fa(res.travel_minutes)} دقیقه تا رسیدن`);
       setAmounts(emptyAmounts()); setTarget(''); setOriginCastle(me.castle);
       loadCaravans();
     } catch (e) { toast(e.message); }
@@ -180,7 +180,7 @@ export default function Trade() {
     try {
       await api.marketBuy(resource, qty, market.find(m => m.resource === resource)?.price);
       haptic('medium');
-      api.me().then(setMe);
+      api.me().then(setMe).catch(e => toast(e.message));
       toast(`${qty.toLocaleString('fa-IR')} واحد ${TRADE_GOOD_NAMES[resource] || resource} خریداری شد`);
       loadMarket();
     } catch (e) { toast(e.message); loadMarket(); }
@@ -193,7 +193,7 @@ export default function Trade() {
     try {
       await api.blackMarketBuy(m.id, qty);
       haptic('medium');
-      api.me().then(setMe);
+      api.me().then(setMe).catch(e => toast(e.message));
       toast(`${qty.toLocaleString('fa-IR')} واحد ${m.name} از بازار سیاه خریداری شد`);
       loadBlack();
     } catch (e) { toast(e.message); }
@@ -251,7 +251,7 @@ export default function Trade() {
                       <label className="f" style={{ marginTop: 0 }}>مسیر کاروان — یکی را انتخاب کن</label>
                       {routeOptions.map((route, index) => {
                         const unavailable = route.available === false;
-                        const missing = (route.missing_lords || []).map(lord => lord.name).join('، ');
+                        const missing = (Array.isArray(route.missing_lords) ? route.missing_lords : []).map(lord => lord?.name || "").join('، ');
                         return <div key={index}
                           onClick={() => { if (!unavailable) { haptic(); setRouteChoice(index); } }}
                           className={`pick ${routeChoice === index && !unavailable ? 'sel' : ''}`}
@@ -260,7 +260,7 @@ export default function Trade() {
                             {route.path.map(castleLabel).join('  ←  ')}
                           </div>
                           <div className="c">
-                            {route.minutes.toLocaleString('fa-IR')} دقیقه{route.via_sea ? ' · ⚓ مسیر دریایی' : ''}
+                            {fa(route.minutes)} دقیقه{route.via_sea ? ' · ⚓ مسیر دریایی' : ''}
                           </div>
                           {unavailable && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 5 }}>
                             این مسیر بسته است؛ با {missing || 'لردهای مسیر'} پیمان تجاری یا اتحاد کامل نداری.
@@ -282,10 +282,10 @@ export default function Trade() {
                     <div className="troop" key={g}>
                       <div className="tn">
                         {Icon && <Icon s={14} />} {TRADE_GOOD_NAMES[g]}
-                        <small>{(me.resources[g] ?? 0).toLocaleString('fa-IR')} موجودی</small>
+                        <small>{(me.resources?.[g] ?? 0).toLocaleString('fa-IR')} موجودی</small>
                       </div>
-                      <input type="number" min="0" max={me.resources[g] ?? 0} value={amounts[g]}
-                             onChange={e => setAmounts({ ...amounts, [g]: Math.max(0, Math.min(me.resources[g] ?? 0, +e.target.value || 0)) })} />
+                      <input type="number" min="0" max={me.resources?.[g] ?? 0} value={amounts[g]}
+                             onChange={e => setAmounts({ ...amounts, [g]: Math.max(0, Math.min(me.resources?.[g] ?? 0, +e.target.value || 0)) })} />
                     </div>
                   );
                 })}
@@ -311,8 +311,8 @@ export default function Trade() {
                     ? <><b>کاروانت</b> به‌سوی <b>{c.to}</b> ({c.to_castle})</>
                     : <><b>کاروانی از {c.from}</b> ({c.from_castle}) به‌سویت</>}
                   <div className="tm">
-                    {Object.entries(c.resources).map(([k, v]) => `${v.toLocaleString('fa-IR')} ${k}`).join(' · ')}
-                    {' · '}{c.delivery_failed ? 'تحویل ناموفق — گیرنده دیگر فعال نیست' : c.arrived ? 'رسیده' : `در راه — حدود ${c.travel_minutes.toLocaleString('fa-IR')} دقیقه`}
+                    {Object.entries(c.resources || {}).map(([k, v]) => `${fa(v)} ${k}`).join(' · ')}
+                    {' · '}{c.delivery_failed ? 'تحویل ناموفق — گیرنده دیگر فعال نیست' : c.arrived ? 'رسیده' : `در راه — حدود ${fa(c.travel_minutes)} دقیقه`}
                   </div>
                 </div>
               </div>
@@ -347,3 +347,11 @@ export default function Trade() {
     </section>
   );
 }
+
+class TradeBoundary extends Component {
+  state = {failed:false};
+  static getDerivedStateFromError() { return {failed:true}; }
+  componentDidCatch(error) { console.error('Trade render failed', error); }
+  render() { return this.state.failed ? <section className="card"><p className="page-sub">نمایش تجارت با خطا مواجه شد. اگر ارسال را زده‌ای، پیش از ارسال دوباره فهرست کاروان‌ها را بررسی کن.</p><button className="btn" onClick={() => this.setState({failed:false})}>بازکردن دوبارهٔ تجارت</button></section> : this.props.children; }
+}
+export default function Trade() { return <TradeBoundary><TradeContent /></TradeBoundary>; }

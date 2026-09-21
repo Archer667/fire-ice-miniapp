@@ -10,4 +10,4 @@ export function initTelegram() {
 
 export const getInitData = () => tg?.initData || '';
 export const getTgUser = () => tg?.initDataUnsafe?.user || null;
-export const haptic = (t = 'light') => tg?.HapticFeedback?.impactOccurred?.(t);
+export const haptic = (t = 'light') => { try { tg?.HapticFeedback?.impactOccurred?.(t); } catch {} };

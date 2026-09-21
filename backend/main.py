@@ -94,6 +94,8 @@ async def serialize_game_state(request: Request, call_next):
     if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
             await game_clock.load()
+            from food_settlement import recover_pending_food
+            await recover_pending_food()
             from character_records import recover_swaps
             await recover_swaps()
             from pact_exits import recover_exits
@@ -151,6 +153,8 @@ async def _arrival_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from food_settlement import recover_pending_food
+                await recover_pending_food()
                 from character_records import recover_swaps
                 await recover_swaps()
                 from character_records import deliver_announcements
@@ -169,6 +173,8 @@ async def _arrival_watcher():
                     await notify_admin_deadlines()
                     await expire_unpaid_tributes()
                     await pay_daily_salaries()
+                    from food_settlement import tick as tick_food
+                    await tick_food()
                     await evaluate_rebellions()
         except Exception:
             logger.exception("arrival watcher tick failed")
@@ -179,6 +185,8 @@ async def _project_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from food_settlement import recover_pending_food
+                await recover_pending_food()
                 from character_records import recover_swaps
                 await recover_swaps()
                 if not game_clock.paused():
@@ -193,6 +201,8 @@ async def _market_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from food_settlement import recover_pending_food
+                await recover_pending_food()
                 from character_records import recover_swaps
                 await recover_swaps()
                 if not game_clock.paused():
@@ -202,6 +212,8 @@ async def _market_watcher():
         await asyncio.sleep(300)
 
 async def _ensure_indexes():
+    from db import db
+    await db.food_settlements.create_index("status")
     from login_audit import ensure_indexes as ensure_login_indexes
     await ensure_login_indexes()
     from db import db
@@ -404,6 +416,8 @@ async def _migrate_castle_roster_v2():
 @app.on_event("startup")
 async def start_background_watchers():
     await game_clock.load()
+    from food_settlement import recover_pending_food
+    await recover_pending_food()
     await _ensure_indexes()
     from ranks import migrate_exclusive_titles
     await migrate_exclusive_titles()
