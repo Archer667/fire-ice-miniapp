@@ -8,7 +8,7 @@ import { castleLabel, CASTLE_EN_NAMES } from '../gamedata.js';
  * درخواستِ خاندان موقع ثبت‌نام، چون خاندانِ اول‌اولویتِ بازیکن ممکنه از قبل
  * اشغال شده باشه و ادمین لازمه بدونه بعدی‌هاش چی‌ان. جست‌وجو هم می‌شه کرد، ولی
  * بدونِ تایپ‌کردن هم همهٔ قلعه‌ها (با اسمِ خاندانشون) دیده می‌شن. */
-export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...', regionStates = [] }) {
+export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...', regionStates = [], allowOccupied = false, excludedCastles = [] }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(null);
@@ -33,7 +33,7 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
 
   const stateByRegion = Object.fromEntries(regionStates.map(r => [r.id, r]));
   const pick = (castle) => {
-    if (value.length >= max || castle.occupied || stateByRegion[castle.region_id]?.full) return;
+    if (value.length >= max || (castle.occupied && !allowOccupied) || excludedCastles.includes(castle.name) || stateByRegion[castle.region_id]?.full) return;
     haptic();
     onChange([...value, castle.name]);
     setQuery('');
@@ -77,11 +77,12 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
                 <div className="ppicker-empty">موردی پیدا نشد</div>
               ) : results.map(c => {
                 const regionFull = stateByRegion[c.region_id]?.full;
-                const disabled = c.occupied || regionFull;
+                const alreadyOwned = excludedCastles.includes(c.name);
+                const disabled = (c.occupied && !allowOccupied) || alreadyOwned || regionFull;
                 return (
                 <button type="button" disabled={disabled} className={`rbtn ppicker-row ${disabled ? 'disabled' : ''}`} key={c.name} onClick={() => pick(c)}>
                   <span>{castleLabel(c.name)}{c.house ? ` · خاندان ${c.house}` : ''}</span>
-                  <small>{c.region_name}{c.occupied ? ' · قبلاً گرفته شده' : regionFull ? ' · ظرفیت اقلیم تکمیل شده' : ''}</small>
+                  <small>{c.region_name}{alreadyOwned ? ' · متعلق به همین بازیکن' : c.occupied ? (allowOccupied ? ' · صاحب‌دار — قابل انتقال' : ' · قبلاً گرفته شده') : regionFull ? ' · ظرفیت اقلیم تکمیل شده' : ''}</small>
                 </button>
               )})}
             </div>

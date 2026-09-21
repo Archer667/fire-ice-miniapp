@@ -1260,7 +1260,7 @@ export default function Admin() {
     const castle = addCastleValue[0];
     if (!castle) { toast('یک قلعه انتخاب کن'); return; }
     const holder = roster?.find(p => !p.is_dead && (p.castle === castle || p.castles?.includes(castle)));
-    if (holder && holder.tg_id !== tgId && !window.confirm(`قلعهٔ «${castle}» از «${holder.name}» گرفته شود؟ ساختمان‌ها منتقل می‌شوند و منابع مشترک باقی می‌مانند.${!(holder.castles?.length) && holder.castle === castle ? ' این آخرین قلعهٔ اوست؛ بازیکن کشته و تمام لشکرهایش حذف می‌شوند.' : ''}`)) return;
+    if (holder && holder.tg_id !== tgId && !window.confirm(`قلعهٔ «${castle}» از «${holder.name}» گرفته شود؟ ساختمان‌ها منتقل می‌شوند و منابع مشترک باقی می‌مانند.${new Set([holder.castle, ...(holder.castles || [])].filter(Boolean)).size === 1 ? ' این آخرین قلعهٔ اوست؛ بازیکن کشته و تمام لشکرهایش حذف می‌شوند.' : ''}`)) return;
     setAddCastleBusyId(tgId);
     try {
       const res = await api.adminAddCastle(tgId, castle, addCastleMode);
@@ -1951,7 +1951,7 @@ export default function Admin() {
                         قلعهٔ اضافه — پایگاهِ دومِ کاملِ این بازیکن؛ از هر اقلیمی می‌تونه باشه. اگه الان دستِ بازیکنِ
                         دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، با ساختمان‌هایش منتقل می‌شود؛ فقط در حالت فتح، آمار فتح و پیروزی اضافه می‌شود.
                       </div>
-                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker value={addCastleValue} onChange={setAddCastleValue} max={1} />
+                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker value={addCastleValue} onChange={setAddCastleValue} max={1} allowOccupied excludedCastles={[p.castle, ...(p.castles || [])].filter(Boolean)} />
                       <button className="btn" style={{ marginTop: 14 }} disabled={addCastleBusyId === p.tg_id} onClick={() => addCastle(p.tg_id)}>
                         {addCastleBusyId === p.tg_id ? 'در حال ثبت...' : 'افزودن'}
                       </button>
