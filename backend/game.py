@@ -62,7 +62,9 @@ def castle_building_state(player: dict, castle: str) -> dict:
     return player.setdefault("castle_buildings", {}).setdefault(castle, {})
 
 def building_levels_for(player: dict, castle: str):
-    for bid, raw in castle_building_state(player, castle).items():
+    # Reading an army location must never create ownership of that location.
+    state = player.get("buildings", {}) if castle == player.get("castle") else player.get("castle_buildings", {}).get(castle, {})
+    for bid, raw in state.items():
         level = normalize_building_state(raw)["level"]
         if level > 0 and bid in BUILDINGS:
             yield bid, level
