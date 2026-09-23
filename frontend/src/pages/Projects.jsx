@@ -1,6 +1,6 @@
 import { WEAPON_NAMES } from '../gamedata.js';
 import SubmissionQuota from '../components/SubmissionQuota.jsx';
-import { gameNow } from '../gameClock.js';
+
 import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api.js';
 import '../projects.css';
@@ -63,14 +63,14 @@ export default function Projects({ admin = false }) {
   const [purchaseAccepted, setPurchaseAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(null);
-  const [clock, setClock] = useState(gameNow());
+  const [clock, setClock] = useState(Date.now());
   const busyRef = useRef(false);
   const load = async () => {
     try { const data = await (admin ? api.adminProjects() : api.projects(mine)); setRows(data); setError(''); }
     catch (e) { setError(e.message); }
   };
   useEffect(() => { api.projectRules().then(setRules).catch(e => setError(e.message)); }, []);
-  useEffect(() => { load(); const timer = setInterval(() => { load(); setClock(gameNow()); }, 15000); return () => clearInterval(timer); }, [admin, mine]);
+  useEffect(() => { load(); const timer = setInterval(() => { load(); setClock(Date.now()); }, 15000); return () => clearInterval(timer); }, [admin, mine]);
   const run = async action => {
     if (busyRef.current) return;
     busyRef.current = true; setBusy(true);
@@ -98,13 +98,13 @@ export default function Projects({ admin = false }) {
   };
   const openProject = p => {
     setSelected(p); setQuantity(1); setPurchaseKey(crypto.randomUUID()); setPurchaseAccepted(false);
-    const local = new Date(gameNow() + 3600000); local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
+    const local = new Date(Date.now() + 3600000 + 12600000);
     setReview({ publish_at: local.toISOString().slice(0, 16), funding_hours: 48, max_shares_per_player: '', reason: '', notification_terms: p.notification_terms || rules?.terms || '' });
   };
   const decide = action => run(async () => {
     if (review.reason.trim().length < 3) throw new Error('دلیل تصمیم را بنویس');
     if (action === 'fail' && !window.confirm('شکست پروژه ثبت شود؟ اصل سرمایه بازنمی‌گردد و تمام پرداخت‌های آینده متوقف می‌شوند.')) return;
-    const payload = action === 'approve' ? { ...review, publish_at: new Date(review.publish_at).toISOString(), funding_hours: Number(review.funding_hours), max_shares_per_player: review.max_shares_per_player ? Number(review.max_shares_per_player) : null } : { reason: review.reason };
+    const payload = action === 'approve' ? { ...review, publish_at: new Date(review.publish_at + ':00+03:30').toISOString(), funding_hours: Number(review.funding_hours), max_shares_per_player: review.max_shares_per_player ? Number(review.max_shares_per_player) : null } : { reason: review.reason };
     await api.decideProject(selectedProject.id, action, payload); toast('تصمیم ثبت شد'); setSelected(null);
   });
 
@@ -198,7 +198,7 @@ export default function Projects({ admin = false }) {
       {admin && review && ['pending', 'active'].includes(selectedProject.status) && <div className="project-review">
         <h3>تصمیم ادمین</h3><label className="f">دلیل تصمیم<textarea minLength={3} maxLength={500} value={review.reason} disabled={busy} onChange={e => setReview({ ...review, reason: e.target.value })} /></label>
         {selectedProject.status === 'pending' && <>
-          <label className="f">زمان عرضه (به وقت دستگاه شما)<input type="datetime-local" value={review.publish_at} disabled={busy} onChange={e => setReview({ ...review, publish_at: e.target.value })} /></label>
+          <label className="f">زمان عرضه (به وقت تهران)<input type="datetime-local" value={review.publish_at} disabled={busy} onChange={e => setReview({ ...review, publish_at: e.target.value })} /></label>
           <label className="f">فرصت جذب سرمایه از زمان عرضه (ساعت)<input type="number" min="1" max="720" value={review.funding_hours} disabled={busy} onChange={e => setReview({ ...review, funding_hours: e.target.value })} /></label>
           {selectedProject.kind === 'shared' && <label className="f">حداکثر مجموع سهام هر بازیکن — خالی یعنی نامحدود<input type="number" min="1" max="10000" value={review.max_shares_per_player} disabled={busy} onChange={e => setReview({ ...review, max_shares_per_player: e.target.value })} /></label>}
           <label className="f">شرایط سرمایه‌گذاری در اعلان<textarea rows="7" minLength={10} maxLength={1000} value={review.notification_terms} disabled={busy} onChange={e => setReview({ ...review, notification_terms: e.target.value })} /></label>

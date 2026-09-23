@@ -1425,7 +1425,9 @@ async def notify_arrivals():
                 pushes.update({"battle_attacker_snapshots": snapshot, "battle_attacker_army_ids": str(c["_id"]), "battle_attacker_joins": join})
             await campaigns.update_one({"_id": open_battle["_id"], "battle_open": True}, {"$push": pushes, "$addToSet": {"battle_participant_tg_ids": c["tg_id"]}})
             side_name = "طرف مستقل" if side == "independent" else ("مدافعان" if joins_defender else "مهاجمان")
-            join_text = f"⚔️ لشکر {c['player_name']} در ساعت {joined_at.strftime('%H:%M')} به سمت {side_name} نبرد بازِ {target} اضافه شد."
+            from display_clock import display_clock
+            joined_display = (await display_clock()).text(joined_at)
+            join_text = f"⚔️ لشکر {c['player_name']} در {joined_display} (به وقت تهران) به سمت {side_name} نبرد بازِ {target} اضافه شد."
             await queue_battle_roster(open_battle, f"battle-join:{engagement_id}:{c['_id']}", join_text)
             admin_join_text = await battle_admin_roster_text(open_battle, engagement_id, join_text)
             await notify_admins(

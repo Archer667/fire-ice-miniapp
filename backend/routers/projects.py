@@ -1,3 +1,4 @@
+import game_clock
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 import hashlib
@@ -115,7 +116,7 @@ async def listing(mine: bool = False, user=Depends(get_user)):
         async for p in projects.find({'status': {'$ne': 'invalid'}}).sort('created_at', -1):
             p = await tick_project(p)
             involved = p['owner_id'] == user['id'] or str(user['id']) in p['members']
-            public = p['kind'] == 'shared' and p.get('publish_at') and now() >= p['publish_at'] and p['status'] != 'pending'
+            public = p['kind'] == 'shared' and p.get('publish_at') and game_clock.real_now() >= p['publish_at'] and p['status'] != 'pending'
             if (mine and involved) or (not mine and (involved or public)):
                 result.append(public_project(p, user['id']))
         return result
@@ -145,7 +146,7 @@ async def buy(project_id: str, body: Purchase, user=Depends(get_user)):
             if not member or not wallet.get('project_receipts', {}).get(receipt_key(f'{project_id}:buy:{key}')):
                 raise HTTPException(409, 'شناسهٔ خرید متعلق به درخواست دیگری است')
             return public_project(doc, p['tg_id'])
-        if doc['status'] != 'funding' or now() < doc['publish_at'] or now() >= doc['funding_deadline']:
+        if doc['status'] != 'funding' or game_clock.real_now() < doc['publish_at'] or now() >= doc['funding_deadline']:
             raise HTTPException(409, 'خرید سهام این پروژه اکنون باز نیست')
         held = doc['members'].get(str(p['tg_id']), {})
         if held and held['character_created_at'] != p['created_at']:
@@ -185,7 +186,7 @@ async def approve(project_id: str, body: Approval, user=Depends(manager)):
     if body.publish_at.tzinfo is None:
         raise HTTPException(400, 'زمان عرضه باید منطقهٔ زمانی داشته باشد')
     stamp = body.publish_at.astimezone(timezone.utc).replace(tzinfo=None)
-    if stamp < now():
+    if stamp < game_clock.real_now():
         raise HTTPException(400, 'زمان عرضه باید در آینده باشد')
     async with project_lock:
         doc = await projects.find_one({'_id': project_id})

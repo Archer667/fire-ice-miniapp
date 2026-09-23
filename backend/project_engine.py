@@ -16,6 +16,7 @@ from db import db, players, messages, admin_roles
 from game import now, apply_production, production_fields, can_afford, pay
 from config import ADMIN_IDS, OWNER_ID, SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME, MINI_APP_URL
 import telegram_bot
+import game_clock
 from game_data import WEAPON_NAMES
 
 projects = db.projects
@@ -184,11 +185,11 @@ async def tick_project(project):
     if not owner or owner.get('is_dead') or owner.get('created_at') != project['members'][str(project['owner_id'])]['character_created_at']:
         return await fail_project(project, 'مرگ یا پایان شخصیت طراح پروژه')
     current = now()
-    if project['status'] == 'scheduled' and current >= project['publish_at']:
-        state = {'status': 'funding'}
+    if project['status'] == 'scheduled' and game_clock.real_now() >= project['publish_at']:
+        state = {'status': 'funding', 'funding_deadline': current + timedelta(hours=project['funding_hours'])}
         if project['kind'] == 'personal':
-            state = {'status': 'active', 'started_at': project['publish_at'],
-                     'next_payout_at': project['publish_at'] + timedelta(hours=project['period_hours'])}
+            state = {'status': 'active', 'started_at': current,
+                     'next_payout_at': current + timedelta(hours=project['period_hours'])}
         await projects.update_one({'_id': project['_id']}, {'$set': state})
         project.update(state)
     if project['status'] == 'funding' and current >= project['funding_deadline']:
@@ -234,6 +235,11 @@ def public_project(project, user_id):
     out['my_received'] = scaled(out['my_return'], project['paid_periods'])
     out['my_net'] = {k: out['my_total_return'].get(k, 0) - out['my_investment'].get(k, 0) for k in RESOURCES}
     out['remaining_shares'] = project['total_shares'] - project['sold_shares']
+    # Deadlines run on paused game time; API dates displayed to humans use real UTC.
+    offset = game_clock.real_now() - now()
+    for field in ('funding_deadline', 'next_payout_at'):
+        if out.get(field) and project['status'] != 'scheduled':
+            out[field] = out[field] + offset
     out['can_buy'] = project['status'] == 'funding' and not out['is_owner']
     return out
 
