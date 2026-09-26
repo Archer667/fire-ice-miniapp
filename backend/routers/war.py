@@ -1394,7 +1394,8 @@ async def notify_arrivals():
             )
 
         owner_is_friendly = bool(target_owner and await players_are_friendly(c["tg_id"], target_owner["tg_id"]))
-        creates_battle = (c["op_type"] in DIRECT_ATTACK_OP_TYPES and not owner_is_friendly) or opposing_army is not None
+        hostile_castle = bool(target_owner and target_owner["tg_id"] != c["tg_id"] and not owner_is_friendly)
+        creates_battle = hostile_castle or (c["op_type"] in DIRECT_ATTACK_OP_TYPES and not owner_is_friendly) or opposing_army is not None
         # تا وقتی نتیجهٔ نبرد قلعه ثبت نشده، مهاجم تازه پروندهٔ جدا نمی‌سازد؛ با
         # snapshot و زمان ورود مستقل به همان نبرد باز اضافه و قفل می‌شود.
         open_battle = None
