@@ -26,7 +26,7 @@ const SIMPLE_SECTIONS = [
     ['safe_popularity','مرز امن','محبوبیت'], ['high_risk_popularity','مرز خطر بالا','محبوبیت'], ['guaranteed_popularity','مرز شورش قطعی','محبوبیت'],
   ]},
   { key: 'war', title: 'جنگ و داوری', help: 'قواعد تشکیل نیرو، مهلت رول، نگهداری گزارش و لغو لشکر.', fields: [
-    ['minimum_army_men','حداقل نفرات لشکر','نفر'], ['minimum_ambush_men','حداقل نفرات کمین','نفر'], ['roleplay_hours','مهلت ارسال رول جنگ','ساعت'],
+    ['minimum_army_men','حداقل نفرات لشکر','نفر'], ['minimum_ambush_men','حداقل نفرات کمین','نفر'],
     ['report_visible_hours','مدت نمایش گزارش','ساعت'], ['cancel_penalty_percent','جریمه لغو','درصد'], ['cancel_grace_minutes','مهلت لغو بدون جریمه','دقیقه'],
     ['spy_gold_cost','هزینه جاسوسی','سکه'], ['spy_men_cost','نفرات جاسوسی','نفر'],
   ]},

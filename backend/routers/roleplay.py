@@ -64,7 +64,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             oid = None
         if not c and oid is not None:
             c = await campaigns.find_one({"_id": oid, "engagement_locked": True})
-        if not c or not c.get("engagement_locked") or c.get("battle_cancelled_at") or c.get("combat_resolved_at"):
+        if not c or not c.get("battle_open") or c.get("battle_cancelled_at") or c.get("combat_resolved_at"):
             raise HTTPException(404, "این نبرد پیدا نشد")
 
         canonical_id = c.get("engagement_campaign_id") or str(c["_id"])
@@ -82,8 +82,6 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
         arrival_at = c.get("battle_started_at") or c.get("arrival_at")
         if not arrival_at or now() < arrival_at:
             raise HTTPException(400, "این نبرد هنوز به مقصد نرسیده")
-        if now() > arrival_at + timedelta(hours=roleplay_window_hours()):
-            raise HTTPException(400, f"مهلت {roleplay_window_hours():g} ساعته برای فرستادن سناریوی این نبرد گذشته")
         if await roleplays.find_one({"tg_id": user["id"], "campaign_id": canonical_id}):
             raise HTTPException(400, "قبلاً سناریوی این نبرد را فرستاده‌ای")
         campaign_id = canonical_id
@@ -124,7 +122,6 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     )
     if campaign_id:
         submitted = await roleplays.count_documents({"campaign_id": campaign_id})
-        deadline = (c.get("battle_started_at") or c["arrival_at"]) + timedelta(hours=roleplay_window_hours())
         both_ready = submitted >= 2
         await notify_admins(
             "war_roleplay",
@@ -138,7 +135,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
             castle=c["target_castle"],
             action="از پنل ادمین ← جنگ و رول‌ها ← رول‌ها، روایت طرفین را بررسی کن.",
             source_id=campaign_id,
-            deadline=deadline,
+
         )
     else:
         await notify_admins(

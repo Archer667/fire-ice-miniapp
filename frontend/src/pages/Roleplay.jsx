@@ -91,7 +91,7 @@ export default function Roleplay() {
                 <div className="page-sub" style={{ margin: '0 4px' }}>در حال بارگذاری نبردها...</div>
               ) : battles.length === 0 ? (
                 <div className="page-sub" style={{ margin: '0 4px', color: 'var(--danger)' }}>
-                  فعلاً هیچ نبردِ رسیده‌ای برای نوشتن سناریو نداری — بعد از اینکه لشکری (مهاجم یا مدافع) به مقصد برسد، تا ۶ ساعت اینجا نشانش می‌دهیم
+                  نبرد بازی که هنوز رولش را نفرستاده باشی نداری؛ تا وقتی پروندهٔ نبرد باز است، می‌توانی رول آن را ارسال کنی.
                 </div>
               ) : (
                 <select value={campaignId} onChange={e => setCampaignId(e.target.value)}>

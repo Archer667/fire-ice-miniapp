@@ -99,31 +99,3 @@ async def notify_admin_deadlines():
             source_id=str(row["_id"]),
             deadline=row.get("deadline"),
         )
-
-    # مهلت رول جنگ از زمان رسیدن لشکر شروع می‌شود.
-    from routers.war import ATTACK_OP_TYPES, roleplay_window_hours
-    cutoff = current - timedelta(hours=roleplay_window_hours())
-    async for campaign in campaigns.find({
-        "op_type": {"$in": list(ATTACK_OP_TYPES)},
-        "arrival_at": {"$gt": cutoff, "$lte": current},
-    }):
-        deadline = campaign["arrival_at"] + timedelta(hours=roleplay_window_hours())
-        if deadline > soon:
-            continue
-        battle_id = campaign.get("engagement_campaign_id") or str(campaign["_id"])
-        submitted = await roleplays.count_documents({"campaign_id": battle_id})
-        if submitted >= 2:
-            continue
-        await notify_admins(
-            "war_deadline",
-            "⏳ مهلت رول جنگ رو به پایان است",
-            f"نبرد «{campaign.get('name') or 'بدون نام'}» در {campaign.get('target_castle')} کمتر از دو ساعت مهلت دارد؛ {submitted} طرف از ۲ طرف رول فرستاده.",
-            dedupe_key=f"war-deadline:{battle_id}",
-            priority="high",
-            player_name=campaign.get("player_name"),
-            player_tg_id=campaign.get("tg_id"),
-            castle=campaign.get("target_castle"),
-            action="رول‌های نبرد را بررسی کن و در صورت نیاز به طرفین یادآوری کن.",
-            source_id=battle_id,
-            deadline=deadline,
-        )

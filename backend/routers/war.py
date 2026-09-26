@@ -1151,7 +1151,7 @@ async def notify_battle_admins(engagement_id: str, location: str, attacker: dict
         "battle_started", "⚔️ نبرد تازه آغاز شد", detail,
         dedupe_key=f"battle-started:{engagement_id}", priority="urgent",
         player_name=attacker_name, player_tg_id=attacker.get("tg_id"), castle=location,
-        source_id=engagement_id, deadline=now() + timedelta(hours=roleplay_window_hours()),
+        source_id=engagement_id,
         action="در پنل ادمین ← نبردها، نیروها و رول‌های دو طرف را بررسی کن.",
     )
     # اعلان عمومی شروع نبرد نوع یگان‌ها را فاش نمی‌کند، اما مجموع نفرات و ادوات هر
@@ -1512,7 +1512,7 @@ async def notify_arrivals():
                 f"مهاجم ({c['player_name']}): {attacker_summary:,} نفر · {attacker_equipment_summary:,} ادوات\n"
                 f"لشکر دفاعی قلعه ({battle_defender['name']}): {defender_summary:,} نفر · {defender_equipment_summary:,} ادوات\n"
                 f"زیرساخت‌های دفاعی {target}: {infrastructure_summary(defense_infrastructure)}\n"
-                f"هر دو طرف تا {roleplay_window_hours():g} ساعت دیگر فرصت دارید سناریوی این نبرد را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را برای هر دو طرف می‌فرستد."
+                "تا زمانی که پروندهٔ نبرد باز است، سناریوی آن را از صفحهٔ رول‌ها (دستهٔ جنگ) بفرستید — ادمین نتیجه را اعلام می‌کند."
             )
             await send_system_message(c["tg_id"], c["player_name"], stats_text, kind="battle")
             await send_system_message(battle_defender["tg_id"], battle_defender["name"], stats_text, kind="battle")
@@ -1527,7 +1527,6 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         return []
-    cutoff = now() - timedelta(hours=roleplay_window_hours())
 
     async def build(c, role):
         canonical_id = c.get("engagement_campaign_id") or str(c["_id"])
@@ -1538,6 +1537,11 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
             except Exception:
                 root = c
         root = root or c
+        if not root.get("battle_open") or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
+            return None
+        started = root.get("battle_started_at") or root.get("arrival_at")
+        if not started or started > now():
+            return None
         already = await roleplays.find_one({"tg_id": user["id"], "campaign_id": canonical_id})
         if already:
             return None
@@ -1561,8 +1565,6 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
         "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False},
     })
     async for root in roots:
-        if (root.get("battle_started_at") or root.get("arrival_at")) < cutoff:
-            continue
         row = await build(root, "participant")
         if row and row["campaign_id"] not in seen_engagements:
             out.append(row)
@@ -1571,8 +1573,6 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
     # fallback برای پرونده‌های قدیمی که آرایهٔ participant نداشتند.
     cur = campaigns.find({"tg_id": user["id"], "engagement_locked": True})
     async for c in cur:
-        if (c.get("battle_started_at") or c.get("arrival_at")) < cutoff:
-            continue
         row = await build(c, "attacker")
         if row and row["campaign_id"] not in seen_engagements:
             out.append(row)
@@ -1583,8 +1583,6 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
         "$or": [{"target_castle": {"$in": owned_castles(p)}}, {"opponent_tg_id": user["id"]}],
     })
     async for c in cur2:
-        if (c.get("battle_started_at") or c.get("arrival_at")) < cutoff:
-            continue
         row = await build(c, "defender")
         if row and row["campaign_id"] not in seen_engagements:
             out.append(row)
