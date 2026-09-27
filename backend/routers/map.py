@@ -68,7 +68,7 @@ async def get_map(user: dict = Depends(get_user)):
             owners_by_castle[c] = {
                 "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
                 "points": r["score"], "overlord_name": overlord_name.get(rid),
-                "region": rid, "pact": pact_by_tgid.get(p["tg_id"]),
+                "region": p["region"], "castle_region": rid, "pact": pact_by_tgid.get(p["tg_id"]),
             }
 
     # terrain: land | coastal | sea — همان چیزی که ادمین از تب نقشه روی هر پین مشخص کرده

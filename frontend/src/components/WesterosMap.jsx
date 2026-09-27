@@ -2,6 +2,7 @@ import { gameNow } from '../gameClock.js';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
 import { Ship, Keep, Coliseum, Swords } from './Icons.jsx';
+import REGION_AREAS from '../mapRegions.json';
 import { MAP_IMAGE } from '../mapCoords.js';
 import { REGIONS_STATIC, castleLabel, REGION_COLORS, PACT_COLORS, ALLIANCE_TYPES, SEA_EDGES, isSeaEdge } from '../gamedata.js';
 import ZoomPanMap, { ZoomContext } from './ZoomPanMap.jsx';
@@ -104,7 +105,7 @@ function ArmyMarker({ campaign, coords, active, onToggle, zoom }) {
   );
 }
 
-export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel, colorMode = 'region', routeSegments, seaLaneSegments, campaigns = [] }) {
+export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSelectTarget, pickLabel, colorMode = 'region', showBorders = false, routeSegments, seaLaneSegments, campaigns = [] }) {
   const zoom = useContext(ZoomContext);
   const [activeArmy, setActiveArmy] = useState(null);
   const handleFrameClick = (e) => {
@@ -118,6 +119,11 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
   return (
     <div className="map-canvas" onClick={handleFrameClick} style={{ cursor: onFrameClick ? 'crosshair' : 'default' }}>
       <img src={MAP_IMAGE} alt="نقشهٔ وستروس" draggable={false} />
+      {showBorders && <svg className="map-region-overlay" style={{'--region-border-width': `${1.1 / zoom}px`}} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {Object.entries(REGION_AREAS).map(([rid, areas]) => <g key={rid} style={{color: REGION_COLORS[rid]}}>
+          {areas.map((points, i) => <polygon key={i} points={points.map(p => p.join(',')).join(' ')} />)}
+        </g>)}
+      </svg>}
       {(seaLaneSegments?.length > 0 || routeSegments?.length > 0) && (
         <svg className="map-overlay-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
           {seaLaneSegments?.map(([[x1, y1], [x2, y2]], i) => (
@@ -138,7 +144,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
         const ownerColor = c.owner
           ? (colorMode === 'pact' ? PACT_COLORS[c.owner.pact || 'none'] : (c.owner.region ? REGION_COLORS[c.owner.region] : null))
           : null;
-        const dotStyle = ownerColor ? { borderColor: ownerColor, color: ownerColor } : undefined;
+        const dotStyle = { borderColor: ownerColor || '#8c939c', color: ownerColor || '#8c939c', ...(ownerColor ? {background: ownerColor} : {}) };
         return (
           <div key={c.name} role={onPinClick ? 'button' : undefined} tabIndex={onPinClick ? 0 : undefined}
                aria-label={onPinClick ? c.name : undefined}
@@ -232,6 +238,7 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
   const [activeRegion, setActiveRegion] = useState(null);
   const [pinFilter, setPinFilter] = useState('all');
   const [colorMode, setColorMode] = useState('region');
+  const [showBorders, setShowBorders] = useState(() => { try { return localStorage.getItem('valyria.map.borders') !== '0'; } catch { return true; } });
   const [showArmies, setShowArmies] = useState(() => {
     try { return localStorage.getItem('valyria.map.showArmies') !== '0'; }
     catch { return true; }
@@ -359,6 +366,11 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
               {f.label}
             </button>
           ))}
+          <button type="button" role="switch" aria-checked={showBorders}
+                  className={`map-region-tab ${showBorders ? 'on' : ''}`}
+                  onClick={() => { const value = !showBorders; setShowBorders(value); try { localStorage.setItem('valyria.map.borders', value ? '1' : '0'); } catch {} }}>
+            مرز اقلیم‌ها: {showBorders ? 'روشن' : 'خاموش'}
+          </button>
           <button type="button" role="switch" aria-checked={showArmies}
                   className={`map-region-tab ${showArmies ? 'on' : ''}`}
                   onClick={toggleArmies}>
@@ -372,7 +384,7 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
           <MapFrame region={{ castles: filteredCastles }} coords={coords} pin={pin}
                     onPinClick={(c) => { haptic(); setPin(pin === c.name ? null : c.name); }}
                     onSelectTarget={onSelectTarget} pickLabel={pickLabel}
-                    colorMode={colorMode} routeSegments={routeSegments} seaLaneSegments={seaLaneSegments}
+                    colorMode={colorMode} showBorders={showBorders} routeSegments={routeSegments} seaLaneSegments={seaLaneSegments}
                     campaigns={showArmies ? (data.campaigns || []).filter(c => !c.arrived) : []} />
         </ZoomPanMap>
         {mapped.length > 6 && <MiniMap pins={mapped} view={view} onJump={jumpFromMiniMap} />}
@@ -384,7 +396,7 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
       </div>
       {ownedRegions.length > 0 && (
         <div className="map-legend">
-          {colorMode === 'region' ? ownedRegions.map(rid => (
+          {colorMode === 'region' ? (showBorders ? Object.keys(REGION_AREAS) : ownedRegions).map(rid => (
             <span className="map-legend-item" key={rid}>
               <span className="map-legend-dot" style={{ background: REGION_COLORS[rid] }} />
               {REGIONS_STATIC[rid]?.name || rid}
@@ -395,9 +407,10 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
               {t === 'none' ? 'بدون پیمان' : ALLIANCE_TYPES[t]?.name}
             </span>
           ))}
+          <span className="map-legend-item"><span className="map-legend-dot" style={{background: '#8c939c'}} />بدون مالک</span>
           <button type="button" className="map-legend-toggle"
                   onClick={() => { haptic(); setColorMode(m => m === 'region' ? 'pact' : 'region'); }}>
-            رنگ‌بندی: {colorMode === 'region' ? 'اقلیم' : 'پیمان'}
+            رنگ‌بندی: {colorMode === 'region' ? 'اقلیم مالک' : 'پیمان'}
           </button>
         </div>
       )}
