@@ -571,7 +571,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
     if not op:
         raise HTTPException(400, "نوع عملیات نامعتبر")
 
-    if not (await get_war_window())["open"]:
+    if body.op_type != "defense" and not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی")
 
     p = apply_production(p)
@@ -685,6 +685,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "created_at": now(), "last_food_tick": now(),
     }
     res = await campaigns.insert_one(doc)
+    await notify_campaign_departure(doc)
     return {
         "ok": True, "id": str(res.inserted_id), "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "men_committed": men, "power": power,
         "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
@@ -847,7 +848,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
         },
         "$push": {"movement_history": {**{k: c.get(k) for k in ('origin_castle', 'target_castle', 'route_path', 'route_edge_minutes', 'route_start_position', 'moved_at', 'arrival_at')}, 'ended_at': now(), 'reason': 'new_order'}},
         "$unset": {
-            "stationed_edge": "", "stationed_at": "", "battle_contact": "",
+            "stationed_edge": "", "stationed_at": "", "battle_contact": "", "route_segments": "", "returning_from_battle": "", "return_destination_edge": "",
             **({"route_start_position": ""} if not road_point else {}),
             "combat_resolved_at": "", "combat_outcome": "", "winner_tg_id": "",
             "medal_outcome_recorded": "", "engagement_campaign_id": "",
@@ -858,6 +859,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
             "opponent_campaign_id": "", "opponent_tg_id": "", "public_start_notified": "",
         },
     })
+    await notify_campaign_departure({**c, "origin_castle": origin, "target_castle": body.target_castle, "op_type": body.op_type, "arrival_at": arrival_at})
     return {"ok": True, "arrival_at": arrival_at.isoformat(), "travel_minutes": move_minutes, "route_path": chosen["path"]}
 
 @router.post("/{campaign_id}/attack")
@@ -904,7 +906,7 @@ async def legions(user: dict = Depends(get_user)):
             # صرفاً وجود و مسیر لشکرکشی را نشان می‌دهد.
             "mine": is_mine,
             "op_type": c["op_type"] if is_mine else None,
-            "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]) if is_mine else "لشکرکشی",
+            "op_name": ("بازگشت از نبرد" if c.get("returning_from_battle") else OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])) if is_mine else "لشکرکشی",
             "name": (c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])) if is_mine else "لشکرکشی",
             "origin": c["origin_castle"], "target": c["target_castle"],
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
@@ -935,7 +937,7 @@ async def mine(user: dict = Depends(get_user)):
             continue
         out.append({
             "id": str(c["_id"]),
-            "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
+            "op_type": c["op_type"], "op_name": ("بازگشت از نبرد" if c.get("returning_from_battle") else OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])),
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "sender": c["player_name"],
             "origin": c["origin_castle"], "target": c["target_castle"],
@@ -1356,11 +1358,24 @@ async def notify_arrivals():
     await repair_open_battle_rosters()
     await process_route_ambushes()
     await detect_route_encounters()
-    cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False}})
+    cur = campaigns.find({"active": True, "arrival_notified": {"$ne": True}, "arrival_at": {"$lte": now()}, "$or": [{"returning_from_battle": {"$exists": True}}, {"combat_resolved_at": {"$exists": False}, "battle_cancelled_at": {"$exists": False}}]})
     async for c in cur:
         c = await campaigns.find_one({"_id": c["_id"]})
         if not c or not c.get("active") or c.get("arrival_notified"):
             continue
+        if c.get('returning_from_battle') and not c.get('engagement_locked'):
+            destination_edge = c.get('return_destination_edge')
+            update = {'returning_from_battle': '', 'return_destination_edge': '', 'combat_resolved_at': '', 'battle_cancelled_at': ''}
+            state = {}
+            if destination_edge:
+                state = {'stationed_edge': destination_edge, 'stationed_at': c['arrival_at'], 'arrival_notified': True}
+            await campaigns.update_one({'_id': c['_id']}, {'$unset': update, '$set': state})
+            for key in update:
+                c.pop(key, None)
+            c.update(state)
+            if destination_edge:
+                await send_system_message(c['tg_id'], c['player_name'], f"لشکرت «{c.get('name', '')}» به محل اولیه در مسیر برگشت.")
+                continue
         if c.get("engagement_locked") or c.get("combat_resolved_at") or c.get("battle_cancelled_at"):
             await campaigns.update_one({"_id": c["_id"]}, {"$set": {"arrival_notified": True}})
             continue
@@ -1591,3 +1606,27 @@ async def roleplay_eligible(user: dict = Depends(get_user)):
 
     out.sort(key=lambda r: r["arrival_at"], reverse=True)
     return out
+
+
+async def notify_campaign_departure(army):
+    """Publish only the public movement details; never reveal troop composition."""
+    if army.get('origin_castle') == army.get('target_castle'):
+        return
+    import logging
+    try:
+        from display_clock import display_clock
+        import telegram_bot
+        clock = await display_clock()
+        text = (f"⚔️ حرکت لشکر «{army.get('name', 'لشکر')}»\n"
+                f"فرمانده: {titled_name(name=army.get('player_name', ''), gender=army.get('player_gender', 'lord'))}\n"
+                f"مبدأ: {army['origin_castle']}\nمقصد: {army['target_castle']}\n"
+                f"فرمان: {('بازگشت از نبرد' if army.get('returning_from_battle') else OP_TYPES.get(army.get('op_type'), {}).get('name', 'بازگشت'))}\n"
+                f"زمان رسیدن: {clock.text(army['arrival_at'])} (به وقت تهران)")
+        settings = await game_settings.find_one({'_id': 'campaign_channel'}) or {}
+        if settings.get('chat_id'):
+            telegram_bot.push(settings['chat_id'], text)
+        target = await owner_of_castle(army['target_castle'])
+        if target and target['tg_id'] != army['tg_id']:
+            await send_system_message(target['tg_id'], target['name'], text)
+    except Exception:
+        logging.getLogger(__name__).exception('Campaign departure notification failed')

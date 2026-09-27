@@ -249,7 +249,7 @@ export default function War() {
   const overSeaRoute = !!chosenRoute?.via_sea && seaLandMen > seaCapacity;
   const targetPeacePact = ['non_aggression', 'full_alliance'].includes(target?.owner?.pact) ? target.owner.pact : null;
   const hostileAgainstPact = !!targetPeacePact && ['attack', 'siege', 'naval_raid'].includes(opType);
-  const formIssue = windowClosed ? 'پنجرهٔ لشکرکشی بسته است'
+  const formIssue = windowClosed && opType !== 'defense' ? 'پنجرهٔ لشکرکشی بسته است'
     : movingLegion && !target ? 'مقصد را انتخاب کن'
     : movingLegion && target?.name === movingLegion.target ? 'مقصد جدید باید متفاوت باشد'
     : movingLegion?.stationed_edge && target && ![movingLegion.stationed_edge.a, movingLegion.stationed_edge.b].includes(target.name) ? 'یکی از دو سرِ همین مسیر را انتخاب کن'
@@ -276,7 +276,7 @@ export default function War() {
   };
 
   const send = async () => {
-    if (windowClosed) { toast('پنجرهٔ لشکرکشی الان بسته است'); return; }
+    if (windowClosed && opType !== 'defense') { toast('پنجرهٔ لشکرکشی الان بسته است'); return; }
     if (op.needsTarget && !target) { toast('مقصد را از روی نقشه یا لیست انتخاب کن'); return; }
     if (op.portOnly && target && !target.port) { toast('غارت دریایی فقط علیه اهداف بندری ممکن است'); return; }
     if (badOriginForNaval) { toast('غارت دریایی فقط از قلعه/شهرهای بندری ممکن است'); return; }
@@ -402,7 +402,7 @@ export default function War() {
         <>
           {windowClosed && (
             <div className="card up u1" style={{ borderColor: 'var(--danger)', textAlign: 'center', color: 'var(--danger)', fontSize: 12.5 }}>
-              پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی. نقشه و لشکرهای در راه دست‌نخورده‌اند.
+              پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی. ساخت لشکر دفاعی همچنان مجاز است.
             </div>
           )}
           <div className="sect up u2">نقشهٔ وستروس</div>
@@ -615,6 +615,9 @@ export default function War() {
               <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
                 نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
               </div>
+              <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+                ادوات: {Object.entries(c.equipment || {}).filter(([, n]) => Number(n) > 0).map(([id, n]) => `${SIEGE_EQUIPMENT.find(e => e.id === id)?.name || id} × ${Number(n).toLocaleString('fa-IR')}`).join(' · ') || 'ندارد'}
+              </div>
               {c.route_path && c.route_path.length > 2 ? (
                 <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 4 }}>
                   مسیر: {c.route_path.map(castleLabel).join('  ←  ')}
@@ -674,6 +677,9 @@ export default function War() {
                   {c.name}
                   <small>{c.mine ? c.op_name : 'لشکرکشی'} · فرستنده: {c.sender}</small>
                 </div>
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+                ادوات: {Object.entries(c.equipment || {}).filter(([, n]) => Number(n) > 0).map(([id, n]) => `${SIEGE_EQUIPMENT.find(e => e.id === id)?.name || id} × ${Number(n).toLocaleString('fa-IR')}`).join(' · ') || 'ندارد'}
               </div>
               {c.route_path && c.route_path.length > 2 ? (
                 <div style={{ fontSize: 11, color: 'var(--low)', margin: '8px 0 4px' }}>

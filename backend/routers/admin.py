@@ -724,22 +724,41 @@ def _battle_members_query(root: dict, battle_id: str) -> dict:
         {"battle_root_campaign_id": root_id},
     ]}
 
-async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False):
+async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False, return_tg_ids=None):
     """پرونده را برای همهٔ اعضا یک‌جا می‌بندد تا هیچ قفل یا ریشهٔ یتیمی باقی نماند."""
     timestamp = now()
-    members = await campaigns.find(_battle_members_query(root, battle_id), {'_id': 1}).to_list(None)
+    members = await campaigns.find(_battle_members_query(root, battle_id)).to_list(None)
+    from battle_returns import return_plan
+    from game_data import TRAVEL_GRAPH
+    plans = []
+    for member in members:
+        if member.get('active') and (cancelled or member.get('tg_id') in (return_tg_ids or [])):
+            try:
+                plan = return_plan(member, battle_id, timestamp, TRAVEL_GRAPH)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from None
+            if plan:
+                plans.append((member, plan))
     state = {
         "engagement_locked": False, "battle_open": False,
         "released_with_army_ids": [str(a['_id']) for a in members],
         "battle_cancelled_at" if cancelled else "combat_resolved_at": timestamp,
     }
-    return await campaigns.update_many(
+    changed = await campaigns.update_many(
         _battle_members_query(root, battle_id),
         {"$set": state, "$unset": {
             "engagement_campaign_id": "", "battle_root_campaign_id": "", "battle_is_root": "",
             "opponent_campaign_id": "", "opponent_tg_id": "",
         }},
     )
+
+    from routers.war import notify_campaign_departure
+    for member, plan in plans:
+        await campaigns.update_one({'_id': member['_id'], 'active': True}, {
+            '$set': plan, '$unset': {'stationed_edge': '', 'stationed_at': '', 'route_start_position': '', 'battle_contact': ''},
+            '$push': {'movement_history': {**{k: member.get(k) for k in ('origin_castle', 'target_castle', 'route_path', 'route_segments', 'route_edge_minutes', 'created_at', 'moved_at', 'arrival_at')}, 'reason': 'battle_return', 'ended_at': timestamp}}})
+        await notify_campaign_departure({**member, **plan})
+    return changed
 
 async def _dismiss_battle_record(root: dict, battle_id: str, message: str):
     """انحلال واحد و مشترک برای دکمهٔ نبرد و عملیات مستقیم روی لشکر."""
@@ -987,7 +1006,7 @@ async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
     if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
         raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
 
-    unlocked = await _dismiss_battle_record(root, campaign_id, "این نبرد توسط ادمین منحل شد و لشکرهای درگیر آزاد شدند.")
+    unlocked = await _dismiss_battle_record(root, campaign_id, "این نبرد توسط ادمین منحل شد؛ لشکرهای بازمانده با طی زمان مسیر به مبدأ خود برمی‌گردند.")
     return {"ok": True, "armies_unlocked": unlocked.modified_count}
 
 @router.post("/battles/{campaign_id}/resolve")
@@ -1252,6 +1271,16 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             # باشد؛ نمونه‌اش لشکر مهاجمی است که برای کمک به صاحب قلعه وارد صحنه شده.
             combat_outcome = next(iter(winner_sides)) if len(winner_sides) == 1 else "mixed"
             loser_tg_ids = sorted((attacker_tg_ids | defender_tg_ids) - set(winner_tg_ids))
+            # Validate movement before any casualties, medals, or resource mutations.
+            from battle_returns import return_plan
+            from game_data import TRAVEL_GRAPH
+            async for member in campaigns.find(_battle_members_query(campaign, r.get('campaign_id'))):
+                if member.get('active') and member.get('tg_id') in loser_tg_ids:
+                    try:
+                        return_plan(member, r.get('campaign_id'), now(), TRAVEL_GRAPH)
+                    except ValueError as exc:
+                        raise HTTPException(409, str(exc)) from None
+
 
             attacker_before = _sum_campaign_field(attacker_campaigns or [campaign], "troops")
             attacker_equipment_before = _sum_campaign_field(attacker_campaigns or [campaign], "equipment")
@@ -1360,7 +1389,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
         # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
         # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
-        await _close_battle_state(campaign, r.get("campaign_id"), cancelled=False)
+        await _close_battle_state(campaign, r.get("campaign_id"), cancelled=False, return_tg_ids=loser_tg_ids)
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),

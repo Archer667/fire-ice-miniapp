@@ -13,6 +13,13 @@ def legs(army, graph, horizon=None):
     end = army.get('arrival_at')
     if not start or not end or len(path) < 2 or end <= start:
         return []
+    if army.get('route_segments'):
+        cursor, out = start, []
+        for segment in army['route_segments']:
+            finish = cursor + timedelta(seconds=segment['seconds'])
+            out.append((segment['a'], segment['b'], cursor, finish, segment['p0'], segment['p1']))
+            cursor = finish
+        return out
     partial = army.get('route_start_position')
     if partial:
         destination = 0 if army['target_castle'] == partial['a'] else 1

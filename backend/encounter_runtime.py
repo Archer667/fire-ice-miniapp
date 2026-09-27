@@ -39,13 +39,13 @@ async def halt(w, army, point, at, battle_id, root_id, is_root=False):
              'target_castle': location, 'arrival_at': at,
              'route_path': [location], 'travel_minutes': 0, 'arrival_notified': True}
     unset = {'combat_resolved_at': '', 'battle_cancelled_at': '', 'battle_left_at': '',
-             'battle_left_reason': '', 'route_start_position': ''}
+             'battle_left_reason': '', 'route_start_position': '', 'route_segments': '', 'returning_from_battle': '', 'return_destination_edge': ''}
     if point['kind'] == 'edge':
         state['stationed_edge'] = {k: v for k, v in point.items() if k != 'kind'}
     else:
         unset['stationed_edge'] = ''
     movement = {k: army.get(k) for k in ('origin_castle', 'target_castle', 'route_path',
-                 'route_edge_minutes', 'route_start_position', 'created_at', 'moved_at', 'arrival_at')}
+                 'route_edge_minutes', 'route_start_position', 'route_segments', 'created_at', 'moved_at', 'arrival_at')}
     movement.update({'ended_at': at, 'reason': 'battle', 'battle_id': battle_id})
     await w.campaigns.update_one({'_id': army['_id'], 'engagement_locked': {'$ne': True}},
         {'$set': state, '$unset': unset, '$push': {'movement_history': movement}})
