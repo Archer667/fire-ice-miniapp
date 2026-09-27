@@ -6,7 +6,23 @@ from encounter_geometry import legs, coordinates, position
 def return_plan(army, battle_id, at, graph):
     source = next((m for m in reversed(army.get('movement_history', []))
                    if m.get('reason') == 'battle' and m.get('battle_id') == battle_id), army)
+    # Repeated battles at the same stop create stationary snapshots. Follow the
+    # recorded movement back to the last actual journey with this origin.
+    if len(source.get('route_path') or []) < 2 and not source.get('route_segments'):
+        origin = source.get('origin_castle') or army.get('origin_castle')
+        candidates = list(army.get('movement_history', []))
+        source_index = next((i for i, m in enumerate(candidates) if m is source), len(candidates))
+        for previous in reversed(candidates[:source_index]):
+            if previous.get('origin_castle') != origin:
+                break
+            if len(previous.get('route_path') or []) >= 2 or previous.get('route_segments'):
+                source = previous
+                break
     source = {**source, 'created_at': source.get('created_at') or army.get('created_at')}
+    if len(source.get('route_path') or []) == 2 and not source.get('route_edge_minutes'):
+        # Legacy direct journeys retain elapsed time even if that map edge was replaced.
+        source['route_edge_minutes'] = [1]
+
     contact_at = source.get('ended_at') or army.get('battle_started_at') or at
     travelled = []
     for leg in legs(source, graph, contact_at):
