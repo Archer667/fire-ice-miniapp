@@ -103,6 +103,7 @@ const TAB_GROUPS = [
       { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
       { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
       { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
+      { key: 'player-buildings', label: 'ساختمان‌های بازیکن', description: 'تغییر سطح ساختمان‌های قلعه‌های بازیکن', fullOnly: true },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
       { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین', fullOnly: true },
     ],
@@ -2729,9 +2730,9 @@ export default function Admin() {
 
       {['control_center','population_growth'].includes(tab) && isOwner && <AdminControlCenter populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
 
-      {tab === 'balance' && isFull && (
+      {((tab === 'balance' && isOwner) || tab === 'player-buildings') && isFull && (
         <>
-          <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
+          {tab === 'balance' && <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
             <button type="button" role="tab" aria-selected={buildingAdminMode === 'global'}
                     className={`rbtn tab ${buildingAdminMode === 'global' ? 'on' : ''}`}
                     onClick={() => setBuildingAdminMode('global')}>تنظیمات سراسری</button>
@@ -2741,9 +2742,9 @@ export default function Admin() {
             <button type="button" role="tab" aria-selected={buildingAdminMode === 'military'}
                     className={`rbtn tab ${buildingAdminMode === 'military' ? 'on' : ''}`}
                     onClick={() => setBuildingAdminMode('military')}>نیروها و ادوات</button>
-          </div>
+          </div>}
 
-          {buildingAdminMode === 'global' && (
+          {tab === 'balance' && isOwner && buildingAdminMode === 'global' && (
             <>
               <div className="sect up u2">هزینه و بازدهی همهٔ ساختمان‌ها</div>
               <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
@@ -2848,7 +2849,7 @@ export default function Admin() {
             </>
           )}
 
-          {buildingAdminMode === 'military' && (
+          {tab === 'balance' && isOwner && buildingAdminMode === 'military' && (
             <>
               <div className="sect up u2">تعادل نیروها، کشتی‌ها و ادوات</div>
               <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
@@ -2919,7 +2920,7 @@ export default function Admin() {
             </>
           )}
 
-          {buildingAdminMode === 'player' && (
+          {(tab === 'player-buildings' || buildingAdminMode === 'player') && (
             <>
               <div className="sect up u2">مدیریت ساختمان‌های یک بازیکن</div>
               <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
