@@ -96,6 +96,8 @@ async def serialize_game_state(request: Request, call_next):
             await game_clock.load()
             from food_settlement import recover_pending_food
             await recover_pending_food()
+            from army_groups import recover_moves
+            await recover_moves()
             from character_records import recover_swaps
             await recover_swaps()
             from pact_exits import recover_exits
@@ -125,6 +127,8 @@ app.include_router(pause_router.router)
 from routers import characters as characters_router
 app.include_router(characters_router.router)
 app.include_router(players.router)
+from army_groups import router as army_groups_router
+app.include_router(army_groups_router)
 app.include_router(war.router)
 app.include_router(map_router.router)
 app.include_router(ravens.router)
@@ -163,6 +167,8 @@ async def _arrival_watcher():
                 await flush_family_notices()
                 # Repair persisted membership even while gameplay is paused.
                 from routers.war import repair_open_battle_rosters
+                from army_groups import recover_moves
+                await recover_moves()
                 await repair_open_battle_rosters()
                 if not game_clock.paused():
                     await tick_family()

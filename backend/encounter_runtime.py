@@ -52,6 +52,8 @@ async def halt(w, army, point, at, battle_id, root_id, is_root=False):
 
 
 async def announce(w, root, event, intro):
+    from army_groups import attach_battle_group
+    root = await attach_battle_group(root)
     await w.queue_battle_roster(root, event, intro)
     text = await w.battle_admin_roster_text(root, root['engagement_campaign_id'], intro)
     await w.notify_admins('battle_started', '⚔️ پروندهٔ نبرد', text,
@@ -129,6 +131,8 @@ async def _detect_pass(w):
     partners = {uid: await w.allied_tg_ids(uid) for uid in {a['tg_id'] for a in armies}}
     current_peace = set()
     for a, b in combinations(armies, 2):
+        if a.get('merge_group_id') and a.get('merge_group_id') == b.get('merge_group_id'):
+            continue
         if a['tg_id'] == b['tg_id']:
             continue
         if a.get('engagement_locked') and b.get('engagement_locked'):

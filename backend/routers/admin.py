@@ -1260,6 +1260,23 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 if army:
                     defender_campaigns.append(army)
                     recipient_tg_ids.add(army["tg_id"])
+            from army_groups import distribute_battle_losses
+            grouped_rows = [*attacker_campaigns, *defender_campaigns]
+            for row in grouped_rows:
+                if not row.get('merge_group_id'): continue
+                group_owners = {a['tg_id'] for a in grouped_rows if a.get('merge_group_id') == row['merge_group_id']}
+                if set(winner_tg_ids) & group_owners:
+                    winner_tg_ids = list(set(winner_tg_ids) | group_owners)
+            if any(a.get('merge_group_id') for a in attacker_campaigns):
+                body.attacker_army_losses.setdefault(str(campaign['_id']), body.attacker_losses)
+                body.attacker_army_equipment_losses.setdefault(str(campaign['_id']), body.attacker_equipment_losses)
+                await distribute_battle_losses(attacker_campaigns, body.attacker_army_losses, body.attacker_army_equipment_losses)
+            if any(a.get('merge_group_id') for a in defender_campaigns):
+                if defender_campaigns and not body.defender_army_losses:
+                    body.defender_army_losses[str(defender_campaigns[0]['_id'])] = body.defender_losses
+                if defender_campaigns and not body.defender_army_equipment_losses:
+                    body.defender_army_equipment_losses[str(defender_campaigns[0]['_id'])] = body.defender_equipment_losses
+                await distribute_battle_losses(defender_campaigns, body.defender_army_losses, body.defender_army_equipment_losses)
             attacker_tg_ids = {a["tg_id"] for a in attacker_campaigns} or {campaign["tg_id"]}
             defender_tg_ids = {a["tg_id"] for a in defender_campaigns}
             if defender:
@@ -1297,7 +1314,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                                     break
                         survivors = {k: max(0, int(v or 0) - int(losses.get(k, 0))) for k,v in member.get('troops', {}).items()}
                         if sum(survivors.values()):
-                            await _plan_battle_return({**member, 'troops': survivors}, r.get('campaign_id'), now(), False, body.retreat_destinations)
+                            await _plan_battle_return({**member, 'troops': survivors}, r.get('campaign_id'), now(), False, body.retreat_destinations, {**body.attacker_army_losses, **body.defender_army_losses})
                     except ValueError as exc:
                         raise HTTPException(409, str(exc)) from None
 
@@ -3153,12 +3170,25 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     image_url = _validated_message_image(body.image_url)
 
 
-async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None):
+async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None, formation_losses=None):
     from battle_returns import return_plan
     from routers import war
     plan = return_plan(army, battle_id, at, war.TRAVEL_GRAPH, cancelled=cancelled)
     if plan is not None or cancelled:
         return plan
+    if army.get('merge_group_id'):
+        from army_groups import group_for, members, totals
+        group = await group_for(str(army['_id']))
+        if group:
+            rows = await members(group)
+            choices = {(destinations or {}).get(str(a['tg_id']), '').strip() for a in rows} - {''}
+            if len(choices) > 1:
+                raise ValueError('برای همهٔ اعضای لشکر مشترک یک مقصد عقب‌نشینی یکسان تعیین کن')
+            if formation_losses:
+                rows = [{**a, 'troops':{k:max(0,int(v)-int(formation_losses.get(str(a['_id']),{}).get(k,0))) for k,v in a.get('troops',{}).items()}} for a in rows]
+            ts,eq=totals(rows)
+            army={**army,'troops':ts,'equipment':eq,'commander_present':any(a.get('commander_present') for a in rows)}
+            destinations={**(destinations or {}),str(army['tg_id']):next(iter(choices),'')}
     destination = (destinations or {}).get(str(army['tg_id']), '').strip()
     origin = army.get('target_castle')
     if not destination or destination == origin:

@@ -11,6 +11,10 @@ def relation_key(first, second):
 
 
 def build_parties(armies, peace_pairs=(), extra_players=()):
+    peace_pairs = list(peace_pairs)
+    for a,b in combinations(armies, 2):
+        if a.get("merge_group_id") and a.get("merge_group_id") == b.get("merge_group_id"):
+            peace_pairs.append(relation_key(a["tg_id"],b["tg_id"]))
     parties = {}
     for player in extra_players:
         uid = int(player['tg_id'])

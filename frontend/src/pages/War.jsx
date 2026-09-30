@@ -1,3 +1,4 @@
+import ArmyGroups from '../components/ArmyGroups.jsx';
 import { gameNow } from '../gameClock.js';
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../store.jsx';
@@ -59,6 +60,9 @@ export default function War() {
   const [mapError, setMapError] = useState(false);
   const [buildings, setBuildings] = useState(null);
   const [mine, setMine] = useState(null);
+  const [armyGroups,setArmyGroups] = useState([]);
+  const [mergeRequests,setMergeRequests] = useState([]);
+  const [mergeBase,setMergeBase] = useState(null);
   const [legions, setLegions] = useState(null);
   const [ambushes, setAmbushes] = useState(null);
   const [seenIds, setSeenIds] = useState(loadSeenIds);
@@ -69,7 +73,7 @@ export default function War() {
     api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); });
   };
   const loadMine = () => api.warMine().then(setMine).catch(e => { toast(e.message); setMine([]); });
-  const loadLegions = () => api.legions().then(setLegions).catch(e => { toast(e.message); setLegions([]); });
+  const loadLegions = () => Promise.all([api.legions(),api.armyGroups(),api.mergeRequests()]).then(([a,g,r])=>{setLegions(a);setArmyGroups(g);setMergeRequests(r)}).catch(e=>toast(e.message));
   const loadAmbushes = () => api.myAmbushes().then(setAmbushes).catch(e => { toast(e.message); setAmbushes([]); });
   const loadWarWindow = () => api.warWindow().then(setWarWindow).catch(() => setWarWindow({ open: true }));
 
@@ -600,10 +604,11 @@ export default function War() {
             لشکر مستقر در یکی از قلعه‌های فعلی خودت، بدون جریمه لغو می‌شود؛ در نبرد قابل لغو نیست. هزینه‌های قابل بازپرداخت کامل برمی‌گردد؛ غلهٔ مصرف‌شده برنمی‌گردد.
           </div>
           {legions === null && <div className="loading">در حال بارگذاری...</div>}
-          {legions && legions.length === 0 && (
+          {legions && legions.length === 0 && armyGroups.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هیچ لشکر فعالی نداری</div>
           )}
-          {legions && legions.map(c => (
+          <ArmyGroups groups={armyGroups} requests={mergeRequests} base={mergeBase} onClose={()=>setMergeBase(null)} onSelect={setMergeBase} onMove={relaunchFrom} refresh={loadLegions} toast={toast} />
+          {legions && legions.filter(c=>!armyGroups.some(g=>g.army_ids.includes(c.id))).map(c => (
             <div className="card" key={c.id} style={{ marginBottom: 10 }}>
               <div className="res">
                 <div className="ic"><Swords s={16} /></div>
@@ -630,7 +635,8 @@ export default function War() {
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
                 <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {c.can_move && <button className="btn ghost" onClick={()=>setMergeBase(c.id)}>ادغام لشکر</button>}
                 {c.engagement_locked && (
                   <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>
                     {c.waiting_for_result ? 'حمله رسیده — منتظر نتیجهٔ ادمین' : 'درگیر نبرد — تا ثبت نتیجه قفل است'}

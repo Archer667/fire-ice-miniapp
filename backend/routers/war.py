@@ -229,6 +229,8 @@ async def active_peace_pact(a_id: int, b_id: int):
 
 async def castle_armies_are_hostile(incoming, other, owner):
     # The command and the castle owner do not establish peace between armies.
+    if incoming.get('merge_group_id') and incoming.get('merge_group_id') == other.get('merge_group_id'):
+        return False
     return not await players_are_friendly(incoming["tg_id"], other["tg_id"])
 
 
@@ -435,6 +437,11 @@ async def routes(origin_castle: str, target_castle: str, user: dict = Depends(ge
             army = await campaigns.find_one({'_id': ObjectId(campaign_id), 'tg_id': user['id'], 'active': True})
         except Exception:
             army = None
+        if not army:
+            from army_groups import group_for, members
+            group = await group_for(campaign_id)
+            if group and group['leader_tg_id'] == user['id']:
+                army = next((a for a in await members(group) if str(a['_id']) == campaign_id), None)
         if not army:
             raise HTTPException(404, 'لشکر فعال پیدا نشد')
         if army.get('stationed_edge'):
@@ -718,6 +725,9 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not p:
         raise HTTPException(404, "بازیکن پیدا نشد")
+    from army_groups import group_for
+    if await group_for(campaign_id):
+        raise HTTPException(409, 'ابتدا از ادغام خارج شو یا ادغام را بشکن؛ لشکر مشترک قابل بازپرداخت مستقیم نیست')
     at_home = stationed_in_own_castle(c, p)
 
     weapons_refund = {}
@@ -763,6 +773,13 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
 
 @router.post("/{campaign_id}/move")
 async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = Depends(get_user)):
+    from army_groups import group_for, move_group
+    group = await group_for(campaign_id)
+    if group:
+        return await move_group(group, body, user)
+    return await _move_campaign(campaign_id, body, user)
+
+async def _move_campaign(campaign_id, body, user, *, preview=False, formation=None):
     """همان لشکرِ رسیده را بدون ساخت دوباره و بدون کم‌کردن نفرات/طلا به مقصد بعدی می‌فرستد."""
     try:
         oid = ObjectId(campaign_id)
@@ -784,6 +801,8 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     if not (await get_war_window())["open"]:
         raise HTTPException(403, "پنجرهٔ لشکرکشی بسته است")
 
+    if formation:
+        c = {**c, **formation}
     road_point = c.get("stationed_edge")
     origin = c["target_castle"]
     if body.target_castle == origin:
@@ -837,7 +856,7 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
     if c.get("commander_present"):
         move_minutes = max(0, round(move_minutes * (1 - float(rule("movement.commander_speed_bonus_percent", 10)) / 100)))
     arrival_at = now() + timedelta(minutes=move_minutes)
-    await campaigns.update_one({"_id": oid}, {
+    movement_update = {
         "$set": {
             "origin_castle": origin, "target_castle": body.target_castle,
             "op_type": body.op_type, "travel_minutes": move_minutes,
@@ -858,13 +877,20 @@ async def move_campaign(campaign_id: str, body: MoveCampaignBody, user: dict = D
             "battle_defender_army_ids": "", "battle_defender_tg_id": "", "battle_defender_name": "",
             "opponent_campaign_id": "", "opponent_tg_id": "", "public_start_notified": "",
         },
-    })
+    }
+    if preview:
+        return movement_update
+    await campaigns.update_one({"_id": oid}, movement_update)
     await notify_campaign_departure({**c, "origin_castle": origin, "target_castle": body.target_castle, "op_type": body.op_type, "arrival_at": arrival_at})
     return {"ok": True, "arrival_at": arrival_at.isoformat(), "travel_minutes": move_minutes, "route_path": chosen["path"]}
 
 @router.post("/{campaign_id}/attack")
 async def order_siege_attack(campaign_id: str, user: dict = Depends(get_user)):
     """محاصرهٔ رسیده را به حملهٔ مستقیم تبدیل می‌کند؛ واچر درگیری را ایجاد و لشکرها را قفل می‌کند."""
+    from army_groups import group_for, attack_group
+    group = await group_for(campaign_id)
+    if group:
+        return await attack_group(group, user)
     if not feature_enabled("war"):
         raise HTTPException(503, "جنگ فعلاً غیرفعال است")
     try:
@@ -977,6 +1003,7 @@ def battle_army_snapshot(campaign: dict) -> dict:
         "power_building_levels": campaign.get("power_building_levels"),
         "commander_power_bonus_percent": campaign.get("commander_power_bonus_percent"),
         "troops": dict(campaign.get("troops", {})),
+        "merge_group_id": campaign.get("merge_group_id"),
         "equipment": dict(campaign.get("equipment", {})),
         "equipment_power": int(campaign.get("equipment_power", 0) or 0),
     }
@@ -1050,6 +1077,8 @@ async def battle_full_roster_text(root: dict, battle_id: str, intro: str) -> str
     return f"{intro}\n\n🔴 مهاجمان — {totals(attackers)}\n{attacker_text}\n\n🔵 مدافعان — {totals(defenders)}\n{defender_text}"
 
 async def queue_battle_roster(root, event, intro):
+    from army_groups import attach_battle_group
+    root = await attach_battle_group(root)
     from battle_notices import enqueue
     root = await campaigns.find_one({'_id': root['_id']}) or root
     ids = set(root.get('battle_participant_tg_ids') or []) | {root.get('tg_id'), root.get('battle_defender_tg_id')}
@@ -1237,6 +1266,8 @@ async def process_route_ambushes():
         "route_path.1": {"$exists": True},
     }).sort("arrival_at", 1).limit(150)
     async for army in moving:
+        army = await campaigns.find_one({'_id':army['_id'],'active':True})
+        if not army: continue
         path = army.get("route_path", [])
         started = army.get("moved_at") or army.get("created_at")
         arrival = army.get("arrival_at")
@@ -1283,15 +1314,24 @@ async def process_route_ambushes():
                 )
                 break
             requested = round(ambush.get("soldiers_committed", ambush["men_committed"]) * float(ambush.get("coefficient", 0)))
-            updated_troops, losses, casualties = apply_automatic_losses(army.get("troops", {}), requested)
-            old_men = max(1, int(army.get("men_committed", 0)))
-            remaining = sum(updated_troops.values())
-            destroyed = sum(v for k, v in updated_troops.items() if k not in NAVAL_TROOPS) <= 0
-            await campaigns.update_one({"_id": army["_id"], "active": True}, {"$set": {
-                "troops": updated_troops, "men_committed": remaining, "food_per_day": food_rate(updated_troops),
-                "power": round(float(army.get("power", 0)) * remaining / old_men, 2),
-                "active": not destroyed, "status": "ambush_destroyed" if destroyed else army.get("status", "active"),
-            }})
+            from army_groups import group_for, members, totals, proportional_losses, notice
+            group = await group_for(str(army['_id'])) if army.get('merge_group_id') else None
+            victims = await members(group) if group else [army]
+            victims = [v for v in victims if v['tg_id'] != ambush['tg_id'] and not await active_peace_pact(v['tg_id'], ambush['tg_id'])]
+            fleet_troops, _ = totals(victims)
+            _, losses, casualties = apply_automatic_losses(fleet_troops, requested)
+            allocation = proportional_losses(victims, 'troops', losses)
+            for victim in victims:
+                updated_troops = {k:max(0,int(n)-allocation[str(victim['_id'])].get(k,0)) for k,n in victim.get('troops',{}).items()}
+                old_men=max(1,int(victim.get('men_committed',0)))
+                remaining=sum(updated_troops.values())
+                destroyed=remaining<=0
+                await campaigns.update_one({'_id':victim['_id'],'active':True},{'$set':{
+                    'troops':updated_troops,'men_committed':remaining,'food_per_day':food_rate(updated_troops),
+                    'power':round(float(victim.get('power',0))*remaining/old_men,2),
+                    'active':not destroyed,'status':'ambush_destroyed' if destroyed else victim.get('status','active')}})
+            if group:
+                await notice(await members(group),f"group-ambush:{ambush['_id']}",f"🏹 لشکر مشترک در کمین {casualties} نفر تلفات داد؛ سهم‌ها به نسبت هر نوع نیرو محاسبه شد.")
 
             # کیفیت کمین تعیین می‌کند چند درصد از نیروهای کمین‌گذار در ضدحمله/عقب‌نشینی
             # از بین می‌روند. بازمانده‌ها منحل می‌شوند و نفرات، سکه و سلاحشان برمی‌گردد؛
@@ -1382,7 +1422,14 @@ async def notify_arrivals():
         origin, target = c["origin_castle"], c["target_castle"]
         same_castle = origin == target
         name = c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])
-        if not same_castle:
+        group_notice = False
+        if c.get('merge_group_id'):
+            from army_groups import group_for, members, notice
+            group = await group_for(str(c['_id']))
+            if group:
+                group_notice = True
+                await notice(await members(group), f"group-arrived:{group['_id']}:{c.get('moved_at')}", f"لشکر مشترک «{group['name']}» به {target} رسید.")
+        if not same_castle and not group_notice:
             await send_system_message(
                 c["tg_id"], c["player_name"],
                 f"لشکرت «{name}» از {origin} به {target} رسید.",

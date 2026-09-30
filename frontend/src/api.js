@@ -1559,6 +1559,12 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  armyGroups: () => MOCK ? Promise.resolve([]) : req('/api/army-groups/mine'),
+  mergeRequests: () => MOCK ? Promise.resolve([]) : req('/api/army-groups/requests'),
+  mergeCandidates: id => req(`/api/army-groups/candidates/${id}`),
+  inviteMerge: (base_id,target_id) => req('/api/army-groups/invite',{method:'POST',body:JSON.stringify({base_id,target_id})}),
+  replyMerge: (id,accept) => req(`/api/army-groups/requests/${id}/reply`,{method:'POST',body:JSON.stringify({accept})}),
+  leaveArmyGroup: id => req(`/api/army-groups/${id}/leave`,{method:'POST'}),
   family: () => req('/api/family'),
   familyCandidates: () => req('/api/family/candidates'),
   familyPropose: (target_id, request_id, penalty_gold) => req('/api/family/proposals',{method:'POST',body:JSON.stringify({target_id,request_id,penalty_gold})}),

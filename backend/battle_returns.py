@@ -13,7 +13,7 @@ def return_plan(army, battle_id, at, graph, *, cancelled=False):
         candidates = list(army.get('movement_history', []))
         source_index = next((i for i, m in enumerate(candidates) if m is source), len(candidates))
         for previous in reversed(candidates[:source_index]):
-            if previous.get('origin_castle') != origin:
+            if previous.get('reason') == 'merge' or previous.get('origin_castle') != origin:
                 break
             if len(previous.get('route_path') or []) >= 2 or previous.get('route_segments'):
                 source = previous
