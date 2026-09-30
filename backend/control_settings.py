@@ -15,6 +15,7 @@ from game_data import ALLIANCE_TYPES
 DOC_ID = "control_center_v1"
 
 DEFAULTS = {
+    "food": {"civilian_consumption_percent": 100, "army_consumption_percent": 100},
     "tweets": {
         "gold_cost": RUMOR_GOLD_COST, "popularity_damage": RUMOR_POPULARITY_DAMAGE,
         "cooldown_hours": RUMOR_COOLDOWN_HOURS, "text_min": 10, "text_max": 400,
@@ -151,6 +152,9 @@ def validate(settings: dict) -> dict:
             elif isinstance(value, (int, float)) and value < 0:
                 raise ValueError(f"مقادیر بخش {section} نمی‌توانند منفی باشند")
         no_negative(clean[section])
+    for value in clean["food"].values():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1000:
+            raise ValueError("ضریب مصرف غلات باید بین صفر و ۱۰۰۰ درصد باشد")
     economy = clean["economy"]
     if not 0 <= float(economy["population_min_multiplier"]) <= float(economy["population_max_multiplier"]):
         raise ValueError("ضریب رشد محبوبیت صد نباید کمتر از محبوبیت صفر باشد")

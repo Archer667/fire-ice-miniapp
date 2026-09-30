@@ -387,7 +387,7 @@ def troop_food_and_gold(region: str, troops: dict, buildings: dict, is_port: boo
         else:
             raise HTTPException(400, f"نیروی نامعتبر: {tid}")
         men += n
-    return gold, men, food, weapons
+    return gold, men, food_rate(troops), weapons
 
 def equipment_cost_and_effect(equipment: dict, buildings: dict):
     raw_level = buildings.get(SIEGE_WORKSHOP_BUILDING)

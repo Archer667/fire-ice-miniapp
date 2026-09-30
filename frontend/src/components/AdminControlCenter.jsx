@@ -52,7 +52,7 @@ function Numeric({ label, unit, value, onChange, step = 1 }) {
   return <label className="control-field"><span>{label}</span><div><input type="number" step={step} value={value ?? 0} onChange={e => onChange(Number(e.target.value))} /><small>{unit}</small></div></label>;
 }
 
-export default function AdminControlCenter({ data, onChange, onSave, onReset, busy, populationOnly = false }) {
+export default function AdminControlCenter({ data, onChange, onSave, onReset, busy, populationOnly = false, foodOnly = false }) {
   if (!data) return <div className="loading">در حال بارگذاری قوانین بازی...</div>;
   const set = (path, value) => onChange(updateAt(data, path, value));
   const populationFields = (<div className="control-sub"><b>رشد جمعیت</b><p>رشد پایه × ضریب محبوبیت × ضریب کلی × (۱ + تعداد قلعه‌های اضافه × ضریب هر قلعه). صفر برای ضریب قلعهٔ اضافه، اثر قلعه‌های بیشتر را غیرفعال می‌کند؛ سقف جمعیت پابرجاست.</p><div className="control-grid">
@@ -62,6 +62,10 @@ export default function AdminControlCenter({ data, onChange, onSave, onReset, bu
         <Numeric label="ضریب رشد در محبوبیت صد" unit="ضریب" step={.05} value={data.economy.population_max_multiplier} onChange={v=>set(['economy','population_max_multiplier'],v)} />
         <Numeric label="محبوبیت معمول" unit="محبوبیت" value={data.economy.population_normal_popularity} onChange={v=>set(['economy','population_normal_popularity'],v)} />
       </div></div>);
+  if (foodOnly) return <section className="card control-section"><h3>مصرف غلات مردم و لشکر</h3><p>۱۰۰٪ یعنی مصرف پایهٔ فعلی؛ ۵۰٪ نصف مصرف و صفر یعنی بدون مصرف. ضریب مردم روی جیرهٔ انتخاب‌شده هم اعمال می‌شود؛ ضریب لشکر شامل نیروهای زمینی، ویژه و کشتی‌هاست. نرخ ذخیره‌شده در رسیدگی بعدی مصرف استفاده می‌شود و رسیدگی‌های قبلی تغییر نمی‌کنند.</p><div className="control-grid">
+    <Numeric label="مصرف غلات مردم" unit="درصد مصرف پایه" value={data.food?.civilian_consumption_percent ?? 100} onChange={v=>set(['food','civilian_consumption_percent'],v)} />
+    <Numeric label="مصرف غلات لشکر" unit="درصد مصرف پایه" value={data.food?.army_consumption_percent ?? 100} onChange={v=>set(['food','army_consumption_percent'],v)} />
+    </div><div className="control-actions"><button className="btn" disabled={busy} onClick={onSave}>{busy ? 'در حال ذخیره...' : 'ذخیره مصرف غلات'}</button></div></section>;
   if (populationOnly) return <section className="card control-section"><h3>کنترل رشد جمعیت</h3>{populationFields}<div className="control-actions"><button className="btn" disabled={busy} onClick={onSave}>{busy ? 'در حال ذخیره...' : 'ذخیره تنظیمات رشد جمعیت'}</button></div></section>;
   return <>
     <div className="notice-guide"><strong>مرکز کنترل قوانین بازی</strong><span>تمام تغییرات این صفحه سراسری و زنده‌اند. هر بخش را جداگانه بخوان و در پایان «ذخیره همه تغییرات» را بزن.</span></div>

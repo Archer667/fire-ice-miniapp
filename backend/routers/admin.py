@@ -724,7 +724,7 @@ def _battle_members_query(root: dict, battle_id: str) -> dict:
         {"battle_root_campaign_id": root_id},
     ]}
 
-async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False, return_tg_ids=None):
+async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False, return_tg_ids=None, retreat_destinations=None):
     """پرونده را برای همهٔ اعضا یک‌جا می‌بندد تا هیچ قفل یا ریشهٔ یتیمی باقی نماند."""
     timestamp = now()
     members = await campaigns.find(_battle_members_query(root, battle_id)).to_list(None)
@@ -734,7 +734,7 @@ async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = F
     for member in members:
         if member.get('active') and (cancelled or member.get('tg_id') in (return_tg_ids or [])):
             try:
-                plan = return_plan(member, battle_id, timestamp, TRAVEL_GRAPH)
+                plan = await _plan_battle_return(member, battle_id, timestamp, cancelled, retreat_destinations)
             except ValueError as exc:
                 raise HTTPException(409, str(exc)) from None
             if plan:
@@ -983,6 +983,7 @@ class RoleplayResultBody(BaseModel):
     other_lords: list[int] = []
     winner_tg_id: int | None = None        # ادمین دستی مشخص می‌کند این رول بین چه لردهای دیگری هم بوده —
     winner_tg_ids: list[int] = []
+    retreat_destinations: dict[str, str] = {}
     image_url: str | None = None
     attacker_losses: dict[str, int] = {}
     defender_losses: dict[str, int] = {}
@@ -1006,7 +1007,7 @@ async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
     if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
         raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
 
-    unlocked = await _dismiss_battle_record(root, campaign_id, "این نبرد توسط ادمین منحل شد؛ لشکرهای بازمانده با طی زمان مسیر به مبدأ خود برمی‌گردند.")
+    unlocked = await _dismiss_battle_record(root, campaign_id, "نبرد منحل شد؛ لشکرهای دارای حداقل ۱۲ ساعت استقرار پیش از درگیری در محل می‌مانند و سایر بازمانده‌ها با زمان مسیر به مبدأ برمی‌گردند.")
     return {"ok": True, "armies_unlocked": unlocked.modified_count}
 
 @router.post("/battles/{campaign_id}/resolve")
@@ -1277,7 +1278,26 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
             async for member in campaigns.find(_battle_members_query(campaign, r.get('campaign_id'))):
                 if member.get('active') and member.get('tg_id') in loser_tg_ids:
                     try:
-                        return_plan(member, r.get('campaign_id'), now(), TRAVEL_GRAPH)
+                        mid = str(member['_id'])
+                        if mid in attacker_ids:
+                            losses = body.attacker_army_losses.get(mid, body.attacker_losses if mid == str(campaign['_id']) else {})
+                        elif body.defender_army_losses or body.defender_army_equipment_losses:
+                            losses = body.defender_army_losses.get(mid, {})
+                        elif opponent_campaign and member['_id'] == opponent_campaign['_id']:
+                            losses = body.defender_losses
+                        else:
+                            # Preview the same oldest-first allocation as _apply_defender_losses.
+                            remaining = dict(body.defender_losses)
+                            losses = {}
+                            for row in sorted(defender_campaigns, key=lambda a: a.get('created_at') or now()):
+                                share = {k: min(int(v or 0), int(row.get('troops', {}).get(k, 0))) for k,v in remaining.items()}
+                                remaining = {k: int(v or 0) - share[k] for k,v in remaining.items()}
+                                if row['_id'] == member['_id']:
+                                    losses = share
+                                    break
+                        survivors = {k: max(0, int(v or 0) - int(losses.get(k, 0))) for k,v in member.get('troops', {}).items()}
+                        if sum(survivors.values()):
+                            await _plan_battle_return({**member, 'troops': survivors}, r.get('campaign_id'), now(), False, body.retreat_destinations)
                     except ValueError as exc:
                         raise HTTPException(409, str(exc)) from None
 
@@ -1389,7 +1409,7 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
 
         # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
         # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
-        await _close_battle_state(campaign, r.get("campaign_id"), cancelled=False, return_tg_ids=loser_tg_ids)
+        await _close_battle_state(campaign, r.get("campaign_id"), cancelled=False, return_tg_ids=loser_tg_ids, retreat_destinations=body.retreat_destinations)
 
     await roleplays.update_many({"_id": {"$in": ids_to_resolve}}, {"$set": {
         "result": result[:4000], "resolved": True, "resolved_at": now(),
@@ -3131,3 +3151,36 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
     player["medals"] = medals
     return {"ok": True, "medals": medal_rows(player)}
     image_url = _validated_message_image(body.image_url)
+
+
+async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None):
+    from battle_returns import return_plan
+    from routers import war
+    plan = return_plan(army, battle_id, at, war.TRAVEL_GRAPH, cancelled=cancelled)
+    if plan is not None or cancelled:
+        return plan
+    destination = (destinations or {}).get(str(army['tg_id']), '').strip()
+    origin = army.get('target_castle')
+    if not destination or destination == origin:
+        raise ValueError(f"برای لشکر بازندهٔ {army.get('player_name', '')} مقصد عقب‌نشینیِ متفاوت از محل نبرد را تعیین کن")
+    names, _ = await war.all_castle_names_and_ports()
+    if destination not in names:
+        raise ValueError('مقصد عقب‌نشینی در نقشه وجود ندارد')
+    terrain = await war.all_castle_terrain()
+    troops = army.get('troops', {})
+    capacity = sum(war.NAVAL_TROOPS[k]['capacity'] * int(v or 0) for k, v in troops.items() if k in war.NAVAL_TROOPS)
+    men = sum(int(v or 0) for k, v in troops.items() if k not in war.NAVAL_TROOPS)
+    routes = war.travel_routes(origin, destination, frozenset(), terrain=terrain, allow_sea=capacity >= men)
+    if not routes:
+        raise ValueError('مسیر قابل پیمایش برای عقب‌نشینی به این قلعه وجود ندارد')
+    route = routes[0]
+    slowdown = min(max(0, float(war.rule('movement.equipment_slowdown_cap_percent', 100)) / 100), sum(war.SIEGE_EQUIPMENT.get(k, {}).get('slowdown', 0) * int(v or 0) for k,v in army.get('equipment', {}).items()))
+    minutes = round(route['minutes'] * max(0, float(war.rule('movement.route_time_percent',100))) / max(1, float(war.rule('movement.base_speed_percent',100))))
+    minutes = round(minutes * (1 + slowdown))
+    if army.get('commander_present'):
+        minutes = max(0, round(minutes * (1 - float(war.rule('movement.commander_speed_bonus_percent',10))/100)))
+    return {'origin_castle': origin, 'target_castle': destination, 'op_type': 'garrison',
+            'route_path': route['path'], 'route_segments': [],
+            'route_edge_minutes': [war.TRAVEL_GRAPH[a][b] for a,b in zip(route['path'],route['path'][1:])],
+            'travel_minutes': minutes, 'moved_at': at, 'arrival_at': at + timedelta(minutes=minutes),
+            'returning_from_battle': battle_id, 'return_destination_edge': None, 'arrival_notified': False}

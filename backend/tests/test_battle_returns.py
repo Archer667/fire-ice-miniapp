@@ -35,3 +35,20 @@ class CloseReturns(unittest.IsolatedAsyncioTestCase):
   self.assertNotIn('returning_from_battle',root)
   self.assertEqual(loser['target_castle'],'A');self.assertEqual(loser['travel_minutes'],30)
   self.assertNotIn('returning_from_battle',dead)
+
+class GarrisonRule(unittest.TestCase):
+ def army(self, hours):
+  t=datetime(2026,9,20)
+  return {'origin_castle':'A','target_castle':'B','created_at':t,'arrival_at':t+timedelta(hours=1),'route_path':['A','B'],'route_edge_minutes':[60],'battle_started_at':t+timedelta(hours=1+hours)}
+ def test_twelve_hours_stays_only_on_dismissal(self):
+  a=self.army(12);at=a['battle_started_at']+timedelta(days=3)
+  self.assertIsNone(return_plan(a,'b',at,{},cancelled=True))
+  self.assertIsNotNone(return_plan(a,'b',at,{},cancelled=False))
+ def test_time_inside_battle_does_not_count(self):
+  a=self.army(11.9)
+  self.assertIsNotNone(return_plan(a,'b',a['battle_started_at']+timedelta(days=3),{},cancelled=True))
+ def test_previous_battle_time_does_not_count(self):
+  a=self.army(1);first={**a,'ended_at':a['battle_started_at'],'reason':'battle','battle_id':'first'}
+  second={**a,'route_path':['B'],'arrival_at':a['battle_started_at'],'ended_at':a['battle_started_at']+timedelta(days=2),'reason':'battle','battle_id':'second'}
+  a.update(route_path=['B'],movement_history=[first,second])
+  self.assertIsNotNone(return_plan(a,'second',second['ended_at']+timedelta(days=1),{},cancelled=True))

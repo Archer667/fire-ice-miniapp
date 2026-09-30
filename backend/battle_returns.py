@@ -3,7 +3,7 @@ from datetime import timedelta
 from encounter_geometry import legs, coordinates, position
 
 
-def return_plan(army, battle_id, at, graph):
+def return_plan(army, battle_id, at, graph, *, cancelled=False):
     source = next((m for m in reversed(army.get('movement_history', []))
                    if m.get('reason') == 'battle' and m.get('battle_id') == battle_id), army)
     # Repeated battles at the same stop create stationary snapshots. Follow the
@@ -24,6 +24,13 @@ def return_plan(army, battle_id, at, graph):
         source['route_edge_minutes'] = [1]
 
     contact_at = source.get('ended_at') or army.get('battle_started_at') or at
+    # Use the first contact of this stay, never time spent fighting or paused.
+    arrival = source.get('arrival_at')
+    if (cancelled and not army.get('stationed_edge') and not army.get('returning_from_battle')
+            and source.get('target_castle') == army.get('target_castle')
+            and arrival and contact_at - arrival >= timedelta(hours=12)):
+        return None
+
     travelled = []
     for leg in legs(source, graph, contact_at):
         if leg[2] >= contact_at:

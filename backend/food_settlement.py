@@ -1,3 +1,4 @@
+from army_upkeep import civilian_food_rate
 """Daily food settlement; prepared absolute writes are recoverable under game_state_lock."""
 from datetime import timedelta
 import math
@@ -74,7 +75,7 @@ async def tick():
         rows += [('ambushes', c) async for c in ambushes.find({'tg_id': player['tg_id'], 'status': {'$in': ['pending_score', 'active']}})]
         durations = [max(0, (end-max(start, normalize_datetime(c.get('created_at')) or start)).total_seconds()/86400) for _, c in rows]
         ration = settings['ration_levels'].get(player.get('food_ration', settings['default_ration']), settings['ration_levels']['normal'])
-        rate = float(settings['base_food_per_100_men'])/100 * float(ration['multiplier']) * days
+        rate = civilian_food_rate(settings) * float(ration['multiplier']) * days
         result = starvation_plan(player['resources'].get('men', 0), player['resources'].get('food', 0), rate,
                                  [(c.get('troops', {}), duration) for (_, c), duration in zip(rows, durations)])
         player['resources']['food'] = max(0, player['resources'].get('food', 0)-result['consumed'])

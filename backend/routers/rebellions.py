@@ -1,3 +1,4 @@
+from army_upkeep import civilian_food_rate
 import random
 from datetime import timedelta
 from bson import ObjectId
@@ -173,7 +174,7 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     ration_key = player.get("food_ration", settings["default_ration"])
     ration = settings["ration_levels"].get(ration_key, settings["ration_levels"]["normal"])
     men = max(0, int(player.get("resources", {}).get("men", 0)))
-    base_food = max(1, round(men * float(settings["base_food_per_100_men"]) / 100))
+    base_food = max(0, round(men * civilian_food_rate(settings)))
     wanted = max(0, round(base_food * float(ration["multiplier"])))
     available = max(0, int(player.get("resources", {}).get("food", 0)))
     settlement = player.get("food_settlement_summary", {})
@@ -258,7 +259,7 @@ async def status(user: dict = Depends(get_user)):
     ration_key = p.get("food_ration", settings["default_ration"])
     ration = settings["ration_levels"].get(ration_key, settings["ration_levels"]["normal"])
     men = max(0, int(p.get("resources", {}).get("men", 0)))
-    base_food = max(1, round(men * float(settings["base_food_per_100_men"]) / 100))
+    base_food = max(0, round(men * civilian_food_rate(settings)))
     wanted_food = max(0, round(base_food * float(ration["multiplier"])))
     food_available = max(0, int(p.get("resources", {}).get("food", 0)))
     ration_delta = int(ration["popularity"]) if food_available >= wanted_food else int(settings["starvation_popularity"])

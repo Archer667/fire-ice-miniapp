@@ -134,6 +134,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
       { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
       { key: 'submission_limits', label: 'سهمیه‌های هفتگی', description: 'سقف رول و درخواست پروژه', fullOnly:true },
       { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
@@ -354,6 +355,7 @@ export default function Admin() {
   const [securitySearching, setSecuritySearching] = useState(false);
   const [battles, setBattles] = useState(null);
   const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
+  const [retreatDestinations, setRetreatDestinations] = useState({});
   const [battleResultImages, setBattleResultImages] = useState({});
   const [battleLoot, setBattleLoot] = useState({});
   const [lootBusy, setLootBusy] = useState(null);
@@ -1065,7 +1067,7 @@ export default function Admin() {
     setRoleplayBusyId(id);
     try {
       const losses = roleplayLosses[id] || {};
-      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {}, battleResultImages[id] || null);
+      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {}, battleResultImages[id] || null, retreatDestinations[id] || {});
       toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
       loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
@@ -2100,6 +2102,11 @@ export default function Admin() {
                   const selected = (roleplayWinners[b.campaign_id] || []).includes(id);
                   return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{b.multi_party ? 'طرف مستقل' : side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
                 })}</div>
+                <details style={{ marginTop: 10 }}>
+                  <summary>مقصد عقب‌نشینی بازنده‌های مستقر در مبدأ</summary>
+                  <p className="page-sub">اگر مبدأ لشکر همان محل نبرد است، نام دقیق قلعهٔ مقصد را تعیین کن. بقیهٔ بازنده‌ها به مبدأ قبلی برمی‌گردند.</p>
+                  {[...(b.attacker_armies || []), ...(b.defender_armies || [])].filter((a,i,all) => a.tg_id && all.findIndex(x => x.tg_id === a.tg_id) === i && !(roleplayWinners[b.campaign_id] || []).includes(a.tg_id)).map(a => <label className="f" key={a.tg_id}>{a.player_name}<input value={retreatDestinations[b.campaign_id]?.[a.tg_id] || ''} placeholder="نام دقیق قلعهٔ مقصد" onChange={e => setRetreatDestinations(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], [a.tg_id]: e.target.value}}))} /></label>)}
+                </details>
                 <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
                 <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setBattleResultImages(p => ({ ...p, [b.campaign_id]: image })), toast)} />
                 <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
@@ -2728,7 +2735,7 @@ export default function Admin() {
         </>
       )}
 
-      {['control_center','population_growth'].includes(tab) && isOwner && <AdminControlCenter populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
+      {['control_center','population_growth','food_consumption'].includes(tab) && isOwner && <AdminControlCenter foodOnly={tab === 'food_consumption'} populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
 
       {((tab === 'balance' && isOwner) || tab === 'player-buildings') && isFull && (
         <>
