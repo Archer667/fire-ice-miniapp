@@ -730,6 +730,7 @@ CASTLE_TRAVEL_EDGES = [
     ("استون دنس", "های استک هال", 60),
     ("های استک هال", "برونزگیت", 5),
     ("برونزگیت", "استورمز اند", 10),
+    ("کینگزلندینگ", "برونزگیت", 60),
     ("برونزگیت", "فلوود", 10),
     ("فلوود", "سامرهال", 30),
     ("سامرهال", "بلک هیون", 30),
@@ -952,6 +953,15 @@ def travel_routes(origin_castle: str, target_castle: str, blocked: frozenset = f
     if candidates:
         candidates.sort(key=lambda r: r["minutes"])
         routes.extend(candidates[:max(0, max_routes - 1)])
+    # Preserve a usable land option when faster sea alternatives fill the shortlist.
+    if allow_sea and max_routes > 1 and all(r["via_sea"] for r in routes):
+        land_min, land_path = _dijkstra_path(origin_castle, target_castle, blocked, False, terrain)
+        if land_path:
+            land_route = {"minutes": land_min, "path": land_path, "via_sea": False}
+            if len(routes) >= max_routes:
+                routes[max_routes - 1] = land_route
+            else:
+                routes.append(land_route)
     return routes[:max_routes]
 
 # جاسوس‌ها سبک‌بارتر و سریع‌تر از لشکر حرکت می‌کنند — حدود نصف زمان یک لشکر کامل
