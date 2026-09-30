@@ -83,6 +83,15 @@ def roster(rows):
     return text
 
 
+def composition(rows):
+    from routers.war import troop_name
+    from game_data import SIEGE_EQUIPMENT
+    ts,eq=totals(rows)
+    return {'forces':[{'id':k,'name':troop_name(k),'count':v} for k,v in ts.items() if v and k not in NAVAL_TROOPS],
+            'ships':[{'id':k,'name':troop_name(k),'count':v} for k,v in ts.items() if v and k in NAVAL_TROOPS],
+            'devices':[{'id':k,'name':SIEGE_EQUIPMENT.get(k,{}).get('name',k),'count':v} for k,v in eq.items() if v]}
+
+
 async def notice(rows, event, intro):
     from battle_notices import enqueue
     recipients = await players.find({'tg_id': {'$in': list({a['tg_id'] for a in rows})}}).to_list(None)
@@ -290,6 +299,7 @@ async def distribute_battle_losses(armies, troop_losses, equipment_losses):
 
 @router.get('/mine')
 async def mine(user=Depends(get_user)):
+    from battle_passage import status as passage_status
     owned=[a['_id'] async for a in campaigns.find({'tg_id':user['id'],'active':True},{'_id':1})]
     out=[]
     async for group in groups.find({'active':True,'$or':[{'army_ids':{'$in':owned}},{'leader_tg_id':user['id']}]}):
@@ -301,6 +311,8 @@ async def mine(user=Depends(get_user)):
         except HTTPException:free=False
         out.append({'id':str(group['_id']),'root_id':str(command_army['_id']),'name':group['name'],'leader_tg_id':group['leader_tg_id'],
                     'army_ids':[str(a['_id']) for a in rows],'troops':troops,'equipment':equipment,'summary':roster(rows),
+                    'composition':composition(rows),'passage':await passage_status(command_army,user['id']),
+                    'member_compositions':[{'tg_id':uid,'name':titled_name(name=next(a for a in rows if a['tg_id']==uid).get('player_name'),gender=next(a for a in rows if a['tg_id']==uid).get('player_gender')),**composition([a for a in rows if a['tg_id']==uid])} for uid in sorted({a['tg_id'] for a in rows})],
                     'state':('مستقر' if free else 'در حال حرکت' if any(a.get('arrival_at') and a['arrival_at']>now() for a in rows) else 'درگیر نبرد'),'can_split':free,'can_attack':free and all(a.get('op_type')=='siege' for a in rows) and group['leader_tg_id']==user['id'],'location':rows[0].get('target_castle') if rows else '',
                     'arrival_at':rows[0].get('arrival_at').isoformat() if rows and rows[0].get('arrival_at') else None,
                     'stationed_edge':rows[0].get('stationed_edge') if rows else None, 'is_leader':group['leader_tg_id']==user['id'], 'can_move':free and group['leader_tg_id']==user['id']})

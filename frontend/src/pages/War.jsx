@@ -1,3 +1,4 @@
+import PassageConsent from '../components/PassageConsent.jsx';
 import ArmyGroups from '../components/ArmyGroups.jsx';
 import { gameNow } from '../gameClock.js';
 import { useEffect, useMemo, useState } from 'react';
@@ -637,6 +638,7 @@ export default function War() {
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {c.can_move && <button className="btn ghost" onClick={()=>setMergeBase(c.id)}>ادغام لشکر</button>}
+                <PassageConsent armyId={c.id} status={c.passage} refresh={loadLegions} toast={toast} />
                 {c.engagement_locked && (
                   <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>
                     {c.waiting_for_result ? 'حمله رسیده — منتظر نتیجهٔ ادمین' : 'درگیر نبرد — تا ثبت نتیجه قفل است'}

@@ -1,13 +1,15 @@
+import PassageConsent from './PassageConsent.jsx';
 import {useEffect,useState} from 'react';
 import {api} from '../api.js';
 
 export default function ArmyGroups({groups,requests,base,onClose,onSelect,onMove,refresh,toast}) {
+ const details=(info)=><div style={{fontSize:11.5,color:'var(--mid)',lineHeight:1.9,marginTop:6}}>{[['forces','نیروها'],['devices','ادوات'],['ships','کشتی‌ها']].map(([key,label])=><div key={key}>{label}: {(info?.[key]||[]).map(x=>`${x.name} × ${Number(x.count).toLocaleString('fa-IR')}`).join(' · ')||'ندارد'}</div>)}</div>;
  const [choices,setChoices]=useState(null),[busy,setBusy]=useState(false);
  useEffect(()=>{let live=true;setChoices(null);if(base)api.mergeCandidates(base).then(r=>{if(live)setChoices(r)}).catch(e=>{toast(e.message);onClose()});return()=>{live=false}},[base]);
  const act=async(fn)=>{if(busy)return;setBusy(true);try{await fn();await refresh();toast('انجام شد');onClose()}catch(e){toast(e.message)}finally{setBusy(false)}};
  return <>
   {requests.map(r=><div className="card" key={r.id}><div className="sect">درخواست ادغام از {r.from_name}</div><p className="page-sub">لشکر «{r.target_name}» زیر فرمان درخواست‌دهنده می‌رود؛ مالکیت و غلات سهم خودت حفظ می‌شود. خروج فقط در حالت مستقر و خارج از نبرد ممکن است.</p><div className="grid2"><button className="btn" disabled={busy} onClick={()=>act(()=>api.replyMerge(r.id,true))}>پذیرش</button><button className="btn ghost" disabled={busy} onClick={()=>act(()=>api.replyMerge(r.id,false))}>رد درخواست</button></div></div>)}
-  {groups.map(g=><div className="card" key={g.id}><div className="sect">لشکر مشترک «{g.name}»</div><p className="page-sub">{g.location} · {g.state}</p><div style={{whiteSpace:'pre-line',fontSize:12,color:'var(--mid)',lineHeight:1.9}}>{g.summary}</div><div className="grid2" style={{marginTop:10}}>
+  {groups.map(g=><div className="card" key={g.id}><div className="sect">لشکر مشترک «{g.name}»</div><p className="page-sub">{g.location} · {g.state}</p><div style={{whiteSpace:'pre-line',fontSize:12,color:'var(--mid)',lineHeight:1.9}}>{g.summary}</div>{details(g.composition)}<details style={{fontSize:12,color:'var(--mid)',marginTop:8}}><summary>ترکیب لشکر هر لرد و لیدی</summary>{(g.member_compositions||[]).map(m=><div key={m.tg_id} style={{marginTop:8}}>{m.name}{details(m)}</div>)}</details><PassageConsent armyId={g.root_id} status={g.passage} refresh={refresh} toast={toast}/><div className="grid2" style={{marginTop:10}}>
    {g.is_leader&&<><button className="btn ghost" disabled={!g.can_split||busy} onClick={()=>onSelect(g.root_id)}>ادغام لشکر دیگر</button><button className="btn" disabled={!g.can_move||busy} onClick={()=>onMove({id:g.root_id,name:g.name,target:g.location,men_committed:Object.values(g.troops).reduce((a,b)=>a+Number(b),0),stationed_edge:g.stationed_edge})}>حرکت لشکر مشترک</button></>}
    {g.can_attack&&<button className="btn" disabled={busy} onClick={()=>act(()=>api.orderSiegeAttack(g.root_id))}>فرمان حمله</button>}
    <button className="btn ghost" disabled={!g.can_split||busy} onClick={()=>{if(window.confirm(g.is_leader?'ادغام شکسته شود و سهم هر عضو در همین محل جدا شود؟':'سهم لشکرهایت در همین محل جدا شود؟'))act(()=>api.leaveArmyGroup(g.id))}}>{g.is_leader?'شکستن ادغام':'خروج لشکرهای من'}</button></div></div>)}

@@ -98,6 +98,8 @@ async def serialize_game_state(request: Request, call_next):
             await recover_pending_food()
             from army_groups import recover_moves
             await recover_moves()
+            from battle_passage import recover as recover_passage
+            await recover_passage()
             from character_records import recover_swaps
             await recover_swaps()
             from pact_exits import recover_exits
@@ -169,6 +171,8 @@ async def _arrival_watcher():
                 from routers.war import repair_open_battle_rosters
                 from army_groups import recover_moves
                 await recover_moves()
+                from battle_passage import recover as recover_passage
+                await recover_passage()
                 await repair_open_battle_rosters()
                 if not game_clock.paused():
                     await tick_family()

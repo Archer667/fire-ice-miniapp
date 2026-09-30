@@ -1618,6 +1618,7 @@ export const api = {
     : req(`/api/war/routes?origin_castle=${encodeURIComponent(origin)}&target_castle=${encodeURIComponent(target)}${campaignId ? `&campaign_id=${encodeURIComponent(campaignId)}` : ''}`),
   cancelCampaign: (id) => MOCK ? Promise.resolve(M.cancelCampaign(id)) : req(`/api/war/${id}/cancel`, { method: 'POST' }),
   moveCampaign: (id, b) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/move`, { method: 'POST', body: JSON.stringify(b) }),
+  passageConsent: (id, agree) => req(`/api/war/${id}/passage-consent`, { method: 'POST', body: JSON.stringify({ agree }) }),
   orderSiegeAttack: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/war/${id}/attack`, { method: 'POST' }),
   ambushOptions: () => MOCK ? Promise.resolve([]) : req('/api/war/ambush/options'),
   myAmbushes: () => MOCK ? Promise.resolve([]) : req('/api/war/ambush/mine'),

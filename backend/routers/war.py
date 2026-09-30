@@ -910,11 +910,22 @@ async def order_siege_attack(campaign_id: str, user: dict = Depends(get_user)):
     }})
     return {"ok": True}
 
+class PassageConsentBody(BaseModel):
+    agree: bool = True
+
+
+@router.post('/{campaign_id}/passage-consent')
+async def passage_consent(campaign_id: str, body: PassageConsentBody, user: dict = Depends(get_user)):
+    from battle_passage import consent
+    return await consent(campaign_id, body.agree, user)
+
+
 @router.get("/legions")
 async def legions(user: dict = Depends(get_user)):
     """همهٔ لشکرهای فعالِ من — از جمله دفاعی/جای‌گیری — برای مدیریت (لغو یا حرکت‌دادن).
     برخلاف /mine که فقط برای گزارش تهاجمی‌ها و با تأخیر/بازهٔ زمانی محدود است، اینجا
     خودِ صاحبِ لشکرهاست که دارد می‌بیند، پس نه چیزی حذف می‌شود نه پنهان"""
+    from battle_passage import status as passage_status
     cur = campaigns.find({"tg_id": user["id"], "active": True}).sort("created_at", -1).limit(50)
     out = []
     async for c in cur:
@@ -928,6 +939,7 @@ async def legions(user: dict = Depends(get_user)):
         ]
         out.append({
             "id": str(c["_id"]),
+            "passage": await passage_status(c, user["id"]),
             # نوع فرمان و نام سفارشی فقط برای صاحب همان لشکر است؛ گزارش عمومی
             # صرفاً وجود و مسیر لشکرکشی را نشان می‌دهد.
             "mine": is_mine,

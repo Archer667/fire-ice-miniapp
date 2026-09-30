@@ -44,7 +44,7 @@ async def halt(w, army, point, at, battle_id, root_id, is_root=False):
         state['stationed_edge'] = {k: v for k, v in point.items() if k != 'kind'}
     else:
         unset['stationed_edge'] = ''
-    movement = {k: army.get(k) for k in ('origin_castle', 'target_castle', 'route_path',
+    movement = {k: army.get(k) for k in ('op_type','stationed_edge','stationed_at','origin_castle', 'target_castle', 'route_path',
                  'route_edge_minutes', 'route_start_position', 'route_segments', 'created_at', 'moved_at', 'arrival_at')}
     movement.update({'ended_at': at, 'reason': 'battle', 'battle_id': battle_id})
     await w.campaigns.update_one({'_id': army['_id'], 'engagement_locked': {'$ne': True}},
