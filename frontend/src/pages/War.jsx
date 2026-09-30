@@ -636,7 +636,7 @@ export default function War() {
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
                 <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />
               </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div className="army-actions">
                 {c.can_move && <button className="btn ghost" onClick={()=>setMergeBase(c.id)}>ادغام لشکر</button>}
                 <PassageConsent armyId={c.id} status={c.passage} refresh={loadLegions} toast={toast} />
                 {c.engagement_locked && (
@@ -650,12 +650,12 @@ export default function War() {
                   </div>
                 )}
                 {c.can_move && (
-                  <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => relaunchFrom(c)}>حرکت بده</button>
+                  <button className="btn ghost army-action" onClick={() => relaunchFrom(c)}>حرکت بده</button>
                 )}
                 {c.can_attack && (
-                  <button className="btn" style={{ padding: 10, fontSize: 12, flex: 1 }} disabled={attackBusyId === c.id} onClick={() => orderAttack(c)}>{attackBusyId === c.id ? '...' : 'دستور حمله'}</button>
+                  <button className="btn army-action" disabled={attackBusyId === c.id} onClick={() => orderAttack(c)}>{attackBusyId === c.id ? '...' : 'دستور حمله'}</button>
                 )}
-                <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} disabled={cancelBusyId === c.id || c.engagement_locked} onClick={() => cancelCampaign(c)}>
+                <button className="btn ghost army-action" disabled={cancelBusyId === c.id || c.engagement_locked} onClick={() => cancelCampaign(c)}>
                   {cancelBusyId === c.id ? '...' : 'لغو لشکر'}
                 </button>
               </div>

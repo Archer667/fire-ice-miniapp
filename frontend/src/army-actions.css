@@ -1,0 +1,17 @@
+/* Legion controls use the existing game button template and palette. */
+.army-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.army-actions > .btn { flex:1 1 140px; width:auto; }
+.army-actions .btn, .army-action, .army-merge-choice {
+  box-sizing:border-box; min-width:0; min-height:44px; padding:10px 12px;
+  font-family:'Peyda',sans-serif; font-size:12px; font-weight:700;
+  line-height:1.8; text-align:center; overflow-wrap:anywhere;
+}
+.army-actions > .army-passage { flex-basis:100%; }
+.army-passage { width:100%; margin-top:8px; }
+.army-merge-choice { display:block; width:100%; margin-bottom:8px; text-align:start; }
+.army-merge-choice .c { font-size:11px; font-weight:400; color:var(--mid); margin-top:3px; }
+.army-actions .btn:disabled, .army-action:disabled, .army-merge-choice:disabled {
+  background:var(--glass-hi); color:var(--low); border-color:var(--iron);
+  box-shadow:none; cursor:default; transform:none;
+}
+@media(max-width:360px) { .army-actions > .btn { flex-basis:120px; } }
