@@ -1,5 +1,6 @@
 import { gameNow } from '../gameClock.js';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -48,6 +49,8 @@ function timeAgo(iso) {
 }
 
 export default function Ravens() {
+  const [fabHost, setFabHost] = useState(null);
+  useEffect(() => { setFabHost(document.querySelector('.shell')); }, []);
   const { me, setMe, toast, refreshUnread, unreadBreakdown } = useGame();
   const [inbox, setInbox] = useState(null);
   const [tab, setTab] = useState('announcements');
@@ -283,15 +286,15 @@ export default function Ravens() {
         </div>
       )}
 
-      {tab === 'messages' && (
+      {tab === 'messages' && fabHost && createPortal(
         <button type="button" className="fab" aria-label="کلاغ تازه" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
           <Plus s={22} />
-        </button>
+        </button>, fabHost
       )}
-      {tab === 'rumors' && !composingTweet && (
-        <button type="button" className="fab" aria-label="توییت تازه" onClick={() => { haptic(); setComposingTweet(true); }}>
+      {tab === 'rumors' && !composingTweet && fabHost && createPortal(
+        <button type="button" className="fab" aria-label="توییت تازه" onClick={() => { haptic(); setComposingTweet(true); document.querySelector('.view')?.scrollTo({ top: 0, behavior: 'smooth' }); }}>
           <Plus s={22} />
-        </button>
+        </button>, fabHost
       )}
     </>
   );
