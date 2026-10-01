@@ -197,6 +197,9 @@ async def _detect_pass(w):
         # An earlier event may have stopped one of these armies elsewhere.
         if any(x.get('stationed_at') and x['stationed_at'] > when for x in (a, b)):
             continue
+        from road_victory import try_resolve
+        if await try_resolve(w, a, b, point, when, armies, partners):
+            return True
         await start(w, a, b, point, when)
         return True
     await w.campaigns.update_many({'_id': {'$in': [a['_id'] for a in armies]}},

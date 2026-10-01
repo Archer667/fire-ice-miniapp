@@ -40,14 +40,14 @@ def death_text(player, reason, narrative):
     parts.append('🕯 داستان این کاراکتر به پایان رسید.')
     return '\n\n'.join(parts)
 
-async def retire(tg_id, body, actor):
+async def retire(tg_id, body, actor, *, system_death=False):
     from routers.admin import _mark_player_dead
     from fastapi import HTTPException
     from auth import get_admin_role
     target = await players.find_one({'tg_id': tg_id})
     if not target or target.get('registration_reset'):
         raise HTTPException(409, 'این کاراکتر قبلاً حذف شده؛ فهرست را تازه کن')
-    if await get_admin_role({'id': tg_id}):
+    if not system_death and await get_admin_role({'id': tg_id}):
         raise HTTPException(400, 'حساب ادمین از این مسیر حذف نمی‌شود')
     target = apply_production(target) if target.get('castle') else target
     already_dead = target.get('is_dead')

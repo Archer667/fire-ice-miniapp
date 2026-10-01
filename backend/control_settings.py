@@ -42,7 +42,7 @@ DEFAULTS = {
         "feast_popularity_gain": FEAST_POPULARITY_GAIN, "feast_cooldown_hours": FEAST_COOLDOWN_HOURS,
     },
     "war": {
-        "minimum_army_men": 100, "minimum_ambush_men": 50, "roleplay_hours": 6,
+        "road_victory_ratio": 7, "minimum_army_men": 100, "minimum_ambush_men": 50, "roleplay_hours": 6,
         "report_visible_hours": 24, "cancel_penalty_percent": 50, "cancel_grace_minutes": 5,
         "spy_gold_cost": SPY_GOLD_COST, "spy_men_cost": SPY_MEN_COST,
     },
@@ -155,6 +155,9 @@ def validate(settings: dict) -> dict:
     for value in clean["food"].values():
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1000:
             raise ValueError("ضریب مصرف غلات باید بین صفر و ۱۰۰۰ درصد باشد")
+    ratio = clean["war"]["road_victory_ratio"]
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)) or not 1 < ratio <= 1000:
+        raise ValueError("ضریب پیروزی خودکار باید بیشتر از یک و حداکثر ۱۰۰۰ باشد")
     economy = clean["economy"]
     if not 0 <= float(economy["population_min_multiplier"]) <= float(economy["population_max_multiplier"]):
         raise ValueError("ضریب رشد محبوبیت صد نباید کمتر از محبوبیت صفر باشد")

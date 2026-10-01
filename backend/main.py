@@ -105,6 +105,8 @@ async def serialize_game_state(request: Request, call_next):
             await recover_passage()
             from character_records import recover_swaps
             await recover_swaps()
+            from road_victory import recover as recover_road_victories
+            await recover_road_victories()
             from pact_exits import recover_exits
             await recover_exits()
             if path.startswith('/api/war') or path == '/api/admin/battles':
@@ -176,6 +178,8 @@ async def _arrival_watcher():
                 await recover_moves()
                 from battle_passage import recover as recover_passage
                 await recover_passage()
+                from road_victory import recover as recover_road_victories
+                await recover_road_victories()
                 await repair_open_battle_rosters()
                 if not game_clock.paused():
                     await tick_family()

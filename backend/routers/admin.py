@@ -1732,7 +1732,7 @@ async def _admin_unassign_house(tg_id: int, user: dict = Depends(full_admin_user
     )
     return {"ok": True}
 
-async def _mark_player_dead(target: dict, reason: str, notify=True):
+async def _mark_player_dead(target: dict, reason: str, notify=True, *, resume=False):
     """Keep the character and final score, relinquish ownership, destroy all armies."""
     tg_id = target["tg_id"]
     h = await get_hierarchy_doc()
@@ -1748,7 +1748,7 @@ async def _mark_player_dead(target: dict, reason: str, notify=True):
         "castle": None, "region": None, "house": None, "is_port": False,
         "buildings": {}, "castle_buildings": {}, "troops": {}, "equipment": {},
     }})
-    if not changed.matched_count:
+    if not changed.matched_count and not resume:
         raise HTTPException(409, "مرگ این بازیکن قبلاً ثبت شده است")
     await fail_owner_projects(tg_id)
     armies = await campaigns.find({"tg_id": tg_id, "active": True}).to_list(None)

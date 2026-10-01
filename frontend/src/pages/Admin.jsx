@@ -134,6 +134,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
       { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
       { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
       { key: 'submission_limits', label: 'سهمیه‌های هفتگی', description: 'سقف رول و درخواست پروژه', fullOnly:true },
@@ -591,7 +592,7 @@ export default function Admin() {
     if (!isOwner) return;
     if (tab === 'balance') { loadBalance(); loadGameplayBalance(); }
     if (tab === 'admins') { loadAdmins(); loadCleanupPreview(); loadResetPreview(); }
-    if (['control_center', 'population_growth', 'food_consumption'].includes(tab)) api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
+    if (['control_center', 'population_growth', 'food_consumption', 'road_victory'].includes(tab)) api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
   }, [tab, tab === 'war' ? warSubTab : null, isFull, isOwner]);
 
   useEffect(() => {
@@ -2740,7 +2741,7 @@ export default function Admin() {
         </>
       )}
 
-      {['control_center','population_growth','food_consumption'].includes(tab) && isOwner && <AdminControlCenter foodOnly={tab === 'food_consumption'} populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
+      {['control_center','population_growth','food_consumption','road_victory'].includes(tab) && isOwner && <AdminControlCenter roadVictoryOnly={tab === 'road_victory'} foodOnly={tab === 'food_consumption'} populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
 
       {((tab === 'balance' && isOwner) || tab === 'player-buildings') && isFull && (
         <>
