@@ -15,8 +15,8 @@ def find_matches(rows, query):
         castles = owned_castles(p)
         if not castles:continue
         matched = next((c for c in castles if needle in normalized(c) or needle in normalized(CASTLE_EN_NAMES.get(c,''))), None)
-        labels = [p.get('name'),p.get('username'),p.get('tg_id')]
+        labels = [p.get('name'),p.get('telegram_username'),p.get('username'),p.get('tg_id')]
         if not matched and not any(needle in normalized(v) for v in labels):continue
         results.append({'tg_id':p['tg_id'],'name':p.get('name',''),'castle':matched or p.get('castle',''),
-            'region_name':REGIONS.get(p.get('region'),{}).get('name',p.get('region','')),'title':p.get('title')})
+            'region_name':REGIONS.get(p.get('region'),{}).get('name',p.get('region','')),'title':p.get('title'),'telegram_username':p.get('telegram_username') or p.get('username')})
     return sorted(results,key=lambda p: (normalized(p['castle']) != needle,normalized(p['name']) != needle,p['tg_id']))[:20]

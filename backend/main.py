@@ -91,6 +91,9 @@ async def serialize_game_state(request: Request, call_next):
     # Legacy economy handlers use read/modify/write. Serialize with project wallets
     # in this single-Uvicorn-worker deployment, including production-on-read routes.
     path = request.scope['path']
+    # Selector search is read-only; authentication remains in the route dependency.
+    if request.method == 'GET' and path == '/api/players/search':
+        return await call_next(request)
     if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
             await game_clock.load()

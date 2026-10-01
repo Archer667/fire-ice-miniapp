@@ -1772,7 +1772,7 @@ export const api = {
   regionLeaderboard: () => MOCK ? Promise.resolve(M.regionLeaderboard()) : req('/api/leaderboard/regions'),
   polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
   vote:  (id, option) => MOCK ? Promise.resolve(M.vote(id, option)) : req(`/api/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option }) }),
-  searchPlayers: (q) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q)),
+  searchPlayers: (q, opts = {}) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q), opts),
 
   /* ---------- شورش و محبوبیت ---------- */
   rebellionStatus: () => MOCK ? Promise.resolve((() => {

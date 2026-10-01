@@ -4,22 +4,28 @@ import { haptic } from '../telegram.js';
 import { Close } from './Icons.jsx';
 import { castleLabel } from '../gamedata.js';
 
-export default function PlayerPicker({ value, onChange, placeholder = 'اسم لرد یا قلعه را جست‌وجو کن...', single = false }) {
+export default function PlayerPicker({ value, onChange, placeholder = 'نام، یوزرنیم، آیدی یا قلعه را جست‌وجو کن...', single = false }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const timer = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    setError('');
     clearTimeout(timer.current);
-    if (query.trim().length < 2) { setResults([]); return; }
+    if (query.trim().length < 2) { setResults([]); setLoading(false); return; }
+    setResults([]); setLoading(true);
     timer.current = setTimeout(() => {
-      api.searchPlayers(query.trim())
+      api.searchPlayers(query.trim(), { signal: controller.signal })
         .then(rows => { if (!cancelled) setResults(rows.filter(r => !value.some(v => v.tg_id === r.tg_id))); })
-        .catch(() => { if (!cancelled) setResults([]); });
-    }, 300);
-    return () => { cancelled = true; clearTimeout(timer.current); };
+        .catch(e => { if (!cancelled && e.name !== 'AbortError') { setResults([]); setError('جست‌وجو انجام نشد؛ دوباره تلاش کن'); } })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 180);
+    return () => { cancelled = true; controller.abort(); clearTimeout(timer.current); };
   }, [query, value]);
 
   const pick = (p) => {
@@ -51,12 +57,12 @@ export default function PlayerPicker({ value, onChange, placeholder = 'اسم ل
       />
       {open && query.trim().length >= 2 && (
         <div className="ppicker-results">
-          {results.length === 0 ? (
-            <div className="ppicker-empty">لردی با این مشخصات پیدا نشد</div>
+          {loading || error || results.length === 0 ? (
+            <div className="ppicker-empty">{loading ? 'در حال جست‌وجو…' : error || 'لردی با این مشخصات پیدا نشد'}</div>
           ) : results.map(p => (
             <button type="button" className="rbtn ppicker-row" key={p.tg_id} onClick={() => pick(p)}>
               <span>{p.name}</span>
-              <small>{castleLabel(p.castle)} · {p.region_name}</small>
+              <small>{p.telegram_username ? `@${p.telegram_username.replace(/^@/, '')} · ` : ''}{castleLabel(p.castle)} · {p.region_name}</small>
             </button>
           ))}
         </div>

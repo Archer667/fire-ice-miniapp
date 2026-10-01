@@ -559,35 +559,40 @@ export default function Admin() {
     setRebellionBusyId(null);
   };
 
+  useEffect(() => { loadAdminNotifications(); }, []);
+
   useEffect(() => {
-    loadAdminNotifications();
-    loadAdminRumors();
-    loadCampaigns();
-    loadAmbushes();
-    loadWarWindow();
-    loadSpyPending();
-    loadSpyResolved();
-    loadRoleplayPending();
-    api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(() => setSecurityRoleplays([]));
-    loadBattles();
-    loadRebellions();
-    api.adminRoleplayScoreSettings().then(r => setRoleplayScoreMax(r.max_score)).catch(e => toast(e.message));
-    loadPendingPlayers();
-    if (isFull) {
-      loadRegistrationSettings(); loadRoster(); loadAlliances(); loadMapData();
-      loadPolls(); loadMarket(); loadBlackMarket(); loadItems();
-      api.adminMarketFloors().then(setMarketFloors).catch(e => toast(e.message));
-      api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
+    // Fetch only the active panel; unrelated heavy requests must not queue saves.
+    if (tab === 'notifications') loadAdminNotifications();
+    if (tab === 'rumor_admin') loadAdminRumors();
+    if (tab === 'war') {
+      loadWarWindow();
+      if (warSubTab === 'campaigns') loadCampaigns();
+      if (warSubTab === 'ambushes') loadAmbushes();
+      if (warSubTab === 'battles') loadBattles();
+      if (warSubTab === 'espionage') { loadSpyPending(); loadSpyResolved(); }
     }
-    if (isOwner) {
-      loadRebellionSettings();
-      loadBalance(); loadGameplayBalance();
-      loadAdmins();
-      loadCleanupPreview();
-      loadResetPreview();
-      api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
+    if (tab === 'roleplays') {
+      loadRoleplayPending();
+      api.adminRoleplayScoreSettings().then(r => setRoleplayScoreMax(r.max_score)).catch(e => toast(e.message));
     }
-  }, []);
+    if (tab === 'security_archive') loadSecurityRoleplays();
+    if (tab === 'rebellions') { loadRebellions(); if (isOwner) loadRebellionSettings(); }
+    if (tab === 'registration') { loadPendingPlayers(); if (isFull) { loadRegistrationSettings(); loadMapData(); } }
+    if (!isFull) return;
+    if (tab === 'onboarding') { loadRoster(); loadMapData(); }
+    if (tab === 'alliances') loadAlliances();
+    if (tab === 'map') loadMapData();
+    if (tab === 'polls') loadPolls();
+    if (tab === 'market') { loadMarket(); loadBlackMarket(); }
+    if (tab === 'items') loadItems();
+    if (tab === 'market-floors') api.adminMarketFloors().then(setMarketFloors).catch(e => toast(e.message));
+    if (tab === 'music') api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
+    if (!isOwner) return;
+    if (tab === 'balance') { loadBalance(); loadGameplayBalance(); }
+    if (tab === 'admins') { loadAdmins(); loadCleanupPreview(); loadResetPreview(); }
+    if (['control_center', 'population_growth', 'food_consumption'].includes(tab)) api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
+  }, [tab, tab === 'war' ? warSubTab : null, isFull, isOwner]);
 
   useEffect(() => {
     if (!profileTarget.length) { setProfileDraft(null); return; }
@@ -596,11 +601,11 @@ export default function Admin() {
   }, [profileTarget]);
 
   useEffect(() => {
-    if (!isFull) return;
+    if (!isFull || tab !== 'map') return;
     loadMapOptions();
     resetCastlePicker();
     setEditingCastle(null);
-  }, [mapRegion]);
+  }, [mapRegion, tab]);
 
   useEffect(() => {
     if (!playerBuildingTarget.length) {

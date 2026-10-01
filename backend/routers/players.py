@@ -273,7 +273,7 @@ async def search(q: str = "", user: dict = Depends(get_user)):
         return []
     from player_search import find_matches
     rows = await players.find({"tg_id": {"$ne": user["id"]}, "is_dead": {"$ne": True}},
-        {"tg_id":1,"name":1,"castle":1,"castle_buildings":1,"region":1,"title":1,"username":1}).to_list(None)
+        {"tg_id":1,"name":1,"castle":1,"castle_buildings":1,"region":1,"title":1,"username":1,"telegram_username":1}).to_list(None)
     return find_matches(rows, q)
 
 
