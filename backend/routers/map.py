@@ -125,4 +125,6 @@ async def get_map(user: dict = Depends(get_user)):
                 "travel_minutes": s.get("travel_minutes", 0),
                 "arrived": (now() >= arrival_at) if arrival_at else True,
             })
-    return {"regions": regions, "campaigns": camps}
+    from map_effects import active_map_effects
+    effects = await active_map_effects(campaigns, now())
+    return {"regions": regions, "campaigns": camps, "effects": effects}

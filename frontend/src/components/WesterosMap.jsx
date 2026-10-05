@@ -1,3 +1,4 @@
+import WesterosMap3D from './WesterosMap3D.jsx';
 import { gameNow } from '../gameClock.js';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { haptic } from '../telegram.js';
@@ -232,7 +233,7 @@ const PIN_FILTERS = [
 ];
 const PACT_LEGEND_ORDER = ['full_alliance', 'non_aggression', 'trade', 'none'];
 
-export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد', routePath }) {
+function LegacyWesterosMap({ data, meCastle, meCastles, onSelectTarget, pickLabel = 'انتخاب به‌عنوان مقصد', routePath }) {
   const [pin, setPin] = useState(null);
   const [view, setView] = useState(null);
   const [activeRegion, setActiveRegion] = useState(null);
@@ -417,3 +418,5 @@ export default function WesterosMap({ data, meCastle, meCastles, onSelectTarget,
     </div>
   );
 }
+
+export default function WesterosMap(props) { return <WesterosMap3D {...props} fallback={<LegacyWesterosMap {...props} />} />; }

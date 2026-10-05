@@ -3,22 +3,55 @@
     {
       "source": "/",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
-        { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
-        { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/westeros/v6/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     }
   ],
   "rewrites": [
-    { "source": "/api/players/me", "destination": "/api/login" },
-    { "source": "/api/:path*", "destination": "https://valyria-game.duckdns.org/api/:path*" },
-    { "source": "/telegram-web-app.js", "destination": "https://telegram.org/js/telegram-web-app.js" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/players/me",
+      "destination": "/api/login"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://valyria-game.duckdns.org/api/:path*"
+    },
+    {
+      "source": "/telegram-web-app.js",
+      "destination": "https://telegram.org/js/telegram-web-app.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
