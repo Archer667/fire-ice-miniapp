@@ -4,6 +4,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { castleLabel } from '../gamedata.js';
 import ProfileImageModal from '../components/ProfileImageModal.jsx';
+import PlayerFlag from '../components/PlayerFlag.jsx';
 
 const TABS = [
   { id: 'regions', label: 'اقلیم‌ها' },
@@ -139,7 +140,7 @@ export default function Leaderboard() {
             {lordRows.map(r => (
               <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
-                <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
+                <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
                 <div className="n">
                   {r.name}<RankMovement value={r.movement} />{r.me ? ' — تو' : ''}
                   {r.rank_label && <span className="title-tag">{r.rank_label}</span>}
@@ -167,7 +168,7 @@ export default function Leaderboard() {
               {weeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
-                  <div className={`rk ${r.profile_image ? 'profile-rk' : ''}`}>{playerPicture(r)}</div>
+                  <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
                   <div className="n">
                     {r.name}<RankMovement value={r.movement} />{r.me ? ' — تو' : ''}
                     {r.rank_label && <span className="title-tag">{r.rank_label}</span>}

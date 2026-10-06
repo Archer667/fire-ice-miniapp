@@ -1373,3 +1373,13 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .map-region-overlay polygon { fill:currentColor; fill-opacity:.075; stroke:currentColor; stroke-opacity:.85; stroke-width:var(--region-border-width, 1.1px); vector-effect:non-scaling-stroke; stroke-linejoin:round; }
 
 .army-merge-backdrop { position:fixed; inset:0; z-index:1200; display:flex; padding:16px; background:rgba(0,0,0,.76); backdrop-filter:blur(3px); }
+
+/* Approved player flags retain their full artwork. */
+.player-flag { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 42px; height: 48px; padding: 3px; border: 1px solid var(--gold); border-radius: 5px 5px 10px 10px; background: #201d18; box-shadow: 0 3px 9px #0005; overflow: hidden; }
+.player-flag img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.realm-player-identity { display: flex; direction: rtl; align-items: center; gap: 7px; flex-shrink: 0; }
+.realm-player-flag { width: 38px; height: 51px; }
+.lbr .rk.flag-rk { width: 38px; height: auto; min-height: 38px; flex-direction: column; gap: 5px; border: 0; background: transparent; overflow: visible; }
+.leader-player-flag { width: 32px; height: 35px; padding: 2px; }
+.map-player-flag { float: left; margin: 0 18px 8px 8px; width: 44px; height: 53px; }
+.me-row > div:last-child { min-width: 0; }

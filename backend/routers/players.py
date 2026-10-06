@@ -1,4 +1,5 @@
 from army_upkeep import campaign_food
+from portrait_thumbnails import flag_thumbnail
 import re
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from login_audit import request_ip, record_login
@@ -229,6 +230,7 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
         "pending": False,
         "name": p["name"],
         "backstory": p.get("backstory", ""), "profile_image": p.get("profile_image"),
+        "flag_image": flag_thumbnail(p.get("flag_map_image") or p.get("flag_image")),
         "admin_role": admin_role,
         "is_owner": admin_role == "owner",
         "gender": p.get("gender", "lord"),

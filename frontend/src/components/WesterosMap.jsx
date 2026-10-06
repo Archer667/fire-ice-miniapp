@@ -1,3 +1,4 @@
+import PlayerFlag from './PlayerFlag.jsx';
 import WesterosMap3D from './WesterosMap3D.jsx';
 import { gameNow } from '../gameClock.js';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -162,7 +163,7 @@ export function MapFrame({ region, coords, pin, onPinClick, onFrameClick, onSele
             <span className="dot" style={dotStyle}><Icon s={8} /></span>
             {active && onPinClick && (
               <div className="pin-popup" style={popupStyle} onClick={(e) => e.stopPropagation()}>
-                <div className="pi-name">{castleLabel(c.name)}{c.port ? ' ⚓' : ''}{c.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
+                <PlayerFlag src={c.flag_url} name={c.owner?.name} className="map-player-flag" /><div className="pi-name">{castleLabel(c.name)}{c.port ? ' ⚓' : ''}{c.mine ? <span className="pi-mine">قلعهٔ خودت</span> : null}</div>
                 <div className="pi-owner">اقلیم: {REGIONS_STATIC[c.region]?.name || '—'}</div>
                 {c.owner ? (
                   <div className="pi-owner-block">

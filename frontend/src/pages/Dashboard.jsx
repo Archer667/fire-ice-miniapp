@@ -7,6 +7,7 @@ import { SEASONS, seasonOf } from '../seasons.js';
 import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
 import { FamilySummary } from './Family.jsx';
 import ProfileImageModal from '../components/ProfileImageModal.jsx';
+import PlayerFlag from '../components/PlayerFlag.jsx';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
 
@@ -159,6 +160,7 @@ export default function Dashboard({ goTo }) {
 
       <div className="card up u1">
         <div className="me-row">
+          <div className="realm-player-identity">
           {me.profile_image ? (
             <button type="button" className="ava profile-image-trigger"
                     aria-label={`نمایش تصویر پروفایل ${me.name}`}
@@ -166,6 +168,8 @@ export default function Dashboard({ goTo }) {
               <img src={me.profile_image} alt="" />
             </button>
           ) : <div className="ava">{me.name.charAt(0)}</div>}
+          <PlayerFlag src={me.flag_image} name={me.name} className="realm-player-flag" />
+          </div>
           <div>
             <div className="nm">{me.name}{me.house ? <span className="house-tag">خاندان {me.house}</span> : null}{me.title ? <span className="title-tag">{me.title}</span> : null}</div>
             <div className="hs">

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from auth import get_user
 from db import admin_roles, players
-from portrait_thumbnails import thumbnail
+from portrait_thumbnails import thumbnail, flag_thumbnail
 from rank_history import player_key, baseline, movement
 from medals import medal_rows, normalize_stats
 from game_data import REGIONS
@@ -53,6 +53,7 @@ async def leaderboard(user: dict = Depends(get_user), page: int | None = Query(d
             "movement": movement(prior, player_key(p), i + 1),
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
             "profile_image": thumbnail(p.get("profile_image")),
+            "flag_image": flag_thumbnail(p.get("flag_map_image") or p.get("flag_image")),
             "profile_key": str(p["tg_id"]) + ":" + str(p.get("created_at")),
             "castle": p["castle"], "region": REGIONS.get(p.get("region"), {}).get("name", ""),
             "points": row["score"],
@@ -74,6 +75,7 @@ async def weekly_leaderboard(user: dict = Depends(get_user)):
             "movement": movement(prior, player_key(p), i + 1),
             "is_dead": bool(p.get("is_dead")), "rank": i + 1, "name": p["name"], "title": p.get("title"),
             "profile_image": thumbnail(p.get("profile_image")),
+            "flag_image": flag_thumbnail(p.get("flag_map_image") or p.get("flag_image")),
             "profile_key": str(p["tg_id"]) + ":" + str(p.get("created_at")),
             "castle": p["castle"], "region": REGIONS.get(p.get("region"), {}).get("name", ""),
             "points": row["weekly_score"],
