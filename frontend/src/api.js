@@ -477,9 +477,6 @@ const M = {
       ],
     };
   },
-  adminMapLayout: () => req('/api/admin/map-layout'),
-  adminSaveMapLayout: b => req('/api/admin/map-layout', {method:'PUT',body:JSON.stringify(b)}),
-  adminMapLayoutAction: (action,revision) => req('/api/admin/map-layout/'+action, {method:'POST',body:JSON.stringify({revision})}),
   adminMapOptions: (region) => {
     const r = REGIONS_STATIC[region];
     if (!r) return [];
@@ -1626,6 +1623,9 @@ export const api = {
   ambushOptions: () => MOCK ? Promise.resolve([]) : req('/api/war/ambush/options'),
   myAmbushes: () => MOCK ? Promise.resolve([]) : req('/api/war/ambush/mine'),
   createAmbush: (b) => MOCK ? Promise.resolve({ ok: true }) : req('/api/war/ambush', { method: 'POST', body: JSON.stringify(b) }),
+  adminMapLayout: () => req('/api/admin/map-layout'),
+  adminSaveMapLayout: b => req('/api/admin/map-layout', {method:'PUT',body:JSON.stringify(b)}),
+  adminMapLayoutAction: (action,revision) => req('/api/admin/map-layout/'+action, {method:'POST',body:JSON.stringify({revision})}),
   adminMapOptions: (region) => MOCK ? Promise.resolve(M.adminMapOptions(region)) : req('/api/admin/map/options?region=' + encodeURIComponent(region)),
   adminAddMapCastle: (b) => MOCK ? Promise.resolve(M.adminAddMapCastle(b)) : req('/api/admin/map/castles', { method: 'POST', body: JSON.stringify(b) }),
   adminDeleteMapCastle: (name) => MOCK ? Promise.resolve(M.adminDeleteMapCastle(name))
@@ -1879,3 +1879,4 @@ export const api = {
   adminResetScoreboard: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
     : req('/api/admin/reset-scoreboard', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
+
