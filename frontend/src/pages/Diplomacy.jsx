@@ -250,7 +250,7 @@ export default function Diplomacy() {
   return (
     <>
       <div className="page-title up">دیپلماسی</div>
-      <div className="page-sub up">ضیافت بگیر، پیمان ببند، ببین قدرت دست کیه</div>
+      <div className="page-sub up">ضیافت، پیمان و مناسبات خاندان‌های وستروس</div>
 
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
@@ -297,7 +297,7 @@ export default function Diplomacy() {
                    onChange={e => setPenaltyGold(Math.max(0, parseInt(e.target.value, 10) || 0))}
                    placeholder="مثلاً ۵۰۰" />
             <div className="page-sub" style={{ margin: '4px 4px 0' }}>
-              غرامت بین اعضای باقی‌مانده تقسیم می‌شه. خروج سازنده کل گروه رو منحل می‌کنه. خروج اختیاری سکهٔ کافی می‌خواد؛ اخراج ادمین می‌تونه موجودی رو منفی کنه.
+              با خروج از پیمان، غرامت میان اعضای باقی‌مانده تقسیم می‌شود. خروج بنیان‌گذار، اتحاد را منحل می‌کند. برای خروج اختیاری باید طلای کافی داشته باشی؛ اخراج ممکن است خاندان را بدهکار کند.
             </div>
           </>
         )}
@@ -356,7 +356,7 @@ export default function Diplomacy() {
           </div>
           {invitePact?.id === a.id && <div className="card" style={{ marginBottom: 12 }}>
             <div className="sect" style={{ marginTop: 0 }}>دعوت به {a.name || a.type_name}</div>
-            <p className="page-sub">{a.type_name} · {a.public ? 'عمومی' : 'خصوصی'}{a.penalty_gold ? ` · غرامت ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}. شرایط پیمان تغییر نمی‌کند؛ عضویت فقط با پذیرش دعوت فعال می‌شود.</p>
+            <p className="page-sub">{a.type_name} · {a.public ? 'عمومی' : 'خصوصی'}{a.penalty_gold ? ` · غرامت ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}. عضو تازه پس از پذیرش دعوت، با همین شرایط به پیمان می‌پیوندد.</p>
             <PlayerPicker value={inviteTargets} onChange={setInviteTargets} placeholder="بازیکن جدید را جست‌وجو کن..." />
             <p className="page-sub">هزینهٔ هر دعوت: {Number(a.invite_wine_cost || 0).toLocaleString('fa-IR')} شراب · مجموع انتخاب‌ها: {(Number(a.invite_wine_cost || 0) * inviteTargets.length).toLocaleString('fa-IR')} شراب. اعضای فعلی و دعوت‌های تکراری هزینه ندارند؛ رد دعوت مانند پیشنهاد عادی بازپرداخت می‌شود.</p>
             <div className="grid2">
@@ -438,7 +438,7 @@ export default function Diplomacy() {
             </button>
           </>
         ) : (
-          <div className="page-sub" style={{ margin: '10px 4px 0' }}>فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند شورای کوچک را بچیند</div>
+          <div className="page-sub" style={{ margin: '10px 4px 0' }}>اعضای شورای کوچک را فرمانروای تاج‌وتخت منصوب می‌کند.</div>
         )}
       </div>
 
@@ -476,7 +476,7 @@ export default function Diplomacy() {
           <div className="sect up u3">خراج‌گیری ({tribute.my_role_label})</div>
           <div className="card up u3">
             {tribute.demand_targets.length === 0 ? (
-              <div className="page-sub" style={{ margin: '0 4px' }}>هنوز زیردستِ مستقیمی نداری تا ازش خراج بخوای</div>
+              <div className="page-sub" style={{ margin: '0 4px' }}>خراج تنها از زیردستان مستقیم خاندان دریافت می‌شود. هنوز زیردستی نداری.</div>
             ) : (
               <>
                 <label className="f" style={{ marginTop: 0 }}>از چه کسی</label>
@@ -487,7 +487,7 @@ export default function Diplomacy() {
                 <input type="number" min={1} value={demandAmount}
                        onChange={e => setDemandAmount(e.target.value)} placeholder="مثلاً ۵۰۰" />
                 <div className="page-sub" style={{ margin: '4px 4px 0' }}>
-                  ۲۴ ساعت مهلت داره. اگه نده هیچ پیامدِ خودکاری نیست — فقط یه کلاغ برات میاد که بگه پرداخت نشد.
+                  مهلت پرداخت خراج ۲۴ ساعت است. اگر پرداخت نشود، کلاغی به تو خبر می‌دهد؛ تصمیم بعدی با توست و مجازاتی خودبه‌خود اعمال نمی‌شود.
                 </div>
                 <button className="btn" style={{ marginTop: 14 }} disabled={demandBusy} onClick={demandTribute}>
                   {demandBusy ? 'در حال ارسال...' : 'درخواستِ خراج با کلاغ'}
@@ -517,7 +517,7 @@ export default function Diplomacy() {
       {tab === 'alliances' && (
         <div className="up u2">
           <div className="page-sub" style={{ margin: '0 4px 10px' }}>
-            همهٔ اتحادهای برقرارِ عمومیِ وستروس — پیمان‌های خصوصی اینجا نشان داده نمی‌شوند
+            اتحادهای عمومی وستروس؛ پیمان‌های خصوصی تنها برای اعضای آن‌ها قابل مشاهده‌اند.
           </div>
           {(!publicAlliances || publicAlliances.length === 0) && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز اتحاد عمومی‌ای برقرار نشده</div>
@@ -540,7 +540,7 @@ export default function Diplomacy() {
         <div className="up u2">
           {(!polls || polls.length === 0) && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-              فعلاً هیچ رای‌گیری‌ای باز نیست — هروقت ادمین یکی باز کنه، همین‌جا می‌بینیش
+              رأی‌گیری فعالی وجود ندارد.
             </div>
           )}
           {polls && polls.map(p => (

@@ -7,13 +7,13 @@ import '../projects.css';
 import { useGame } from '../store.jsx';
 
 const LABELS = { gold: 'طلا', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غذا', wine: 'شراب', men: 'مردم / نیروی انسانی', ...WEAPON_NAMES };
-const STATUS = { pending: 'منتظر تأیید ادمین', scheduled: 'زمان‌بندی‌شده', funding: 'در حال جذب سرمایه', active: 'در حال اجرا', completed: 'تکمیل‌شده', rejected: 'ردشده', unfunded: 'جذب سرمایه ناموفق', failed: 'شکست‌خورده', reserving: 'در حال رزرو آورده' };
+const STATUS = { pending: 'در انتظار تأیید', scheduled: 'زمان‌بندی‌شده', funding: 'در حال جذب سرمایه', active: 'در حال اجرا', completed: 'تکمیل‌شده', rejected: 'ردشده', unfunded: 'جذب سرمایه ناموفق', failed: 'شکست‌خورده', reserving: 'در حال رزرو آورده' };
 const number = v => Number(v || 0).toLocaleString('fa-IR', { maximumFractionDigits: 8 });
 const money = b => Object.entries(b || {}).filter(([, v]) => v !== 0).map(([k, v]) => `${number(v)} ${LABELS[k] || k}`).join(' + ') || '۰';
 const mult = (b, q) => Object.fromEntries(Object.entries(b || {}).map(([k, v]) => [k, v * q]));
 const difference = (a, b) => Object.fromEntries(Object.keys(LABELS).map(k => [k, (a?.[k] || 0) - (b?.[k] || 0)]));
 const isoDate = s => s && new Date(/[Zz]|[+-]\d\d:\d\d$/.test(s) ? s : s + 'Z');
-const date = s => s ? isoDate(s).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', dateStyle: 'medium', timeStyle: 'short' }) + ' (تهران)' : 'پس از تأیید ادمین';
+const date = s => s ? isoDate(s).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran', dateStyle: 'medium', timeStyle: 'short' }) + ' (تهران)' : 'پس از تأیید پروژه';
 const initial = () => ({ request_id: crypto.randomUUID(), kind: 'shared', name: '', goal: '', description: '', budget: { gold: 1000, wood: 200 }, total_shares: 100, owner_shares: 30, period_return: { gold: 200, wood: 100 }, period_hours: 24, period_count: 10, accepted_terms: false });
 
 function Modal({ title, children, close }) {
@@ -161,7 +161,7 @@ export default function Projects({ admin = false }) {
           <label className="project-check"><input required type="checkbox" checked={form.accepted_terms} onChange={e => field('accepted_terms', e.target.checked)} />شرایط رزرو، جریمه و شکست پروژه را خواندم و می‌پذیرم.</label>
           {form.kind === 'personal' && <p className="page-sub">در پروژهٔ شخصی، کل بودجه هنگام ثبت از موجودی خودت رزرو می‌شود.</p>}
           {createError && <p role="alert" className="project-error">{createError}</p>}
-          {!form.accepted_terms && <p className="page-sub">برای فعال‌شدن ثبت، شرایط سرمایه‌گذاری را بپذیر.</p>}
+          {!form.accepted_terms && <p className="page-sub">پیش از ثبت پروژه، شرایط سرمایه‌گذاری را بخوان و بپذیر.</p>}
           <button className="btn" disabled={!previewValid || !form.accepted_terms}>{busy ? 'در حال ثبت...' : 'ثبت درخواست و رزرو آوردهٔ من'}</button>
         </fieldset>
       </form>
@@ -182,10 +182,10 @@ export default function Projects({ admin = false }) {
       <Economics project={selectedProject} shares={1} title="هر سهم" />
       {(selectedProject.my_shares > 0 || admin) && <Economics project={selectedProject} shares={admin ? selectedProject.owner_shares : selectedProject.my_shares} title={admin ? 'محاسبات طراح' : 'محاسبات سهام شما'} />}
       {selectedProject.my_shares > 0 && <p>دریافتی پرداخت‌شدهٔ شما: <strong>{money(selectedProject.my_received)}</strong></p>}
-      {selectedProject.reason && <p className="project-pre">دلیل تصمیم ادمین: {selectedProject.reason}</p>}
+      {selectedProject.reason && <p className="project-pre">نتیجهٔ بررسی پروژه: {selectedProject.reason}</p>}
       {selectedProject.notification_terms && <><h3>متن شرایط اعلام‌شده</h3><p className="project-pre">{selectedProject.notification_terms}</p></>}
       <button className="btn ghost" onClick={() => setTerms(true)}>قوانین ثابت سرمایه‌گذاری</button>
-      {!admin && selectedProject.is_owner && <p className="page-sub">شما طراح این پروژه هستید؛ خرید سهم برای طراح مجاز نیست.</p>}
+      {!admin && selectedProject.is_owner && <p className="page-sub">تو طراح این پروژه‌ای و نمی‌توانی سهم‌های عرضه‌شدهٔ آن را بخری.</p>}
       {!admin && !me.admin_role && selectedProject.can_buy && clock < isoDate(selectedProject.funding_deadline).getTime() && <form onSubmit={e => { e.preventDefault(); run(async () => {
         if (!purchaseAccepted) throw new Error('شرایط سرمایه‌گذاری را بپذیر');
         await api.buyProjectShares(selectedProject.id, { shares: quantity, request_id: purchaseKey }); toast('سهام خریداری شد'); setSelected(null);

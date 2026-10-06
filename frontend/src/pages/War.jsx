@@ -313,7 +313,7 @@ export default function War() {
     try {
       if (opType === 'ambush') {
         await api.createAmbush({ origin_castle: origin, target_castle: target.name, troops: counts, scenario: ambushScenario.trim() });
-        haptic('medium'); toast('کمین ساخته شد و برای تعیین ضریب به ادمین رفت');
+        haptic('medium'); toast('کمین ثبت شد و در انتظار داوری است.');
         api.me().then(setMe); setAmbushScenario(''); resetForm(); loadLegions(); setBusy(false); return;
       }
       await api.submitCampaign({
@@ -381,7 +381,7 @@ export default function War() {
     <>
       <div className="page-title up">نیروها/لشکرکشی</div>
       <div className="card up u1" style={{ textAlign: 'center', color: 'var(--mid)' }}>
-        نقشه بارگذاری نشد — اتصال به سرور را بررسی کن
+        نقشه دریافت نشد. اتصال اینترنت را بررسی کن و دوباره تلاش کن.
         <div style={{ marginTop: 12 }}>
           <button className="btn ghost" style={{ padding: 11 }} onClick={loadMap}>تلاش دوباره</button>
         </div>
@@ -393,7 +393,7 @@ export default function War() {
   return (
     <>
       <div className="page-title up">نیروها/لشکرکشی</div>
-      <div className="page-sub up">روی یک قلعه در نقشه کلیک کن تا اطلاعاتش را ببینی یا آن را هدف بگیری</div>
+      <div className="page-sub up">قلعه‌ای را در نقشه انتخاب کن تا اطلاعاتش را ببینی و مقصد لشکر را تعیین کنی.</div>
 
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
@@ -410,7 +410,7 @@ export default function War() {
         <>
           {windowClosed && (
             <div className="card up u1" style={{ borderColor: 'var(--danger)', textAlign: 'center', color: 'var(--danger)', fontSize: 12.5 }}>
-              پنجرهٔ لشکرکشی الان بسته است — ادمین باید بازش کند تا بتوانی فرمان گسیل بدهی. ساخت لشکر دفاعی همچنان مجاز است.
+              در حال حاضر اعزام لشکر تهاجمی مجاز نیست. همچنان می‌توانی لشکر دفاعی تشکیل بدهی.
             </div>
           )}
           <div className="sect up u2">نقشهٔ وستروس</div>
@@ -420,7 +420,7 @@ export default function War() {
           </div>
 
           <div className="sect up u3">ساخت لشکر</div>
-          <p className="page-sub">فقط از قلعهٔ مبدأیی که درگیر نبرد یا محاصره است نمی‌توان نیرو ساخت؛ درگیری لشکرها در جای دیگر، قلعه‌های آزاد تو را نمی‌بندد.</p>
+          <p className="page-sub">برای تشکیل لشکر، قلعه‌ای آزاد از نبرد و محاصره انتخاب کن. درگیری لشکرها در جای دیگر مانع اعزام از قلعه‌های آزاد نیست.</p>
           <div className="card up u3">
             {movingLegion && (
               <div style={{ marginBottom: 12, padding: 10, borderRadius: 12, background: 'rgba(77,163,255,.08)', color: 'var(--az2)', fontSize: 12 }}>
@@ -434,7 +434,7 @@ export default function War() {
             <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
             {!movingLegion && <button type="button" className={`rbtn pick ${commanderPresent ? 'sel' : ''}`} style={{ marginTop: 10, width: '100%', textAlign: 'right' }} onClick={() => setCommanderPresent(v => !v)}>
               <div className="n">{commanderPresent ? 'فرمانده همراه لشکر می‌رود' : 'فرمانده در قلعه می‌ماند'}</div>
-              <div className="c">حضور کاراکتر: {Number(warWindow?.commander_power_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ قدرت بیشتر و {Number(warWindow?.commander_speed_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ کاهش زمان حرکت؛ این ضرایب در پنل ادمین قابل تغییرند.</div>
+              <div className="c">حضور کاراکتر: {Number(warWindow?.commander_power_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ قدرت بیشتر و {Number(warWindow?.commander_speed_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ کاهش زمان سفر.</div>
             </button>}
 
             <label className="f">مبدا</label>
@@ -510,11 +510,11 @@ export default function War() {
               <label className="f">سناریوی کمین</label>
               <textarea rows={5} maxLength={4000} value={ambushScenario} onChange={e => setAmbushScenario(e.target.value)}
                 placeholder="نحوهٔ پنهان‌شدن نیروها، زمان یورش و نقشهٔ کمین را بنویس..." />
-              <div className="page-sub" style={{ margin: '8px 4px 0' }}>کمین فقط روی جادهٔ مستقیم قلعهٔ مبدا تا قلعهٔ بعدی پذیرفته می‌شود. ادمین بر اساس این سناریو ضریب می‌دهد.</div>
+              <div className="page-sub" style={{ margin: '8px 4px 0' }}>کمین را در جادهٔ میان دو قلعهٔ همسایه برپا کن. کیفیت سناریو، قدرت کمین را تعیین می‌کند.</div>
             </>}
             {op.needsTarget && opType !== 'garrison' && opType !== 'ambush' && (
               <div className="page-sub" style={{ margin: '10px 4px 0' }}>
-                سناریوی نبرد اینجا نوشته نمی‌شود — وقتی لشکر برسد، آمار دو طرف رد و بدل می‌شود و تا ۶ ساعت بعد می‌توانی از صفحهٔ «رول‌ها» سناریوی جنگ را بفرستی.
+                پس از رسیدن لشکر و دریافت آمار دو طرف، ۶ ساعت برای ارسال سناریوی نبرد در بخش «رول‌ها» فرصت داری.
               </div>
             )}
           </div>
@@ -653,7 +653,7 @@ export default function War() {
                 <PassageConsent armyId={c.id} status={c.passage} refresh={loadLegions} toast={toast} />
                 {c.engagement_locked && (
                   <div style={{ flex: 1, fontSize: 11, color: 'var(--danger)', alignSelf: 'center' }}>
-                    {c.waiting_for_result ? 'حمله رسیده — منتظر نتیجهٔ ادمین' : 'درگیر نبرد — تا ثبت نتیجه قفل است'}
+                    {c.waiting_for_result ? 'لشکر رسیده؛ در انتظار نتیجهٔ نبرد' : 'درگیر نبرد؛ حرکت پس از اعلام نتیجه'}
                   </div>
                 )}
                 {hostileAgainstPact && (
@@ -677,7 +677,7 @@ export default function War() {
           {ambushes === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
           {ambushes && ambushes.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی نساخته‌ای</div>}
           {(ambushes || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 9 }}>
-            <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">کمین مسیر {castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)}<small>{a.men_committed.toLocaleString('fa-IR')} سرباز · {a.status === 'pending_score' ? 'منتظر داوری ادمین' : a.status === 'active' ? `فعال؛ ضریب ${Number(a.coefficient).toLocaleString('fa-IR')} · امتیاز ${Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}` : `مصرف‌شده${a.victim_name ? ` علیه ${a.victim_name}` : ''}`}</small></div></div>
+            <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">کمین مسیر {castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)}<small>{a.men_committed.toLocaleString('fa-IR')} سرباز · {a.status === 'pending_score' ? 'در انتظار داوری' : a.status === 'active' ? `فعال؛ ضریب ${Number(a.coefficient).toLocaleString('fa-IR')} · امتیاز ${Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}` : `مصرف‌شده${a.victim_name ? ` علیه ${a.victim_name}` : ''}`}</small></div></div>
             {a.casualties != null && <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8 }}>به دشمن {a.casualties.toLocaleString('fa-IR')} تلفات زد · تلفات نیروهای خودی {(a.ambusher_losses || 0).toLocaleString('fa-IR')} نفر · بازمانده‌ها منحل و هزینه‌های غیرغله‌ای برگشتند.</div>}
           </div>)}
         </div>

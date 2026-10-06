@@ -75,9 +75,9 @@ export default function Espionage() {
     <>
       <div className="page-title up">جاسوسی</div>
       <div className="page-sub up">
-        {tab === 'spy' ? 'یک قلعه را روی نقشه هدف بگیر تا از منابع، ساختمان‌های نظامی و لشکرکشی‌هایش خبردار شوی'
+        {tab === 'spy' ? 'قلعهٔ هدف را انتخاب کن و برای کسب اطلاعات از منابع و نیروهای آن جاسوس بفرست.'
           : tab === 'results' ? 'نتیجهٔ ماموریت‌های جاسوسی‌ای که فرستاده‌ای'
-          : 'کارزار عمومی علیه یک لرد — همه می‌بینند، محبوبیتش کمی افت می‌کند'}
+          : 'با انتشار شایعه دربارهٔ یک لرد، محبوبیت او را کاهش بده.'}
       </div>
 
       <div className="tabs up u1" role="tablist">
@@ -91,7 +91,7 @@ export default function Espionage() {
       {tab === 'spy' && (
         mapError ? (
           <div className="card up u2" style={{ textAlign: 'center', color: 'var(--mid)' }}>
-            نقشه بارگذاری نشد — اتصال به سرور را بررسی کن
+            نقشه دریافت نشد. اتصال اینترنت را بررسی کن و دوباره تلاش کن.
             <div style={{ marginTop: 12 }}>
               <button className="btn ghost" style={{ padding: 11 }} onClick={loadMap}>تلاش دوباره</button>
             </div>
@@ -125,7 +125,7 @@ export default function Espionage() {
 
               <label className="f">نقشهٔ جاسوسی</label>
               <textarea value={scenario} onChange={e => setScenario(e.target.value)}
-                        placeholder="یگان جاسوسی‌ات را چطور تربیت و اعزام می‌کنی؟ نقشه‌ات برای نفوذ چیست... (شورای جنگ این را می‌خواند و بر اساسش شانس موفقیتت را مشخص می‌کند)" />
+                        placeholder="روش آموزش، اعزام و نفوذ جاسوس‌ها را شرح بده. کیفیت نقشهٔ تو در داوری مأموریت مؤثر است." />
 
               <div className={`cost ${overGold || overMen ? 'over' : ''}`}>
                 <span>هزینهٔ اعزام</span>

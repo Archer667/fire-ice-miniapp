@@ -15,17 +15,17 @@ const TIER_FA = { bronze: 'برنز', silver: 'نقره', gold: 'طلا' };
 const MEDAL_GUIDE = [
   { key: 'blood_and_steel', icon: '⚔️', name: 'خون و فولاد', desc: 'نشان پیروزی در حمله', rule: 'برنز ۳، نقره ۷، طلا ۱۰ پیروزی' },
   { key: 'peaceful_warrior', icon: '🛡️', name: 'صلح‌طلب، ولی جنگ بلده', desc: 'نشان دفاع موفق از قلمرو', rule: 'برنز ۲، نقره ۵، طلا ۷ دفاع موفق' },
-  { key: 'conqueror', icon: '🏰', name: 'فاتح', desc: 'نشان تصرف واقعی قلعه', rule: 'برنز ۱، نقره ۳، طلا ۶ قلعه' },
+  { key: 'conqueror', icon: '🏰', name: 'فاتح', desc: 'نشان فتح قلعه', rule: 'برنز ۱، نقره ۳، طلا ۶ قلعه' },
   { key: 'rich_father', icon: '🪙', name: 'پدر پولدار', desc: 'نشان تولید طلا', rule: 'برنز ۵هزار، نقره ۲۰هزار، طلا ۴۰هزار' },
   { key: 'oathbound', icon: '🤝', name: 'سوگنددار', desc: 'نشان پیمان‌های پایدار', rule: 'پیمان ۷ روزه، ۳ پیمان، یا ۵ پیمان ده‌روزه' },
   { key: 'eye_in_shadow', icon: '👁️', name: 'چشم در سایه', desc: 'نشان جاسوسی موفق', rule: 'برنز ۲، نقره ۷، طلا ۱۰ جاسوسی' },
-  { key: 'realm_storyteller', icon: '📜', name: 'راوی قلمرو', desc: 'با تشخیص ادمین به راویان بازی داده می‌شود', rule: 'اعطای دستی ادمین' },
+  { key: 'realm_storyteller', icon: '📜', name: 'راوی قلمرو', desc: 'با تشخیص ادمین به راویان بازی داده می‌شود', rule: 'اعطای افتخار با تأیید مدیریت' },
   { key: 'oath_loyal', icon: '🔥', name: 'وفادار به عهد', desc: 'نشان حضور متوالی در بازی', rule: 'برنز ۵، نقره ۱۰، طلا ۱۵ روز' },
-  { key: 'season_champion', icon: '🏆', name: 'قهرمان فصل', desc: 'افتخار ویژهٔ قهرمان فصل', rule: 'اعطای دستی ادمین' },
-  { key: 'realm_savior', icon: '🪽', name: 'ناجی قلمرو', desc: 'افتخار ویژهٔ نجات قلمرو', rule: 'اعطای دستی ادمین' },
-  { key: 'immortal', icon: '♾️', name: 'نامیرا', desc: 'افتخار ویژه برای نامیراهای میدان', rule: 'اعطای دستی ادمین' },
-  { key: 'golden_quill', icon: '✒️', name: 'صاحب قلم زرین', desc: 'افتخار ویژهٔ نویسندگی و روایت', rule: 'اعطای دستی ادمین' },
-  { key: 'crown_enemy', icon: '🗡️', name: 'دشمن تاج', desc: 'افتخار ویژهٔ دشمنان تاج‌وتخت', rule: 'اعطای دستی ادمین' },
+  { key: 'season_champion', icon: '🏆', name: 'قهرمان فصل', desc: 'افتخار ویژهٔ قهرمان فصل', rule: 'اعطای افتخار با تأیید مدیریت' },
+  { key: 'realm_savior', icon: '🪽', name: 'ناجی قلمرو', desc: 'افتخار ویژهٔ نجات قلمرو', rule: 'اعطای افتخار با تأیید مدیریت' },
+  { key: 'immortal', icon: '♾️', name: 'نامیرا', desc: 'افتخار ویژه برای نامیراهای میدان', rule: 'اعطای افتخار با تأیید مدیریت' },
+  { key: 'golden_quill', icon: '✒️', name: 'صاحب قلم زرین', desc: 'افتخار ویژهٔ نویسندگی و روایت', rule: 'اعطای افتخار با تأیید مدیریت' },
+  { key: 'crown_enemy', icon: '🗡️', name: 'دشمن تاج', desc: 'افتخار ویژهٔ دشمنان تاج‌وتخت', rule: 'اعطای افتخار با تأیید مدیریت' },
 ];
 
 function RankMovement({ value }) {
@@ -162,7 +162,7 @@ export default function Leaderboard() {
           <div className="empty up u2">هنوز امتیازی برای این هفته ثبت نشده است.</div>
         ) : (
           <>
-            <div className="page-sub up u2" style={{ marginTop: -6 }}>امتیازی که هرکس فقط از اول همین هفته کسب کرده — رقابت تازه، بدون انباشت کل بازی</div>
+            <div className="page-sub up u2" style={{ marginTop: -6 }}>رتبه‌بندی هفتگی بر پایهٔ امتیازهای کسب‌شده از آغاز هفته است.</div>
             <div className="up u2">
               {weeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
@@ -194,10 +194,10 @@ export default function Leaderboard() {
             {selectedMedal.tier && <div style={{ marginTop: 5, color: 'var(--az2)' }}>سطح {TIER_FA[selectedMedal.tier] || selectedMedal.tier}</div>}
             {selectedMedal.title && <div style={{ marginTop: 5 }}>{selectedMedal.title}</div>}
             <div style={{ color: 'var(--mid)', lineHeight: 1.9, marginTop: 10 }}>
-              {selectedMedal.desc || MEDAL_GUIDE.find(m => m.key === selectedMedal.key)?.desc || 'مدال ویژهٔ ادمین'}
+              {selectedMedal.desc || MEDAL_GUIDE.find(m => m.key === selectedMedal.key)?.desc || 'افتخار ویژه'}
             </div>
             <div style={{ fontSize: 12, marginTop: 8 }}>
-              {selectedMedal.rule || MEDAL_GUIDE.find(m => m.key === selectedMedal.key)?.rule || 'با تشخیص ادمین اعطا شده است'}
+              {selectedMedal.rule || MEDAL_GUIDE.find(m => m.key === selectedMedal.key)?.rule || 'افتخار ویژهٔ اعطاشده به خاندان'}
             </div>
             {selectedMedal.reason && <div style={{ marginTop: 10, padding: 9, borderRadius: 10, background: 'rgba(255,255,255,.06)' }}>دلیل اعطا: {selectedMedal.reason}</div>}
             <button type="button" className="btn" style={{ marginTop: 16 }} onClick={() => setSelectedMedal(null)}>بستن</button>

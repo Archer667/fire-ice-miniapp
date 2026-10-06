@@ -18,9 +18,9 @@ const BUILDING_ICON = {
 };
 
 const GROUPS = [
-  { key: 'economy',  label: 'ساختمان‌های اقتصادی', hint: 'منابعت رو تولید و ذخیره می‌کنن' },
-  { key: 'barracks', label: 'پادگان یگان‌ها',        hint: 'بدون این، اون نیرو رو استخدام نمی‌کنی' },
-  { key: 'armory',   label: 'کارگاه‌های تسلیحات',    hint: 'روزانه تسلیحاتِ همون یگان رو تولید می‌کنن — هر سرباز موقع اعزام ازش مصرف می‌کنه' },
+  { key: 'economy',  label: 'ساختمان‌های اقتصادی', hint: 'تولید منابع و افزایش ظرفیت انبارهای قلمرو' },
+  { key: 'barracks', label: 'پادگان یگان‌ها',        hint: 'برای استخدام هر یگان، پادگان آن را بساز.' },
+  { key: 'armory',   label: 'کارگاه‌های تسلیحات',    hint: 'کارگاه هر یگان، سلاح موردنیاز سربازانش را تولید می‌کند.' },
   { key: 'defense',  label: 'دفاعی و زیرساخت',       hint: '' },
 ];
 
@@ -97,7 +97,7 @@ export default function Buildings() {
   return (
     <>
       <div className="page-title up">ساختمان‌های قلمرو</div>
-      <div className="page-sub up">سقف هر ساختمان را ادمین مشخص می‌کند — هرچی بالاتر بری، بازدهی بیشتره ولی گرون‌تر و کندتر</div>
+      <div className="page-sub up">ساختمان‌های قلمرو را ارتقا بده؛ هر سطح، هزینه و زمان ساخت بیشتری دارد.</div>
 
       {data.castles.length > 1 && (
         <div className="tabs up u1" role="tablist" aria-label="قلعه">

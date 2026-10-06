@@ -70,7 +70,7 @@ export default function Dashboard({ goTo }) {
       haptic();
       const fresh = await api.rebellionStatus();
       setRebellion(fresh);
-      toast('سهم غله مردم ثبت شد؛ اثرش در محاسبه روزانه اعمال می‌شود');
+      toast('سهم غلهٔ مردم تغییر کرد؛ اثر آن از رسیدگی روزانهٔ بعد آغاز می‌شود.');
     } catch (e) { toast(e.message); }
     setRationBusy(false);
   };
@@ -82,7 +82,7 @@ export default function Dashboard({ goTo }) {
       await api.submitRebellionRoleplay(rebellion.active.id, rebellionText.trim());
       haptic('medium');
       setRebellion(prev => ({ ...prev, active: { ...prev.active, status: 'roleplay_submitted', roleplay_text: rebellionText.trim() } }));
-      toast('رول مقابله با شورش برای ادمین‌ها فرستاده شد');
+      toast('سناریوی مقابله با شورش برای داوری ارسال شد.');
     } catch (e) { toast(e.message); }
     setRebellionBusy(false);
   };
@@ -204,7 +204,7 @@ export default function Dashboard({ goTo }) {
                      title={`${m.name} — ${details}`}>
               <div className="player-medal-icon">{m.icon || '🏅'}</div>
               <div className="player-medal-name">{m.name}</div>
-              <div className="player-medal-tier">{isSpecial ? 'ویژهٔ ادمین' : tierName}</div>
+              <div className="player-medal-tier">{isSpecial ? 'افتخار ویژه' : tierName}</div>
               {m.title && <div className="player-medal-title">{m.title}</div>}
               {m.reason && <div className="player-medal-reason">{m.reason}</div>}
             </article>
@@ -265,7 +265,7 @@ export default function Dashboard({ goTo }) {
         {rebellion && (
           <div className="page-sub" style={{ marginTop: 7, lineHeight: 1.9 }}>
             آستانهٔ مالیات سنگین با محبوبیت فعلی: <b>{rebellion.tax_heavy_threshold.toLocaleString('fa-IR')}٪</b>
-            {' · '}اثر مالیات فعلی در بررسی روزانه: <b style={{ color: rebellion.tax_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
+            {' · '}اثر روزانهٔ مالیات: <b style={{ color: rebellion.tax_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
               {rebellion.tax_daily_popularity > 0 ? '+' : ''}{rebellion.tax_daily_popularity.toLocaleString('fa-IR')} محبوبیت
             </b>
             <br />
@@ -288,11 +288,11 @@ export default function Dashboard({ goTo }) {
                 مصرف روزانهٔ این سهم: حدود {rebellion.ration_food_per_day.toLocaleString('fa-IR')} غله
                 {' · '}اثر غله: {rebellion.ration_daily_popularity > 0 ? '+' : ''}{rebellion.ration_daily_popularity.toLocaleString('fa-IR')} محبوبیت
                 <br />
-                جمع اثر مالیات و غله در بررسی روزانه: <b style={{ color: rebellion.combined_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
+                تغییر روزانهٔ محبوبیت با مالیات و جیرهٔ فعلی: <b style={{ color: rebellion.combined_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
                   {rebellion.combined_daily_popularity > 0 ? '+' : ''}{rebellion.combined_daily_popularity.toLocaleString('fa-IR')} محبوبیت
                 </b>
                 <br />
-                احتمال شورش در بررسی روزانه: {rebellion.chance.toLocaleString('fa-IR')}٪ · حد امن {rebellion.safe_popularity.toLocaleString('fa-IR')} · شورش قطعی زیر {rebellion.guaranteed_popularity.toLocaleString('fa-IR')}
+                احتمال روزانهٔ شورش: {rebellion.chance.toLocaleString('fa-IR')}٪ · حد امن {rebellion.safe_popularity.toLocaleString('fa-IR')} · شورش قطعی زیر {rebellion.guaranteed_popularity.toLocaleString('fa-IR')}
               </div>
             </div>
             {rebellion.active && (
@@ -310,7 +310,7 @@ export default function Dashboard({ goTo }) {
                     </button>
                   </>
                 ) : (
-                  <div style={{ marginTop: 8 }}>رول تو ثبت شده و منتظر نتیجه ادمین است.</div>
+                  <div style={{ marginTop: 8 }}>سناریوی مقابله با شورش ثبت شده و در انتظار داوری است.</div>
                 )}
               </div>
             )}

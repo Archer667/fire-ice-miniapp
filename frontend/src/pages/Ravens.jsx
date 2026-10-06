@@ -1,6 +1,5 @@
 import { gameNow } from '../gameClock.js';
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -49,8 +48,6 @@ function timeAgo(iso) {
 }
 
 export default function Ravens() {
-  const [fabHost, setFabHost] = useState(null);
-  useEffect(() => { setFabHost(document.querySelector('.shell')); }, []);
   const { me, setMe, toast, refreshUnread, unreadBreakdown } = useGame();
   const [inbox, setInbox] = useState(null);
   const [tab, setTab] = useState('announcements');
@@ -138,7 +135,7 @@ export default function Ravens() {
       {composing ? (
         <>
           <div className="page-title up">کلاغ تازه</div>
-          <div className="page-sub up">یک یا چند لرد را جست‌وجو و انتخاب کن — کلاغ راهش را بلد است</div>
+          <div className="page-sub up">گیرندگان نامه را انتخاب کن و پیامت را با کلاغ بفرست.</div>
           <div className="card up u1">
             <label className="f" style={{ marginTop: 0 }}>گیرنده(ها)</label>
             <PlayerPicker value={composeTargets} onChange={setComposeTargets} />
@@ -204,7 +201,7 @@ export default function Ravens() {
 
       {tab === 'announcements' && (
         <div className="notice-guide up u2">
-          <strong>اینجا سابقهٔ اتفاق‌های مهم بازی می‌مونه</strong>
+          <strong>اخبار و رخدادهای وستروس</strong>
           <span>⚔️ جنگ · 🔥 شورش · 🏗️ ساخت · 🛒 کاروان · 🤝 پیمان · 🎁 جایزه</span>
         </div>
       )}
@@ -213,7 +210,7 @@ export default function Ravens() {
         <div className="up u2">
           {rows.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-              {tab === 'announcements' ? 'هنوز اطلاعیه‌ای نیامده' : 'هنوز کلاغی برایت نیامده — تو اولین نامه را بفرست'}
+              {tab === 'announcements' ? 'هنوز اطلاعیه‌ای نیامده' : 'نامه‌ای دریافت نکرده‌ای. می‌توانی نخستین کلاغ را بفرستی.'}
             </div>
           )}
           {rows.map((m, i) => (
@@ -286,15 +283,15 @@ export default function Ravens() {
         </div>
       )}
 
-      {tab === 'messages' && fabHost && createPortal(
+      {tab === 'messages' && (
         <button type="button" className="fab" aria-label="کلاغ تازه" onClick={() => { haptic(); setComposing(true); setThread([]); }}>
           <Plus s={22} />
-        </button>, fabHost
+        </button>
       )}
-      {tab === 'rumors' && !composingTweet && fabHost && createPortal(
-        <button type="button" className="fab" aria-label="توییت تازه" onClick={() => { haptic(); setComposingTweet(true); document.querySelector('.view')?.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+      {tab === 'rumors' && !composingTweet && (
+        <button type="button" className="fab" aria-label="توییت تازه" onClick={() => { haptic(); setComposingTweet(true); }}>
           <Plus s={22} />
-        </button>, fabHost
+        </button>
       )}
     </>
   );

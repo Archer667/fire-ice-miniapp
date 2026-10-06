@@ -107,13 +107,13 @@ export default function Onboarding() {
         <label className="f">قلعه‌های درخواستی (اجباری، به‌ترتیب اولویت)</label>
         <CastlePicker value={requestedCastles} onChange={setRequestedCastles} regionStates={registrationRegions} />
         <div className="page-sub" style={{ margin: '6px 4px 0' }}>
-          دست‌کم یک قلعه انتخاب کن. بهتره بیش از یک قلعه را از اقلیم‌های مختلف و به‌ترتیب اولویتت قرار بدی؛ ادمین با توجه به همین فهرست انتخاب نهایی را انجام می‌دهد.
+          قلعه‌های دلخواهت را به‌ترتیب اولویت انتخاب کن. چند انتخاب از اقلیم‌های مختلف، امکان واگذاری قلعه را بیشتر می‌کند.
         </div>
       </div>
       <div className="page-sub up u2" style={{ margin: '4px 4px 0' }}>
         برای تأیید درخواست، باید در تنظیمات حساب تلگرام خود نام کاربری (Username / @ID) تعیین کرده باشی. بعد از تنظیم، بازی را دوباره باز کن.
         <br />
-        اقلیم و قلعه‌ات را خودت نهایی نمی‌کنی — بعد از ثبت‌نام، ادمین بازی با توجه به درخواستت خاندان و قلعه‌ات را برایت مشخص می‌کند
+        اقلیم و قلعهٔ خاندان پس از بررسی درخواست عضویت، با توجه به اولویت‌هایت تعیین می‌شوند.
       </div>
       <div className="up u2" style={{ marginTop: 16 }}>
         <button className="btn" onClick={enter} disabled={busy}>

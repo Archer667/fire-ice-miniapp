@@ -322,7 +322,7 @@ function TradeContent() {
       )}
 
       {tab === 'market' && marketSection === 'players' && <>
-        <div className="exchange-heading"><span className="trade-eyebrow">بازار بازیکنان</span><h2>قیمت را فروشنده تعیین می‌کند</h2><p>حداقل قیمت هر کالا را مدیریت تعیین می‌کند؛ کم شدن موجودی، قیمت آگهی را تغییر نمی‌دهد.</p></div>
+        <div className="exchange-heading"><span className="trade-eyebrow">بازار بازیکنان</span><h2>قیمت را فروشنده تعیین می‌کند</h2><p>قیمت فروش را با رعایت حداقل مجاز انتخاب کن. قیمت آگهی تا پایان فروش ثابت می‌ماند.</p></div>
         <details className="exchange-sell"><summary>＋ فروش کالای من</summary><form onSubmit={e => { e.preventDefault(); sellToPlayerMarket(); }}>
           <label>نوع کالا<select value={sellResource} onChange={e => setSellResource(e.target.value)}>{CARAVAN_GOODS.filter(g => g !== 'gold').map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}</select></label>
           <div className="exchange-fields"><label>تعداد برای فروش<input type="number" inputMode="numeric" min="1" max={Math.floor(me.resources?.[sellResource] || 0)} step="1" required value={sellQty} onChange={e => setSellQty(e.target.value)} /></label><label>قیمت هر واحد (سکه)<input type="number" inputMode="numeric" min={priceFloors[sellResource] || 10} max="1000000000" step="1" required value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></label></div>
@@ -337,12 +337,12 @@ function TradeContent() {
         <div className="exchange-heading"><span className="trade-eyebrow">بازار رسمی وستروس</span><h2>قیمت تابع موجودی بازار است</h2><p>با کمبود کالا قیمت به‌تدریج بالا می‌رود؛ تأمین دوباره، قیمت را به پایه نزدیک می‌کند.</p></div>
         <div className="exchange-grid">{market?.map(m => <MarketCard key={m.resource} item={m} kind="official" value={buyQty[m.resource]} onQuantity={q => setBuyQty(v => ({...v,[m.resource]:q}))} onBuy={() => buyMarket(m.resource)} busy={buyBusy === m.resource} />)}</div>
         {market?.length === 0 && <div className="exchange-empty">عرضهٔ رسمی فعلاً تمام شده است.<small>برای خرید از بازیکنان، بازار بازیکنان را ببین.</small></div>}
-        <details className="exchange-guide"><summary>قیمت و درصد تغییر چگونه حساب می‌شوند؟</summary><p>قیمت پایه و حجم مرجع را عرضهٔ ادمین مشخص می‌کند. قیمت با کاهش موجودی تا حداکثر دو برابر پایه بالا می‌رود و به سکهٔ کامل گرد می‌شود؛ بنابراین با هر یک واحد خرید الزاماً تغییر نمی‌کند. درصد کنار کالا نسبت به پایه است، نه نسبت به خرید قبلی. مبلغ همین سفارش با قیمت نمایش‌داده‌شده محاسبه می‌شود.</p></details>
+        <details className="exchange-guide"><summary>قیمت و درصد تغییر چگونه حساب می‌شوند؟</summary><p>با کمبود کالا، قیمت تا دو برابر نرخ پایه افزایش می‌یابد. درصد کنار کالا، تفاوت با نرخ پایه را نشان می‌دهد. قیمت به سکهٔ کامل نمایش داده می‌شود و ممکن است با خرید مقدار کم ثابت بماند. هزینهٔ سفارشت بر اساس قیمت نمایش‌داده‌شده است.</p></details>
       </>}
       {tab === 'market' && marketSection === 'black' && <>
         <div className="exchange-heading black-heading"><span className="trade-eyebrow">بازار سیاه</span><h2>فرصت محدود، قیمت ثابت</h2><p>قیمت هر عرضه تا پایان مهلت ثابت است؛ فقط موجودی و زمان باقی‌مانده کاهش پیدا می‌کنند.</p></div>
         <div className="exchange-grid">{black?.map(m => <MarketCard key={m.id} item={m} kind="black" value={blackQty[m.id]} onQuantity={q => setBlackQty(v => ({...v,[m.id]:q}))} onBuy={() => buyBlack(m)} busy={blackBusy === m.id} />)}</div>
-        {black?.length === 0 && <div className="exchange-empty">فعلاً عرضه‌ای در بازار سیاه نیست.<small>کالاهای تازه پس از ثبت ادمین اینجا ظاهر می‌شوند.</small></div>}
+        {black?.length === 0 && <div className="exchange-empty">فعلاً عرضه‌ای در بازار سیاه نیست.<small>برای عرضه‌های تازه دوباره سر بزن.</small></div>}
       </>}
     </section>
   );

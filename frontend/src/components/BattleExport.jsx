@@ -27,7 +27,7 @@ export default function BattleExport({ battle, toast }) {
       <textarea aria-label="شرایط نبرد و ترتیب ورود نیروها" rows={5} value={conditions ?? arrivalText(battle)} onChange={e => setConditions(e.target.value)} />
       <label className="f">زمان ارسال سناریو</label>
       <textarea aria-label="زمان ارسال سناریو" rows={2} placeholder="مثلاً طرفین تا ساعت دو ظهر فرصت ارسال سناریو دارند." value={deadline} onChange={e => setDeadline(e.target.value)} />
-      <div className="page-sub">این متن‌ها برای خروجی همین صفحه‌اند؛ مهلت یا قوانین نبرد را تغییر نمی‌دهند.</div>
+      <div className="page-sub">ویرایش متن گزارش، مهلت رسمی یا شرایط نبرد را تغییر نمی‌دهد.</div>
       <label className="f">پیش‌نمایش خروجی</label>
       <textarea aria-label="پیش‌نمایش خروجی نبرد" readOnly rows={12} value={text} style={{ width: '100%', boxSizing: 'border-box' }} />
     </details>

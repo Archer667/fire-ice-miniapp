@@ -3032,10 +3032,10 @@ export default function Admin() {
                       {popularityBusy ? '...' : 'اعمال'}
                     </button>
                   </div>
-                  <div className="page-sub" style={{ marginTop: 7 }}>مقدار مثبت محبوبیت را بیشتر و مقدار منفی آن را کمتر می‌کند؛ نتیجه همیشه بین صفر تا صد می‌ماند.</div>
+                  <div className="page-sub" style={{ marginTop: 7 }}>تغییر محبوبیت: افزایش با مقدار مثبت، کاهش با مقدار منفی؛ محدودهٔ مجاز ۰ تا ۱۰۰.</div>
                 </div>
                 <div className="page-sub" style={{ margin: '4px 4px 12px', lineHeight: 1.9 }}>
-                  عددِ سمت راست موجودی فعلیه و زیرش سقف واقعی بازیکن نوشته شده؛ این سقف از ساختمان‌های همهٔ قلعه‌هاش حساب می‌شه.
+                  موجودی منابع و ظرفیت کل انبارهای این خاندان
                 </div>
                 {PLAYER_RES.map(({ key, label, Icon }) => {
                   const value = Number(resValues[key] ?? 0);

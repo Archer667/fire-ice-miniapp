@@ -51,7 +51,7 @@ export default function Roleplay() {
       const sent = await api.sendRoleplay(category, text.trim(), isWar ? campaignId : undefined, sabotageTarget[0]?.tg_id);
       setQuotaVersion(v => v + 1);
       haptic('medium');
-      toast(category === 'scout' ? (sent.updated ? 'رول پیش‌قراولت اصلاح و دوباره برای امتیازدهی فرستاده شد' : 'رول پیش‌قراولت برای امتیازدهی فرستاده شد') : (sent.result_required === false ? 'رول امنیتی ثبت و در آرشیو ادمین ذخیره شد' : 'رول برای بررسی شورای جنگ فرستاده شد'));
+      toast(category === 'scout' ? (sent.updated ? 'رول پیش‌قراولت اصلاح و دوباره برای امتیازدهی فرستاده شد' : 'رول پیش‌قراولت برای امتیازدهی فرستاده شد') : (sent.result_required === false ? 'رول امنیتی در پروندهٔ خاندان ثبت شد.' : 'رول برای بررسی شورای جنگ فرستاده شد'));
       if (category !== 'scout') setText('');
       setSabotageTarget([]);
       load();
@@ -65,7 +65,7 @@ export default function Roleplay() {
     <>
       <SubmissionQuota kind="roleplays" refreshKey={quotaVersion} />
       <div className="page-title up">رول‌ها</div>
-      <div className="page-sub up">یک سناریوی آزاد بنویس و بفرست — شورای جنگ می‌خواند و نتیجه‌اش را برایت می‌فرستد</div>
+      <div className="page-sub up">اقدام کاراکترت را روایت کن و سناریو را برای داوری بفرست.</div>
 
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
@@ -109,12 +109,12 @@ export default function Roleplay() {
             <>
               <label className="f">هدف خرابکاری</label>
               <PlayerPicker value={sabotageTarget} onChange={setSabotageTarget} single placeholder="نام لرد یا قلعهٔ هدف را جست‌وجو کن..." />
-              <div className="page-sub" style={{ margin: '7px 4px 0' }}>تا زمانی که ازدواج برقرار است، خرابکاری علیه همسر ممنوع است. این هدف همراه رول ثبت می‌شود و ادمین وضعیت منابع و محبوبیت هر دو طرف را هنگام داوری می‌بیند.</div>
+              <div className="page-sub" style={{ margin: '7px 4px 0' }}>خرابکاری علیه همسر تا پایان پیوند ازدواج ممنوع است. هدف را انتخاب کن و روش اجرای نقشه را در سناریو شرح بده.</div>
             </>
           )}
 
           {category === 'scout' && (
-            <div className="notice-guide" style={{ marginTop: 10 }}><strong>یک رول دائمی برای هر بازیکن</strong><span>این سناریو آمادگی پیش‌قراولان تمام لشکرهایت را مشخص می‌کند. هر بار دوباره ارسالش کنی، نسخهٔ قبلی اصلاح و برای امتیازدهی مجدد فرستاده می‌شود.</span></div>
+            <div className="notice-guide" style={{ marginTop: 10 }}><strong>آمادگی پیش‌قراولان خاندان</strong><span>این سناریو برای پیش‌قراولان همهٔ لشکرهایت به کار می‌رود. با ویرایش و ارسال دوباره، آمادگی آن‌ها دوباره داوری می‌شود.</span></div>
           )}
 
           <label className="f">متن رول</label>

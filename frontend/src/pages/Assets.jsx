@@ -53,7 +53,7 @@ export default function Assets() {
   return (
     <>
       <div className="page-title up">دارایی‌ها</div>
-      <div className="page-sub up">هرچه قلعه‌ات می‌سازد و هر آیتمی که به تو داده شده، همین‌جاست</div>
+      <div className="page-sub up">ساختمان‌ها، تولید روزانه و آیتم‌های خاندان</div>
 
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
@@ -77,7 +77,7 @@ export default function Assets() {
           {castle === null && <div className="loading">در حال بارگذاری...</div>}
           {castle && castle.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-              هنوز ساختمانی نساخته‌ای — از تب «ساختمان‌ها» شروع کن
+              این قلعه ساختمانی ندارد. برای ساخت، به بخش «ساختمان‌ها» برو.
             </div>
           )}
           {castle && castle.map(b => {
@@ -117,7 +117,7 @@ export default function Assets() {
           {items === null && <div className="loading">در حال بارگذاری...</div>}
           {items && items.length === 0 && (
             <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>
-              هنوز هیچ آیتمی نداری — وقتی ادمین چیزی به تو بدهد، همین‌جا ظاهر می‌شود
+              هنوز آیتمی به خاندان تو تعلق نگرفته است.
             </div>
           )}
           {items && items.map(it => (
