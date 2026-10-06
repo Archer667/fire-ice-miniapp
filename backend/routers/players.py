@@ -40,8 +40,6 @@ class RegisterBody(BaseModel):
     name: str
     gender: str   # "lord" | "lady"
     requested_castles: list[str] = []   # اولویتِ خودِ بازیکن — چون ممکنه اولی‌ها قبلاً اشغال شده باشن
-    backstory: str
-    profile_image: str | None = None
 
 @router.post("/register")
 async def register(body: RegisterBody, user: dict = Depends(get_user)):
@@ -53,13 +51,6 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         raise HTTPException(400, "جنسیت نامعتبر")
     if not body.name.strip():
         raise HTTPException(400, "نام نمی‌تواند خالی باشد")
-    if len(body.backstory.strip()) < 40 or len(body.backstory.strip()) > 2000:
-        raise HTTPException(400, "بک‌استوری باید بین ۴۰ تا ۲۰۰۰ نویسه باشد")
-    if body.profile_image:
-        if not body.profile_image.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")):
-            raise HTTPException(400, "عکس پروفایل باید JPG، PNG یا WebP باشد")
-        if len(body.profile_image) > 3_500_000:
-            raise HTTPException(400, "حجم عکس پروفایل باید حداکثر ۲٫۵ مگابایت باشد")
     existing = await players.find_one({"tg_id": user["id"]})
     if existing and not existing.get("registration_reset"):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
@@ -93,8 +84,8 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "castle": None,
         "is_port": False,
         "requested_castles": requested,
-        "backstory": body.backstory.strip(),
-        "profile_image": body.profile_image,
+        "backstory": "",
+        "profile_image": None,
         "resources": rule("economy.starting_resources", STARTING_RESOURCES),
         "troops": {},
         "buildings": {},
