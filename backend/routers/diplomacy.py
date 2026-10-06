@@ -59,6 +59,11 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
     # Existing pairwise treaties do not imply membership of this exact group.
     valid_targets = []
     for t in targets:
+        # A new proposal creates its own group. Other individual, marriage,
+        # or group treaties between these players are independent contracts.
+        if not source:
+            valid_targets.append(t)
+            continue
         query = {
             "type": body.type, "status": {"$in": ["pending", "accepted"]},
             "$or": [
@@ -198,13 +203,6 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         if not active or not proposer or proposer.get('is_dead') or not proposer.get('castle') or proposer.get('registration_reset'):
             raise HTTPException(409, 'این پیمان دیگر فعال نیست؛ دعوت را رد کن تا هزینهٔ آن به سازنده برگردد')
 
-    if body.accept and a['type'] == 'full_alliance':
-        from marriage_pacts import spouses
-        first = await players.find_one({'tg_id': a['from_id']})
-        second = await players.find_one({'tg_id': a['to_id']})
-        if await spouses(first, second):
-            raise HTTPException(409, 'پیمان کامل ازدواج برقرار است؛ این درخواست قدیمی را رد کن تا هزینه‌اش برگردد')
-
     # اتمیک و مشروط به status=pending — وگرنه دو کلیکِ هم‌زمانِ پذیرفتن/ردکردن هردو از
     # رویِ همون خواندنِ قدیمی رد می‌شن و alliance_count دوبار می‌خوره یا شرابِ رد دوبار برمی‌گرده
     new_status = "accepted" if body.accept else "rejected"
@@ -280,3 +278,4 @@ async def feast(user: dict = Depends(get_user)):
     fields.update({"popularity": popularity, "last_feast": now()})
     await players.update_one({"tg_id": user["id"]}, {"$set": fields})
     return {"ok": True, "popularity": popularity}
+
