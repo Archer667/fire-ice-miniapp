@@ -952,6 +952,14 @@ async def list_open_battles(user: dict = Depends(admin_user)):
         for key, stored in [('battle_joins','battle_joins'), ('attacker_joins','battle_attacker_joins'), ('defender_joins','battle_defender_joins')]:
             for item, source in zip(battle_row[key], root.get(stored, [])):
                 item['joined_at_real'] = display.iso(source.get('joined_at'))
+        army_lookup = {a['campaign_id']: a for a in battle_row['attacker_armies'] + battle_row['defender_armies']}
+        for key in ('battle_joins','attacker_joins','defender_joins'):
+            for join in battle_row[key]:
+                army = army_lookup.get(join.get('campaign_id'))
+                if army:
+                    join['army_name'] = army['name']
+                    army['joined_at'] = join.get('joined_at')
+                    army['joined_at_real'] = join.get('joined_at_real')
         out.append(battle_row)
         # repair اعلان: اگر پرونده در نسخهٔ قدیمی ساخته شده و اعلان لحظه‌ای‌اش جا افتاده،
         # اولین بار که پنل آن را بازیابی می‌کند فقط یک اعلان ماندگار/تلگرامی ساخته می‌شود.

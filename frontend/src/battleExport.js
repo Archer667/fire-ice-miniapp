@@ -1,8 +1,16 @@
 const fa = value => Number(value || 0).toLocaleString('fa-IR');
 const divider = '꧁─꩜༺᪥༻꩜─꧂';
 export function battleTime(real, internal) {
-  if (real && Number.isFinite(Date.parse(real))) return new Date(real).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }) + ' (به وقت تهران)';
+  const utc = real && (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(real) ? real : real + 'Z');
+  if (utc && Number.isFinite(Date.parse(utc))) return new Date(utc).toLocaleString('fa-IR', { timeZone: 'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false }) + ' (به وقت تهران)';
   return internal ? String(internal).replace('T', ' ') + ' (زمان داخلی بازی؛ ساعت واقعی ثبت نشده)' : 'نامشخص';
+}
+export function armyJoin(b, army) {
+  return [...(b.battle_joins||[]),...(b.attacker_joins||[]),...(b.defender_joins||[])].find(j=>j.campaign_id&&j.campaign_id===army.campaign_id) || army;
+}
+export function armyArrival(b, army) {
+  const join=armyJoin(b,army);
+  return battleTime(join.joined_at_real || army.joined_at_real,join.joined_at || army.joined_at);
 }
 // Narrative scale only; campaign travel times and game timers stay unchanged.
 export function arrivalDelay(b, j) {
@@ -21,7 +29,7 @@ export function arrivalDelay(b, j) {
 export function arrivalText(b) {
   const rows = b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])];
   const dated = rows.filter(j => j.joined_at && Number.isFinite(Date.parse(j.joined_at))).sort((a, z) => Date.parse(a.joined_at) - Date.parse(z.joined_at));
-  return [b.started_at ? `شروع نبرد: ${battleTime(b.started_at_real, b.started_at)}` : '', ...dated.map(j => `لشکر ${j.player_name || 'بی‌نام'} — ${b.multi_party ? 'طرف مستقل' : j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)} | ${arrivalDelay(b, j)}`)].filter(Boolean).join('\n') || 'زمان ورود نیروها ثبت نشده است.';
+  return [b.started_at ? `شروع نبرد: ${battleTime(b.started_at_real, b.started_at)}` : '', ...dated.map(j => `لشکر «${j.army_name || 'بی‌نام'}» — ${j.player_name || 'بی‌نام'} — ${b.multi_party ? 'طرف مستقل' : j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)} | ${arrivalDelay(b, j)}`)].filter(Boolean).join('\n') || 'زمان ورود نیروها ثبت نشده است.';
 }
 export function battleExportText(b, navalIds, conditions = arrivalText(b), deadline = '') {
   const side = (armies, fallback, icon, title) => {
@@ -33,7 +41,8 @@ export function battleExportText(b, navalIds, conditions = arrivalText(b), deadl
       ships += (a.troops || []).filter(t => navalIds.includes(t.id)).reduce((n, t) => n + Number(t.count || 0), 0);
       equipment += (a.equipment || []).reduce((n, t) => n + Number(t.count || 0), 0);
     }
-    return `${icon} ${title}: ${names.join(' - ') || fallback || 'بدون نیرو'}\n\n⚔ آمار ارتش: ${fa(men)} سرباز\n☄ ادوات جنگی: ${equipment ? `${fa(equipment)} ادوات جنگی` : 'فاقد ادوات جنگی'}\n🚢 آمار کشتی‌ها: ${ships ? `${fa(ships)} کشتی` : 'فاقد کشتی'}`;
+    const arrivals=armies.map(a=>`لشکر «${a.name||'بی‌نام'}» — ${a.player_name||'نامشخص'}\nرسیدن: ${armyArrival(b,a)} | ${arrivalDelay(b,armyJoin(b,a))}`).join('\n');
+    return `${icon} ${title}: ${names.join(' - ') || fallback || 'بدون نیرو'}\n${arrivals}\n\n⚔ آمار ارتش: ${fa(men)} سرباز\n☄ ادوات جنگی: ${equipment ? `${fa(equipment)} ادوات جنگی` : 'فاقد ادوات جنگی'}\n🚢 آمار کشتی‌ها: ${ships ? `${fa(ships)} کشتی` : 'فاقد کشتی'}`;
   };
   const attackers = b.attacker_armies ?? (b.attacker_army ? [b.attacker_army] : []);
   const defenders = b.defender_armies || [];

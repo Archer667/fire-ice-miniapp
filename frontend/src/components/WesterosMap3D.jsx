@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useGame } from '../store.jsx';
 import { api } from '../api.js';
 import { MAP_IMAGE } from '../mapCoords.js';
 import { gameNow } from '../gameClock.js';
@@ -9,6 +10,7 @@ import './WesterosMap3D.css';
 const REGION_COLORS={north:'#ffffff',iron:'#172b50',river:'#677442',west:'#d6ad36',reach:'#6fae52',vale:'#b7def2',storm:'#92979d',dorne:'#e57932',crown:'#b82d32'};
 
 export default function WesterosMap3D({ data, meCastle, meCastles, onSelectTarget, pickLabel='انتخاب به‌عنوان مقصد', routePath, fallback }) {
+  const {me}=useGame();
   const frame=useRef(null), [ready,setReady]=useState(false), [failed,setFailed]=useState(false), [live,setLive]=useState(data), [selection,setSelection]=useState(null), [army,setArmy]=useState(null), [pins,setPins]=useState('all'), [region,setRegion]=useState(null), [colorMode,setColorMode]=useState('region'), [armies,setArmies]=useState(true), [tick,setTick]=useState(gameNow()), [borders,setBorders]=useState(false);
   const latest=useRef(null);
   const popupRef=useRef(null);
@@ -17,7 +19,7 @@ export default function WesterosMap3D({ data, meCastle, meCastles, onSelectTarge
   useEffect(()=>{let active=true,busy=false;const refresh=async()=>{if(document.hidden||busy)return;busy=true;try{const result=await api.map();if(active)setLive(result)}catch{/* Keep the last authenticated response. */}finally{busy=false}};const timer=setInterval(refresh,20000);const clock=setInterval(()=>{if(!document.hidden)setTick(gameNow())},1000);document.addEventListener('visibilitychange',refresh);return()=>{active=false;clearInterval(timer);clearInterval(clock);document.removeEventListener('visibilitychange',refresh)}},[]);
   const own=useMemo(()=>new Set(meCastles?.length?meCastles:meCastle?[meCastle]:[]),[meCastle,meCastles]);
   const castles=useMemo(()=>(live?.regions||[]).flatMap(r=>r.castles.map(c=>({...c,region:r.id,mine:own.has(c.name)}))),[live,own]);
-  const state=useMemo(()=>({castles,campaigns:live?.campaigns||[],effects:live?.effects||[],routePath:routePath||[],filters:{pins,region},colorMode,regionColors:REGION_COLORS,pactColors:PACT_COLORS,showArmies:armies,showBorders:borders,now:tick}),[castles,live,routePath,pins,region,colorMode,armies,borders,tick]);latest.current=state;
+  const state=useMemo(()=>({day:live?.day??me?.day,mapLayout:live?.map_layout,castles,campaigns:live?.campaigns||[],effects:live?.effects||[],routePath:routePath||[],filters:{pins,region},colorMode,regionColors:REGION_COLORS,pactColors:PACT_COLORS,showArmies:armies,showBorders:borders,now:tick}),[castles,live,me?.day,routePath,pins,region,colorMode,armies,borders,tick]);latest.current=state;
   const send=message=>frame.current?.contentWindow?.postMessage(message,location.origin);
   useEffect(()=>{const receive=event=>{if(event.origin!==location.origin||event.source!==frame.current?.contentWindow)return;const message=event.data;if(message?.type==='valyria-map-ready'){setReady(true);send({type:'valyria-map-state',state:latest.current})}if(message?.type==='valyria-map-castle'){haptic();setSelection(message.name);setArmy(null)}if(message?.type==='valyria-map-army'){haptic();setArmy(message.id);setSelection(null)}if(message?.type==='valyria-map-error')setFailed(true)};window.addEventListener('message',receive);return()=>window.removeEventListener('message',receive)},[]);
   useEffect(()=>{if(ready)send({type:'valyria-map-state',state})},[ready,state]);
@@ -26,7 +28,7 @@ export default function WesterosMap3D({ data, meCastle, meCastles, onSelectTarge
   return <div className="mapview">
     <div className="map-region-tabs"><button className={`map-region-tab ${!region?'on':''}`} onClick={()=>{setRegion(null);send({type:'valyria-map-fit'})}}>همهٔ نقشه</button>{(live?.regions||[]).map(r=><button key={r.id} className={`map-region-tab ${region===r.id?'on':''}`} onClick={()=>{setRegion(r.id);const c=castles.find(c=>c.region===r.id);if(c)send({type:'valyria-map-focus',name:c.name})}}>{REGIONS_STATIC[r.id]?.name||r.name}</button>)}</div>
     <div className="map-region-tabs map-pin-filter">{[['all','همه'],['mine','قلعه‌های من'],['owned','صاحب‌دار'],['empty','خالی'],['port','بندر']].map(([id,name])=><button key={id} className={`map-region-tab ${pins===id?'on':''}`} onClick={()=>setPins(id)}>{name}</button>)}<button className={`map-region-tab ${armies?'on':''}`} role="switch" aria-checked={armies} onClick={()=>setArmies(!armies)}><Swords s={11}/> لشکرها</button><button className={`map-region-tab ${borders?'on':''}`} role="switch" aria-checked={borders} onClick={()=>setBorders(!borders)}>محدودهٔ اقلیم‌ها</button></div>
-    <div className="mapview-frame map3d-frame"><iframe ref={frame} src="/westeros/hybrid-v2/index.html" title="نقشهٔ سه‌بعدی وستروس" className="map3d-view" />
+    <div className="mapview-frame map3d-frame"><iframe ref={frame} src="/westeros/hybrid-v2/index-managed.html" title="نقشهٔ سه‌بعدی وستروس" className="map3d-view" />
       <button className="map3d-minimap" title="نقشهٔ راهنما؛ انتخاب قلعهٔ نزدیک" aria-label="نقشهٔ راهنما" onClick={e=>{const box=e.currentTarget.getBoundingClientRect(),x=(e.clientX-box.left)/box.width*100,y=(e.clientY-box.top)/box.height*100;const near=(live?.regions||[]).flatMap(r=>r.castles.filter(c=>r.coords?.[c.name]).map(c=>({name:c.name,xy:r.coords[c.name]}))).sort((a,b)=>Math.hypot(a.xy[0]-x,a.xy[1]-y)-Math.hypot(b.xy[0]-x,b.xy[1]-y))[0];if(near){setRegion(null);setPins('all');send({type:'valyria-map-focus',name:near.name})}}}><img src={MAP_IMAGE} alt="نمای کلی وستروس" draggable={false}/></button>
       {mine&&<button className="map-my-castle" aria-label="پرش به قلعهٔ خودم" onClick={()=>{setRegion(null);setPins('all');send({type:'valyria-map-focus',name:mine.name});setSelection(mine.name)}}><Keep s={14}/></button>}
     </div>

@@ -477,3 +477,6 @@ async def gamedata():
         "game_rules": game_data.GAME_RULES,
         "building_overrides": game_data.BUILDING_OVERRIDES,
     }
+
+from routers import map_management
+app.include_router(map_management.router)

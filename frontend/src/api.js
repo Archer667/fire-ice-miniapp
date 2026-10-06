@@ -477,6 +477,9 @@ const M = {
       ],
     };
   },
+  adminMapLayout: () => req('/api/admin/map-layout'),
+  adminSaveMapLayout: b => req('/api/admin/map-layout', {method:'PUT',body:JSON.stringify(b)}),
+  adminMapLayoutAction: (action,revision) => req('/api/admin/map-layout/'+action, {method:'POST',body:JSON.stringify({revision})}),
   adminMapOptions: (region) => {
     const r = REGIONS_STATIC[region];
     if (!r) return [];

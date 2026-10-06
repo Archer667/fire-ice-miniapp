@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from auth import get_user
-from db import campaigns, map_castles, alliances
+from db import campaigns, map_castles, alliances, game_settings
 from game import now
 from game_data import REGIONS, CASTLE_HOUSES
 from game import owned_castles
@@ -127,4 +127,7 @@ async def get_map(user: dict = Depends(get_user)):
             })
     from map_effects import active_map_effects
     effects = await active_map_effects(campaigns, now())
-    return {"regions": regions, "campaigns": camps, "effects": effects}
+    layout=await game_settings.find_one({'_id':'visual_map_layout'}) or {}
+    from season_clock import season_day
+    calendar=await season_day()
+    return {"regions": regions, "campaigns": camps, "effects": effects, 'day':calendar['day'], 'map_layout':layout.get('published')}

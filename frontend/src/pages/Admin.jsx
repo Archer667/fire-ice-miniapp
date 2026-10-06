@@ -1,4 +1,5 @@
-import { battleTime, arrivalDelay } from '../battleExport.js';
+import AdminMapManagement from '../components/AdminMapManagement.jsx';
+import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
 import BattleExport from '../components/BattleExport.jsx';
 import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
 import { gameNow } from '../gameClock.js';
@@ -105,7 +106,6 @@ const TAB_GROUPS = [
       { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
       { key: 'player-buildings', label: 'ساختمان‌های بازیکن', description: 'تغییر سطح ساختمان‌های قلعه‌های بازیکن', fullOnly: true },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
-      { key: 'map',       label: 'نقشه', description: 'مدیریت نشانه‌ها و نوع زمین', fullOnly: true },
     ],
   },
   {
@@ -134,6 +134,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      {key:'map_management',label:'مدیریت نقشه',description:'جانمایی، مدل بناها، فصل و انتشار نقشه',fullOnly:true},
       { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
       { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
       { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
@@ -932,7 +933,7 @@ export default function Admin() {
     const penalty = member.penalty_gold || a.members?.find(m => !m.creator && m.status === 'accepted')?.penalty_gold || 0;
     if (!window.confirm(`اخراج ${member.name}؟ غرامت ${penalty.toLocaleString('fa-IR')} سکه بین سایر اعضا تقسیم می‌شود و موجودی ناکافی منفی می‌شود.${member.creator ? ' کل گروه منحل می‌شود.' : ''}`)) return;
     setDissolveBusyId(a.id);
-    try { await api.adminExpelAlliance(a.id, member.tg_id); toast('اخراج و تسویهٔ غرامت انجام شد'); loadAlliances(); }
+    try { await api.adminExpelAlliance(member.alliance_id || a.id, member.tg_id); toast('اخراج و تسویهٔ غرامت انجام شد'); loadAlliances(); }
     catch (e) { toast(e.message); }
     setDissolveBusyId(null);
   };
@@ -2076,12 +2077,14 @@ export default function Admin() {
                 {b.defense_infrastructure_source === 'snapshot' && JSON.stringify(b.defense_infrastructure) !== JSON.stringify(b.defense_infrastructure_current) && <div className="notice-guide" style={{marginBottom:10}}><strong>وضعیت فعلی دفاع قلعه</strong><span>{b.defense_infrastructure_current?.length ? b.defense_infrastructure_current.map(x => `${x.name} سطح ${Number(x.level).toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>}
                 {(b.attacker_armies || [b.attacker_army]).map((army, ai) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--danger)' }}>{army.player_name || `مهاجم ${ai + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
+                  <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
                   <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attackers?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackers: { ...(p[b.campaign_id]?.attackers || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackers?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.attackerEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackerEquipments: { ...(p[b.campaign_id]?.attackerEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackerEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
                 </div>)}
                 {(b.defender_armies || []).map((army, di) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--az2)' }}>{army.player_name || b.defender_name || `مدافع ${di + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
+                  <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
                   <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
@@ -2451,167 +2454,7 @@ export default function Admin() {
         </>
       )}
 
-      {tab === 'map' && (
-        <>
-          <div className="sect up u2">افزودن قلعه/شهر به نقشه</div>
-          <div className="card up u2" id="admin-role-form">
-            <div className="page-sub" style={{ margin: '0 4px 10px' }}>روی نقطهٔ خالی از نقشه کلیک کن تا قلعه/شهر تازه‌ای همان‌جا اضافه شود</div>
-            {mapError && (
-              <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5, margin: '10px 0' }}>
-                نقشه بارگذاری نشد — <button type="button" className="rbtn" style={{ width: 'auto', display: 'inline', color: 'var(--az2)', cursor: 'pointer', textDecoration: 'underline' }} onClick={loadMapData}>تلاش دوباره</button>
-              </div>
-            )}
-            {mapData && (() => {
-              const r = mapData.regions.find(x => x.id === mapRegion);
-              if (!r) return null;
-              const coords = r.coords || {};
-              return (
-                <div className="mapview" style={{ marginTop: 4 }}>
-                  <ZoomPanMap>
-                    <MapFrame region={r} coords={coords} pin={null}
-                              onFrameClick={(x, y) => { haptic(); setPendingPin({ x, y }); }} />
-                  </ZoomPanMap>
-                </div>
-              );
-            })()}
-            <label className="f">اقلیم</label>
-            <select value={mapRegion} onChange={e => setMapRegion(e.target.value)}>
-              {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
-            </select>
-            {pendingPin && (
-              <div style={{ marginTop: 12 }}>
-                <label className="f" style={{ marginTop: 0 }}>این نقطه کدام قلعه/شهر است؟</label>
-                <div className="ppicker">
-                  <input
-                    value={castleQuery}
-                    onChange={e => { setCastleQuery(e.target.value); setPickName(''); setCastleResultsOpen(true); }}
-                    onFocus={() => setCastleResultsOpen(true)}
-                    placeholder={mapOptions === null ? 'در حال بارگذاری قلعه/شهرهای این اقلیم...' : 'اسم قلعه یا شهر را جست‌وجو کن...'}
-                  />
-                  {castleResultsOpen && (
-                    <div className="ppicker-results">
-                      {mapOptions === null ? (
-                        <div className="ppicker-empty">در حال بارگذاری...</div>
-                      ) : (
-                        <>
-                          {filteredCastleOptions.length === 0 && (
-                            <div className="ppicker-empty">
-                              {mapOptions.length === 0 ? 'همهٔ قلعه/شهرهای این اقلیم روی نقشه جا گرفته‌اند' : 'موردی پیدا نشد'}
-                            </div>
-                          )}
-                          {filteredCastleOptions.map(o => (
-                            <button type="button" className="rbtn ppicker-row" key={o.name} onClick={() => pickCastle(o.name)}>
-                              <span>{castleLabel(o.name)}{o.kind === 'port' ? ' ⚓ بندر' : ''}</span>
-                            </button>
-                          ))}
-                          <button type="button" className="rbtn ppicker-row" onClick={pickNewCastle} style={{ color: 'var(--az2)' }}>
-                            + قلعه/شهر کاملاً جدید{castleQuery.trim() ? `: «${castleQuery.trim()}»` : '...'}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {pickName && pickName !== NEW_CASTLE && (
-                  <div className="page-sub" style={{ margin: '8px 4px 0' }}>انتخاب شد: <b style={{ color: 'var(--az2)' }}>{castleLabel(pickName)}</b></div>
-                )}
-                {pickName === NEW_CASTLE && (
-                  <>
-                    <label className="f">نام تازه</label>
-                    <input value={newCastleName} onChange={e => setNewCastleName(e.target.value)} placeholder="مثلاً: هارتزهیل" />
-                  </>
-                )}
-                {pickName && (
-                  <>
-                    <label className="f">نوع آیکن روی نقشه</label>
-                    <div className="grid2">
-                      {MAP_KINDS.map(k => (
-                        <div key={k.key} className={`pick ${pinKind === k.key ? 'sel' : ''}`}
-                             onClick={() => { haptic(); setPinKind(k.key); }}>
-                          <div className="n">{k.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <label className="f">نوع زمین (تعیین‌کنندهٔ ساخت کشتی/بندر)</label>
-                    <div className="grid2">
-                      {MAP_TERRAINS.map(t => (
-                        <div key={t.key} className={`pick ${pinTerrain === t.key ? 'sel' : ''}`}
-                             onClick={() => { haptic(); setPinTerrain(t.key); }}>
-                          <div className="n">{t.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                  <button className="btn" style={{ padding: 11 }} onClick={addMapCastle}>افزودن به نقشه</button>
-                  <button className="btn ghost" style={{ padding: 11 }} onClick={resetCastlePicker}>انصراف</button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {mapData && (() => {
-            const r = mapData.regions.find(x => x.id === mapRegion);
-            if (!r) return null;
-            const placedNames = new Set(Object.keys(r.coords || {}));
-            const placed = r.castles.filter(c => placedNames.has(c.name));
-            if (!placed.length) return null;
-            return (
-              <>
-                <div className="sect up u3">نشانه‌های ثبت‌شدهٔ این اقلیم</div>
-                <div className="region-castles up u3">
-                  {placed.map(c => (
-                    <div key={c.name}>
-                      <div className="rc">
-                        <span>{castleLabel(c.name)}<small style={{ color: 'var(--low)' }}> · {MAP_KINDS.find(k => k.key === c.kind)?.label || c.kind} · {MAP_TERRAINS.find(t => t.key === c.terrain)?.label || 'صرفاً خشکی'}</small></span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {c.owner ? <span className="own">{c.owner.name}</span> : <span className="empty">بدون لرد</span>}
-                          <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}
-                                  onClick={() => startEditMapCastle(c)}>ادیت</button>
-                          <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 11 }}
-                                  onClick={() => deleteMapCastle(c.name)}>حذف</button>
-                        </div>
-                      </div>
-                      {editingCastle === c.name && (
-                        <div style={{ padding: '10px 4px 16px' }}>
-                          <label className="f">نوع آیکن روی نقشه</label>
-                          <div className="grid2">
-                            {MAP_KINDS.map(k => (
-                              <div key={k.key} className={`pick ${editKind === k.key ? 'sel' : ''}`}
-                                   onClick={() => { haptic(); setEditKind(k.key); }}>
-                                <div className="n">{k.label}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <label className="f">نوع زمین (تعیین‌کنندهٔ ساخت کشتی/بندر)</label>
-                          <div className="grid2">
-                            {MAP_TERRAINS.map(t => (
-                              <div key={t.key} className={`pick ${editTerrain === t.key ? 'sel' : ''}`}
-                                   onClick={() => { haptic(); setEditTerrain(t.key); }}>
-                                <div className="n">{t.label}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <label className="f">اقلیم جغرافیایی قلعه</label>
-                          <select value={editRegion} onChange={e => setEditRegion(e.target.value)}>
-                            {Object.entries(REGIONS_STATIC).map(([rid, region]) => <option key={rid} value={rid}>{region.name}</option>)}
-                          </select>
-                          <div className="page-sub" style={{ marginTop: 6 }}>با تغییر این گزینه، نشانه و قلعهٔ اصلیِ صاحب فعلی به اقلیم تازه منتقل می‌شوند.</div>
-                          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                            <button className="btn" style={{ padding: 11 }} onClick={saveEditMapCastle}>ذخیره</button>
-                            <button className="btn ghost" style={{ padding: 11 }} onClick={cancelEditMapCastle}>انصراف</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            );
-          })()}
-        </>
-      )}
+      {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
 
       {tab === 'titles' && (
         <>
