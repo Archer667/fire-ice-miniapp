@@ -1559,6 +1559,11 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  characterProfile: () => req('/api/character/profile'),
+  submitCharacterProfile: body => req('/api/character/profile',{method:'POST',body:JSON.stringify(body)}),
+  adminCharacterProfiles: () => req('/api/admin/character-profiles'),
+  reviewCharacterProfile: (id,body) => req(`/api/admin/character-profiles/${id}/review`,{method:'POST',body:JSON.stringify(body)}),
+
   armyGroups: () => MOCK ? Promise.resolve([]) : req('/api/army-groups/mine'),
   mergeRequests: () => MOCK ? Promise.resolve([]) : req('/api/army-groups/requests'),
   mergeCandidates: id => req(`/api/army-groups/candidates/${id}`),
@@ -1879,4 +1884,3 @@ export const api = {
   adminResetScoreboard: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
     : req('/api/admin/reset-scoreboard', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
-

@@ -480,3 +480,6 @@ async def gamedata():
 
 from routers import map_management
 app.include_router(map_management.router)
+
+from routers import character_profiles
+app.include_router(character_profiles.router)

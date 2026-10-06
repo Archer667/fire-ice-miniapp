@@ -21,6 +21,7 @@ export const EXTRA_PAGES = [
   { index: 9, Icon: Scroll, label: 'رول‌ها' },
   { index: 10, Icon: Warehouse, label: 'دارایی‌ها' },
   { index: 11, Icon: FamilyIcon, label: 'خاندان و خانواده' },
+  { index: 12, Icon: Scroll, label: 'ساخت و ویرایش کاراکتر' },
 ];
 
 export default function NavBar({ tab, onChange }) {

@@ -1,3 +1,4 @@
+import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
 import AdminMapManagement from '../components/AdminMapManagement.jsx';
 import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
 import BattleExport from '../components/BattleExport.jsx';
@@ -101,6 +102,7 @@ const TAB_GROUPS = [
     key: 'players', label: 'بازیکنان و جهان',
     description: 'ثبت‌نام، قلمروها، منابع و نقشه',
     tabs: [
+      {key:'character_profiles',label:'درخواست‌های کاراکتر',description:'تأیید نام، عکس، بک‌استوری و پرچم',fullOnly:true},
       { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
       { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
       { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
@@ -2454,6 +2456,7 @@ export default function Admin() {
         </>
       )}
 
+      {tab === 'character_profiles' && isFull && <AdminCharacterProfiles toast={toast}/>}
       {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
 
       {tab === 'titles' && (

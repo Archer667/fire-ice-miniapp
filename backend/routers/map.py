@@ -97,6 +97,17 @@ async def get_map(user: dict = Depends(get_user)):
             "coords": coords_by_region.get(rid, {}),
         })
 
+    for region in regions:
+        for castle in region['castles']:
+            owner = castle.get('owner')
+            if owner:
+                row = by_tgid.get(owner.get('tg_id'))
+                profile = row['player'] if row else None
+                if profile and profile.get('flag_image'):
+                    from urllib.parse import quote
+                    revision = quote(str(profile.get('approved_profile_request') or profile.get('profile_edited_at') or '1'), safe='')
+                    castle['flag_url'] = f"/api/character/flags/{profile['tg_id']}?v={revision}"
+
     # همهٔ لشکرهای در حال حرکت فوراً روی نقشه دیده می‌شوند؛ جداسازی مارکرهای هم‌مکان
     # در فرانت انجام می‌شود تا چند ارتش روی یک مسیر همدیگر را نپوشانند.
     camps = []

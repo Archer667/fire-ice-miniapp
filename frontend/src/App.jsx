@@ -1,3 +1,4 @@
+import CharacterProfile from './pages/CharacterProfile.jsx';
 import { useEffect, useState } from 'react';
 import { useGame } from './store.jsx';
 import { initTelegram } from './telegram.js';
@@ -25,7 +26,7 @@ import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile];
 const RAVENS_INDEX = 4;
 const ADMIN_INDEX = 6;
 
