@@ -1736,8 +1736,8 @@ export const api = {
   adminListItems: () => MOCK ? Promise.resolve(M.adminListItems()) : req('/api/admin/items'),
   adminCreateItem: (b) => MOCK ? Promise.resolve(M.adminCreateItem(b)) : req('/api/admin/items', { method: 'POST', body: JSON.stringify(b) }),
   adminDeleteItem: (id) => MOCK ? Promise.resolve(M.adminDeleteItem(id)) : req(`/api/admin/items/${id}`, { method: 'DELETE' }),
-  adminGrantItem: (itemId, tgId, color) => MOCK ? Promise.resolve(M.adminGrantItem(itemId, tgId, color))
-    : req(`/api/admin/items/${itemId}/grant`, { method: 'POST', body: JSON.stringify({ tg_id: tgId, color }) }),
+  adminGrantItem: (itemId, tgId, color, requestId) => MOCK ? Promise.resolve(M.adminGrantItem(itemId, tgId, color))
+    : req(`/api/admin/items/${itemId}/grant`, { method: 'POST', body: JSON.stringify({ tg_id: tgId, color, request_id: requestId }) }),
   adminGetBuildingBalance: () => MOCK ? Promise.resolve(M.adminGetBuildingBalance()) : req('/api/admin/building-balance'),
   adminSetBuildingBalance: (b) => MOCK ? Promise.resolve(M.adminSetBuildingBalance(b))
     : req('/api/admin/building-balance', { method: 'POST', body: JSON.stringify(b) }),

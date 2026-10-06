@@ -97,6 +97,8 @@ async def serialize_game_state(request: Request, call_next):
     if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
             await game_clock.load()
+            from item_effects import recover_item_effects
+            await recover_item_effects()
             from food_settlement import recover_pending_food
             await recover_pending_food()
             from army_groups import recover_moves
@@ -164,6 +166,8 @@ async def _arrival_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from item_effects import recover_item_effects
+                await recover_item_effects()
                 from food_settlement import recover_pending_food
                 await recover_pending_food()
                 from character_records import recover_swaps
@@ -202,6 +206,8 @@ async def _project_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from item_effects import recover_item_effects
+                await recover_item_effects()
                 from food_settlement import recover_pending_food
                 await recover_pending_food()
                 from character_records import recover_swaps
@@ -218,6 +224,8 @@ async def _market_watcher():
         try:
             async with game_state_lock:
                 await game_clock.load()
+                from item_effects import recover_item_effects
+                await recover_item_effects()
                 from food_settlement import recover_pending_food
                 await recover_pending_food()
                 from character_records import recover_swaps
@@ -230,6 +238,9 @@ async def _market_watcher():
 
 async def _ensure_indexes():
     from db import db
+    await db.item_grants.create_index('effect_pending')
+    await db.item_grants.create_index([('tg_id', 1), ('granted_at', -1)])
+    await campaigns.create_index([('item_ids', 1), ('active', 1)])
     await db.food_settlements.create_index("status")
     from login_audit import ensure_indexes as ensure_login_indexes
     await ensure_login_indexes()

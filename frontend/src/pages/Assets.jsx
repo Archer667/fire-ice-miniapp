@@ -16,7 +16,8 @@ const TABS = [
 ];
 
 function fmtRemaining(iso) {
-  const ms = new Date(iso).getTime() - gameNow();
+  const utc = /[zZ]$|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + 'Z';
+  const ms = new Date(utc).getTime() - gameNow();
   if (ms <= 0) return 'به‌زودی منقضی می‌شود';
   const h = Math.floor(ms / 3600000);
   const m = Math.round((ms % 3600000) / 60000);
@@ -128,6 +129,8 @@ export default function Assets() {
               <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 6 }}>
                 {it.type_name} · {it.duration_name}{it.expires_at ? ` · ${fmtRemaining(it.expires_at)}` : ''}
               </div>
+              {it.building_id && <div className="page-sub">{it.building_name}: +{Number(it.yield_percent).toLocaleString('fa-IR')}٪ تولید روزانه</div>}
+              {it.campaign_id && <div className="page-sub">همراه لشکر «{it.campaign_name || 'لشکر'}»</div>}
               {it.description && (
                 <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--hi)', marginTop: 8 }}>{it.description}</div>
               )}

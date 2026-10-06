@@ -41,7 +41,7 @@ export function battleExportText(b, navalIds, conditions = arrivalText(b), deadl
       ships += (a.troops || []).filter(t => navalIds.includes(t.id)).reduce((n, t) => n + Number(t.count || 0), 0);
       equipment += (a.equipment || []).reduce((n, t) => n + Number(t.count || 0), 0);
     }
-    const arrivals=armies.map(a=>`لشکر «${a.name||'بی‌نام'}» — ${a.player_name||'نامشخص'}\nرسیدن: ${armyArrival(b,a)} | ${arrivalDelay(b,armyJoin(b,a))}`).join('\n');
+    const arrivals=armies.map(a=>`لشکر «${a.name||'بی‌نام'}» — ${a.player_name||'نامشخص'}\nرسیدن: ${armyArrival(b,a)} | ${arrivalDelay(b,armyJoin(b,a))}${a.war_items?.length ? `\nآیتم‌ها: ${a.war_items.map(it => it.name).join('، ')}` : ''}`).join('\n');
     return `${icon} ${title}: ${names.join(' - ') || fallback || 'بدون نیرو'}\n${arrivals}\n\n⚔ آمار ارتش: ${fa(men)} سرباز\n☄ ادوات جنگی: ${equipment ? `${fa(equipment)} ادوات جنگی` : 'فاقد ادوات جنگی'}\n🚢 آمار کشتی‌ها: ${ships ? `${fa(ships)} کشتی` : 'فاقد کشتی'}`;
   };
   const attackers = b.attacker_armies ?? (b.attacker_army ? [b.attacker_army] : []);

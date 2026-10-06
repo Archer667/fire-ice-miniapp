@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from auth import get_user
 from db import players
 from game import (
+    effective_building_produces,
     now, apply_production, can_afford, pay, normalize_building_state, normalize_datetime,
     owned_castles, castle_building_state, production_fields,
 )
@@ -51,7 +52,7 @@ async def list_buildings(castle: str | None = None, user: dict = Depends(get_use
         level = st["level"]
         max_level = building_max_level(bid)
         target = st["upgrade_to"] or (level + 1 if level < max_level else None)
-        per_level_produces = building_produces(bid)
+        per_level_produces = effective_building_produces(p, bid)
         per_level_cap = building_cap_bonus(bid)
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),

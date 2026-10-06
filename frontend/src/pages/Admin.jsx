@@ -15,7 +15,7 @@ import CastlePicker from '../components/CastlePicker.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import AdminControlCenter from '../components/AdminControlCenter.jsx';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, BUILDINGS_STATIC, buildingProduces, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
 import Projects from './Projects.jsx';
 import { AdminFamily } from './Family.jsx';
@@ -386,6 +386,11 @@ export default function Admin() {
   const [itemDuration, setItemDuration] = useState(Object.keys(ITEM_DURATIONS)[0]);
   const [itemDurationHours, setItemDurationHours] = useState('24');
   const [itemDescription, setItemDescription] = useState('');
+  const [grantRequestId, setGrantRequestId] = useState(() => crypto.randomUUID());
+  const [itemColor, setItemColor] = useState('gray');
+  const [itemBuilding, setItemBuilding] = useState('');
+  const [itemYield, setItemYield] = useState('15');
+  const itemBuildings = Object.entries(BUILDINGS_STATIC).map(([id, b]) => ({ ...b, id, produces_per_level: buildingProduces(id) }));
   const [itemBusy, setItemBusy] = useState(false);
   const [grantOpenId, setGrantOpenId] = useState(null);
   const [grantTarget, setGrantTarget] = useState([]);
@@ -1333,7 +1338,9 @@ export default function Admin() {
       await api.adminCreateItem({
         name: itemName.trim(), type: itemType, duration: itemDuration,
         duration_hours: itemDuration === 'temporary' ? +itemDurationHours : null,
-        description: itemDescription.trim(),
+        description: itemDescription.trim(), color: itemColor,
+        building_id: itemType === 'economy' && itemBuilding ? itemBuilding : null,
+        yield_percent: itemType === 'economy' && itemBuilding ? Number(itemYield) : 0,
       });
       haptic('medium');
       toast('آیتم ساخته شد');
@@ -1351,14 +1358,15 @@ export default function Admin() {
   const openGrant = (id) => {
     haptic();
     setGrantOpenId(prev => prev === id ? null : id);
-    setGrantTarget([]); setGrantColor(Object.keys(ITEM_RARITY_COLORS)[0]);
+    setGrantRequestId(crypto.randomUUID());
+    setGrantTarget([]); setGrantColor(itemsList?.find(it => it.id === id)?.color || 'gray');
   };
 
   const grantItem = async (id) => {
     if (!grantTarget.length) { toast('یک لرد را انتخاب کن'); return; }
     setGrantBusy(true);
     try {
-      await api.adminGrantItem(id, grantTarget[0].tg_id, grantColor);
+      await api.adminGrantItem(id, grantTarget[0].tg_id, grantColor, grantRequestId);
       haptic('medium');
       toast(`آیتم به «${grantTarget[0].name}» داده شد`);
       setGrantOpenId(null); setGrantTarget([]);
@@ -2080,6 +2088,7 @@ export default function Admin() {
                 {(b.attacker_armies || [b.attacker_army]).map((army, ai) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--danger)' }}>{army.player_name || `مهاجم ${ai + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
                   <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
+                  {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
                   <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attackers?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackers: { ...(p[b.campaign_id]?.attackers || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackers?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.attackerEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackerEquipments: { ...(p[b.campaign_id]?.attackerEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackerEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
@@ -2087,6 +2096,7 @@ export default function Admin() {
                 {(b.defender_armies || []).map((army, di) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--az2)' }}>{army.player_name || b.defender_name || `مدافع ${di + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
                   <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
+                  {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
                   <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
                   {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
@@ -2519,6 +2529,19 @@ export default function Admin() {
             <select value={itemType} onChange={e => setItemType(e.target.value)}>
               {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
+            <label className="f">رده و رنگ پیش‌فرض</label>
+            <select value={itemColor} onChange={e => setItemColor(e.target.value)}>
+              {Object.entries(ITEM_RARITY_COLORS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+            {itemType === 'economy' && <>
+              <label className="f">ساختمان با بازده بیشتر (اختیاری)</label>
+              <select value={itemBuilding} onChange={e => setItemBuilding(e.target.value)}>
+                <option value="">بدون اثر تولید</option>
+                {itemBuildings.filter(b => Object.values(b.produces_per_level || {}).some(v => v > 0)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+              {itemBuilding && <><label className="f">افزایش بازده (%)</label><input type="number" min="0.01" max="1000" step="0.01" value={itemYield} onChange={e => setItemYield(e.target.value)} />
+                <p className="page-sub">به تولید روزانهٔ همین ساختمان در همهٔ قلعه‌های بازیکن اضافه می‌شود. درصد چند آیتم با هم جمع می‌شود؛ ظرفیت انبار تغییر نمی‌کند.</p></>}
+            </>}
             <label className="f">مدت</label>
             <select value={itemDuration} onChange={e => setItemDuration(e.target.value)}>
               {Object.entries(ITEM_DURATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -2553,6 +2576,8 @@ export default function Admin() {
                     </small>
                   </div>
                 </div>
+                <div style={{ color: ITEM_RARITY_HEX[it.color] }}>{ITEM_RARITY_COLORS[it.color] || 'معمولی'}</div>
+                {it.building_id && <div className="page-sub">{it.building_name}: +{Number(it.yield_percent).toLocaleString('fa-IR')}٪ بازده</div>}
                 {it.description && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0' }}>{it.description}</div>}
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                   <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => openGrant(it.id)}>

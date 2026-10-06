@@ -921,8 +921,8 @@ export const ROLEPLAY_CATEGORIES = {
 export const ITEM_TYPES = { war: 'جنگی', economy: 'اقتصادی', stealth: 'مخفی‌کاری' };
 export const ITEM_DURATIONS = { temporary: 'موقتی', permanent: 'دائمی' };
 // «رنگ» میزان خاص‌بودن آیتم را نشان می‌دهد — ادمین موقع دادن آیتم به هر لرد جداگانه انتخابش می‌کند
-export const ITEM_RARITY_COLORS = { gray: 'خاکستری', blue: 'آبی', purple: 'بنفش', gold: 'طلایی' };
-export const ITEM_RARITY_HEX = { gray: '#9aa5b1', blue: '#4da3ff', purple: '#b06cf0', gold: '#e0b84a' };
+export const ITEM_RARITY_COLORS = { gray: 'معمولی', blue: 'آبی', purple: 'بنفش', gold: 'طلایی', legendary: 'افسانه‌ای', custom: 'سفارشی پلیر' };
+export const ITEM_RARITY_HEX = { gray: '#9aa5b1', blue: '#4da3ff', purple: '#b06cf0', gold: '#e0b84a', legendary: '#ee7645', custom: '#40cbb5' };
 
 // شورای کوچک پادشاه — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند این کرسی‌ها را بچیند
 export const SMALL_COUNCIL_SEATS = {

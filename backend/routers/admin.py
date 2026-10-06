@@ -8,7 +8,7 @@ import html
 from datetime import timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, StrictInt
+from pydantic import BaseModel, StrictInt, Field
 from auth import get_user, get_admin, get_full_admin, get_owner, get_admin_role
 from db import (
     campaigns, ambushes, players, admin_roles, map_castles, market_listings, black_market_listings,
@@ -347,6 +347,7 @@ async def _admin_army_metrics(army):
         calculated = True
     return {
         'power': power,
+        'war_items': army.get('war_items', []),
         'power_calculated': calculated,
         'equipment_power': army.get('equipment_power', sum(SIEGE_EQUIPMENT.get(k, {}).get('siege_power', 0) * n for k, n in army.get('equipment', {}).items())),
     }
@@ -2181,7 +2182,9 @@ async def admin_list_items(user: dict = Depends(full_admin_user)):
             "duration": tpl["duration"], "duration_name": ITEM_DURATIONS.get(tpl["duration"], tpl["duration"]),
             "duration_hours": tpl.get("duration_hours"),
             "description": tpl.get("description", ""),
-            "grant_count": grant_count,
+            "grant_count": grant_count, "color": tpl.get('color', 'gray'),
+            "building_id": tpl.get('building_id'), "yield_percent": tpl.get('yield_percent', 0),
+            "building_name": BUILDINGS.get(tpl.get('building_id'), {}).get('name'),
         })
     return out
 
@@ -2189,8 +2192,11 @@ class ItemBody(BaseModel):
     name: str
     type: str
     duration: str
-    duration_hours: int | None = None
+    duration_hours: int | None = Field(default=None, ge=1, le=876000)
     description: str = ""
+    color: str = "gray"
+    building_id: str | None = None
+    yield_percent: float = 0
 
 @router.post("/items")
 async def admin_create_item(body: ItemBody, user: dict = Depends(full_admin_user)):
@@ -2201,6 +2207,16 @@ async def admin_create_item(body: ItemBody, user: dict = Depends(full_admin_user
         raise HTTPException(400, "نوع آیتم نامعتبر")
     if body.duration not in ITEM_DURATIONS:
         raise HTTPException(400, "مدت آیتم نامعتبر")
+    import math
+    if body.color not in ITEM_RARITY_COLORS:
+        raise HTTPException(400, 'ردهٔ آیتم نامعتبر است')
+    if not math.isfinite(body.yield_percent) or not 0 <= body.yield_percent <= 1000:
+        raise HTTPException(400, 'افزایش بازده باید بین صفر و ۱۰۰۰ درصد باشد')
+    if body.building_id or body.yield_percent:
+        if body.type != 'economy' or body.building_id not in BUILDINGS or body.yield_percent <= 0:
+            raise HTTPException(400, 'برای اثر اقتصادی، ساختمان معتبر و درصد مثبت انتخاب کن')
+        if not building_produces(body.building_id):
+            raise HTTPException(400, 'این ساختمان تولید روزانه ندارد')
     duration_hours = None
     if body.duration == "temporary":
         if not body.duration_hours or body.duration_hours <= 0:
@@ -2210,6 +2226,7 @@ async def admin_create_item(body: ItemBody, user: dict = Depends(full_admin_user
     doc = {
         "name": name[:60], "type": body.type, "duration": body.duration,
         "duration_hours": duration_hours, "description": body.description.strip()[:300],
+        "color": body.color, "building_id": body.building_id, "yield_percent": body.yield_percent,
         "created_by": user["id"], "created_at": now(),
     }
     res = await items.insert_one(doc)
@@ -2221,6 +2238,22 @@ async def admin_delete_item(item_id: str, user: dict = Depends(full_admin_user))
         oid = ObjectId(item_id)
     except Exception:
         raise HTTPException(400, "شناسهٔ آیتم نامعتبر است")
+    if not await items.find_one({'_id': oid}):
+        raise HTTPException(404, 'این آیتم پیدا نشد')
+    grants = await item_grants.find({'item_id': oid}).to_list(None)
+    grant_ids = [str(g['_id']) for g in grants]
+    if grant_ids and await campaigns.find_one({'active': True, 'item_ids': {'$in': grant_ids}}):
+        raise HTTPException(409, 'این آیتم همراه لشکر فعال است؛ ابتدا لشکر را برگردان یا منحل کن')
+    for uid in {g['tg_id'] for g in grants}:
+        player = await players.find_one({'tg_id': uid})
+        if not player:
+            continue
+        player = apply_production(player)
+        effects = dict(player.get('item_effects', {}))
+        for grant in grants:
+            if grant['tg_id'] == uid:
+                effects.pop(str(grant['_id']), None)
+        await players.update_one({'tg_id': uid}, {'$set': {**production_fields(player), 'item_effects': effects}})
     res = await items.delete_one({"_id": oid})
     if res.deleted_count == 0:
         raise HTTPException(404, "این آیتم پیدا نشد")
@@ -2229,7 +2262,8 @@ async def admin_delete_item(item_id: str, user: dict = Depends(full_admin_user))
 
 class ItemGrantBody(BaseModel):
     tg_id: int
-    color: str
+    color: str | None = None
+    request_id: str | None = None
 
 @router.post("/items/{item_id}/grant")
 async def admin_grant_item(item_id: str, body: ItemGrantBody, user: dict = Depends(full_admin_user)):
@@ -2240,20 +2274,49 @@ async def admin_grant_item(item_id: str, body: ItemGrantBody, user: dict = Depen
     tpl = await items.find_one({"_id": oid})
     if not tpl:
         raise HTTPException(404, "این آیتم پیدا نشد")
-    if body.color not in ITEM_RARITY_COLORS:
+    color = body.color or tpl.get("color", "gray")
+    if color not in ITEM_RARITY_COLORS:
         raise HTTPException(400, "رنگ نامعتبر")
     target = await players.find_one({"tg_id": body.tg_id})
-    if not target:
-        raise HTTPException(404, "این لرد پیدا نشد")
+    if not target or target.get("is_dead") or not target.get("castle"):
+        raise HTTPException(404, "کاراکتر زندهٔ این لرد پیدا نشد")
+    import hashlib
+    from uuid import UUID
+    from item_effects import character_matches, recover_item_effects
+    grant_id = ObjectId()
+    if body.request_id:
+        try:
+            key = str(UUID(body.request_id))
+        except ValueError:
+            raise HTTPException(400, 'شناسهٔ درخواست اعطا نامعتبر است') from None
+        grant_id = ObjectId(hashlib.sha256(f'{user["id"]}:{key}'.encode()).hexdigest()[:24])
+        prior = await item_grants.find_one({'_id': grant_id})
+        if prior:
+            if prior['tg_id'] != body.tg_id or prior['item_id'] != oid or prior['color'] != color or not character_matches(prior, target):
+                raise HTTPException(409, 'این درخواست قبلاً برای اعطای دیگری استفاده شده است')
+            await recover_item_effects()
+            return {'ok': True, 'id': str(grant_id)}
+    target = apply_production(target)
+    await players.update_one({"tg_id": body.tg_id}, {"$set": production_fields(target)})
 
     expires_at = now() + timedelta(hours=tpl["duration_hours"]) if tpl["duration"] == "temporary" else None
+    granted_at = now()
+    effect = None
+    if tpl.get('building_id') and tpl.get('yield_percent', 0) > 0:
+        effect = {'building_id': tpl['building_id'], 'percent': tpl['yield_percent'],
+                  'starts_at': granted_at, 'expires_at': expires_at, 'character_created_at': target.get('created_at'),
+                  'character_child_id': target.get('family_child_id')}
     await item_grants.insert_one({
-        "item_id": oid, "tg_id": body.tg_id, "color": body.color,
-        "granted_by": user["id"], "granted_at": now(), "expires_at": expires_at,
+        "_id": grant_id, "character_created_at": target.get("created_at"), "character_child_id": target.get('family_child_id'),
+        "item_id": oid, "tg_id": body.tg_id, "color": color,
+        "granted_by": user["id"], "granted_at": granted_at, "expires_at": expires_at,
+        "effect": effect, "effect_pending": bool(effect),
     })
+    if effect:
+        await recover_item_effects()
     await send_system_message(
         target["tg_id"], target["name"],
-        f"آیتم «{tpl['name']}» ({ITEM_RARITY_COLORS[body.color]}) به دارایی‌های تو اضافه شد — در صفحهٔ «دارایی‌ها» ببینش.",
+        f"آیتم «{tpl['name']}» ({ITEM_RARITY_COLORS[color]}) به دارایی‌های تو اضافه شد — در صفحهٔ «دارایی‌ها» ببینش.",
     )
     return {"ok": True}
 

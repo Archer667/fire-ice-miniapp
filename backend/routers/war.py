@@ -160,6 +160,7 @@ class CampaignBody(BaseModel):
     equipment: dict = {}    # {equipment_id: count}
     via: list[str] | None = None   # مسیرِ انتخابیِ بازیکن (اگر چند گزینهٔ مسیر بود) — از /war/routes
     commander_present: bool = False
+    item_ids: list[str] = []
 
 class MoveCampaignBody(BaseModel):
     target_castle: str
@@ -666,6 +667,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         commander_power = float(rule("movement.commander_power_bonus_percent", float(game_data.GAME_RULES["commander_power_bonus"]) * 100)) / 100
         power = round(power * (1 + commander_power))
 
+    from item_effects import select_war_items
+    war_items = await select_war_items(p, body.item_ids)
     pay(p["resources"], {**combined_cost, "men": men})
 
     # فرمان خصمانه علیه عدم‌تجاوز/اتحاد کامل بالاتر کاملاً مسدود شده است.
@@ -686,6 +689,7 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "route_edge_minutes": [TRAVEL_GRAPH[a][b] for a, b in zip(route_path, route_path[1:])],
         "penalty_charged": penalty_charged,
         "commander_present": body.commander_present,
+        "item_ids": [it["id"] for it in war_items], "war_items": war_items,
         "power_building_levels": _building_levels(p, body.origin_castle),
         "commander_power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 10)),
         "active": True, "arrival_notified": False,
@@ -949,6 +953,7 @@ async def legions(user: dict = Depends(get_user)):
             "origin": c["origin_castle"], "target": c["target_castle"],
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
             "equipment": c.get("equipment", {}), "equipment_power": c.get("equipment_power", 0),
+            "war_items": c.get("war_items", []),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
             "engagement_locked": bool(c.get("engagement_locked") or waiting_result),
@@ -979,7 +984,7 @@ async def mine(user: dict = Depends(get_user)):
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "sender": c["player_name"],
             "origin": c["origin_castle"], "target": c["target_castle"],
-            "active": c.get("active", False),
+            "active": c.get("active", False), "war_items": c.get("war_items", []),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
             "created_at": c["created_at"].isoformat(),
@@ -1017,8 +1022,13 @@ def battle_army_snapshot(campaign: dict) -> dict:
         "troops": dict(campaign.get("troops", {})),
         "merge_group_id": campaign.get("merge_group_id"),
         "equipment": dict(campaign.get("equipment", {})),
+        "war_items": campaign.get("war_items", []), "item_ids": campaign.get("item_ids", []),
         "equipment_power": int(campaign.get("equipment_power", 0) or 0),
     }
+
+def war_items_text(army):
+    return '، '.join(it['name'] + (' (منقضی)' if it.get('expires_at') and normalize_datetime(it['expires_at']) <= now() else '') for it in army.get('war_items', [])) or 'ندارد'
+
 
 def battle_army_stats_line(army: dict) -> str:
     equipment = "، ".join(
@@ -1029,7 +1039,7 @@ def battle_army_stats_line(army: dict) -> str:
     return (
         f"{titled_name(name=army.get('player_name', 'نامشخص'), gender=army.get('player_gender'))} · «{army.get('name', 'لشکر')}» · {men} نفر\n"
         f"فرمانده: {'همراه لشکر است' if army.get('commander_present') else 'همراه لشکر نیست'}\n"
-        f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}"
+        f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}\nآیتم‌ها: {war_items_text(army)}"
     )
 
 def battle_army_public_line(army: dict) -> str:

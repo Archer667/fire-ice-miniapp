@@ -60,7 +60,7 @@ ROLEPLAY_CATEGORIES = {
 ITEM_TYPES = {"war": "جنگی", "economy": "اقتصادی", "stealth": "مخفی‌کاری"}
 ITEM_DURATIONS = {"temporary": "موقتی", "permanent": "دائمی"}
 # «رنگ» میزان خاص‌بودن آیتم را نشان می‌دهد — ادمین موقع دادن آیتم به هر لرد جداگانه انتخابش می‌کند
-ITEM_RARITY_COLORS = {"gray": "خاکستری", "blue": "آبی", "purple": "بنفش", "gold": "طلایی"}
+ITEM_RARITY_COLORS = {"gray": "معمولی", "blue": "آبی", "purple": "بنفش", "gold": "طلایی", "legendary": "افسانه‌ای", "custom": "سفارشی پلیر"}
 
 # ---- شورای کوچک پادشاه — فقط خودِ پادشاه/ملکهٔ فعلی می‌تواند این کرسی‌ها را بچیند ----
 SMALL_COUNCIL_SEATS = {

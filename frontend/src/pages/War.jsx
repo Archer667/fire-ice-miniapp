@@ -11,7 +11,7 @@ import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
   NAVAL_TROOPS, NAVAL_TROOP_IDS, NAVAL_CAMP_BUILDING, WEAPON_NAMES, castleLabel,
-  SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING, WEAPON_PER_SOLDIER,
+  SIEGE_EQUIPMENT, SIEGE_WORKSHOP_BUILDING, WEAPON_PER_SOLDIER, ITEM_RARITY_HEX,
 } from '../gamedata.js';
 
 const TABS = [
@@ -57,6 +57,9 @@ export default function War() {
   const men = me.resources.men ?? 0;
 
   const [tab, setTab] = useState('command');
+  const [warItems, setWarItems] = useState(null);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const loadWarItems = () => api.myItems().then(items => setWarItems(items.filter(it => it.type === 'war'))).catch(e => { toast(e.message); setWarItems(null); });
   const [mapData, setMapData] = useState(null);
   const [mapError, setMapError] = useState(false);
   const [buildings, setBuildings] = useState(null);
@@ -79,9 +82,9 @@ export default function War() {
   const loadWarWindow = () => api.warWindow().then(setWarWindow).catch(() => setWarWindow({ open: true }));
 
   useEffect(() => {
-    loadMap(); loadMine(); loadLegions(); loadAmbushes(); loadWarWindow();
+    loadMap(); loadMine(); loadLegions(); loadAmbushes(); loadWarWindow(); loadWarItems();
     const mapTimer = setInterval(loadMap, 30000);
-    const armyTimer = setInterval(() => { loadMine(); loadLegions(); loadAmbushes(); }, 15000);
+    const armyTimer = setInterval(() => { loadMine(); loadLegions(); loadAmbushes(); loadWarItems(); }, 15000);
     return () => { clearInterval(mapTimer); clearInterval(armyTimer); };
   }, []);
   const windowClosed = warWindow ? !warWindow.open : false;
@@ -275,7 +278,7 @@ export default function War() {
     : null;
 
   const resetForm = () => {
-    setName(''); setTarget(null); setCommanderPresent(false);
+    setName(''); setTarget(null); setCommanderPresent(false); setSelectedItems([]);
     setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
     setEquipmentCounts(Object.fromEntries(SIEGE_EQUIPMENT.map(e => [e.id, 0])));
   };
@@ -318,7 +321,7 @@ export default function War() {
         target_castle: op.needsTarget ? target.name : null,
         name: name.trim(), troops: counts,
         equipment: equipmentCounts,
-        commander_present: commanderPresent,
+        commander_present: commanderPresent, item_ids: selectedItems,
         via: chosenRoute ? chosenRoute.path : undefined,
       });
       haptic('medium');
@@ -332,7 +335,7 @@ export default function War() {
       });
       toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
       resetForm();
-      loadMine(); loadMap(); loadLegions();
+      loadMine(); loadMap(); loadLegions(); loadWarItems();
     } catch (e) { toast(e.message); }
     setBusy(false);
   };
@@ -349,7 +352,7 @@ export default function War() {
         : res.penalty_applied
           ? `لشکر لغو شد؛ ${Math.round(Number(res.refund_ratio) * 100).toLocaleString('fa-IR')}٪ نفرات و هزینه‌های قابل بازپرداخت برگشت`
           : 'لشکر در مهلت لغو رایگان لغو شد و هزینه‌های قابل بازپرداخت برگشت');
-      loadMine(); loadMap(); loadLegions();
+      loadMine(); loadMap(); loadLegions(); loadWarItems();
     } catch (e) { toast(e.message); }
     setCancelBusyId(null);
   };
@@ -547,6 +550,14 @@ export default function War() {
                 </div>
               );
             })}
+            {opType !== 'ambush' && <>
+              <div className="sect" style={{ margin: '16px 0 7px' }}>آیتم‌های جنگی همراه لشکر</div>
+              <div className="page-sub">انتخاب اختیاری است. هر آیتم فقط همراه یک لشکر فعال می‌ماند و پس از پایان لشکر دوباره قابل انتخاب است.</div>
+              {warItems === null ? <button type="button" className="btn ghost" onClick={loadWarItems}>بارگذاری آیتم‌ها</button> : !warItems.length ? <div className="page-sub">آیتم جنگی نداری.</div> : warItems.map(it => <label className="troop" key={it.id} style={{ borderInlineStart: `3px solid ${ITEM_RARITY_HEX[it.color] || '#999'}` }}>
+                <div className="tn">{it.name}<small>{it.color_name}{it.campaign_id ? ` · همراه «${it.campaign_name || 'لشکر'}»` : ''}</small><small>{it.description}</small></div>
+                <input type="checkbox" style={{ width: 22, height: 22 }} disabled={!!it.campaign_id} checked={selectedItems.includes(it.id) && !it.campaign_id} onChange={e => setSelectedItems(prev => e.target.checked ? [...prev, it.id] : prev.filter(id => id !== it.id))} />
+              </label>)}
+            </>}
             <div className="sect" style={{ margin: '16px 0 7px' }}>ادوات نظامی</div>
             <div className="page-sub" style={{ marginBottom: 8 }}>
               سطح کارگاه مهندسی ادوات این قلعه: {(builtLevels[SIEGE_WORKSHOP_BUILDING] || 0).toLocaleString('fa-IR')} از ۳ · ادوات نفرات مصرف نمی‌کنند اما سرعت لشکر را کم می‌کنند.
@@ -615,6 +626,7 @@ export default function War() {
                 <div className="ic"><Swords s={16} /></div>
                 <div className="n">
                   {c.name}
+                  {!!c.war_items?.length && <small>آیتم‌ها: {c.war_items.map(it => it.name).join('، ')}</small>}
                   <small>{c.op_name} · توان {c.power.toLocaleString('fa-IR')} · {c.men_committed.toLocaleString('fa-IR')} نفر</small>
                 </div>
               </div>
@@ -636,7 +648,7 @@ export default function War() {
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
                 <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />
               </div>
-              <div className="army-actions">
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {c.can_move && <button className="btn ghost" onClick={()=>setMergeBase(c.id)}>ادغام لشکر</button>}
                 <PassageConsent armyId={c.id} status={c.passage} refresh={loadLegions} toast={toast} />
                 {c.engagement_locked && (
@@ -683,6 +695,7 @@ export default function War() {
                 <div className="ic"><Swords s={16} /></div>
                 <div className="n">
                   {c.name}
+                  {!!c.war_items?.length && <small>آیتم‌ها: {c.war_items.map(it => it.name).join('، ')}</small>}
                   <small>{c.mine ? c.op_name : 'لشکرکشی'} · فرستنده: {c.sender}</small>
                 </div>
               </div>

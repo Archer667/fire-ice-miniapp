@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from auth import get_user
 from db import players, items, item_grants
-from game import now, apply_production, normalize_building_state, owned_castles, castle_building_state, production_fields
+from game import effective_building_produces, now, apply_production, normalize_building_state, owned_castles, castle_building_state, production_fields
 from game_data import BUILDINGS, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, building_produces, building_cap_bonus, CASTLE_HOUSES
 from routers.war import all_castle_terrain
 
@@ -38,7 +38,7 @@ async def castle_assets(castle: str | None = None, user: dict = Depends(get_user
         if level <= 0 or bid not in BUILDINGS:
             continue
         meta = BUILDINGS[bid]
-        produces = {k: v * level for k, v in building_produces(bid).items()}
+        produces = {k: v * level for k, v in effective_building_produces(p, bid).items()}
         cap_bonus = {k: v * level for k, v in building_cap_bonus(bid).items()}
         out.append({
             "id": bid, "name": meta["name"], "type": meta.get("type", "economy"),
@@ -50,22 +50,32 @@ async def castle_assets(castle: str | None = None, user: dict = Depends(get_user
 @router.get("/items")
 async def my_items(user: dict = Depends(get_user)):
     """آیتم‌های لرد — دارایی‌های شخصی که ادمین به او داده؛ آیتم موقتیِ منقضی‌شده دیگر نشان داده نمی‌شود"""
+    from item_effects import character_matches, campaign_for_grant, instant
+    player = await players.find_one({'tg_id': user['id']})
+    if not player or player.get('is_dead'):
+        return []
     out = []
     cur = item_grants.find({"tg_id": user["id"]}).sort("granted_at", -1)
     async for g in cur:
         expires_at = g.get("expires_at")
-        if expires_at and now() >= expires_at:
+        if not character_matches(g, player) or (expires_at and now() >= instant(expires_at)):
             continue
         tpl = await items.find_one({"_id": g["item_id"]})
         if not tpl:
             continue
+        attached = await campaign_for_grant(g['_id'])
+        color = g.get('color', tpl.get('color', 'gray'))
         out.append({
+            "building_id": tpl.get('building_id'), "yield_percent": tpl.get('yield_percent', 0),
+            "building_name": BUILDINGS.get(tpl.get('building_id'), {}).get('name'),
+            "campaign_id": str(attached['_id']) if attached else None,
+            "campaign_name": attached.get('name') if attached else None,
             "id": str(g["_id"]), "item_id": str(tpl["_id"]),
             "name": tpl["name"], "type": tpl["type"], "type_name": ITEM_TYPES.get(tpl["type"], tpl["type"]),
             "description": tpl.get("description", ""),
             "duration": tpl["duration"], "duration_name": ITEM_DURATIONS.get(tpl["duration"], tpl["duration"]),
-            "color": g["color"], "color_name": ITEM_RARITY_COLORS.get(g["color"], g["color"]),
-            "granted_at": g["granted_at"].isoformat(),
-            "expires_at": expires_at.isoformat() if expires_at else None,
+            "color": color, "color_name": ITEM_RARITY_COLORS.get(color, color),
+            "granted_at": instant(g["granted_at"]).isoformat() + 'Z',
+            "expires_at": instant(expires_at).isoformat() + 'Z' if expires_at else None,
         })
     return out

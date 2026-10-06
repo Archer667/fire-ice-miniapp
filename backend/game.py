@@ -119,12 +119,12 @@ def _building_states(player: dict):
     yield player.setdefault("buildings", {})
     yield from player.setdefault("castle_buildings", {}).values()
 
-def _apply_production_interval(player: dict, elapsed_days: float):
+def _apply_production_interval(player: dict, elapsed_days: float, at=None):
     if elapsed_days <= 0:
         return
     res = player["resources"]
     caps = effective_caps(player)
-    prod = daily_production(player)
+    prod = daily_production(player, at)
     gold_before = res.get("gold", 0)
     for key, per_day in prod.items():
         before = res.get(key, 0)
@@ -138,12 +138,18 @@ def _apply_production_interval(player: dict, elapsed_days: float):
         stats = player.setdefault("stats", {})
         stats["gold_produced"] = stats.get("gold_produced", 0) + gold_added
 
-def daily_production(player: dict) -> dict:
+def effective_building_produces(player, bid, at=None):
+    from item_effects import building_item_percent
+    multiplier = 1 + building_item_percent(player, bid, at or now()) / 100
+    return {key: value * multiplier for key, value in building_produces(bid).items()}
+
+
+def daily_production(player: dict, at=None) -> dict:
     """تولید پایه + بونوس ساختمان‌ها (طبق مقادیرِ سراسریِ فعلی — پیش‌فرض یا بازنویسیِ
     ادمین) + مالیات (وابسته به جمعیت، نرخ و محبوبیت)"""
     prod = rule("economy.daily_production", DAILY_PRODUCTION)
     for bid, level in all_building_levels(player).items():
-        for k, v in building_produces(bid).items():
+        for k, v in effective_building_produces(player, bid, at).items():
             prod[k] = prod.get(k, 0) + v * level
 
     # دهکده فقط ظرفیت جمعیت را زیاد می‌کند؛ سرعت رشد خود جمعیت تابع محبوبیت است.
@@ -194,14 +200,21 @@ def apply_production(player: dict) -> dict:
             if st.get("upgrade_to") and ready and last < ready <= current:
                 boundaries.add(ready)
 
+    from item_effects import character_matches
+    for effect in player.get('item_effects', {}).values():
+        if character_matches(effect, player):
+            for field in ('starts_at', 'expires_at'):
+                boundary = normalize_datetime(effect.get(field))
+                if boundary and last < boundary <= current:
+                    boundaries.add(boundary)
     cursor = last
     for boundary in sorted(boundaries):
-        _apply_production_interval(player, (boundary - cursor).total_seconds() / 86400)
+        _apply_production_interval(player, (boundary - cursor).total_seconds() / 86400, cursor)
         for state in _building_states(player):
             resolve_building_upgrades_for(state, boundary)
         cursor = boundary
 
-    _apply_production_interval(player, (current - cursor).total_seconds() / 86400)
+    _apply_production_interval(player, (current - cursor).total_seconds() / 86400, cursor)
     for state in _building_states(player):
         resolve_building_upgrades_for(state, current)
     player["last_tick"] = current
