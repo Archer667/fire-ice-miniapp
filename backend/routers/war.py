@@ -1479,7 +1479,16 @@ async def notify_arrivals():
 
         owner_is_friendly = bool(target_owner and await players_are_friendly(c["tg_id"], target_owner["tg_id"]))
         hostile_castle = bool(target_owner and target_owner["tg_id"] != c["tg_id"] and not owner_is_friendly)
-        creates_battle = hostile_castle or (c["op_type"] in DIRECT_ATTACK_OP_TYPES and not owner_is_friendly) or opposing_army is not None
+        creates_battle = hostile_castle or opposing_army is not None
+        if not creates_battle and not target_owner and c['op_type'] in DIRECT_ATTACK_OP_TYPES:
+            # Unopposed arrival is stationing, never a victory or a battle dossier.
+            await campaigns.update_one({'_id': c['_id'], 'active': True}, {'$set': {
+                'op_type': 'garrison', 'arrival_notified': True, 'engagement_locked': False,
+                'unopposed_arrival_at': now(), 'unopposed_original_order': c['op_type'],
+            }})
+            await send_system_message(c['tg_id'], c['player_name'],
+                f"لشکر «{name}» در قلعهٔ بی‌صاحب {target} مستقر شد؛ مدافع متخاصمی حضور نداشت و نبرد یا پیروزی جنگی ثبت نشد.")
+            continue
         # تا وقتی نتیجهٔ نبرد قلعه ثبت نشده، مهاجم تازه پروندهٔ جدا نمی‌سازد؛ با
         # snapshot و زمان ورود مستقل به همان نبرد باز اضافه و قفل می‌شود.
         open_battle = None
