@@ -1828,6 +1828,9 @@ export const api = {
   adminScoreAmbush: (id, coefficient, ambushScore) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/ambushes/${id}/score`, { method: 'POST', body: JSON.stringify({ coefficient, ambush_score: ambushScore }) }),
   adminEditAmbush: (id, scenario, coefficient, ambushScore) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/ambushes/${id}`, { method: 'PUT', body: JSON.stringify({ scenario, coefficient, ambush_score: ambushScore }) }),
   adminDeleteAmbush: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/ambushes/${id}`, { method: 'DELETE' }),
+  adminRelocateCampaign: (id, destination, confirmBattleExit) => MOCK
+    ? Promise.reject(new Error('انتقال ادمینی در نسخهٔ نمایشی فعال نیست'))
+    : req(`/api/admin/campaigns/${id}/relocate`, { method: 'POST', body: JSON.stringify({ destination, confirm_battle_exit: confirmBattleExit }) }),
   adminPlayerCampaigns: (tgId) => MOCK ? Promise.resolve(M.adminPlayerCampaigns(tgId)) : req(`/api/admin/players/${tgId}/campaigns`),
   adminDisbandCampaign: (id) => MOCK ? Promise.resolve(M.adminDisbandCampaign(id)) : req(`/api/admin/campaigns/${id}/disband`, { method: 'POST' }),
   adminDestroyCampaign: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/destroy`, { method: 'POST' }),

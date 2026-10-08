@@ -2512,9 +2512,63 @@ async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_use
             "from": c["origin_castle"], "to": c["target_castle"],
             "troops": troops, "power": c.get("power", 0), "men_committed": c["men_committed"],
             "active": c.get("active", False),
+            "in_battle": bool(c.get("engagement_locked")),
+            "merge_group_id": str(c.get("merge_group_id") or ""),
             "arrived": (now() >= arrival_at) if arrival_at else True,
         })
     return out
+
+class RelocateCampaignBody(BaseModel):
+    destination: str
+    confirm_battle_exit: bool = False
+
+@router.post("/campaigns/{campaign_id}/relocate")
+async def admin_relocate_campaign(campaign_id: str, body: RelocateCampaignBody, user: dict = Depends(full_admin_user)):
+    from project_engine import game_state_lock
+    async with game_state_lock:
+        return await _relocate_campaign(campaign_id, body, user)
+
+async def _relocate_campaign(campaign_id, body, user):
+    from routers import war
+    try:
+        oid = ObjectId(campaign_id)
+    except Exception:
+        raise HTTPException(400, "شناسهٔ لشکر نامعتبر است") from None
+    army = await campaigns.find_one({'_id': oid, 'active': True})
+    if not army:
+        raise HTTPException(404, "لشکر فعال پیدا نشد")
+    destination = body.destination.strip()
+    names, _ = await war.all_castle_names_and_ports()
+    if destination not in names:
+        raise HTTPException(400, "قلعهٔ مقصد در نقشه وجود ندارد")
+    if army.get('merge_group_id'):
+        raise HTTPException(409, "ابتدا این لشکر را از لشکر مشترک جدا کن؛ انتقال یک عضو نباید محل بقیهٔ اعضا را تغییر دهد")
+    engaged = bool(army.get('engagement_locked') or (army.get('engagement_campaign_id') and not army.get('battle_left_at')))
+    if engaged and not body.confirm_battle_exit:
+        raise HTTPException(409, "خروج لشکر از نبرد یا محاصره را جداگانه تأیید کن")
+    change = await _remove_campaign_from_battle(army, "لشکر به فرمان ادمین به قلعهٔ دیگری منتقل شد.")
+    at = now()
+    fields = {'origin_castle': destination, 'target_castle': destination, 'op_type': 'garrison',
+              'route_path': [destination], 'route_segments': [], 'route_edge_minutes': [],
+              'travel_minutes': 0, 'moved_at': at, 'arrival_at': at, 'arrival_notified': True,
+              'engagement_locked': False, 'encounters_checked_at': at,
+              'admin_relocated_at': at, 'admin_relocated_by': user['id']}
+    unset = {key: '' for key in ('stationed_edge', 'stationed_at', 'route_start_position',
+             'returning_from_battle', 'return_destination_edge', 'battle_contact')}
+    # A departed root keeps its battle dossier until the remaining armies finish.
+    if not army.get('battle_is_root') or change.get('battle_closed'):
+        unset.update({key: '' for key in ('engagement_campaign_id', 'battle_root_campaign_id', 'battle_is_root',
+                     'battle_open', 'opponent_campaign_id', 'opponent_tg_id')})
+    result = await campaigns.update_one({'_id': oid, 'active': True}, {
+        '$set': fields, '$unset': unset,
+        '$push': {'movement_history': {**{k: army.get(k) for k in ('origin_castle','target_castle','route_path','route_segments','route_edge_minutes','route_start_position','created_at','moved_at','arrival_at')},
+                  'reason': 'admin_relocation', 'ended_at': at, 'admin_id': user['id'], 'destination': destination}}})
+    if not result.matched_count:
+        raise HTTPException(409, "وضعیت لشکر تغییر کرده؛ صفحه را تازه کن")
+    owner = await players.find_one({'tg_id': army['tg_id']}, {'tg_id': 1, 'name': 1})
+    if owner:
+        await send_system_message(owner['tg_id'], owner['name'], f"لشکر «{army.get('name', 'بی‌نام')}» به فرمان ادمین فوراً به {destination} منتقل شد؛ نیروها و تجهیزات حفظ شدند.")
+    return {'ok': True, 'destination': destination, 'battle_closed': change.get('battle_closed', False)}
 
 @router.post("/campaigns/{campaign_id}/disband")
 async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_admin_user)):

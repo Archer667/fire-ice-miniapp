@@ -12,6 +12,7 @@ import { haptic } from '../telegram.js';
 import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse, Swords } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
+import AdminArmyRelocation from '../components/AdminArmyRelocation.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import AdminControlCenter from '../components/AdminControlCenter.jsx';
@@ -3091,6 +3092,7 @@ export default function Admin() {
                     <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
                       نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
                     </div>
+                    {c.active && <AdminArmyRelocation army={c} toast={toast} onMoved={() => { api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message)); loadCampaigns(); loadBattles(); }} />}
                     {c.active && <div style={{ padding: 10, border: '1px solid var(--line)', borderRadius: 12, marginBottom: 9 }}>
                       <div style={{ fontSize: 11.5, fontWeight: 800, marginBottom: 6 }}>ثبت تلفات مستقیم (بدون بازپرداخت)</div>
                       {c.troops.map(t => <div className="troop" key={t.id}>
