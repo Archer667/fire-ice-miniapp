@@ -756,7 +756,7 @@ async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = F
     from routers.war import notify_campaign_departure
     for member, plan in plans:
         await campaigns.update_one({'_id': member['_id'], 'active': True}, {
-            '$set': plan, '$unset': {'stationed_edge': '', 'stationed_at': '', 'route_start_position': '', 'battle_contact': ''},
+            '$set': plan, '$unset': {'stationed_edge': '', 'stationed_at': '', 'battle_contact': '', **({'route_start_position': ''} if 'route_start_position' not in plan else {})},
             '$push': {'movement_history': {**{k: member.get(k) for k in ('origin_castle', 'target_castle', 'route_path', 'route_segments', 'route_edge_minutes', 'created_at', 'moved_at', 'arrival_at')}, 'reason': 'battle_return', 'ended_at': timestamp}}})
         await notify_campaign_departure({**member, **plan})
     return changed
@@ -1608,7 +1608,10 @@ async def list_pending_players(user: dict = Depends(admin_user)):
 async def list_roster(user: dict = Depends(full_admin_user)):
     """همهٔ بازیکن‌های خاندان‌دار — برای مرور، حذف از خاندان یا تخصیص دوباره"""
     out = []
-    cur = players.find({"$or": [{"region": {"$ne": None}, "castle": {"$ne": None}}, {"is_dead": True}]}).sort("name", 1)
+    cur = players.find({"$or": [{"region": {"$ne": None}, "castle": {"$ne": None}}, {"is_dead": True}]},
+        {"tg_id": 1, "name": 1, "created_at": 1, "is_dead": 1, "death_snapshot.castle": 1,
+         "death_snapshot.region": 1, "title": 1, "telegram_username": 1, "region": 1,
+         "castle": 1, "is_port": 1, "house": 1, "castle_buildings": 1}).sort("name", 1)
     async for p in cur:
         if p.get("is_dead"):
             p = {**p, "castle": p.get("death_snapshot", {}).get("castle"), "region": p.get("death_snapshot", {}).get("region")}
@@ -3244,9 +3247,8 @@ async def award_special_medal(tg_id: int, body: SpecialMedalBody, user: dict = D
 async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None, formation_losses=None):
     from battle_returns import return_plan
     from routers import war
-    plan = return_plan(army, battle_id, at, war.TRAVEL_GRAPH, cancelled=cancelled)
-    if plan is not None or cancelled:
-        return plan
+    if cancelled:
+        return return_plan(army, battle_id, at, war.TRAVEL_GRAPH, cancelled=True)
     if army.get('merge_group_id'):
         from army_groups import group_for, members, totals
         group = await group_for(str(army['_id']))
@@ -3261,6 +3263,10 @@ async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None,
             army={**army,'troops':ts,'equipment':eq,'commander_present':any(a.get('commander_present') for a in rows)}
             destinations={**(destinations or {}),str(army['tg_id']):next(iter(choices),'')}
     destination = (destinations or {}).get(str(army['tg_id']), '').strip()
+    # Older callers without an explicit order retain the recorded return route.
+    # A selected retreat destination always takes precedence, even after travel.
+    if not destination and not destinations:
+        return return_plan(army, battle_id, at, war.TRAVEL_GRAPH, cancelled=False)
     origin = army.get('target_castle')
     if not destination or destination == origin:
         raise ValueError(f"برای لشکر بازندهٔ {army.get('player_name', '')} مقصد عقب‌نشینیِ متفاوت از محل نبرد را تعیین کن")
@@ -3271,7 +3277,18 @@ async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None,
     troops = army.get('troops', {})
     capacity = sum(war.NAVAL_TROOPS[k]['capacity'] * int(v or 0) for k, v in troops.items() if k in war.NAVAL_TROOPS)
     men = sum(int(v or 0) for k, v in troops.items() if k not in war.NAVAL_TROOPS)
-    routes = war.travel_routes(origin, destination, frozenset(), terrain=terrain, allow_sea=capacity >= men)
+    road_point = army.get('stationed_edge')
+    if road_point:
+        from road_positions import endpoint_route
+        try:
+            route = endpoint_route(army, destination, terrain)
+        except HTTPException as exc:
+            raise ValueError(exc.detail) from None
+        if route.get('via_sea') and capacity < men:
+            raise ValueError('کشتی‌های لشکر ظرفیت کافی برای عقب‌نشینی دریایی ندارند')
+        routes = [route]
+    else:
+        routes = war.travel_routes(origin, destination, frozenset(), terrain=terrain, allow_sea=capacity >= men)
     if not routes:
         raise ValueError('مسیر قابل پیمایش برای عقب‌نشینی به این قلعه وجود ندارد')
     route = routes[0]
@@ -3282,6 +3299,7 @@ async def _plan_battle_return(army, battle_id, at, cancelled, destinations=None,
         minutes = max(0, round(minutes * (1 - float(war.rule('movement.commander_speed_bonus_percent',10))/100)))
     return {'origin_castle': origin, 'target_castle': destination, 'op_type': 'garrison',
             'route_path': route['path'], 'route_segments': [],
-            'route_edge_minutes': [war.TRAVEL_GRAPH[a][b] for a,b in zip(route['path'],route['path'][1:])],
+            'route_edge_minutes': ([route['minutes']] if road_point else [war.TRAVEL_GRAPH[a][b] for a,b in zip(route['path'],route['path'][1:])]),
+            **({'route_start_position': road_point} if road_point else {}),
             'travel_minutes': minutes, 'moved_at': at, 'arrival_at': at + timedelta(minutes=minutes),
             'returning_from_battle': battle_id, 'return_destination_edge': None, 'arrival_notified': False}

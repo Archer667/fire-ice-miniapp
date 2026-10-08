@@ -8,13 +8,13 @@ import { castleLabel, CASTLE_EN_NAMES } from '../gamedata.js';
  * درخواستِ خاندان موقع ثبت‌نام، چون خاندانِ اول‌اولویتِ بازیکن ممکنه از قبل
  * اشغال شده باشه و ادمین لازمه بدونه بعدی‌هاش چی‌ان. جست‌وجو هم می‌شه کرد، ولی
  * بدونِ تایپ‌کردن هم همهٔ قلعه‌ها (با اسمِ خاندانشون) دیده می‌شن. */
-export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...', regionStates = [], allowOccupied = false, excludedCastles = [] }) {
+export default function CastlePicker({ value, onChange, max = 5, placeholder = 'اسم قلعه یا شهر را جست‌وجو کن، یا از لیست انتخاب کن...', regionStates = [], allowOccupied = false, excludedCastles = [], mapData = null }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(null);
 
   useEffect(() => {
-    api.map().then(data => {
+    Promise.resolve(mapData || api.map()).then(data => {
       const list = [];
       for (const r of data.regions) {
         for (const c of r.castles) {
@@ -24,7 +24,7 @@ export default function CastlePicker({ value, onChange, max = 5, placeholder = '
       list.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
       setAll(list);
     }).catch(() => setAll([]));
-  }, []);
+  }, [mapData]);
 
   const q = query.trim().toLowerCase();
   const results = (all || [])

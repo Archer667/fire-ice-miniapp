@@ -5,7 +5,7 @@ import BattleExport from '../components/BattleExport.jsx';
 import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
 import { gameNow } from '../gameClock.js';
 import { syncGameClock } from '../gameClock.js';
-import { useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -191,6 +191,9 @@ export default function Admin() {
   const [castleReportBusy, setCastleReportBusy] = useState(false);
   const [castleReport, setCastleReport] = useState('');
   const [rosterQuery, setRosterQuery] = useState('');
+  const deferredRosterQuery = useDeferredValue(rosterQuery);
+  const [rosterLimit, setRosterLimit] = useState(25);
+  useEffect(() => { setRosterLimit(25); }, [deferredRosterQuery]);
   const [registrationSettings, setRegistrationSettings] = useState(null);
   const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
   const [reassignOpenId, setReassignOpenId] = useState(null);
@@ -1566,10 +1569,10 @@ export default function Admin() {
     return 0;
   };
 
-  const normalizedRosterQuery = rosterQuery.trim().toLocaleLowerCase('fa-IR');
-  const visibleRoster = !normalizedRosterQuery ? (roster || []) : (roster || []).filter(player => [
+  const normalizedRosterQuery = deferredRosterQuery.trim().toLocaleLowerCase('fa-IR');
+  const visibleRoster = useMemo(() => !normalizedRosterQuery ? (roster || []) : (roster || []).filter(player => [
     player.name, player.telegram_username, player.region_name, player.castle, ...(player.castles || []),
-  ].some(value => String(value || '').toLocaleLowerCase('fa-IR').includes(normalizedRosterQuery)));
+  ].some(value => String(value || '').toLocaleLowerCase('fa-IR').includes(normalizedRosterQuery))), [roster, normalizedRosterQuery]);
 
   if (!me.admin_role) {
     return (
@@ -1899,7 +1902,7 @@ export default function Admin() {
             {roster && visibleRoster.length === 0 && normalizedRosterQuery && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>چیزی با این عبارت پیدا نشد</div>
             )}
-            {roster && visibleRoster.map(p => {
+            {roster && visibleRoster.slice(0, rosterLimit).map(p => {
               const regionId = assignRegion[p.tg_id] || p.region || Object.keys(REGIONS_STATIC)[0];
               const region = REGIONS_STATIC[regionId];
               const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
@@ -1971,7 +1974,7 @@ export default function Admin() {
                         قلعهٔ اضافه — پایگاهِ دومِ کاملِ این بازیکن؛ از هر اقلیمی می‌تونه باشه. اگه الان دستِ بازیکنِ
                         دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، با ساختمان‌هایش منتقل می‌شود؛ فقط در حالت فتح، آمار فتح و پیروزی اضافه می‌شود.
                       </div>
-                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker value={addCastleValue} onChange={setAddCastleValue} max={1} allowOccupied excludedCastles={[p.castle, ...(p.castles || [])].filter(Boolean)} />
+                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker mapData={mapData} value={addCastleValue} onChange={setAddCastleValue} max={1} allowOccupied excludedCastles={[p.castle, ...(p.castles || [])].filter(Boolean)} />
                       <button className="btn" style={{ marginTop: 14 }} disabled={addCastleBusyId === p.tg_id} onClick={() => addCastle(p.tg_id)}>
                         {addCastleBusyId === p.tg_id ? 'در حال ثبت...' : 'افزودن'}
                       </button>
@@ -1980,6 +1983,7 @@ export default function Admin() {
                 </div>
               );
             })}
+            {visibleRoster.length > rosterLimit && <button className="btn ghost" onClick={() => setRosterLimit(n => n + 25)}>نمایش ۲۵ خاندان بعدی</button>}
           </div>
         </>
       )}
