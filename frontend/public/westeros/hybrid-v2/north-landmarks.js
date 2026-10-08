@@ -31,25 +31,28 @@ export function wallEndpoints(rows) {
 }
 
 export function createIceSurface() {
-  const canvas=document.createElement('canvas');canvas.width=2048;canvas.height=1024;
-  const ctx=canvas.getContext('2d'),image=ctx.createImageData(2048,1024);
-  const hash=(x,y)=>{let n=Math.imul(x,374761393)+Math.imul(y,668265263);n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967295;};
-  const noise=(x,y)=>{const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy,s=fx*fx*(3-2*fx),t=fy*fy*(3-2*fy);return (hash(ix,iy)*(1-s)+hash(ix+1,iy)*s)*(1-t)+(hash(ix,iy+1)*(1-s)+hash(ix+1,iy+1)*s)*t;};
-  for(let y=0;y<1024;y++)for(let x=0;x<2048;x++){
-    const h=y/1024,bend=noise(x*.008,y*.007)*18;
-    const erosion=noise((x+bend)*.065,y*.003),cloud=noise(x*.023,y*.034),fine=noise(x*.16,y*.12);
-    const strata=Math.pow(Math.abs(Math.sin(y*.058+noise(x*.006,y*.008)*5)),12);
-    const shade=.36+.30*h+.22*erosion+.10*cloud+.035*fine-strata*.09;
-    const at=(y*2048+x)*4;
-    image.data[at]=Math.min(255,185*shade+45*h*h);image.data[at+1]=Math.min(255,226*shade+32*h*h);image.data[at+2]=Math.min(255,248*shade+20*h*h);image.data[at+3]=255;
+  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=512;
+  const ctx=canvas.getContext('2d'),image=ctx.createImageData(canvas.width,canvas.height);
+  const fract=n=>n-Math.floor(n),hash=n=>fract(Math.sin(n*127.1+311.7)*43758.5453);
+  const noise=x=>{const i=Math.floor(x),f=x-i,s=f*f*(3-2*f);return hash(i)*(1-s)+hash(i+1)*s;};
+  for(let y=0;y<512;y++)for(let x=0;x<1024;x++){
+    const bend=Math.sin(y*.009+x*.002)*6+Math.sin(y*.023)*2;
+    const bands=noise((x+bend)*.029)*.55+noise((x+bend)*.092)*.30+noise((x+bend)*.28)*.15;
+    const grain=hash(x+y*1024)-.5,cloud=noise(x*.011+y*.026);
+    const frost=noise(x*.17+y*.19)*noise(x*.07-y*.13);
+    const shade=.63+bands*.30+cloud*.055+grain*.028+(frost-.25)*.065;
+    const at=(y*1024+x)*4;
+    image.data[at]=Math.round(206*shade);image.data[at+1]=Math.round(235*shade);image.data[at+2]=Math.round(250*shade);image.data[at+3]=255;
   }
   ctx.putImageData(image,0,0);
-  for(let i=0;i<180;i++){
-    let x=hash(i,73)*2048,y=hash(i,112)*1024;
+  // Cracks branch and fade into the ice instead of repeating across each slab.
+  for(let i=0;i<93;i++){
+    let x=hash(i+73)*1024,y=hash(i+112)*512;
     ctx.beginPath();ctx.moveTo(x,y);
-    for(let j=0;j<7;j++){x+=(hash(i,j)-.5)*36;y+=9+hash(i+20,j)*25;ctx.lineTo(x,y);}
-    ctx.strokeStyle='rgba(25,66,89,.38)';ctx.lineWidth=.7+hash(i,37)*2;ctx.stroke();
-    ctx.translate(1.5,0);ctx.strokeStyle='rgba(228,249,255,.46)';ctx.lineWidth=.8;ctx.stroke();ctx.translate(-1.5,0);
+    const steps=3+Math.floor(hash(i+199)*6);
+    for(let j=0;j<steps;j++){x+=(hash(i*17+j)-.5)*25;y+=13+hash(i*9+j)*24;ctx.lineTo(x,y);}
+    ctx.strokeStyle='rgba(57,103,132,.34)';ctx.lineWidth=.7+hash(i+37)*1.5;ctx.stroke();
+    ctx.strokeStyle='rgba(232,250,255,.32)';ctx.lineWidth=.65;ctx.translate(1.5,0);ctx.stroke();ctx.translate(-1.5,0);
   }
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,8,8);
   return canvas;
@@ -57,7 +60,7 @@ export function createIceSurface() {
 
 export function buildIceWall({east,west}, sampleHeight) {
   const packed=[],indices=[],uv=[];
-  const depth=.011,height=.057,segments=128,layers=12;
+  const depth=.011,height=.057,segments=96,layers=8;
   const portals=[.025,.55,.975];
   function face(a,b,c,d,color,ice=false){
     const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
@@ -65,7 +68,7 @@ export function buildIceWall({east,west}, sampleHeight) {
     n=n.map(v=>v/length);const offset=packed.length/10;
     for(const p of [a,b,c,d]){
       packed.push(...p,...n,...color,1);
-      uv.push(...(ice?[.015+.97*(p[0]-west.x)/(east.x-west.x),.025+.94*(p[1]-.032)/.067]:[.003,.006]));
+      uv.push(...(ice?[.015+.97*(p[0]-west.x)/(east.x-west.x),.03+.94*(p[1]-.032)/.080]:[.003,.006]));
     }
     indices.push(offset,offset+1,offset+2,offset,offset+2,offset+3);
   }
@@ -80,11 +83,11 @@ export function buildIceWall({east,west}, sampleHeight) {
     const t=i/segments,x=west.x+(east.x-west.x)*t;
     const z=west.z+(east.z-west.z)*t+Math.sin(t*Math.PI)*Math.sin(t*7)*.0015;
     const base=sampleHeight(x,z)?.height??.037;
-    const top=west.y+(east.y-west.y)*t+height+Math.sin(t*Math.PI)*.003+Math.sin(t*103)*.00045+Math.sin(t*211)*.00025;
+    const top=west.y+(east.y-west.y)*t+height+Math.sin(t*Math.PI)*.003;
     return {x,z,base,top,t};
   });
   const point=(p,f,side=1)=>{
-    const swell=Math.sin(p.t*49+f*2)*.0012+Math.sin(p.t*113-f*7)*.0007+Math.sin(p.t*227+f*31)*.00035;
+    const swell=Math.sin(p.t*49+f*2)*.0006+Math.sin(p.t*113-f*7)*.0003;
     return [p.x,p.base+(p.top-p.base)*f,p.z+side*(depth*(1-.36*f)+swell)];
   };
   for(let i=0;i<segments;i++){
@@ -97,28 +100,54 @@ export function buildIceWall({east,west}, sampleHeight) {
       face(point(b,f,-1),point(a,f,-1),point(a,g,-1),point(b,g,-1),[.93,.98,1],true);
     }
     face(point(a,1,-1),point(a,1),point(b,1),point(b,1,-1),[.93,.97,1]);
-    // Local ice shelves break up the face without a continuous artificial skirt.
-    if(i%7===2||i%11===4){
-      const f=.18+(.5+.5*Math.sin(i*1.73))*.62;
-      const c=point(a,f),d=point(b,f);
-      face(c,d,[d[0],d[1]+.001,d[2]+.0005],[c[0],c[1]+.0006,c[2]+.0007],[.88,.96,1],true);
+    // Uneven snow shoulders soften the cliff's base and crest.
+    const mound=.0015+(1+Math.sin(i*.81))*.0012;
+    face([a.x,a.base-.0006,a.z+depth+.003+(Math.sin(i*.63)+1)*.0008],[b.x,b.base-.0006,b.z+depth+.003+(Math.sin((i+1)*.63)+1)*.0008],point(b,.09),point(a,.09),[.87,.94,.98]);
+    const c=point(a,1),d=point(b,1);
+    face([c[0],c[1]-.002,c[2]+.0018],[d[0],d[1]-.002,d[2]+.0018],[d[0],d[1]+mound*.15,d[2]],[c[0],c[1]+mound*.15,c[2]],[.97,.99,1]);
+    if(i%5===2){
+      const x=a.x+.0007,z=c[2]+.0017,tip=.006+(.5+.5*Math.sin(i*2.71))*.009;
+      face([x-.0006,c[1]-.001,z],[x+.0006,c[1]-.001,z],[x+.00015,c[1]-tip,z+.0003],[x-.0001,c[1]-tip*.75,z],[.79,.92,.99]);
     }
   }
   for(const a of [nodes[0],nodes.at(-1)])face(point(a,0,-1),point(a,0),point(a,1),point(a,1,-1),[.92,.97,1],true);
   const timber=[.16,.13,.11],frost=[.78,.87,.90];
+  // Patrol walkway with wooden rails, instead of castle-like ice battlements.
+  for(let i=0;i<segments;i+=3){
+    const a=nodes[i],b=nodes[Math.min(segments,i+3)],z=a.z+depth*.48;
+    box(a.x,a.top+.0003,z,.00035,.0035,.0004,timber);
+    face([a.x,a.top+.003,z],[b.x,b.top+.003,b.z+depth*.48],[b.x,b.top+.0036,b.z+depth*.48],[a.x,a.top+.0036,z],timber);
+  }
   for(const t of portals){
     const a=nodes[Math.round(t*segments)],front=a.z+depth+.0004,y=a.base;
-    box(a.x-.0034,y,front,.0008,.011,.001,[.30,.37,.40]);
-    box(a.x+.0034,y,front,.0008,.011,.001,[.30,.37,.40]);
-    box(a.x,y+.010,front,.0041,.001,.001,frost);
-    for(let k=-2;k<=2;k++)box(a.x+k*.001,y,front-.0012,.00018,.010,.00016,[.09,.12,.14]);
+    // Frozen stone gate surround and iron portcullis inside the tunnel.
+    box(a.x-.0034,y,front,.0008,.015,.001,[.43,.51,.53]);
+    box(a.x+.0034,y,front,.0008,.015,.001,[.43,.51,.53]);
+    box(a.x,y+.013,front,.0041,.0015,.001,frost);
+    for(let k=-2;k<=2;k++)box(a.x+k*.001,y,front-.0012,.00018,.013,.00016,[.11,.15,.16]);
+    // Three compact watch platforms and exposed timber lift towers.
+    const px=a.x+.009,pz=a.z+depth+.006;
+    for(const dx of [-.002,.002]){
+      box(px+dx,y,pz,.00032,a.top-y+.006,.0004,timber);
+      box(px+dx,a.top+.001,a.z,.0003,.010,.00035,timber);
+    }
+    box(px,a.top+.002,a.z,.0032,.001,.004,timber);
+    const roof=a.top+.014;
+    face([px-.004,roof-.002,a.z-.005],[px+.004,roof-.002,a.z-.005],[px+.004,roof,a.z],[px-.004,roof,a.z],[.22,.25,.25]);
+    face([px-.004,roof,a.z],[px+.004,roof,a.z],[px+.004,roof-.002,a.z+.005],[px-.004,roof-.002,a.z+.005],[.81,.9,.94]);
+    box(px,y+.006,pz,.0022,.0025,.002,timber);
+    // Ladder rungs, iron bindings and small service landings.
+    const liftHeight=a.top-y;
+    for(let k=1;k<27;k++)box(px,y+k*liftHeight/27,pz+.00045,.0021,.00018,.00025,[.30,.25,.19]);
+    for(let k=1;k<5;k++){
+      const level=y+k*liftHeight/5;
+      for(const dx of [-.002,.002])box(px+dx,level,pz+.0004,.00046,.00065,.00025,[.32,.36,.37]);
+      box(px,level,pz-.0004,.0026,.00035,.0015,timber);
+      face([px-.002,level,pz],[px-.0016,level,pz],[px+.002,level+liftHeight/5-.001,pz],[px+.0016,level+liftHeight/5-.001,pz],[.25,.20,.15]);
+    }
+    for(const dx of [-.0017,.0017])box(px+dx,y+.008,pz+.002,.00018,.003,.00018,[.31,.34,.34]);
+    box(px,y+.0105,pz+.002,.0019,.0003,.0002,timber);
   }
-  // Castle Black's enclosed lift is a slender dark shaft attached to the ice.
-  const a=nodes[Math.round(.55*segments)],px=a.x+.007,pz=a.z+depth*.72+.001;
-  box(px,a.base,pz,.00125,a.top-a.base+.001,.00065,[.10,.14,.16]);
-  for(const dx of [-.00135,.00135])box(px+dx,a.base,pz+.0007,.00018,a.top-a.base+.002,.0002,[.28,.32,.32]);
-  box(px,a.base+.009,pz+.001,.0016,.0035,.001,[.18,.20,.19]);
-  box(px,a.top-.001,pz,.0017,.002,.001,[.24,.28,.28]);
   return {packed:new Float32Array(packed),indices:new Uint32Array(indices),uv:new Float32Array(uv),nodes};
 }
 
@@ -145,7 +174,7 @@ function ensureNorthWall(){
  if(!northWallTexture){northWallTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,northWallTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,window.valyriaNorth.createIceSurface());gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);}
 
  const ib=gl.createBuffer();northWallBuffers.push({buffer:ib});gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,mesh.indices,gl.STATIC_DRAW);
- groups.push({isCastle:true,permanentNature:true,northWall:true,vao,count:mesh.indices.length,type:gl.UNSIGNED_INT,base:[1,1,1],emission:[.20,.22,.24],texture:northWallTexture,opacity:1});
+ groups.push({isCastle:true,permanentNature:true,northWall:true,vao,count:mesh.indices.length,type:gl.UNSIGNED_INT,base:[1,1,1],emission:[.26,.28,.30],texture:northWallTexture,opacity:1});
  northWallNodes=mesh.nodes;northWallKey=key;
 }
 function fetchNorthSnow(key,path,done){if(northSnowPending.has(key))return;northSnowPending.add(key);mapAsset(path).then(b=>createImageBitmap(new Blob([b],{type:'image/webp'}))).then(im=>{northSnowPending.delete(key);done(im);paintHybridGround()}).catch(()=>northSnowPending.delete(key))}
