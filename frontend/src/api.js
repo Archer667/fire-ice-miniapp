@@ -1559,6 +1559,13 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  adminTimeWorkers: settings => req('/api/admin/time/workers',{method:'PUT',body:JSON.stringify(settings)}),
+  adminTimeOverview: () => req('/api/admin/time'),
+  adminTimeTimers: (kind,page) => req(`/api/admin/time/timers?kind=${encodeURIComponent(kind)}&page=${page}`),
+  adminTimeDisplay: timezone => req('/api/admin/time/display',{method:'PUT',body:JSON.stringify({timezone})}),
+  adminTimeSeason: (day,reason) => req('/api/admin/time/season',{method:'PUT',body:JSON.stringify({day,reason})}),
+  adminTimeRebellion: (id,remaining_minutes,expected_internal_at,reason) => req(`/api/admin/time/rebellions/${id}`,{method:'PUT',body:JSON.stringify({remaining_minutes,expected_internal_at,reason})}),
+
   characterProfile: () => req('/api/character/profile'),
   submitCharacterProfile: body => req('/api/character/profile',{method:'POST',body:JSON.stringify(body)}),
   adminCharacterProfiles: () => req('/api/admin/character-profiles'),

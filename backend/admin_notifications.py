@@ -79,7 +79,8 @@ async def notify_admins(
 async def notify_admin_deadlines():
     """یادآوری کنترل‌شده برای پرونده‌هایی که کمتر از دو ساعت تا پایان مهلت‌شان مانده."""
     current = now()
-    soon = current + timedelta(hours=2)
+    from game_clock import timing
+    soon = current + timedelta(hours=timing('deadline_warning_hours'))
 
     async for row in rebellions.find({
         "status": {"$in": ["awaiting_roleplay", "roleplay_submitted"]},
@@ -88,9 +89,9 @@ async def notify_admin_deadlines():
         await notify_admins(
             "rebellion_deadline",
             "⏳ مهلت شورش رو به پایان است",
-            f"{row.get('player_name', 'بازیکن')} در {row.get('castle') or 'قلعه نامشخص'} کمتر از دو ساعت فرصت دارد."
+            f"{row.get('player_name', 'بازیکن')} در {row.get('castle') or 'قلعه نامشخص'} کمتر از {timing('deadline_warning_hours'):g} ساعت فرصت دارد."
             + (" رولش را فرستاده و منتظر داوری است." if row.get("status") == "roleplay_submitted" else " هنوز رولش را نفرستاده."),
-            dedupe_key=f"rebellion-deadline:{row['_id']}",
+            dedupe_key=f"rebellion-deadline:{row['_id']}:{row['deadline'].isoformat()}",
             priority="high",
             player_name=row.get("player_name"),
             player_tg_id=row.get("tg_id"),

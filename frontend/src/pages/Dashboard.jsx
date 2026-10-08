@@ -303,7 +303,7 @@ export default function Dashboard({ goTo }) {
               <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(180,35,35,.14)', border: '1px solid rgba(255,90,90,.35)' }}>
                 <div style={{ fontWeight: 900, color: 'var(--danger)' }}>🔥 شورش در قلمرو</div>
                 <div className="page-sub" style={{ marginTop: 6 }}>
-                  مهلت ارسال رول: {new Date(rebellion.active.deadline).toLocaleString('fa-IR')}
+                  مهلت ارسال رول{rebellion.active.deadline_info?.paused ? ' (پس از ادامهٔ بازی؛ تخمینی)' : ''}: {new Date(rebellion.active.deadline).toLocaleString('fa-IR', { timeZone: rebellion.active.display_timezone || 'Asia/Tehran' })}
                 </div>
                 {rebellion.active.status === 'awaiting_roleplay' ? (
                   <>

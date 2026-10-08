@@ -1,3 +1,4 @@
+import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
 import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
 import AdminMapManagement from '../components/AdminMapManagement.jsx';
 import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
@@ -137,6 +138,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      {key:'time_management',label:'زمان و تقویم',description:'ساعت‌ها، منطقهٔ نمایش و اصلاح مهلت‌ها',fullOnly:true},
       {key:'map_management',label:'مدیریت نقشه',description:'جانمایی، مدل بناها، فصل و انتشار نقشه',fullOnly:true},
       { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
       { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
@@ -2472,6 +2474,7 @@ export default function Admin() {
       )}
 
       {tab === 'character_profiles' && isFull && <AdminCharacterProfiles toast={toast}/>}
+      {tab === 'time_management' && isFull && <AdminTimeManagement toast={toast}/>}
       {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
 
       {tab === 'titles' && (

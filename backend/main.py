@@ -133,6 +133,8 @@ app.include_router(family_router.router)
 app.include_router(reports_router)
 app.include_router(projects_router.router)
 app.include_router(pause_router.router)
+from time_management import router as time_router
+app.include_router(time_router)
 from routers import characters as characters_router
 app.include_router(characters_router.router)
 app.include_router(players.router)
@@ -199,7 +201,7 @@ async def _arrival_watcher():
                     await evaluate_rebellions()
         except Exception:
             logger.exception("arrival watcher tick failed")
-        await asyncio.sleep(30)
+        await asyncio.sleep(game_clock.timing('arrival_poll_seconds'))
 
 async def _project_watcher():
     while True:
@@ -216,7 +218,7 @@ async def _project_watcher():
                     await tick_projects()
         except Exception:
             logger.exception('project watcher tick failed')
-        await asyncio.sleep(15)
+        await asyncio.sleep(game_clock.timing('project_poll_seconds'))
 
 async def _market_watcher():
     """هر ۵ دقیقه قیمت‌های بازار وستروس را کمی نوسان می‌دهد"""
@@ -234,7 +236,7 @@ async def _market_watcher():
                     await drift_market_prices()
         except Exception:
             logger.exception("market watcher tick failed")
-        await asyncio.sleep(300)
+        await asyncio.sleep(game_clock.timing('market_poll_seconds'))
 
 async def _ensure_indexes():
     from db import db

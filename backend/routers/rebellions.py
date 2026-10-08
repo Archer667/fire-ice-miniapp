@@ -11,6 +11,7 @@ from auth import get_user, get_admin, get_full_admin, get_owner
 from config import POPULARITY_START, tax_yield_multiplier
 from db import players, rebellions, rebellion_checks, game_settings
 from game import now
+from time_management import deadline_view, display_zone
 from routers.ravens import send_system_message
 from admin_notifications import notify_admins
 from control_settings import get as rule
@@ -204,8 +205,15 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     if triggered:
         await _trigger_rebellion(player, popularity, chance, roll, settings)
 
+async def expire_roleplay_deadlines():
+    current = now()
+    async for r in rebellions.find({"status": {"$in": ["awaiting_roleplay", "roleplay_submitted"]}, "deadline": {"$lte": current}}):
+        await rebellions.update_one({"_id": r["_id"]}, {"$set": {"status": "expired"}})
+        await _notify_admins(f"⌛ مهلت رول شورش {r['player_name']} در {r.get('castle') or 'قلمرو'} تمام شد.")
+
 async def evaluate_rebellions():
     global _last_evaluation_hour
+    await expire_roleplay_deadlines()
     hour_key = now().strftime("%Y-%m-%d-%H")
     if _last_evaluation_hour == hour_key:
         return
@@ -215,9 +223,6 @@ async def evaluate_rebellions():
         return
     current = now()
     day_key = current.strftime("%Y-%m-%d")
-    async for r in rebellions.find({"status": {"$in": ["awaiting_roleplay", "roleplay_submitted"]}, "deadline": {"$lte": current}}):
-        await rebellions.update_one({"_id": r["_id"]}, {"$set": {"status": "expired"}})
-        await _notify_admins(f"⌛ مهلت رول شورش {r['player_name']} در {r.get('castle') or 'قلمرو'} تمام شد.")
     async for player in players.find({"region": {"$ne": None}, "castle": {"$ne": None}}):
         await evaluate_player(player, settings, day_key)
 
@@ -283,7 +288,7 @@ async def status(user: dict = Depends(get_user)):
         "guaranteed_popularity": settings["guaranteed_popularity"],
         "high_risk_popularity": settings["high_risk_popularity"],
         "active": None if not active else {
-            "id": str(active["_id"]), "status": active["status"], "deadline": active["deadline"].isoformat(),
+            "id": str(active["_id"]), "status": active["status"], "deadline": deadline_view(active["deadline"])["display_at"], "deadline_info": deadline_view(active["deadline"]), "display_timezone": await display_zone(),
             "roleplay_text": active.get("roleplay_text"), "result": active.get("result"),
         },
     }
@@ -353,7 +358,7 @@ async def admin_list(user: dict = Depends(admin_user)):
             "id": str(r["_id"]), "tg_id": r["tg_id"], "player_name": r["player_name"],
             "castle": r.get("castle"), "popularity": r["popularity"], "chance": r["chance"],
             "roll": r["roll"], "status": r["status"], "roleplay_text": r.get("roleplay_text"),
-            "deadline": r["deadline"].isoformat(), "result": r.get("result"),
+            "deadline": deadline_view(r["deadline"])["display_at"], "deadline_info": deadline_view(r["deadline"]), "result": r.get("result"),
         })
     return out
 

@@ -4,6 +4,11 @@ from db import game_settings
 
 _state = {}
 
+TIMING_DEFAULTS = {'arrival_poll_seconds':30, 'project_poll_seconds':15, 'market_poll_seconds':300, 'deadline_warning_hours':2}
+
+def timing(key):
+    return _state.get('timing', {}).get(key, TIMING_DEFAULTS[key])
+
 def real_now():
     return datetime.utcnow()
 
@@ -37,7 +42,7 @@ async def change(stop, reason, actor):
         checkpoints.append({'game_at': current - timedelta(seconds=offset), 'offset_seconds': offset})
     state = {'paused_at': current if stop else None, 'offset_seconds': offset,
              'reason': reason if stop else '', 'changed_by': actor, 'changed_at': current,
-             'display_checkpoints': checkpoints}
+             'display_checkpoints': checkpoints, 'timing':_state.get('timing', {})}
     await game_settings.update_one({'_id': 'game_clock'}, {'$set': state}, upsert=True)
     _state = state
     return status()
