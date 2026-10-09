@@ -2524,9 +2524,8 @@ class RelocateCampaignBody(BaseModel):
 
 @router.post("/campaigns/{campaign_id}/relocate")
 async def admin_relocate_campaign(campaign_id: str, body: RelocateCampaignBody, user: dict = Depends(full_admin_user)):
-    from project_engine import game_state_lock
-    async with game_state_lock:
-        return await _relocate_campaign(campaign_id, body, user)
+    # The API middleware already holds the game lock for this request.
+    return await _relocate_campaign(campaign_id, body, user)
 
 async def _relocate_campaign(campaign_id, body, user):
     from routers import war
