@@ -1,3 +1,4 @@
+import AdminInstitutions from '../components/AdminInstitutions.jsx';
 import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
 import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
 import AdminMapManagement from '../components/AdminMapManagement.jsx';
@@ -77,6 +78,8 @@ const MAP_KINDS = [
 
 // هر تب توضیح کوتاه و سطح دسترسی خودش را دارد تا ادمین تازه‌کار هم مسیر را گم نکند
 const TAB_GROUPS = [
+  {key:'institutions',label:'مدیریت نهادها',description:'مدیران، خزانه و قراردادهای نهادها',tabs:[{key:'institution_bank',label:'بانک آهنین',description:'مدیریت نهاد',fullOnly:true},{key:'institution_citadel',label:'سیتادل',description:'مدیریت نهاد',fullOnly:true},{key:'institution_golden-company',label:'گروه طلایی',description:'مدیریت نهاد',fullOnly:true},{key:'institution_alchemists',label:'صنف کیمیاگران',description:'مدیریت نهاد',fullOnly:true},{key:'institution_faceless',label:'بی‌چهره‌ها',description:'مدیریت نهاد',fullOnly:true},{key:'institution_faith',label:'ایمان هفت',description:'مدیریت نهاد',fullOnly:true},{key:'institution_watch',label:'نگهبانان شب',description:'مدیریت نهاد',fullOnly:true}]},
+
   {
     key: 'desk', label: 'پیشخوان',
     description: 'وضعیت امروز و کارهای منتظر',
@@ -2474,6 +2477,7 @@ export default function Admin() {
       )}
 
       {tab === 'character_profiles' && isFull && <AdminCharacterProfiles toast={toast}/>}
+      {tab.startsWith('institution_') && isFull && <AdminInstitutions institution={tab.slice(12)} toast={toast}/>}
       {tab === 'time_management' && isFull && <AdminTimeManagement toast={toast}/>}
       {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
 

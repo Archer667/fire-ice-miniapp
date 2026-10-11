@@ -1559,6 +1559,19 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  institutions: () => req('/api/institutions'),
+  bank: (page=1) => req(`/api/institutions/bank?page=${page}`),
+  bankRequest: body => req('/api/institutions/bank/requests',{method:'POST',body:JSON.stringify(body)}),
+  bankOffer: (id,body) => req(`/api/institutions/bank/loans/${id}/offer`,{method:'POST',body:JSON.stringify(body)}),
+  bankAccept: (id,body) => req(`/api/institutions/bank/loans/${id}/accept`,{method:'POST',body:JSON.stringify(body)}),
+  bankPay: (id,number) => req(`/api/institutions/bank/loans/${id}/pay`,{method:'POST',body:JSON.stringify({number})}),
+  bankReject: (id,reason) => req(`/api/institutions/bank/loans/${id}/reject`,{method:'POST',body:JSON.stringify({reason})}),
+  adminBank: (page=1) => req(`/api/institutions/admin/bank?page=${page}`),
+  adminBankSettings: body => req('/api/institutions/admin/bank/settings',{method:'PUT',body:JSON.stringify(body)}),
+  adminBankTreasury: body => req('/api/institutions/admin/bank/treasury',{method:'POST',body:JSON.stringify(body)}),
+  adminBankReject: (id,reason) => req(`/api/institutions/admin/bank/loans/${id}/reject`,{method:'POST',body:JSON.stringify({reason})}),
+  adminBankWriteoff: (id,reason) => req(`/api/institutions/admin/bank/loans/${id}/writeoff`,{method:'POST',body:JSON.stringify({reason})}),
+  adminBankAudit: () => req('/api/institutions/admin/bank/audit'),
   adminTimeWorkers: settings => req('/api/admin/time/workers',{method:'PUT',body:JSON.stringify(settings)}),
   adminTimeOverview: () => req('/api/admin/time'),
   adminTimeTimers: (kind,page) => req(`/api/admin/time/timers?kind=${encodeURIComponent(kind)}&page=${page}`),
@@ -1894,3 +1907,4 @@ export const api = {
   adminResetScoreboard: (confirm) => MOCK ? Promise.resolve({ ok: true, players_reset: mockPlayers.length })
     : req('/api/admin/reset-scoreboard', { method: 'POST', body: JSON.stringify({ confirm }) }),
 };
+

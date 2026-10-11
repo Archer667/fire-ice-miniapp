@@ -111,6 +111,8 @@ async def serialize_game_state(request: Request, call_next):
             await recover_road_victories()
             from pact_exits import recover_exits
             await recover_exits()
+            from institution_bank import recover as recover_bank
+            await recover_bank()
             if path.startswith('/api/war') or path == '/api/admin/battles':
                 from routers.war import reconcile_battle_locks
                 await reconcile_battle_locks()
@@ -133,6 +135,8 @@ app.include_router(family_router.router)
 app.include_router(reports_router)
 app.include_router(projects_router.router)
 app.include_router(pause_router.router)
+import institution_bank
+app.include_router(institution_bank.router)
 from time_management import router as time_router
 app.include_router(time_router)
 from routers import characters as characters_router
@@ -189,6 +193,7 @@ async def _arrival_watcher():
                 await repair_open_battle_rosters()
                 if not game_clock.paused():
                     await tick_family()
+                    await institution_bank.tick()
                     await notify_arrivals()
                     await notify_caravan_arrivals()
                     await notify_building_completions()
@@ -449,6 +454,8 @@ async def start_background_watchers():
     from food_settlement import recover_pending_food
     await recover_pending_food()
     await _ensure_indexes()
+    await institution_bank.ensure_indexes()
+    await institution_bank.recover()
     from ranks import migrate_exclusive_titles
     await migrate_exclusive_titles()
     from trade_pacts import migrate_legacy_groups
