@@ -181,7 +181,10 @@ def public_loan(loan):
 @router.get('')
 async def catalog(user=Depends(get_user)):
     cfg=await settings()
-    return [{'id':key,'name':name,'icon':icon,'description':description,'available':key=='iron-bank' and cfg['enabled'],'implemented':key=='iron-bank'} for key,name,icon,description in CATALOG]
+    from institution_citadel import settings as citadel_settings
+    citadel=await citadel_settings()
+    available={'iron-bank':cfg['enabled'],'citadel':citadel['enabled']}
+    return [{'id':key,'name':name,'icon':icon,'description':description,'available':available.get(key,False),'implemented':key in available} for key,name,icon,description in CATALOG]
 
 @router.get('/bank')
 async def dashboard(page:int=1,user=Depends(get_user)):

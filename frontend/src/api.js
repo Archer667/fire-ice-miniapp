@@ -1559,6 +1559,15 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  citadel: (page=1) => req(`/api/institutions/citadel?page=${page}`),
+  adminCitadel: (page=1) => req(`/api/institutions/admin/citadel?page=${page}`),
+  citadelRequest: body => req('/api/institutions/citadel/requests',{method:'POST',body:JSON.stringify(body)}),
+  citadelSettings: body => req('/api/institutions/admin/citadel/settings',{method:'PUT',body:JSON.stringify(body)}),
+  citadelStart: (id,body) => req(`/api/institutions/citadel/cases/${id}/start`,{method:'POST',body:JSON.stringify(body)}),
+  citadelSubmit: (id,body) => req(`/api/institutions/citadel/cases/${id}/submit`,{method:'POST',body:JSON.stringify(body)}),
+  citadelReject: (id,body) => req(`/api/institutions/citadel/cases/${id}/reject`,{method:'POST',body:JSON.stringify(body)}),
+  citadelCancel: (id,body) => req(`/api/institutions/citadel/cases/${id}/cancel`,{method:'POST',body:JSON.stringify(body)}),
+  citadelReview: (id,body) => req(`/api/institutions/admin/citadel/cases/${id}/review`,{method:'POST',body:JSON.stringify(body)}),
   institutions: () => req('/api/institutions'),
   bank: (page=1) => req(`/api/institutions/bank?page=${page}`),
   bankRequest: body => req('/api/institutions/bank/requests',{method:'POST',body:JSON.stringify(body)}),

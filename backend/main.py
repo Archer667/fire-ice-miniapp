@@ -137,6 +137,8 @@ app.include_router(projects_router.router)
 app.include_router(pause_router.router)
 import institution_bank
 app.include_router(institution_bank.router)
+import institution_citadel
+app.include_router(institution_citadel.router)
 from time_management import router as time_router
 app.include_router(time_router)
 from routers import characters as characters_router
@@ -455,6 +457,7 @@ async def start_background_watchers():
     await recover_pending_food()
     await _ensure_indexes()
     await institution_bank.ensure_indexes()
+    await institution_citadel.ensure_indexes()
     await institution_bank.recover()
     from ranks import migrate_exclusive_titles
     await migrate_exclusive_titles()
