@@ -1559,6 +1559,10 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  institutionServices: (kind,admin=false,page=1)=>req(`/api/institutions/${admin?'admin/':''}services/${kind}?page=${page}`),
+  institutionAction: (path,body={},method='POST')=>req(`/api/institutions/${path}`,{method,body:JSON.stringify(body)}),
+  goldenCompany: (admin=false,page=1)=>req(`/api/institutions/${admin?'admin/':''}golden-company?page=${page}`),
+  bankCapitalLedger: ()=>req('/api/institutions/bank/capital-ledger'),
   citadel: (page=1) => req(`/api/institutions/citadel?page=${page}`),
   adminCitadel: (page=1) => req(`/api/institutions/admin/citadel?page=${page}`),
   citadelRequest: body => req('/api/institutions/citadel/requests',{method:'POST',body:JSON.stringify(body)}),

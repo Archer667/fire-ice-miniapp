@@ -28,6 +28,9 @@ def match(row,q):
             for op,x in v.items():
                 if op=='$ne' and a==x:return False
                 if op=='$gte' and (a is None or a<x):return False
+                if op=='$gt' and (a is None or a<=x):return False
+                if op=='$lte' and (a is None or a>x):return False
+                if op=='$lt' and (a is None or a>=x):return False
                 if op=='$in' and a not in x:return False
         elif a!=v:return False
     return True
@@ -46,7 +49,7 @@ class Cursor:
         try:return next(self.it)
         except StopIteration:raise StopAsyncIteration
 class Collection:
-    def __init__(self,rows=()):self.rows=copy.deepcopy(list(rows))
+    def __init__(self,rows=(),name='test'):self.rows=copy.deepcopy(list(rows));self.name=name
     def find(self,q):return Cursor([r for r in self.rows if match(r,q)])
     async def find_one(self,q):return next((copy.deepcopy(r) for r in self.rows if match(r,q)),None)
     async def insert_one(self,r):self.rows.append(copy.deepcopy(r));return SimpleNamespace(inserted_id=r.get('_id'))
@@ -68,7 +71,7 @@ class BankTests(unittest.IsolatedAsyncioTestCase):
         self.cfg={**b.DEFAULTS,'enabled':True,'managers':[b.member(self.people.rows[0])]}
         self.enterContext(patch.object(b,'settings',new=AsyncMock(side_effect=lambda:copy.deepcopy(self.cfg))))
         for key,v in [('players',self.people),('bank',self.treasury),('loans',self.loans),('operations',self.ops),('messages',self.messages)]:self.enterContext(patch.object(b,key,v))
-        self.enterContext(patch.object(b,'db',SimpleNamespace(institution_audit=self.audit)))
+        self.enterContext(patch.object(b,'db',SimpleNamespace(institution_audit=self.audit,institution_bank_capital=Collection())))
         self.enterContext(patch.object(b,'get_admin_role',new=AsyncMock(return_value=None)))
         self.enterContext(patch.object(b,'apply_production',side_effect=lambda p:p))
         self.enterContext(patch.object(b,'production_fields',side_effect=lambda p:{'resources':p['resources']}))
@@ -84,6 +87,43 @@ class BankTests(unittest.IsolatedAsyncioTestCase):
         for uid in (2,3):await b.accept(loan['id'],b.Acceptance(version=loan['version'],accepted=True),{'id':uid})
         return await self.loans.find_one({'_id':ObjectId(loan['id'])})
     async def balance(self,uid):return (await self.people.find_one({'tg_id':uid}))['resources']['gold']
+    async def test_member_deposit_and_withdraw_are_personal_exact_once_and_cooldown(self):
+        deposit=b.CapitalChange(request_id=str(uuid4()),amount=300)
+        await b.change_capital('deposit',deposit,{'id':1});await b.change_capital('deposit',deposit,{'id':1})
+        self.assertEqual(await self.balance(1),700);self.assertEqual((await b.treasury())['gold'],5300)
+        withdrawal=b.CapitalChange(request_id=str(uuid4()),amount=100)
+        await b.change_capital('withdraw',withdrawal,{'id':1});await b.change_capital('withdraw',withdrawal,{'id':1})
+        self.assertEqual(await self.balance(1),800)
+        with self.assertRaises(HTTPException):await b.change_capital('withdraw',b.CapitalChange(request_id=str(uuid4()),amount=100),{'id':1})
+        self.clock+=timedelta(hours=24)
+        with self.assertRaises(HTTPException):await b.change_capital('withdraw',b.CapitalChange(request_id=str(uuid4()),amount=201),{'id':1})
+        with self.assertRaises(HTTPException):await b.change_capital('deposit',deposit,{'id':2})
+    async def test_loan_profit_uses_original_capital_snapshot_and_returns_exact_principal(self):
+        self.cfg['managers'].append(b.member(self.people.rows[3]))
+        await b.change_capital('deposit',b.CapitalChange(request_id=str(uuid4()),amount=300),{'id':1})
+        await b.change_capital('deposit',b.CapitalChange(request_id=str(uuid4()),amount=100),{'id':4})
+        loan=await self.active()
+        await b.change_capital('deposit',b.CapitalChange(request_id=str(uuid4()),amount=500),{'id':4})
+        for index in range(3):await b.pay_installment(loan,index,loan['borrower'])
+        self.assertEqual(await self.balance(1),745);self.assertEqual(await self.balance(4),415)
+        self.assertEqual((await b.treasury())['gold'],5900)
+        await b.recover();self.assertEqual(await self.balance(1),745)
+    async def test_capital_deposit_recovers_after_personal_debit(self):
+        body=b.CapitalChange(request_id=str(uuid4()),amount=200);original=b.player_once
+        async def crash(*args):await original(*args);raise RuntimeError('after personal debit')
+        with patch.object(b,'player_once',side_effect=crash):
+            with self.assertRaises(RuntimeError):await b.change_capital('deposit',body,{'id':1})
+        await b.recover();await b.change_capital('deposit',body,{'id':1})
+        self.assertEqual(await self.balance(1),800);self.assertEqual((await b.treasury())['gold'],5200)
+    def test_weighted_split_conserves_small_rounding_remainders(self):
+        for amount in range(1,25):
+            result=b.weighted_split(amount,[{'person':{'tg_id':1},'amount':3},{'person':{'tg_id':2},'amount':7},{'person':{'tg_id':3},'amount':1}])
+            self.assertEqual(sum(x['amount'] for x in result),amount)
+    async def test_freeform_collateral_can_replace_personal_guarantor(self):
+        row=await b.request_loan(b.RequestLoan(request_id=str(uuid4()),amount=200,purpose='تأمین هزینهٔ ساخت',collateral='قلعه و آیتم پیشنهادی'),{'id':2})
+        offered=await b.offer(row['id'],b.Offer(principal=200,interest_percent=10,installment_count=2,interval_hours=24),{'id':1})
+        self.assertIsNone(offered['guarantor']);self.assertEqual(offered['collateral'],'قلعه و آیتم پیشنهادی')
+        accepted=await b.accept(row['id'],b.Acceptance(version=offered['version'],accepted=True),{'id':2});self.assertEqual(accepted['status'],'active')
     async def test_manager_cannot_borrow_and_unauthorized_cannot_offer(self):
         with self.assertRaises(HTTPException):await self.request(1)
         loan=await self.request()

@@ -2579,6 +2579,7 @@ async def admin_disband_campaign(campaign_id: str, user: dict = Depends(full_adm
     c = await campaigns.find_one({"_id": oid})
     if not c:
         raise HTTPException(404, "این لشکرکشی پیدا نشد")
+    if c.get('mercenary_contract_id'):raise HTTPException(409,'لشکر مزدوری قابل بازپرداخت منابع نیست؛ قرارداد را در مدیریت گروهان طلایی خاتمه بده')
     if not c.get("active"):
         raise HTTPException(400, "این لشکرکشی دیگر فعال نیست")
     battle_change = await _remove_campaign_from_battle(c, "این لشکر به فرمان ادمین منحل شد.")
@@ -2843,7 +2844,11 @@ async def _clear_season_history():
     await db.character_announcements.delete_many({})
     await db.character_retirements.delete_many({})
     await db.castle_swaps.delete_many({})
-    for name in ('family_marriages', 'family_children', 'family_operations', 'family_successions', 'family_notices', 'battle_notice_outbox'):
+    for name in ('family_marriages', 'family_children', 'family_operations', 'family_successions', 'family_notices', 'battle_notice_outbox',
+                 'institution_service_cases','institution_transfers','institution_service_treasuries',
+                 'institution_faith_accounts','institution_faith_withdrawals','institution_donors',
+                 'institution_mercenary_offers','institution_mercenary_contracts','institution_citadel_cases',
+                 'institution_loans','institution_treasuries','institution_bank_operations','institution_bank_capital','institution_audit'):
         await db[name].delete_many({})
     """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
     for collection in (

@@ -15,7 +15,7 @@ from institution_bank import admin,living,member,matches,oid,request_key,notice
 
 router=APIRouter(prefix='/api/institutions',tags=['citadel'])
 cases=db.institution_citadel_cases
-DEFAULTS={'enabled':False,'research_enabled':True,'healing_enabled':True,'max_open_per_player':3,'max_duration_hours':720,'managers':[]}
+DEFAULTS={'enabled':False,'research_enabled':True,'healing_enabled':True,'member_limit':5,'max_open_per_player':3,'max_duration_hours':720,'managers':[]}
 async def settings():
     row=await game_settings.find_one({'_id':'citadel'}) or {}
     return {**DEFAULTS,**row.get('settings',{})}
@@ -120,7 +120,8 @@ class Settings(BaseModel):
     healing_enabled:StrictBool
     max_open_per_player:StrictInt=Field(ge=1,le=20)
     max_duration_hours:StrictInt=Field(ge=1,le=720)
-    manager_ids:list[StrictInt]=Field(max_length=5)
+    member_limit:StrictInt=Field(default=5,ge=1,le=100)
+    manager_ids:list[StrictInt]=Field(max_length=100)
 @router.get('/admin/citadel')
 async def admin_dashboard(page:int=1,user=Depends(admin)):
     if page<1 or page>10000:raise HTTPException(400,'صفحه نامعتبر است')
@@ -128,6 +129,7 @@ async def admin_dashboard(page:int=1,user=Depends(admin)):
     return {'settings':{**cfg,'managers':[{'tg_id':m['tg_id'],'name':m['name']} for m in cfg['managers']]},'cases':[public(r) async for r in cases.find({}).sort('real_created_at',-1).skip((page-1)*25).limit(25)],'page':page,'total':await cases.count_documents({})}
 @router.put('/admin/citadel/settings')
 async def save_settings(body:Settings,user=Depends(admin)):
+    if len(set(body.manager_ids))>body.member_limit:raise HTTPException(400,'تعداد اعضا بیشتر از سقف نهاد است')
     managers=[member(await living(uid)) for uid in set(body.manager_ids)]
     cfg={k:v for k,v in body.model_dump().items() if k!='manager_ids'};cfg['managers']=managers
     await game_settings.update_one({'_id':'citadel'},{'$set':{'settings':cfg,'changed_by':user['id'],'changed_at':game_clock.real_now()}},upsert=True)

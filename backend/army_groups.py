@@ -35,6 +35,7 @@ async def ready(army):
     from routers.war import campaign_waiting_for_result, repair_stale_engagement_lock
     if not army or not army.get('active'):
         raise HTTPException(409, 'لشکر دیگر فعال نیست')
+    if army.get('mercenary_contract_id'):raise HTTPException(409,'لشکر قراردادی باید مستقل بماند و قابل ادغام نیست')
     army = await repair_stale_engagement_lock(army)
     if army.get('engagement_locked') or campaign_waiting_for_result(army):
         raise HTTPException(409, 'لشکر درگیر نبرد است')

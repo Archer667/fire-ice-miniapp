@@ -10,7 +10,7 @@ export const InstitutionsIcon=props=><InstitutionIcon {...props} kind="instituti
 export const INSTITUTIONS=[
   {id:'bank',name:'بانک آهنین براووس',description:'وام، اقساط و ضمانت',icon:'bank'},
   {id:'citadel',name:'سیتادل',description:'پژوهش و درمان کاراکتر',icon:'citadel'},
-  {id:'golden-company',name:'گروه طلایی',description:'قرارداد و اعزام مزدور',icon:'golden-company'},
+  {id:'golden-company',name:'گروهان طلایی',description:'قرارداد و اعزام مزدور',icon:'golden-company'},
   {id:'alchemists',name:'صنف کیمیاگران',description:'سفارش ساخت و سناریوی تولید',icon:'alchemists'},
   {id:'faceless',name:'بی‌چهره‌ها',description:'سفارش مأموریت و ارسال سناریو',icon:'faceless'},
   {id:'faith',name:'ایمان هفت',description:'مراسم، میانجی‌گری و حمایت مذهبی',icon:'faith'},

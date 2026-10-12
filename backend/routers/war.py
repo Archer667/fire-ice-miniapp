@@ -717,6 +717,7 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
     c = await campaigns.find_one({"_id": ObjectId(campaign_id)})
     if not c or c["tg_id"] != user["id"]:
         raise HTTPException(404, "لشکر پیدا نشد")
+    if c.get('mercenary_contract_id'):raise HTTPException(409,'لشکر قراردادی را از صفحهٔ گروهان طلایی بازگردان؛ هزینه و نیروهایش قابل تبدیل به منابع نیست')
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
     if c.get('route_path') and c.get('created_at'):

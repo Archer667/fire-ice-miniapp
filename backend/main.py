@@ -113,6 +113,11 @@ async def serialize_game_state(request: Request, call_next):
             await recover_exits()
             from institution_bank import recover as recover_bank
             await recover_bank()
+            import institution_finance
+            await institution_finance.recover()
+            if not game_clock.paused() and path.startswith('/api/war'):
+                from institution_mercenaries import tick as tick_mercenaries
+                await tick_mercenaries()
             if path.startswith('/api/war') or path == '/api/admin/battles':
                 from routers.war import reconcile_battle_locks
                 await reconcile_battle_locks()
@@ -139,6 +144,9 @@ import institution_bank
 app.include_router(institution_bank.router)
 import institution_citadel
 app.include_router(institution_citadel.router)
+import institution_services,institution_mercenaries,institution_finance
+app.include_router(institution_services.router)
+app.include_router(institution_mercenaries.router)
 from time_management import router as time_router
 app.include_router(time_router)
 from routers import characters as characters_router
@@ -196,6 +204,8 @@ async def _arrival_watcher():
                 if not game_clock.paused():
                     await tick_family()
                     await institution_bank.tick()
+                    await institution_finance.recover()
+                    await institution_mercenaries.tick()
                     await notify_arrivals()
                     await notify_caravan_arrivals()
                     await notify_building_completions()
@@ -458,6 +468,9 @@ async def start_background_watchers():
     await _ensure_indexes()
     await institution_bank.ensure_indexes()
     await institution_citadel.ensure_indexes()
+    await institution_finance.ensure_indexes()
+    await institution_services.ensure_indexes()
+    await institution_mercenaries.ensure_indexes()
     await institution_bank.recover()
     from ranks import migrate_exclusive_titles
     await migrate_exclusive_titles()

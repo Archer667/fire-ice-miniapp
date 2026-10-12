@@ -9,7 +9,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
   return (
     <>
       <div className={`sidemenu-overlay ${open ? 'show' : ''}`} onClick={onClose} aria-hidden="true" />
-      <div className={`sidemenu ${open ? 'open' : ''}`} role="dialog" aria-modal="true" aria-label="منو">
+      <div className={`sidemenu ${open ? 'open' : ''}`} role="dialog" aria-modal="true" aria-label="منو" aria-hidden={!open} inert={open?undefined:''}>
         <div className="sidemenu-head">
           <div className="ava" style={{ width: 44, height: 44, fontSize: 18 }}>{me?.name?.charAt(0)}</div>
           <div>
@@ -19,6 +19,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
           <button className="sidemenu-close" onClick={onClose} aria-label="بستن"><Close s={17} /></button>
         </div>
 
+        <div className="sidemenu-scroll" tabIndex={0} aria-label="بخش‌های بازی">
         <div className="sidemenu-list">
           {[...NAV_ITEMS, ...EXTRA_PAGES]
             .filter(p => !p.adminOnly || me?.admin_role)
@@ -35,6 +36,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         <div className="sidemenu-list">
           <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('راهنما — به‌زودی'); onClose(); }}>راهنمای بازی</button>
           <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('پشتیبانی — به‌زودی'); onClose(); }}>پشتیبانی</button>
+        </div>
         </div>
       </div>
     </>

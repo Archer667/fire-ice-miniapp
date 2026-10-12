@@ -19,11 +19,11 @@ loans = db.institution_loans
 operations = db.institution_bank_operations
 DEFAULTS = {'enabled':False, 'max_principal':10000, 'max_interest_percent':20,
             'max_installments':12, 'min_interval_hours':24, 'max_interval_hours':720,
-            'grace_hours':24, 'require_guarantor':True, 'managers':[]}
+            'grace_hours':24, 'require_guarantor':True, 'member_limit':5, 'managers':[]}
 CATALOG = [
     ('iron-bank','بانک آهنین براووس','bank','وام، اقساط و ضمانت'),
     ('citadel','سیتادل','citadel','پژوهش و درمان کاراکتر'),
-    ('golden-company','گروه طلایی',None,'قرارداد و اعزام مزدور'),
+    ('golden-company','گروهان طلایی',None,'قرارداد و اعزام مزدور'),
     ('alchemists','صنف کیمیاگران','alchemists','سفارش ساخت و سناریوی تولید'),
     ('faceless','بی‌چهره‌ها','faceless','سفارش مأموریت و ارسال سناریو'),
     ('faith','ایمان هفت','faith','مراسم، میانجی‌گری و حمایت مذهبی'),
@@ -71,6 +71,47 @@ async def admin(user=Depends(get_user)):
 async def treasury():
     await bank.update_one({'_id':'iron-bank'}, {'$setOnInsert':{'gold':0}}, upsert=True)
     return await bank.find_one({'_id':'iron-bank'})
+
+def capital_id(person):return f"{person['tg_id']}:{person['created_at'].isoformat()}"
+async def capital_snapshot():
+    return [{'person':row['person'],'amount':row['amount']} async for row in db.institution_bank_capital.find({'amount':{'$gt':0}})]
+def weighted_split(amount,shares):
+    total=sum(s['amount'] for s in shares)
+    if not total or not amount:return []
+    result=[];acc=0
+    for s in shares:
+        part=(acc+s['amount'])*amount//total-acc*amount//total;acc+=s['amount']
+        if part:result.append({'person':s['person'],'amount':part})
+    return result
+
+class CapitalChange(BaseModel):
+    request_id:str
+    amount:StrictInt=Field(ge=1,le=10**9)
+@router.post('/bank/capital/{action}')
+async def change_capital(action:str,body:CapitalChange,user=Depends(get_user)):
+    p,_=await manager(user)
+    if action not in ('deposit','withdraw'):raise HTTPException(400,'عملیات سرمایه معتبر نیست')
+    person=member(p);key='capital:'+action+':'+capital_id(person)+':'+request_key(body.request_id)
+    old=await operations.find_one({'_id':key})
+    if old:
+        if old['amount']!=body.amount:raise HTTPException(409,'مبلغ درخواست تکراری متفاوت است')
+        if old.get('aborted'):raise HTTPException(409,'درخواست ناموفق بود؛ درخواست تازه ثبت کن')
+        await finish_operation(old);return {'ok':True}
+    if await operations.count_documents({'kind':{'$in':['deposit','withdraw']},'complete':{'$ne':True},'aborted':{'$ne':True}}):raise HTTPException(409,'یک انتقال سرمایه ناتمام است؛ رسیدگی لازم است')
+    account=await db.institution_bank_capital.find_one({'_id':capital_id(person)}) or {}
+    capital=account.get('amount',0)
+    if action=='withdraw':
+        if account.get('next_at') and account['next_at']>now():raise HTTPException(400,'از برداشت قبلی هنوز ۲۴ ساعت بازی نگذشته است')
+        if body.amount>capital or body.amount>(await treasury())['gold']:raise HTTPException(400,'مبلغ از سرمایهٔ تو یا موجودی آزاد بانک بیشتر است')
+    else:
+        current=apply_production(p)
+        if current.get('resources',{}).get('gold',0)<body.amount:raise HTTPException(400,'طلای شخصی کافی نیست')
+    await prepare_operation({'_id':key,'kind':action,'person':person,'amount':body.amount,'capital_after':capital+(body.amount if action=='deposit' else -body.amount),'actor':p['tg_id'],'at':now(),'complete':False,'recipients':[p['tg_id']],'text':f"{body.amount} طلا {'به خزانهٔ بانک افزوده شد' if action=='deposit' else 'از سرمایهٔ بانک برداشت شد'}."})
+    return {'ok':True}
+@router.get('/bank/capital-ledger')
+async def capital_ledger(user=Depends(get_user)):
+    await manager(user)
+    return [{'name':r.get('person',{}).get('name'),'event':r['kind'],'amount':r['amount'],'complete':r.get('complete',False),'aborted':r.get('aborted',False),'at':r['real_at'].isoformat()+'Z'} async for r in operations.find({'kind':{'$in':['deposit','withdraw']}}).sort('real_at',-1).limit(100)]
 
 def schedule(principal,interest,count,interval,start):
     total = principal + (principal*interest+99)//100
@@ -132,15 +173,22 @@ async def finish_operation(op):
         await bank_once(-op['amount'],key+':bank')
         await operations.update_one({'_id':key},{'$set':{'started':True}})
         await player_once(op['recipient'],op['amount'],key+':player')
-        await loans.update_one({'_id':op['loan_id'],'status':'disbursing'},{'$set':{'status':'active','started_at':op['at'],'installments':op['installments']}})
+        await loans.update_one({'_id':op['loan_id'],'status':'disbursing'},{'$set':{'status':'active','started_at':op['at'],'installments':op['installments'],'capital_shares':op.get('capital_shares',[])}})
     elif op['kind']=='repay':
         await player_once(op['payer'],-op['amount'],key+':player')
         await operations.update_one({'_id':key},{'$set':{'started':True}})
-        await bank_once(op['amount'],key+':bank')
+        await bank_once(op['amount']-sum(s['amount'] for s in op.get('profit_shares',[])),key+':bank')
+        for share in op.get('profit_shares',[]):await player_once(share['person'],share['amount'],key+':profit:'+capital_id(share['person']))
         await loans.update_one({'_id':op['loan_id'],f"installments.{op['index']}.paid":False},{'$set':{f"installments.{op['index']}.paid":True,f"installments.{op['index']}.paid_by":op['payer']['tg_id'],f"installments.{op['index']}.paid_at":op['at']}})
         loan=await loans.find_one({'_id':op['loan_id']})
         if loan and all(i['paid'] for i in loan['installments']):
             await loans.update_one({'_id':op['loan_id'],'status':'active'},{'$set':{'status':'repaid','finished_at':now()}})
+    elif op['kind'] in ('deposit','withdraw'):
+        if op['kind']=='deposit':
+            await player_once(op['person'],-op['amount'],key+':player');await bank_once(op['amount'],key+':bank')
+        else:
+            await bank_once(-op['amount'],key+':bank');await player_once(op['person'],op['amount'],key+':player')
+        await db.institution_bank_capital.update_one({'_id':capital_id(op['person'])},{'$set':{'person':op['person'],'amount':op['capital_after'],**({'next_at':op['at']+timedelta(hours=24)} if op['kind']=='withdraw' else {})}},upsert=True)
     else:
         await bank_once(op['amount'],key+':bank')
     await notice(key,op.get('recipients',[]),op['text'])
@@ -154,10 +202,11 @@ async def recover():
             await operations.update_one({'_id':op['_id']},{'$set':{'last_error':exc.detail}})
             # An uncommitted debit must not silently happen days later. A debit
             # receipt, rather than the advisory started flag, proves commitment.
-            if op['kind'] in ('repay','adjust'):
-                source=await (players.find_one({'tg_id':op['payer']['tg_id']}) if op['kind']=='repay' else treasury())
-                namespace='institution_receipts' if op['kind']=='repay' else 'receipts'
-                suffix=':player' if op['kind']=='repay' else ':bank'
+            if op['kind'] in ('repay','adjust','deposit','withdraw'):
+                personal=op['kind'] in ('repay','deposit')
+                source=await (players.find_one({'tg_id':(op.get('payer') or op['person'])['tg_id']}) if personal else treasury())
+                namespace='institution_receipts' if personal else 'receipts'
+                suffix=':player' if personal else ':bank'
                 receipt=hashlib.sha256((str(op['_id'])+suffix).encode()).hexdigest()
                 if not (source or {}).get(namespace,{}).get(receipt):
                     await operations.update_one({'_id':op['_id']},{'$set':{'aborted':True}})
@@ -172,7 +221,7 @@ def public_loan(loan):
     terms=loan.get('terms') or {}
     return {'id':str(loan['_id']),'status':loan['status'],'borrower':{k:loan['borrower'][k] for k in ('tg_id','name')},
             'guarantor':{k:loan['guarantor'][k] for k in ('tg_id','name')} if loan.get('guarantor') else None,
-            'requested_amount':loan['requested_amount'],'purpose':loan['purpose'],'terms':terms,'version':loan.get('version'),
+            'requested_amount':loan['requested_amount'],'purpose':loan['purpose'],'collateral':loan.get('collateral',''),'terms':terms,'version':loan.get('version'),
             'borrower_accepted':loan.get('borrower_accepted',False),'guarantor_accepted':loan.get('guarantor_accepted',False),
             'installments':[{'number':i['number'],'amount':i['amount'],'paid':i['paid'],'paid_by':i.get('paid_by'),**deadline_view(i['due_at'])} for i in loan.get('installments',[])],
             'outstanding':0 if loan['status']=='written_off' else sum(i['amount'] for i in loan.get('installments',[]) if not i['paid']),
@@ -184,6 +233,8 @@ async def catalog(user=Depends(get_user)):
     from institution_citadel import settings as citadel_settings
     citadel=await citadel_settings()
     available={'iron-bank':cfg['enabled'],'citadel':citadel['enabled']}
+    from institution_services import settings as service_settings,KINDS
+    for key in KINDS:available[key]=(await service_settings(key))['enabled']
     return [{'id':key,'name':name,'icon':icon,'description':description,'available':available.get(key,False),'implemented':key in available} for key,name,icon,description in CATALOG]
 
 @router.get('/bank')
@@ -193,13 +244,15 @@ async def dashboard(page:int=1,user=Depends(get_user)):
     query={} if is_manager else {'$or':[{'borrower.tg_id':p['tg_id'],'borrower.created_at':p['created_at']},{'guarantor.tg_id':p['tg_id'],'guarantor.created_at':p['created_at']}]}
     if page<1 or page>10000:raise HTTPException(400,'صفحه نامعتبر است')
     rows=[public_loan(row) async for row in loans.find(query).sort('created_at',-1).skip((page-1)*25).limit(25)]
-    return {'viewer_id':p['tg_id'],'settings':{k:v for k,v in cfg.items() if k!='managers'},'managers':[{'tg_id':m['tg_id'],'name':m['name']} for m in cfg['managers']],
+    capital=await db.institution_bank_capital.find_one({'_id':capital_id(member(p))}) or {}
+    return {'capital':capital.get('amount',0),'withdrawal_deadline':deadline_view(capital['next_at']) if capital.get('next_at') else None,'viewer_id':p['tg_id'],'settings':{k:v for k,v in cfg.items() if k!='managers'},'managers':[{'tg_id':m['tg_id'],'name':m['name']} for m in cfg['managers']],
             'is_manager':is_manager,'treasury':(await treasury())['gold'] if is_manager else None,'loans':rows,'page':page,'total':await loans.count_documents(query)}
 
 class RequestLoan(BaseModel):
     request_id:str
     amount:StrictInt=Field(ge=1,le=1000000000)
     purpose:str=Field(min_length=5,max_length=500)
+    collateral:str=Field(default='',max_length=300)
 
 @router.post('/bank/requests')
 async def request_loan(body:RequestLoan,user=Depends(get_user)):
@@ -211,9 +264,9 @@ async def request_loan(body:RequestLoan,user=Depends(get_user)):
     old=await loans.find_one({'request_key':key})
     if len(body.purpose.strip())<5:raise HTTPException(400,'هدف وام را در دست‌کم پنج حرف بنویس')
     if old:
-        if old['requested_amount']!=body.amount or old['purpose']!=body.purpose.strip():raise HTTPException(409,'شناسهٔ تکراری با اطلاعات متفاوت ارسال شده است')
+        if old['requested_amount']!=body.amount or old['purpose']!=body.purpose.strip() or old.get('collateral','')!=body.collateral.strip():raise HTTPException(409,'شناسهٔ تکراری با اطلاعات متفاوت ارسال شده است')
         return public_loan(old)
-    doc={'_id':ObjectId(),'request_key':key,'borrower':member(p),'requested_amount':body.amount,'purpose':body.purpose.strip(),'status':'requested','created_at':now()}
+    doc={'_id':ObjectId(),'request_key':key,'borrower':member(p),'requested_amount':body.amount,'purpose':body.purpose.strip(),'collateral':body.collateral.strip(),'status':'requested','created_at':now()}
     try:await loans.insert_one(doc)
     except DuplicateKeyError:return public_loan(await loans.find_one({'request_key':key}))
     await notice(str(doc['_id'])+':request',[m['tg_id'] for m in cfg['managers']],f"درخواست وام {body.amount} طلا از {p['name']} در بانک آهنین ثبت شد.")
@@ -237,7 +290,7 @@ async def offer(loan_id:str,body:Offer,user=Depends(get_user)):
     if any(matches(borrower,m) for m in cfg['managers']):raise HTTPException(403,'وام‌دادن به مدیر بانک مجاز نیست')
     if body.principal>cfg['max_principal'] or body.interest_percent>cfg['max_interest_percent'] or body.installment_count>cfg['max_installments'] or not cfg['min_interval_hours']<=body.interval_hours<=cfg['max_interval_hours']:
         raise HTTPException(400,'شرایط پیشنهادی خارج از حدود تنظیم‌شدهٔ بانک است')
-    if cfg['require_guarantor'] and body.guarantor_id is None:raise HTTPException(400,'برای این وام ضامن لازم است')
+    if cfg['require_guarantor'] and body.guarantor_id is None and not loan.get('collateral','').strip():raise HTTPException(400,'برای این وام ضامن یا وثیقهٔ پیشنهادی لازم است')
     guarantor=await living(body.guarantor_id) if body.guarantor_id is not None else None
     if guarantor and guarantor['tg_id']==borrower['tg_id']:raise HTTPException(400,'وام‌گیرنده نمی‌تواند ضامن خودش باشد')
     schedule(body.principal,body.interest_percent,body.installment_count,body.interval_hours,now())
@@ -267,6 +320,7 @@ async def activate(loan):
         'real_at':game_clock.real_now(),'actor':loan.get('offered_by'),
         'installments':schedule(terms['principal'],terms['interest_percent'],terms['installment_count'],terms['interval_hours'],at),
         'recipients':[loan['borrower']['tg_id']]+([loan['guarantor']['tg_id']] if loan.get('guarantor') else []),'text':f"وام {terms['principal']} طلایی بانک آهنین پرداخت شد. مبلغ کل بازپرداخت {terms['total_repayment']} طلا است؛ اقساط در صفحهٔ نهادها نمایش داده می‌شوند."}
+    op['capital_shares']=await capital_snapshot()
     # Intent precedes state and money, so restart recovery can finish the same loan.
     await operations.update_one({'_id':op['_id']},{'$setOnInsert':op},upsert=True)
     await loans.update_one({'_id':loan['_id'],'status':'offered'},{'$set':{'status':'disbursing'}})
@@ -308,7 +362,11 @@ async def pay_installment(loan,index,payer):
     if not matches(current,payer) or current.get('is_dead'):raise HTTPException(409,'کاراکتر پرداخت‌کننده تغییر کرده یا درگذشته است')
     current=apply_production(current)
     if current.get('resources',{}).get('gold',0)<i['amount']:raise HTTPException(400,'طلا برای پرداخت کامل این قسط کافی نیست')
-    await prepare_operation({'_id':key,'kind':'repay','loan_id':loan['_id'],'payer':payer,'amount':i['amount'],'index':index,'at':now(),'complete':False,
+    shares=loan.get('capital_shares',[])
+    total=loan['terms']['total_repayment'];principal=loan['terms']['principal'];before=sum(x['amount'] for x in loan['installments'][:index])
+    principal_part=(before+i['amount'])*principal//total-before*principal//total
+    profit=weighted_split(i['amount']-principal_part,shares)
+    await prepare_operation({'_id':key,'kind':'repay','loan_id':loan['_id'],'payer':payer,'amount':i['amount'],'profit_shares':profit,'index':index,'at':now(),'complete':False,
         'actor':payer['tg_id'],
         'recipients':[loan['borrower']['tg_id']]+([loan['guarantor']['tg_id']] if loan.get('guarantor') else []),'text':f"قسط {i['number']} وام بانک آهنین به مبلغ {i['amount']} طلا توسط {payer['name']} پرداخت شد."})
 
@@ -351,7 +409,8 @@ class BankSettings(BaseModel):
     max_interval_hours:StrictInt=Field(ge=1,le=720)
     grace_hours:StrictInt=Field(ge=1,le=720)
     require_guarantor:StrictBool
-    manager_ids:list[StrictInt]=Field(max_length=5)
+    member_limit:StrictInt=Field(default=5,ge=1,le=100)
+    manager_ids:list[StrictInt]=Field(max_length=100)
 
 @router.get('/admin/bank')
 async def admin_dashboard(page:int=1,user=Depends(admin)):
@@ -363,6 +422,7 @@ async def admin_dashboard(page:int=1,user=Depends(admin)):
 @router.put('/admin/bank/settings')
 async def save_settings(body:BankSettings,user=Depends(admin)):
     if body.min_interval_hours>body.max_interval_hours:raise HTTPException(400,'حداقل فاصلهٔ اقساط از حداکثر بیشتر است')
+    if len(set(body.manager_ids))>body.member_limit:raise HTTPException(400,'تعداد اعضا از سقف بانک بیشتر است')
     managers=[member(await living(uid)) for uid in set(body.manager_ids)]
     cfg={k:v for k,v in body.model_dump().items() if k!='manager_ids'};cfg['managers']=managers
     await game_settings.update_one({'_id':'iron_bank'},{'$set':{'settings':cfg,'changed_by':user['id'],'changed_at':game_clock.real_now()}},upsert=True)

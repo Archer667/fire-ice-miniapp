@@ -1094,6 +1094,11 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
   box-shadow: 20px 0 50px rgba(0,0,0,0.5);
 }
 .sidemenu.open { transform: translateX(0); }
+.sidemenu { min-height: 0; overflow: hidden; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+.sidemenu-head { flex-shrink: 0; }
+.sidemenu-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #b89a60 #181614; padding: 0 2px 8px; }
+.sidemenu-scroll > .sidemenu-list + .sidemenu-list { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--iron); }
+.sidemenu-scroll:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
 .sidemenu-head { display: flex; align-items: center; gap: 12px; }
 .sidemenu-close {
   margin-inline-start: auto; width: 32px; height: 32px; border-radius: 4px;
