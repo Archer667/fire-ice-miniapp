@@ -269,12 +269,13 @@ export default function Dashboard({ goTo }) {
         {rebellion && (
           <div className="page-sub" style={{ marginTop: 7, lineHeight: 1.9 }}>
             آستانهٔ مالیات سنگین با محبوبیت فعلی: <b>{rebellion.tax_heavy_threshold.toLocaleString('fa-IR')}٪</b>
-            {' · '}اثر روزانهٔ مالیات: <b style={{ color: rebellion.tax_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
+            {' · '}اثر یک روز با این نرخ: <b style={{ color: rebellion.tax_daily_popularity < 0 ? 'var(--danger)' : 'var(--az2)' }}>
               {rebellion.tax_daily_popularity > 0 ? '+' : ''}{rebellion.tax_daily_popularity.toLocaleString('fa-IR')} محبوبیت
             </b>
             <br />
             درآمد تخمینی همین مالیات: {rebellion.estimated_tax_gold_per_day.toLocaleString('fa-IR')} طلا در روز
             {' · '}بازده مالیات با محبوبیت فعلی: {rebellion.tax_yield_percent.toLocaleString('fa-IR')}٪
+            <p>اثر مالیات بر محبوبیت بر اساس مدتِ فعال‌بودن هر نرخ محاسبه می‌شود؛ تغییر نرخ، اثر ساعت‌های گذشته را پاک نمی‌کند.</p>
           </div>
         )}
         {rebellion && (

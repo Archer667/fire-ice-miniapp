@@ -25,10 +25,10 @@ function MarketCard({ item, kind, value, onQuantity, onBuy, onCancel, busy }) {
     <div className="exchange-quote"><div><span>قیمت هر واحد</span><strong>{fa(item.price)} <small>سکه</small></strong></div><div><span>موجودی</span><strong>{fa(item.qty)} <small>واحد</small></strong></div></div>
     {kind === 'official' && <p className="exchange-note"><span className={item.change_pct > 0 ? 'price-rise' : item.change_pct < 0 ? 'price-fall' : ''}>{item.change_pct > 0 ? '+' : ''}{fa(item.change_pct)}٪</span> نسبت به قیمت پایهٔ {fa(item.base_price)} سکه</p>}
     {kind === 'black' && <p className="exchange-note">مهلت خرید: {item.expires_in_minutes < 1 ? 'کمتر از یک دقیقه' : `${fa(Math.floor(item.expires_in_minutes / 60))} ساعت و ${fa(item.expires_in_minutes % 60)} دقیقه`}</p>}
-    {item.below_minimum && <p className="exchange-note">قیمت کمتر از حداقل مجاز است؛ فروشنده باید آگهی را لغو و دوباره ثبت کند.</p>}
+    {(item.below_minimum || item.above_maximum) && <p className="exchange-note">قیمت خارج از بازهٔ مجاز است؛ فروشنده باید آگهی را لغو و دوباره ثبت کند.</p>}
     {item.mine ? <button className="btn ghost" disabled={busy} onClick={onCancel}>برداشتن آگهی و بازگشت کالا</button> : <form className="exchange-buy" onSubmit={e => { e.preventDefault(); onBuy(); }}>
       <label>تعداد خرید<input aria-label={`تعداد خرید ${item.name}`} type="number" inputMode="numeric" min="1" max={item.qty} step="1" required value={qty} onChange={e => onQuantity(e.target.value)} /></label>
-      <button className="btn" disabled={busy || item.qty < 1 || item.below_minimum}>{busy ? 'در حال خرید…' : <>خرید <span>{fa(qty * item.price)} سکه</span></>}</button>
+      <button className="btn" disabled={busy || item.qty < 1 || (item.below_minimum || item.above_maximum)}>{busy ? 'در حال خرید…' : <>خرید <span>{fa(qty * item.price)} سکه</span></>}</button>
     </form>}
   </article>;
 }
@@ -42,6 +42,7 @@ function TradeContent() {
   const [marketSection, setMarketSection] = useState('official');
   const [sellPrice, setSellPrice] = useState(10);
   const [priceFloors, setPriceFloors] = useState({});
+  const [priceCeilings, setPriceCeilings] = useState({});
   const [alliances, setAlliances] = useState(null);
   const [target, setTarget] = useState('');
   const [amounts, setAmounts] = useState(emptyAmounts());
@@ -102,8 +103,8 @@ function TradeContent() {
 
   const loadAlliances = () => api.caravanPartners().then(rows => setAlliances(Array.isArray(rows) ? rows.filter(Boolean) : [])).catch(e => toast(e.message));
   const loadCaravans = () => api.myCaravans().then(rows => setCaravans(Array.isArray(rows) ? rows.filter(Boolean) : [])).catch(e => toast(e.message));
-  useEffect(() => { api.marketFloors().then(setPriceFloors).catch(e => toast(e.message)); }, []);
-  useEffect(() => { setSellPrice(v => Math.max(Number(v) || 0, priceFloors[sellResource] || 10)); }, [sellResource, priceFloors]);
+  useEffect(() => { api.marketLimits().then(data => {setPriceFloors(data.prices); setPriceCeilings(data.ceilings || {});}).catch(e => toast(e.message)); }, []);
+  useEffect(() => { setSellPrice(v => Math.min(priceCeilings[sellResource] ?? 1000000000, Math.max(Number(v) || 0, priceFloors[sellResource] || 10))); }, [sellResource, priceFloors, priceCeilings]);
   const loadMarket = () => api.market().then(setMarket).catch(e => toast(e.message));
   const loadPlayerMarket = () => api.playerMarket().then(setPlayerMarket).catch(e => toast(e.message));
   const loadBlack = () => api.blackMarket().then(setBlack).catch(e => toast(e.message));
@@ -325,8 +326,8 @@ function TradeContent() {
         <div className="exchange-heading"><span className="trade-eyebrow">بازار بازیکنان</span><h2>قیمت را فروشنده تعیین می‌کند</h2><p>قیمت فروش را با رعایت حداقل مجاز انتخاب کن. قیمت آگهی تا پایان فروش ثابت می‌ماند.</p></div>
         <details className="exchange-sell"><summary>＋ فروش کالای من</summary><form onSubmit={e => { e.preventDefault(); sellToPlayerMarket(); }}>
           <label>نوع کالا<select value={sellResource} onChange={e => setSellResource(e.target.value)}>{CARAVAN_GOODS.filter(g => g !== 'gold').map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}</select></label>
-          <div className="exchange-fields"><label>تعداد برای فروش<input type="number" inputMode="numeric" min="1" max={Math.floor(me.resources?.[sellResource] || 0)} step="1" required value={sellQty} onChange={e => setSellQty(e.target.value)} /></label><label>قیمت هر واحد (سکه)<input type="number" inputMode="numeric" min={priceFloors[sellResource] || 10} max="1000000000" step="1" required value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></label></div>
-          <p className="exchange-note">حداقل هر واحد: {fa(priceFloors[sellResource] || 10)} سکه</p><div className="exchange-preview"><span>دریافتی در صورت فروش کامل</span><strong>{fa(sellQty * sellPrice)} سکه</strong></div>
+          <div className="exchange-fields"><label>تعداد برای فروش<input type="number" inputMode="numeric" min="1" max={Math.floor(me.resources?.[sellResource] || 0)} step="1" required value={sellQty} onChange={e => setSellQty(e.target.value)} /></label><label>قیمت هر واحد (سکه)<input type="number" inputMode="numeric" min={priceFloors[sellResource] || 10} max={priceCeilings[sellResource] ?? 1000000000} step="1" required value={sellPrice} onChange={e => setSellPrice(e.target.value)} /></label></div>
+          <p className="exchange-note">حداقل هر واحد: {fa(priceFloors[sellResource] || 10)} سکه{priceCeilings[sellResource] != null && ` · حداکثر: ${fa(priceCeilings[sellResource])} سکه`}</p><div className="exchange-preview"><span>دریافتی در صورت فروش کامل</span><strong>{fa(sellQty * sellPrice)} سکه</strong></div>
           <p className="exchange-note">{fa(me.resources?.[sellResource])} واحد در خزانه داری. کالای آگهی رزرو می‌شود؛ با برداشتن آگهی، باقی‌مانده برمی‌گردد.</p>
           <button className="btn" disabled={playerMarketBusy === 'sell'}>ثبت آگهی فروش</button>
         </form></details>

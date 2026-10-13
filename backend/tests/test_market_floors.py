@@ -29,3 +29,47 @@ class FloorTests(unittest.IsolatedAsyncioTestCase):
     def test_floors_require_integer(self):
         with self.assertRaises(ValidationError):
             admin.PlayerMarketFloorsBody(prices={'wood': 1.5})
+
+    async def test_ceiling_rejects_listing_before_wallet_write(self):
+        with patch.object(market, 'price_floors', AsyncMock(return_value={'wood':10})), \
+             patch.object(market, 'price_ceilings', AsyncMock(return_value={'wood':20})), \
+             patch.object(market, '_market_write_guard'), \
+             patch.object(market.players, 'find_one', AsyncMock()) as wallet:
+            with self.assertRaises(HTTPException) as error:
+                await market.create_player_listing(market.PlayerListingBody(resource='wood',qty=2,price=21),{'id':1})
+            self.assertEqual(error.exception.status_code,400)
+            wallet.assert_not_awaited()
+
+    async def test_old_overpriced_listing_cannot_be_bought(self):
+        from bson import ObjectId
+        oid=ObjectId()
+        with patch.object(market, '_market_write_guard'), \
+             patch.object(market.player_market_listings,'find_one',AsyncMock(return_value={'_id':oid,'seller_tg_id':2,'resource':'wood','price':21})), \
+             patch.object(market,'price_floors',AsyncMock(return_value={'wood':10})), \
+             patch.object(market,'price_ceilings',AsyncMock(return_value={'wood':20})), \
+             patch.object(market.players,'update_one',AsyncMock()) as wallet:
+            with self.assertRaises(HTTPException) as error:
+                await market.buy_player_listing(market.PlayerMarketBuyBody(listing_id=str(oid),qty=1),{'id':1})
+            self.assertEqual(error.exception.status_code,409)
+            wallet.assert_not_awaited()
+
+    async def test_admin_rejects_ceiling_below_floor(self):
+        prices={key:10 for key in admin.TRADE_GOODS}
+        caps={key:20 for key in prices}
+        caps['wood']=9
+        with patch.object(admin.game_settings,'update_one',AsyncMock()) as save:
+            with self.assertRaises(HTTPException):
+                await admin.set_player_market_floors(admin.PlayerMarketFloorsBody(prices=prices,ceilings=caps),{})
+            save.assert_not_awaited()
+
+    async def test_admin_persists_optional_ceiling_and_equal_bounds(self):
+        prices={key:10 for key in admin.TRADE_GOODS}
+        caps={key:None for key in prices}
+        caps['wood']=10
+        with patch.object(admin.game_settings,'update_one',AsyncMock()) as save:
+            await admin.set_player_market_floors(admin.PlayerMarketFloorsBody(prices=prices,ceilings=caps),{})
+            self.assertEqual(save.call_args.args[1]['$set']['ceilings'],caps)
+
+    def test_ceiling_requires_integer(self):
+        with self.assertRaises(ValidationError):
+            admin.PlayerMarketFloorsBody(prices={'wood':10},ceilings={'wood':20.5})

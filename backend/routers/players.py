@@ -282,7 +282,10 @@ async def set_tax(body: TaxBody, user: dict = Depends(get_user)):
     p["resources"] = await apply_campaign_upkeep(user["id"], p["resources"])
     if not (0 <= body.rate <= 100):
         raise HTTPException(400, "نرخ مالیات باید بین ۰ تا ۱۰۰ درصد باشد")
+    from routers.rebellions import accrue_tax_effect, get_settings
+    accrue_tax_effect(p, await get_settings(), now())
     fields = production_fields(p)
+    fields.update({"tax_effect_at": p["tax_effect_at"], "tax_effect_pending": p["tax_effect_pending"]})
     fields.update({"tax_rate": body.rate, "stats": normalize_stats(p), "medals": sync_medals(p)})
     await players.update_one({"tg_id": user["id"]}, {"$set": fields})
     return {"ok": True, "tax_rate": body.rate}

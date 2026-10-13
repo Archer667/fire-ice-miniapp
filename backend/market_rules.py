@@ -5,3 +5,11 @@ async def price_floors():
     doc = await game_settings.find_one({'_id': 'player_market_price_floors'}) or {}
     saved = doc.get('prices', {})
     return {key: max(1, int(saved.get(key, 10))) for key in TRADE_GOODS}
+
+async def price_ceilings():
+    doc = await game_settings.find_one({'_id': 'player_market_price_floors'}) or {}
+    saved = doc.get('ceilings', {})
+    return {key: saved.get(key) for key in TRADE_GOODS}
+
+async def price_limits():
+    return {'prices': await price_floors(), 'ceilings': await price_ceilings()}

@@ -6,6 +6,33 @@ import game_clock
 from game import now
 
 class ClockTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # Recovery journals are covered separately; HTTP permission tests must not
+        # connect to a live database or reuse a Motor client from another loop.
+        for target in ('item_effects.recover_item_effects', 'food_settlement.recover_pending_food',
+                       'army_groups.recover_moves', 'battle_passage.recover',
+                       'road_victory.recover', 'pact_exits.recover_exits',
+                       'institution_bank.recover', 'institution_finance.recover'):
+            self.enterContext(patch(target, AsyncMock()))
+
+    async def test_food_settlement_does_not_write_while_paused(self):
+        import food_settlement
+        with patch.object(game_clock, 'paused', return_value=True), \
+             patch.object(food_settlement.db.game_settings, 'update_one', AsyncMock()) as write:
+            await food_settlement.tick()
+            write.assert_not_awaited()
+
+    async def test_food_elapsed_days_exclude_pause_after_resume(self):
+        start = datetime(2026, 10, 13, 12)
+        settled = start - timedelta(hours=23)
+        with patch.object(game_clock, '_state', {'paused_at':start, 'offset_seconds':0}), \
+             patch.object(game_clock, 'real_now', return_value=start + timedelta(days=5)):
+            self.assertEqual((now()-settled).total_seconds() // 86400, 0)
+            game_clock._state = {'paused_at':None, 'offset_seconds':5*86400}
+            self.assertEqual((now()-settled).total_seconds() // 86400, 0)
+            with patch.object(game_clock, 'real_now', return_value=start+timedelta(days=5,hours=1)):
+                self.assertEqual((now()-settled).total_seconds() // 86400, 1)
+
     async def test_freeze_resume_restart_and_duplicate_requests(self):
         stored = {}
         async def read(*args, **kwargs): return dict(stored)

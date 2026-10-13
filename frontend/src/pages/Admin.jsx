@@ -129,7 +129,7 @@ const TAB_GROUPS = [
     description: 'ابزارهای حساس و سراسری بازی',
     tabs: [
       { key: 'projects', label: 'پروژه‌ها', description: 'بررسی طرح، زمان عرضه و اعلام شکست', fullOnly: true },
-      { key: 'market-floors', label: 'حداقل قیمت کالاها', description: 'کف قیمت بازار بازیکنان', fullOnly: true },
+      { key: 'market-floors', label: 'بازهٔ قیمت کالاها', description: 'حداقل و حداکثر قیمت بازار بازیکنان', fullOnly: true },
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
       { key: 'balance', label: 'تعادل ساختمان و نیرو', description: 'هزینه، بازدهی، نیروها و ادوات', ownerOnly: true },
@@ -320,6 +320,7 @@ export default function Admin() {
 
   const [marketListings, setMarketListings] = useState(null);
   const [marketFloors, setMarketFloors] = useState(null);
+  const [marketCeilings, setMarketCeilings] = useState({});
   const [floorsBusy, setFloorsBusy] = useState(false);
   const [gamePause, setGamePause] = useState(null);
   const [pauseReason, setPauseReason] = useState('بررسی و رسیدگی به وضعیت بازی');
@@ -604,7 +605,7 @@ export default function Admin() {
     if (tab === 'polls') loadPolls();
     if (tab === 'market') { loadMarket(); loadBlackMarket(); }
     if (tab === 'items') loadItems();
-    if (tab === 'market-floors') api.adminMarketFloors().then(setMarketFloors).catch(e => toast(e.message));
+    if (tab === 'market-floors') api.adminMarketFloors().then(data => {setMarketFloors(data.prices); setMarketCeilings(data.ceilings || {});}).catch(e => toast(e.message));
     if (tab === 'music') api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
     if (!isOwner) return;
     if (tab === 'balance') { loadBalance(); loadGameplayBalance(); }
@@ -2909,11 +2910,11 @@ export default function Admin() {
           <button className="btn" disabled={limitsBusy}>ذخیره سهمیه‌ها</button></form>}
       </div>}
       {tab === 'market-floors' && isFull && <div className="card">
-        <h2 className="page-title">حداقل قیمت بازار بازیکنان</h2>
-        <p className="page-sub">قیمت هر واحد به سکه؛ پیش‌فرض همهٔ کالاها ۱۰ است. آگهی‌های قدیمی زیر حداقل، تا لغو و ثبت مجدد قابل خرید نیستند.</p>
-        {marketFloors ? <form onSubmit={async e => { e.preventDefault(); setFloorsBusy(true); try { const values = Object.fromEntries(Object.entries(marketFloors).map(([k,v]) => [k, Number(v)])); setMarketFloors(await api.adminSaveMarketFloors(values)); toast('حداقل قیمت‌ها ذخیره شد'); } catch (err) { toast(err.message); } finally { setFloorsBusy(false); } }}>
-          {TRADE_GOODS.map(g => <label className="f" key={g}>{TRADE_GOOD_NAMES[g]}<input type="number" inputMode="numeric" min="1" max="1000000000" step="1" required value={marketFloors[g]} onChange={e => setMarketFloors(v => ({ ...v, [g]: e.target.value }))} /></label>)}
-          <button className="btn" disabled={floorsBusy}>{floorsBusy ? 'در حال ذخیره…' : 'ذخیره حداقل قیمت‌ها'}</button>
+        <h2 className="page-title">بازهٔ قیمت بازار بازیکنان</h2>
+        <p className="page-sub">قیمت هر واحد به سکه است. حداکثرِ خالی یعنی بدون سقف. آگهی‌های خارج از بازه تا لغو و ثبت مجدد قابل خرید نیستند.</p>
+        {marketFloors ? <form onSubmit={async e => { e.preventDefault(); setFloorsBusy(true); try { const values = Object.fromEntries(Object.entries(marketFloors).map(([k,v]) => [k, Number(v)])); setMarketFloors(await api.adminSaveMarketFloors(values, Object.fromEntries(TRADE_GOODS.map(k => [k, marketCeilings[k] === "" || marketCeilings[k] == null ? null : Number(marketCeilings[k])])))); toast('بازهٔ قیمت‌ها ذخیره شد'); } catch (err) { toast(err.message); } finally { setFloorsBusy(false); } }}>
+          {TRADE_GOODS.map(g => <div key={g}><h3>{TRADE_GOOD_NAMES[g]}</h3><div className="exchange-fields"><label className="f">حداقل<input type="number" inputMode="numeric" min="1" max="1000000000" step="1" required value={marketFloors[g]} onChange={e => setMarketFloors(v => ({ ...v, [g]: e.target.value }))} /></label><label className="f">حداکثر<input type="number" inputMode="numeric" min={Number(marketFloors[g]) || 1} max="1000000000" step="1" placeholder="بدون سقف" value={marketCeilings[g] ?? ""} onChange={e => setMarketCeilings(v => ({...v, [g]: e.target.value}))}/></label></div></div>)}
+          <button className="btn" disabled={floorsBusy}>{floorsBusy ? 'در حال ذخیره…' : 'ذخیرهٔ بازهٔ قیمت‌ها'}</button>
         </form> : <p>در حال دریافت تنظیمات…</p>}
       </div>}
       {tab === 'market' && isFull && (

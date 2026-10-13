@@ -53,6 +53,9 @@ async def recover_pending_food():
 
 
 async def tick():
+    from game_clock import paused
+    if paused():
+        return
     current = now()
     await db.game_settings.update_one({'_id': 'food_settlement_v1'}, {'$setOnInsert': {'started_at': current}}, upsert=True)
     epoch = (await db.game_settings.find_one({'_id': 'food_settlement_v1'}))['started_at']

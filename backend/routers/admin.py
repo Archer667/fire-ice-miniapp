@@ -2082,6 +2082,12 @@ async def admin_market_list(user: dict = Depends(full_admin_user)):
 
 class PlayerMarketFloorsBody(BaseModel):
     prices: dict[str, StrictInt]
+    ceilings: dict[str, StrictInt | None] | None = None
+
+@router.get('/player-market-limits')
+async def get_player_market_limits(user: dict = Depends(full_admin_user)):
+    from market_rules import price_limits
+    return await price_limits()
 
 @router.get('/player-market-floors')
 async def get_player_market_floors(user: dict = Depends(full_admin_user)):
@@ -2092,7 +2098,11 @@ async def get_player_market_floors(user: dict = Depends(full_admin_user)):
 async def set_player_market_floors(body: PlayerMarketFloorsBody, user: dict = Depends(full_admin_user)):
     if set(body.prices) != set(TRADE_GOODS) or any(v < 1 or v > 1000000000 for v in body.prices.values()):
         raise HTTPException(400, 'قیمت تمام کالاها باید عدد صحیح مثبت باشد')
-    await game_settings.update_one({'_id': 'player_market_price_floors'}, {'$set': {'prices': body.prices}}, upsert=True)
+    from market_rules import price_ceilings
+    ceilings = body.ceilings if body.ceilings is not None else await price_ceilings()
+    if set(ceilings) != set(TRADE_GOODS) or any(v is not None and (v < body.prices[k] or v > 1000000000) for k, v in ceilings.items()):
+        raise HTTPException(400, 'حداکثر قیمت باید عدد صحیح و حداقل برابر کف قیمت باشد؛ فیلد خالی یعنی بدون سقف')
+    await game_settings.update_one({'_id': 'player_market_price_floors'}, {'$set': {'prices': body.prices, 'ceilings': ceilings}}, upsert=True)
     return body.prices
 
 class MarketListingBody(BaseModel):

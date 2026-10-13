@@ -8,7 +8,7 @@ from db import players, market_listings, black_market_listings, player_market_li
 from game import now, can_afford, pay, add_resources, apply_production, production_fields
 from game_data import TRADE_GOOD_NAMES
 from control_settings import feature_enabled
-from market_rules import price_floors
+from market_rules import price_floors, price_ceilings, price_limits
 
 def _market_write_guard():
     if not feature_enabled("market"):
@@ -19,6 +19,10 @@ router = APIRouter(prefix="/api/market", tags=["market"])
 @router.get('/price-floors')
 async def get_price_floors(user: dict = Depends(get_user)):
     return await price_floors()
+
+@router.get('/price-limits')
+async def get_price_limits(user: dict = Depends(get_user)):
+    return await price_limits()
 
 @router.get("")
 async def list_market(user: dict = Depends(get_user)):
@@ -82,11 +86,13 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
 async def list_player_market(user: dict = Depends(get_user)):
     out = []
     floors = await price_floors()
+    ceilings = await price_ceilings()
     async for m in player_market_listings.find({"qty": {"$gt": 0}}).sort("created_at", -1):
         out.append({
             "id": str(m["_id"]), "seller_tg_id": m["seller_tg_id"], "seller_name": m["seller_name"],
             "mine": m["seller_tg_id"] == user["id"], "resource": m["resource"],
             "below_minimum": m.get('price', 1) < floors.get(m['resource'], 10),
+            "above_maximum": ceilings.get(m['resource']) is not None and m.get('price', 1) > ceilings[m['resource']],
             "name": TRADE_GOOD_NAMES.get(m["resource"], m["resource"]), "qty": m["qty"], "price": m.get("price", 1),
         })
     return out
@@ -102,6 +108,9 @@ async def create_player_listing(body: PlayerListingBody, user: dict = Depends(ge
     floor = (await price_floors()).get(body.resource, 10)
     if body.price < floor:
         raise HTTPException(400, f'حداقل قیمت هر واحد این کالا {floor} سکه است')
+    ceiling = (await price_ceilings()).get(body.resource)
+    if ceiling is not None and body.price > ceiling:
+        raise HTTPException(400, f'حداکثر قیمت هر واحد این کالا {ceiling} سکه است')
     if body.resource not in TRADE_GOOD_NAMES or body.resource == "gold":
         raise HTTPException(400, "فقط کالاهای بازار قابل فروش‌اند")
     if body.qty <= 0:
@@ -147,6 +156,9 @@ async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get
         raise HTTPException(400, "نمی‌توانی کالای خودت را بخری")
     if listing.get('price', 1) < (await price_floors()).get(listing['resource'], 10):
         raise HTTPException(409, 'قیمت این آگهی کمتر از حداقل مجاز است؛ فروشنده باید آن را لغو و دوباره ثبت کند')
+    ceiling = (await price_ceilings()).get(listing['resource'])
+    if ceiling is not None and listing.get('price', 1) > ceiling:
+        raise HTTPException(409, 'قیمت این آگهی بیشتر از حداکثر مجاز است؛ فروشنده باید آن را لغو و دوباره ثبت کند')
     cost = body.qty * listing.get("price", 1)
     p = await players.find_one({"tg_id": user["id"]})
     if not p:

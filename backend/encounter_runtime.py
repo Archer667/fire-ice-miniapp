@@ -5,6 +5,7 @@ New movements and all subsequent contacts use physical positions and an explicit
 stationary state; closing a case never transports an army to its old destination.
 """
 from itertools import combinations
+from datetime import datetime
 from bson import ObjectId
 from encounter_geometry import encounters, legs, position
 
@@ -61,6 +62,14 @@ async def announce(w, root, event, intro):
 
 
 async def start(w, first, second, point, at):
+    if point['kind']=='castle':
+        root=await open_castle_battle(w,point['castle'])
+        if root:
+            # A pair of fresh arrivals can meet each other before either meets
+            # a locked participant. They still belong to the existing dossier.
+            for army in (first,second):
+                await join(w,root,army,point,at,force_independent=True)
+            return
     battle_id = str(ObjectId())
     location = label(point)
     defender = await w.owner_of_castle(location) if point['kind'] == 'castle' else None
@@ -92,11 +101,24 @@ async def start(w, first, second, point, at):
     await announce(w, root, f'battle-started:{battle_id}', f'⚔️ نبرد در {location} آغاز شد.')
 
 
-async def join(w, root, army, point, at):
+async def open_castle_battle(w,castle,exclude=None):
+    query={'battle_open':True,'battle_is_root':{'$ne':False},
+           'combat_resolved_at':{'$exists':False},'battle_cancelled_at':{'$exists':False},
+           '$or':[{'battle_location':castle},{'battle_location':{'$in':[None,'']},'target_castle':castle}]}
+    if exclude is not None:query['_id']={'$ne':exclude}
+    rows=await w.campaigns.find(query).to_list(None)
+    rows=[r for r in rows if r.get('engagement_campaign_id') and not r.get('stationed_edge') and (not r.get('battle_contact') or r['battle_contact'].get('kind')=='castle')]
+    return min(rows,key=lambda r:(r.get('battle_started_at') or r.get('arrival_at') or datetime.max,str(r['_id']))) if rows else None
+
+async def join(w, root, army, point, at,force_independent=False):
     side = await w.choose_battle_side(root, army)
     if side is None:
-        return
+        if not force_independent:return
+        side='independent'
     bid, rid = root['engagement_campaign_id'], str(root['_id'])
+    current=await w.campaigns.find_one({'_id':army['_id']})
+    if current and current.get('engagement_locked'):
+        return current.get('engagement_campaign_id')==bid
     snapshot = w.battle_army_snapshot(army)
     entry = {'campaign_id': str(army['_id']), 'tg_id': army['tg_id'],
              'player_name': army['player_name'], 'side': side, 'joined_at': at}

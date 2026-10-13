@@ -128,6 +128,25 @@ def _tax_delta(rate: int, settings: dict, popularity: int = POPULARITY_START) ->
             return int(band["popularity"])
     return 0
 
+def accrue_tax_effect(player: dict, settings: dict, current):
+    """Settle the old rate before changes; fractional effects survive daily checks."""
+    from game import normalize_datetime
+    anchor = normalize_datetime(player.get("tax_effect_at"))
+    if anchor is None:
+        history = player.get("popularity_history") or []
+        anchor = normalize_datetime(history[-1].get("at")) if history else None
+        # Existing accounts have no rate history: begin from their last daily check,
+        # or at most one day ago. Never assume a rate predating registration.
+        if anchor is None:
+            anchor = max(normalize_datetime(player.get("created_at")) or current,
+                         current - timedelta(days=1))
+    seconds = max(0, (current - anchor).total_seconds())
+    effect = _tax_delta(int(player.get("tax_rate", 10)), settings,
+                        int(player.get("popularity", POPULARITY_START)))
+    player["tax_effect_pending"] = float(player.get("tax_effect_pending", 0)) + effect * seconds / 86400
+    player["tax_effect_at"] = max(anchor, current)
+
+
 async def _trigger_rebellion(player: dict, popularity: int, chance: int, roll: int, settings: dict):
     if await rebellions.find_one({"tg_id": player["tg_id"], "status": {"$in": ACTIVE_STATUSES}}):
         return None
@@ -184,16 +203,20 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     if settlement.get("shortage", 0) > 0:
         ration_delta = int(settings["starvation_popularity"])
     old_popularity = int(player.get("popularity", POPULARITY_START))
-    tax_delta = _tax_delta(int(player.get("tax_rate", 10)), settings, old_popularity)
+    accrue_tax_effect(player, settings, now())
+    tax_total = float(player.get("tax_effect_pending", 0))
+    tax_delta = int(tax_total)
     popularity = max(0, min(100, old_popularity + ration_delta + tax_delta))
     await players.update_one({"tg_id": player["tg_id"]}, {
         "$set": {
             "popularity": popularity,
             "rebellion_last_check": day_key,
+            "tax_effect_at": player["tax_effect_at"],
+            "tax_effect_pending": tax_total - tax_delta,
         },
         "$push": {"popularity_history": {"$each": [{
             "at": now(), "before": old_popularity, "after": popularity,
-            "ration": ration_delta, "tax": tax_delta, "food_consumed": consumed,
+            "ration": ration_delta, "tax": tax_delta, "tax_accrued": tax_total, "food_consumed": consumed,
         }], "$slice": -60}},
     })
     chance = rebellion_chance(popularity, settings)
