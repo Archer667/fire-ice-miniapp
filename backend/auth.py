@@ -44,6 +44,8 @@ async def get_user(
         dead = await players.find_one({"tg_id": user["id"], "is_dead": True}, {"_id": 1})
         if dead and not await get_admin_role(user):
             raise HTTPException(403, "کشته شد — تا حذف خاندان توسط ادمین امکان بازی نداری", headers={"X-Player-Dead": "1"})
+    if request:
+        user['_admin_request'] = (request.scope.get('method', 'GET'), request.url.path)
     return user
 
 async def get_admin_role(user: dict) -> str | None:
@@ -59,11 +61,15 @@ async def get_admin_role(user: dict) -> str | None:
         return "full"
     doc = await admin_roles.find_one({"tg_id": user["id"]})
     role = doc.get("role") if doc else None
-    return role if role in ("owner", "full", "limited") else None
+    return role if role in ("owner", "full", "limited", "war_roleplay") else None
 
 async def get_admin(user: dict) -> dict:
     """هر سه سطح ادمین — برای کارهای اجرایی مشترک."""
     role = await get_admin_role(user)
+    if role == 'war_roleplay':
+        from admin_permissions import war_roleplay_allowed
+        if not war_roleplay_allowed(*user.get('_admin_request', ('', ''))):
+            raise HTTPException(403, 'این دسترسی فقط برای داوری رول و جنگ است')
     if not role:
         raise HTTPException(403, "دسترسی ادمین نداری")
     user["admin_role"] = role

@@ -503,6 +503,8 @@ async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(ad
 async def list_roleplay_pending(user: dict = Depends(admin_user)):
     """رول‌های بازیکنان که هنوز ادمین نتیجه‌شان را ننوشته — برای دستهٔ «جنگ» طرف
     مقابلِ همان نبرد (اگر او هم سناریواش را فرستاده باشد) هم برای مقایسه نشان داده می‌شود"""
+    from display_clock import display_clock
+    display = await display_clock()
     out = []
     cur = roleplays.find({"resolved": False}).sort("created_at", -1).limit(50)
     async for r in cur:
@@ -520,7 +522,7 @@ async def list_roleplay_pending(user: dict = Depends(admin_user)):
             "id": str(r["_id"]), "player": r["player_name"], "tg_id": r["tg_id"], "castle": r["castle"],
             "category": r["category"], "category_name": ROLEPLAY_CATEGORIES.get(r["category"], r["category"]),
             "text": r["text"], "campaign_id": r.get("campaign_id"), "sibling": None,
-            "created_at": r["created_at"].isoformat(), "war": None,
+            "created_at": r["created_at"].isoformat(), "created_at_real": display.iso(r["created_at"]), "war": None,
             "actor_state": player_state(actor) if r["category"] in ("economy", "sabotage") else None,
             "target_state": player_state(target) if r["category"] == "sabotage" else None,
             "target_tg_id": r.get("target_tg_id"), "target_player_name": r.get("target_player_name"),
@@ -2038,7 +2040,7 @@ class AddAdminBody(BaseModel):
 
 @router.post("/admins")
 async def add_admin(body: AddAdminBody, user: dict = Depends(owner_user)):
-    if body.role not in ("limited", "full", "owner"):
+    if body.role not in ("limited", "full", "owner", "war_roleplay"):
         raise HTTPException(400, "سطح دسترسی ادمین نامعتبر است")
     if body.tg_id in ADMIN_IDS or (OWNER_ID is not None and body.tg_id == OWNER_ID):
         raise HTTPException(400, "این ادمین از تنظیمات سرور مدیریت می‌شود و سطحش از پنل قابل‌تغییر نیست")

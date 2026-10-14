@@ -1,0 +1,15 @@
+.admin-dossier { margin-bottom: 12px; padding: 0; overflow: hidden; }
+.admin-dossier > summary { display: flex; align-items: center; gap: 12px; padding: 15px; cursor: pointer; list-style: none; min-height: 64px; }
+.admin-dossier > summary::-webkit-details-marker { display: none; }
+.admin-dossier > summary:focus-visible { outline: 2px solid var(--gold, #c7a55a); outline-offset: -3px; border-radius: 14px; }
+.admin-dossier-heading { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.admin-dossier-heading strong { color: var(--gold, #d6bc7c); font-size: 14px; }
+.admin-dossier-heading span, .admin-dossier-heading small { color: var(--mid); font-size: 12px; line-height: 1.6; }
+.admin-dossier-heading time { color: var(--low, #a99e89); font-size: 11px; }
+.admin-dossier-mark { color: var(--gold, #d6bc7c); font-size: 24px; }
+.admin-dossier-chevron { color: var(--gold, #d6bc7c); font-size: 24px; }
+.admin-dossier[open] .admin-dossier-chevron { transform: rotate(180deg); }
+.admin-dossier[open] > summary { border-bottom: 1px solid var(--line); background: rgba(205, 170, 90, .04); }
+.admin-dossier-body { padding: 14px; }
+.admin-roleplay-categories { max-width: 100%; overflow-x: auto; padding-bottom: 5px; }
+.admin-roleplay-categories > button { flex-shrink: 0; }

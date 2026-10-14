@@ -21,6 +21,7 @@ import AdminControlCenter from '../components/AdminControlCenter.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, BUILDINGS_STATIC, buildingProduces, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
 import Projects from './Projects.jsx';
+import AdminDossier from '../components/AdminDossier.jsx';
 import { AdminFamily } from './Family.jsx';
 
 const NEW_CASTLE = '__new__';
@@ -174,17 +175,19 @@ export default function Admin() {
   const { me, toast } = useGame();
   const isOwner = me.is_owner || me.admin_role === 'owner';
   const isFull = isOwner || me.admin_role === 'full';
+  const isAdjudicator = me.admin_role === 'war_roleplay';
+  const allowedTabKeys = isAdjudicator ? new Set(['war', 'roleplays']) : LIMITED_TAB_KEYS;
   const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
   const availGroups = TAB_GROUPS
-    .filter(group => isFull || group.tabs.some(item => LIMITED_TAB_KEYS.has(item.key)))
-    .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || LIMITED_TAB_KEYS.has(item.key))) }))
+    .filter(group => isFull || group.tabs.some(item => allowedTabKeys.has(item.key)))
+    .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || allowedTabKeys.has(item.key))) }))
     .filter(group => group.tabs.length);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(isAdjudicator ? 'war' : 'overview');
   const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
 
   useEffect(() => {
-    if (!isFull && !LIMITED_TAB_KEYS.has(tab)) setTab('war');
-  }, [isFull, tab]);
+    if (!isFull && !allowedTabKeys.has(tab)) setTab('war');
+  }, [isFull, isAdjudicator, tab]);
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -578,7 +581,7 @@ export default function Admin() {
     setRebellionBusyId(null);
   };
 
-  useEffect(() => { loadAdminNotifications(); }, []);
+  useEffect(() => { if (!isAdjudicator) loadAdminNotifications(); }, [isAdjudicator]);
 
   useEffect(() => {
     // Fetch only the active panel; unrelated heavy requests must not queue saves.
@@ -1545,8 +1548,8 @@ export default function Admin() {
 
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
-    if (!isFull && !LIMITED_TAB_KEYS.has(key)) {
-      toast('ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
+    if (!isFull && !allowedTabKeys.has(key)) {
+      toast(isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند' : 'ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
       return;
     }
     if (target?.ownerOnly && !isOwner) {
@@ -1599,18 +1602,18 @@ export default function Admin() {
       </div>
       <div className="admin-role-card up">
         <div>
-          <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : 'ادمین اجرایی'}</strong>
+          <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : isAdjudicator ? 'ادمین رول و جنگ' : 'ادمین اجرایی'}</strong>
           <small>{isOwner
             ? 'به تمام بخش‌ها، مدیریت ادمین‌ها و ابزارهای فصل دسترسی داری.'
             : isFull
               ? 'به همهٔ بخش‌های بازی دسترسی داری؛ تب مدیریت ادمین‌ها فقط برای ادمین اصلی است.'
-              : 'فقط بخش داوری و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
+              : isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند.' : 'فقط بخش داوری و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
         </div>
-        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : 'دسترسی اجرایی'}</span>
+        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : isAdjudicator ? 'داوری رول و جنگ' : 'دسترسی اجرایی'}</span>
       </div>
 
       <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
-        <div className="admin-section-switcher up u1" role="tablist" aria-label="دسته‌های پنل">
+        {!isAdjudicator && <div className="admin-section-switcher up u1" role="tablist" aria-label="دسته‌های پنل">
           {availGroups.map(group => {
             const selected = activeGroup?.key === group.key;
             const count = group.tabs.reduce((sum, item) => sum + tabBadge(item.key), 0);
@@ -1620,7 +1623,7 @@ export default function Admin() {
               {count > 0 && <b>{count.toLocaleString('fa-IR')}</b>}
             </button>;
           })}
-        </div>
+        </div>}
         {activeGroup && (
           <section className="admin-active-section up u1">
             <div className="admin-active-section-heading">
@@ -2086,7 +2089,7 @@ export default function Admin() {
             {battles === null && <div className="loading">در حال بارگذاری نبردها...</div>}
             {battles && battles.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>نبرد بازی نداریم</div>}
             {battles && battles.map(b => {
-              return <div className="card" key={b.campaign_id} style={{ marginBottom: 12 }}>
+              return <AdminDossier key={b.campaign_id} kind="battle" title={b.name || 'پروندهٔ نبرد'} date={b.started_at_real || b.started_at} place={castleLabel(b.location)} people={[b.attacker_name, b.defender_name, ...(b.parties || []).map(p => p.player_name), ...(b.attacker_armies || []).map(a => a.player_name), ...(b.defender_armies || []).map(a => a.player_name)]}>
                 <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.multi_party ? 'نبرد چندطرفه' : `${b.attacker_name} در برابر ${b.defender_name}`} · {castleLabel(b.location)}</small></div></div>
                 <BattleExport battle={b} toast={toast} />
                 {b.multi_party && <div className="notice-guide" style={{ marginTop: 10 }}><strong>طرف‌های نبرد و پیمان‌ها</strong><span>{b.parties.map(p => `${p.player_name} — درگیر با: ${p.hostile_to.map(id => b.parties.find(x => x.tg_id === id)?.player_name || id).join('، ') || 'ندارد'}؛ پیمان صلح با: ${p.peace_with.map(id => b.parties.find(x => x.tg_id === id)?.player_name || id).join('، ') || 'ندارد'}`).join('\n')}</span></div>}
@@ -2144,7 +2147,7 @@ export default function Admin() {
                 <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
                 <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
                 <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
-              </div>;
+              </AdminDossier>;
             })}
           </div>
           )}
@@ -2264,7 +2267,7 @@ export default function Admin() {
             سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
           </div>
           <div className="card up u3 roleplay-cap-card"><div><b>سقف امتیاز رول‌ها</b><small>این سقف برای تمام دسته‌هاست و همهٔ ادمین‌ها می‌توانند آن را تنظیم کنند.</small></div><input type="number" min="1" value={roleplayScoreMax} onChange={e=>setRoleplayScoreMax(e.target.value)} /><button className="btn ghost" disabled={roleplayScoreSettingsBusy} onClick={saveRoleplayScoreMax}>ذخیره سقف</button></div>
-          <div className="tabs up u3" role="tablist" style={{ marginBottom: 10 }}>
+          <div className="tabs up u3 admin-roleplay-categories" role="tablist" style={{ marginBottom: 10 }}>
             {[['all', 'همه'], ...Object.entries(ROLEPLAY_CATEGORIES).filter(([key]) => key !== 'security')].map(([key, label]) => {
               const count = (roleplayPending || []).filter(r => key === 'all' || r.category === key).length;
               return <button type="button" key={key} className={`rbtn tab ${roleplayCategoryTab === key ? 'on' : ''}`}
@@ -2276,7 +2279,7 @@ export default function Admin() {
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رول بررسی‌نشده‌ای نیست</div>
             )}
             {roleplayPending && roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).map(r => (
-              <div className="card" key={r.id} style={{ marginBottom: 10 }}>
+              <AdminDossier key={r.id} kind="roleplay" title={r.title || r.category_name || 'پروندهٔ رول'} date={r.created_at_real || r.created_at} place={castleLabel(r.war?.target_castle || r.castle)} people={[r.player, r.target_player_name, r.sibling?.player, r.war?.attacker_name, r.war?.defender_name]}>
                 <div className="res">
                   <div className="ic"><Scroll s={16} /></div>
                   <div className="n">
@@ -2410,7 +2413,7 @@ export default function Admin() {
                   {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
                 </button>
                 </div>
-              </div>
+              </AdminDossier>
             ))}
           </div>
           </>
@@ -3488,12 +3491,14 @@ export default function Admin() {
             <div className="admin-access-summary">
               <div><b>ادمین اصلی</b><span>تمام دسترسی‌ها؛ می‌تواند ادمین اصلی دیگری تعریف کند و عملیات فصل انجام دهد.</span></div>
               <div><b>ادمین کامل</b><span>همهٔ بخش‌های بازی را می‌بیند، ولی تب ادمین‌ها اصلاً برایش نمایش داده نمی‌شود.</span></div>
+              <div><b>ادمین رول و جنگ</b><span>فقط دو تب جنگ و رول‌ها؛ هیچ تب دیگری در پنل نمایش داده نمی‌شود.</span></div>
               <div><b>ادمین اجرایی</b><span>فقط امور داوری و ارتباط: جنگ، رول، شورش، مدال، توییت، رویداد و پیام.</span></div>
             </div>
             <label className="f">افزودن ادمین یا تغییر سطح دسترسی</label>
             <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
             <label className="f">سطح دسترسی</label>
             <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}>
+              <option value="war_roleplay">ادمین رول و جنگ — فقط دو تب جنگ و رول‌ها</option>
               <option value="limited">ادمین اجرایی — عملیات روزمره و دسترسی محدود</option>
               <option value="full">ادمین کامل — همهٔ بخش‌ها به‌جز مدیریت ادمین‌ها</option>
               <option value="owner">ادمین اصلی — دقیقاً با تمام دسترسی‌های تو</option>
@@ -3508,7 +3513,7 @@ export default function Admin() {
             {admins && admins.map(a => (
               <div className="res" key={a.tg_id}>
                 <div className="ic"><Shield s={16} /></div>
-                <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
+                <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : a.role === 'war_roleplay' ? 'ادمین رول و جنگ' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
                 {a.source === 'db' && !a.is_self && <div className="admin-row-actions">
                   <button className="btn ghost" onClick={() => editAdminRole(a)}>تغییر سطح</button>
                   {a.removable && <button className="btn ghost danger" onClick={() => removeAdmin(a.tg_id)}>حذف</button>}

@@ -17,6 +17,8 @@ async def _admin_ids(roles: tuple[str, ...] | None = None) -> set[int]:
         else:
             ids.discard(OWNER_ID)
     async for row in admin_roles.find({}, {"tg_id": 1, "role": 1}):
+        if roles is None and row.get('role') == 'war_roleplay':
+            continue
         if roles is None or row.get("role") in roles:
             ids.add(row["tg_id"])
         else:
@@ -40,6 +42,8 @@ async def notify_admins(
     audience_roles: tuple[str, ...] | None = None,
 ):
     """اعلان ماندگار پنل را می‌سازد و خلاصه را برای سطح‌های مجاز تلگرام می‌کند."""
+    if audience_roles is None and kind in ('battle', 'war', 'roleplay', 'ambush', 'espionage'):
+        audience_roles = ('owner', 'full', 'limited', 'war_roleplay')
     route = notification_route(kind)
     title = await normalize_player_names(title)
     detail = await normalize_player_names(detail)
