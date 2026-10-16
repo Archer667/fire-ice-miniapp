@@ -368,7 +368,7 @@ async def _admin_castle_defenses(root):
 async def list_campaigns(user: dict = Depends(admin_user)):
     """اطلاعات کامل لشکرکشی‌ها برای ادمین — فقط نمایشی، بدون تایید/رد"""
     out = []
-    cur = campaigns.find({}).sort("created_at", -1).limit(50)
+    cur = campaigns.find({"active": True, "merge_group_id":{"$in":[None, ""]}}).sort("created_at", -1)
     async for s in cur:
         troops = [
             {"name": COMMON_TROOPS[tid]["name"] if tid in COMMON_TROOPS else tid, "count": n}
@@ -379,6 +379,7 @@ async def list_campaigns(user: dict = Depends(admin_user)):
         if s["target_castle"] != s["origin_castle"]:
             target_owner = await owner_of_castle(s["target_castle"])
         out.append({
+            "merge_group_id":str(s.get("merge_group_id") or ""),"in_battle":bool(s.get("engagement_locked")),
             "id": str(s["_id"]), "player": s["player_name"], "tg_id": s["tg_id"],
             "from": s["origin_castle"], "to": s["target_castle"],
             "target_tg_id": target_owner["tg_id"] if target_owner else None,
@@ -727,7 +728,7 @@ def _battle_members_query(root: dict, battle_id: str) -> dict:
         {"battle_root_campaign_id": root_id},
     ]}
 
-async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False, return_tg_ids=None, retreat_destinations=None):
+async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = False, return_tg_ids=None, retreat_destinations=None, stay=False):
     """پرونده را برای همهٔ اعضا یک‌جا می‌بندد تا هیچ قفل یا ریشهٔ یتیمی باقی نماند."""
     timestamp = now()
     members = await campaigns.find(_battle_members_query(root, battle_id)).to_list(None)
@@ -735,7 +736,7 @@ async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = F
     from game_data import TRAVEL_GRAPH
     plans = []
     for member in members:
-        if member.get('active') and (cancelled or member.get('tg_id') in (return_tg_ids or [])):
+        if not stay and member.get('active') and not member.get('battle_left_at') and (cancelled or member.get('tg_id') in (return_tg_ids or [])):
             try:
                 plan = await _plan_battle_return(member, battle_id, timestamp, cancelled, retreat_destinations)
             except ValueError as exc:
@@ -755,6 +756,19 @@ async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = F
         }},
     )
 
+    if stay:
+        from encounter_runtime import label
+        for member in members:
+            if not member.get('active') or member.get('battle_left_at'):continue
+            point=member.get('battle_contact') or root.get('battle_contact') or {'kind':'castle','castle':root.get('battle_location') or member['target_castle']}
+            location=label(point)
+            fields={'origin_castle':location,'target_castle':location,'op_type':'garrison',
+                    'route_path':[location],'route_segments':[],'route_edge_minutes':[],'travel_minutes':0,
+                    'arrival_at':timestamp,'arrival_notified':True,'moved_at':timestamp,'encounters_checked_at':timestamp,'stationed_at':timestamp}
+            unset={'returning_from_battle':'','return_destination_edge':'','route_start_position':''}
+            if point['kind']=='edge':fields['stationed_edge']={k:v for k,v in point.items() if k!='kind'}
+            else:unset['stationed_edge']=''
+            await campaigns.update_one({'_id':member['_id']},{'$set':fields,'$unset':unset})
     from routers.war import notify_campaign_departure
     for member, plan in plans:
         await campaigns.update_one({'_id': member['_id'], 'active': True}, {
@@ -763,11 +777,11 @@ async def _close_battle_state(root: dict, battle_id: str, *, cancelled: bool = F
         await notify_campaign_departure({**member, **plan})
     return changed
 
-async def _dismiss_battle_record(root: dict, battle_id: str, message: str):
+async def _dismiss_battle_record(root: dict, battle_id: str, message: str, *, stay=False):
     """انحلال واحد و مشترک برای دکمهٔ نبرد و عملیات مستقیم روی لشکر."""
     member_query = _battle_members_query(root, battle_id)
     members = await campaigns.find(member_query, {"tg_id": 1}).to_list(None)
-    changed = await _close_battle_state(root, battle_id, cancelled=True)
+    changed = await _close_battle_state(root, battle_id, cancelled=True, stay=stay)
     await roleplays.update_many({"category": "war", "campaign_id": battle_id, "resolved": False}, {"$set": {
         "resolved": True, "resolved_at": now(), "result": message,
     }})
@@ -806,6 +820,14 @@ async def _remove_campaign_from_battle(campaign: dict, reason: str) -> dict:
     root = await _battle_root(battle_id)
     if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
         return {"removed": False, "battle_closed": False}
+    if 'battle_attacker_army_ids' not in root and 'battle_defender_army_ids' not in root:
+        legacy=await campaigns.find(_battle_members_query(root,battle_id)).to_list(None)
+        defender=root.get('battle_defender_tg_id') or root.get('opponent_tg_id')
+        roster={'battle_attacker_army_ids':[str(a['_id']) for a in legacy if a.get('active') and a.get('tg_id')!=defender],
+                'battle_defender_army_ids':[str(a['_id']) for a in legacy if a.get('active') and a.get('tg_id')==defender]}
+        if defender:roster['battle_defender_tg_id']=defender
+        await campaigns.update_one({'_id':root['_id']},{'$set':roster})
+        root.update(roster)
     campaign_id = str(campaign["_id"])
     side = "defender" if campaign_id in (root.get("battle_defender_army_ids") or []) else "attacker"
     await campaigns.update_one({"_id": root["_id"]}, {
@@ -833,12 +855,13 @@ async def _remove_campaign_from_battle(campaign: dict, reason: str) -> dict:
     if castle_owner and castle_owner.get("tg_id") == root.get("battle_defender_tg_id"):
         # صاحب قلعه حتی بدون لشکر جداگانه با زیرساخت دفاعی طرف نبرد باقی می‌ماند.
         active_defenders = max(1, active_defenders)
-    remaining = await campaigns.find({"engagement_campaign_id": battle_id, "active": True}, {"tg_id": 1}).to_list(None)
+    remaining = await campaigns.find({"_id":{"$in":[ObjectId(x) for x in attacker_ids+defender_ids]}, "active": True}, {"tg_id": 1}).to_list(None)
     remaining_tg_ids = list({row["tg_id"] for row in remaining})
     await campaigns.update_one({"_id": root["_id"]}, {"$set": {"battle_participant_tg_ids": remaining_tg_ids}})
     # A legacy column becoming empty does not end a multi-party conflict.
     # Remove a field opponent who has actually left; a castle owner remains.
-    if not (castle_owner and castle_owner.get('tg_id') == root.get('battle_defender_tg_id')) and not any(a.get('tg_id') == root.get('battle_defender_tg_id') for a in remaining):
+    defender_withdrew = not any(a.get('tg_id') == root.get('battle_defender_tg_id') for a in remaining) and (campaign.get('tg_id') == root.get('battle_defender_tg_id') or (side == 'defender' and not defender_ids))
+    if defender_withdrew or (not (castle_owner and castle_owner.get('tg_id') == root.get('battle_defender_tg_id')) and not any(a.get('tg_id') == root.get('battle_defender_tg_id') for a in remaining)):
         root.pop('battle_defender_tg_id', None)
         await campaigns.update_one({'_id': root['_id']}, {'$unset': {'battle_defender_tg_id': ''}})
     from routers.war import battle_relations
@@ -847,7 +870,7 @@ async def _remove_campaign_from_battle(campaign: dict, reason: str) -> dict:
     message = f"لشکر «{campaign.get('name', 'بی‌نام')}» از نبرد خارج شد. {reason}"
     if battle_closed:
         message += " چون دیگر طرف‌های متخاصمی در پرونده باقی نماندند، نبرد بدون نتیجه بسته شد."
-        await _dismiss_battle_record(root, battle_id, message)
+        await _dismiss_battle_record(root, battle_id, message, stay=True)
     else:
         recipients = set(remaining_tg_ids) | {campaign.get("tg_id")}
         async for participant in players.find({"tg_id": {"$in": list(recipients)}}):
@@ -1012,13 +1035,14 @@ class RoleplayResultBody(BaseModel):
                                         # طرف مقابلِ خودکارِ لشکرکشی (که فقط برای دستهٔ «جنگ» پیدا می‌شود)
 
 @router.post("/battles/{campaign_id}/dismiss")
-async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user)):
+async def dismiss_battle(campaign_id: str, user: dict = Depends(admin_user), stay: bool = False):
     """انحلال اداری نبرد بدون برنده/تلفات؛ لشکرهای همان پرونده آزاد می‌شوند."""
     root = await _battle_root(campaign_id)
     if not root or root.get("combat_resolved_at") or root.get("battle_cancelled_at"):
         raise HTTPException(404, "پروندهٔ نبرد باز پیدا نشد")
 
-    unlocked = await _dismiss_battle_record(root, campaign_id, "نبرد منحل شد؛ لشکرهای دارای حداقل ۱۲ ساعت استقرار پیش از درگیری در محل می‌مانند و سایر بازمانده‌ها با زمان مسیر به مبدأ برمی‌گردند.")
+    message = "نبرد بدون نتیجه بسته شد؛ همهٔ لشکرهای باقی‌مانده در محل درگیری مستقر شدند." if stay else "نبرد منحل شد؛ لشکرهای دارای حداقل ۱۲ ساعت استقرار پیش از درگیری در محل می‌مانند و سایر بازمانده‌ها با زمان مسیر به مبدأ برمی‌گردند."
+    unlocked = await _dismiss_battle_record(root, campaign_id, message, stay=stay)
     return {"ok": True, "armies_unlocked": unlocked.modified_count}
 
 @router.post("/battles/{campaign_id}/resolve")
@@ -2397,13 +2421,14 @@ class EditPlayerProfileBody(BaseModel):
     name: str
     backstory: str
     profile_image: str | None = None
+    flag_image: str | None = None
 
 @router.get("/players/{tg_id}/profile")
 async def admin_get_player_profile(tg_id: int, user: dict = Depends(admin_user)):
-    player = await players.find_one({"tg_id": tg_id}, {"name": 1, "backstory": 1, "profile_image": 1})
+    player = await players.find_one({"tg_id": tg_id}, {"name": 1, "backstory": 1, "profile_image": 1, "flag_image":1})
     if not player:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    return {"name": player.get("name", ""), "backstory": player.get("backstory", ""), "profile_image": player.get("profile_image")}
+    return {"name": player.get("name", ""), "backstory": player.get("backstory", ""), "profile_image": player.get("profile_image"), "flag_image":player.get("flag_image")}
 
 @router.post("/players/{tg_id}/profile")
 async def admin_edit_player_profile(tg_id: int, body: EditPlayerProfileBody, user: dict = Depends(admin_user)):
@@ -2416,13 +2441,19 @@ async def admin_edit_player_profile(tg_id: int, body: EditPlayerProfileBody, use
     image = body.profile_image
     if image and (not image.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")) or len(image) > 3_500_000):
         raise HTTPException(400, "عکس باید JPG، PNG یا WebP و حداکثر ۲٫۵ مگابایت باشد")
+    flag_update={}
+    if 'flag_image' in body.model_fields_set:
+        from character_images import decode_character_image,map_flag_image
+        decode_character_image(body.flag_image)
+        flag_update={'flag_image':body.flag_image,'flag_map_image':map_flag_image(body.flag_image)}
     result = await players.update_one({"tg_id": tg_id}, {"$set": {
-        "name": name, "backstory": backstory, "profile_image": image,
+        **flag_update, "name": name, "backstory": backstory, "profile_image": image,
         "profile_edited_at": now(), "profile_edited_by": user["id"],
     }})
     if not result.matched_count:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    return {"ok": True, "name": name, "backstory": backstory, "profile_image": image}
+    updated=await players.find_one({"tg_id":tg_id},{"flag_image":1}) or {}
+    return {"ok": True, "name": name, "backstory": backstory, "profile_image": image, "flag_image":updated.get("flag_image")}
 
 @router.post("/players/{tg_id}/popularity")
 async def admin_adjust_player_popularity(tg_id: int, body: AdjustPlayerPopularityBody, user: dict = Depends(full_admin_user)):
@@ -2528,6 +2559,13 @@ async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_use
             for t, n in c["troops"].items() if n and n > 0
         ]
         arrival_at = c.get("arrival_at")
+        leader_name=None
+        if c.get('merge_group_id'):
+            from army_groups import groups
+            group=await groups.find_one({'_id':ObjectId(c['merge_group_id']),'active':True})
+            leader=await players.find_one({'tg_id':group['leader_tg_id']}) if group else None
+            leader_name=leader.get('name') if leader else 'نامشخص'
+
         out.append({
             "id": str(c["_id"]),
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
@@ -2536,7 +2574,7 @@ async def admin_player_campaigns(tg_id: int, user: dict = Depends(full_admin_use
             "troops": troops, "power": c.get("power", 0), "men_committed": c["men_committed"],
             "active": c.get("active", False),
             "in_battle": bool(c.get("engagement_locked")),
-            "merge_group_id": str(c.get("merge_group_id") or ""),
+            "merge_group_id": str(c.get("merge_group_id") or ""), "merge_group_leader_name":leader_name,
             "arrived": (now() >= arrival_at) if arrival_at else True,
         })
     return out
@@ -2550,7 +2588,7 @@ async def admin_relocate_campaign(campaign_id: str, body: RelocateCampaignBody, 
     # The API middleware already holds the game lock for this request.
     return await _relocate_campaign(campaign_id, body, user)
 
-async def _relocate_campaign(campaign_id, body, user):
+async def _relocate_campaign(campaign_id, body, user, *, allow_group=False):
     from routers import war
     try:
         oid = ObjectId(campaign_id)
@@ -2563,8 +2601,11 @@ async def _relocate_campaign(campaign_id, body, user):
     names, _ = await war.all_castle_names_and_ports()
     if destination not in names:
         raise HTTPException(400, "قلعهٔ مقصد در نقشه وجود ندارد")
-    if army.get('merge_group_id'):
-        raise HTTPException(409, "ابتدا این لشکر را از لشکر مشترک جدا کن؛ انتقال یک عضو نباید محل بقیهٔ اعضا را تغییر دهد")
+    if army.get('merge_group_id') and not allow_group:
+        from army_groups import groups
+        group=await groups.find_one({'_id':ObjectId(army['merge_group_id']),'active':True}) if ObjectId.is_valid(army['merge_group_id']) else None
+        leader=await players.find_one({'tg_id':group['leader_tg_id']}) if group else None
+        raise HTTPException(409, f"فرماندهٔ این لشکر مشترک: {leader.get('name') if leader else 'نامشخص'}. انتقال گروهی از کارت لشکر مشترک انجام می‌شود.")
     engaged = bool(army.get('engagement_locked') or (army.get('engagement_campaign_id') and not army.get('battle_left_at')))
     if engaged and not body.confirm_battle_exit:
         raise HTTPException(409, "خروج لشکر از نبرد یا محاصره را جداگانه تأیید کن")

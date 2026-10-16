@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../api.js';
+import { req, api } from '../api.js';
 import CastlePicker from './CastlePicker.jsx';
 
 export default function AdminArmyRelocation({ army, toast, onMoved }) {
@@ -22,7 +22,7 @@ export default function AdminArmyRelocation({ army, toast, onMoved }) {
     <button className="btn ghost" disabled={busy} onClick={() => setOpen(!open)}>جابجایی فوری لشکر</button>
     {open && <div style={{ padding: 12, border: '1px solid var(--line)', borderRadius: 12, marginTop: 8 }}>
       <p className="page-sub">انتقال بدون زمان سفر انجام می‌شود. نیروها، آیتم‌ها و تجهیزات حفظ می‌شوند و لشکر در مقصد مستقر می‌شود.</p>
-      {army.merge_group_id ? <p className="page-sub">ابتدا این عضو را از لشکر مشترک جدا کن.</p> : <>
+      {army.merge_group_id ? <div className="admin-tool-note"><p>فرماندهٔ لشکر مشترک: <strong>{army.merge_group_leader_name||'در کارت لشکر مشترک نمایش داده می‌شود'}</strong></p><p>انتقال تمام اعضا از کارت لشکر مشترکِ فرمانده انجام می‌شود. برای انتقال مستقل، عضویت این لشکر قابل لغو است.</p><button className="btn ghost" disabled={busy} onClick={async()=>{if(!window.confirm('این لشکر مستقل شود؟ محل و نیروهایش حفظ می‌شوند.'))return;setBusy(true);try{await req(`/api/admin/army-groups/${army.merge_group_id}`,{method:'POST',body:JSON.stringify({action:'detach',member_id:army.id})});onMoved();setOpen(false);}catch(e){toast(e.message);}finally{setBusy(false);}}}>جداکردن از لشکر مشترک</button></div> : <>
         <label className="f">قلعهٔ مقصد</label>
         <CastlePicker value={destination} onChange={setDestination} max={1} allowOccupied />
         {battleRequired && <label className="family-confirm"><input type="checkbox" checked={confirm} disabled={busy} onChange={e => setConfirm(e.target.checked)} />خروج این لشکر از نبرد یا محاصره را تأیید می‌کنم؛ اگر طرف متخاصمی باقی نماند، پرونده بدون نتیجه بسته می‌شود.</label>}
@@ -31,4 +31,3 @@ export default function AdminArmyRelocation({ army, toast, onMoved }) {
     </div>}
   </div>;
 }
-

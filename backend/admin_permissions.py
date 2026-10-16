@@ -3,7 +3,7 @@ import re
 
 WAR_ROLEPLAY_ROLE = 'war_roleplay'
 _READ = {
-    '/api/admin/campaigns', '/api/admin/ambushes', '/api/admin/battles',
+    '/api/admin/campaigns', '/api/admin/army-groups', '/api/admin/ambushes', '/api/admin/battles',
     '/api/admin/espionage', '/api/admin/espionage/resolved',
     '/api/admin/war-window', '/api/admin/roleplay', '/api/admin/roleplay-score/settings',
 }

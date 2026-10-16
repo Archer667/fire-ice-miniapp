@@ -1,6 +1,7 @@
 from army_upkeep import civilian_food_rate
 """Daily food settlement; prepared absolute writes are recoverable under game_state_lock."""
 from datetime import timedelta
+from game_clock import real_now
 import math
 from db import db, players, campaigns, ambushes
 from game import now, normalize_datetime, apply_production, production_fields, building_levels_for
@@ -44,7 +45,7 @@ async def apply_record(record):
         if entry['collection'] == 'campaigns' and entry['update'].get('active') is False:
             from routers.admin import _remove_campaign_from_battle
             await _remove_campaign_from_battle(entry['before'], 'این لشکر به علت کمبود غذا از بین رفت.')
-    await db.food_settlements.update_one({'_id': record['_id']}, {'$set': {'status': 'done'}})
+    await db.food_settlements.update_one({'_id': record['_id']}, {'$set': {'status': 'done','processed_real_at':real_now(),'processed_game_at':now()}})
 
 
 async def recover_pending_food():
@@ -98,7 +99,7 @@ async def tick():
             updates.append({'collection': collection, 'id': army['_id'], 'before': army, 'update': update})
         summary = {k: v for k, v in result.items() if k != 'army_losses'}
         summary.update(at=end, soldiers_lost=sum(sum(v.values()) for v in result['army_losses']))
-        record = {'_id': key, 'tg_id': player['tg_id'], 'status': 'prepared', 'armies': updates,
+        record = {'_id': key, 'tg_id': player['tg_id'], 'status': 'prepared','prepared_real_at':real_now(), 'armies': updates,
                   'player_update': {**production_fields(player), 'food_settled_at': end, 'food_settlement_summary': summary}}
         await db.food_settlements.insert_one(record)
         await apply_record(record)

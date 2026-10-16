@@ -185,9 +185,10 @@ async def _trigger_rebellion(player: dict, popularity: int, chance: int, roll: i
     return str(res.inserted_id)
 
 async def evaluate_player(player: dict, settings: dict, day_key: str):
+    from game_clock import real_now
     claimed = await rebellion_checks.update_one(
         {"tg_id": player["tg_id"], "day": day_key},
-        {"$setOnInsert": {"created_at": now()}}, upsert=True,
+        {"$setOnInsert": {"created_at": now(), "real_created_at":real_now()}}, upsert=True,
     )
     if claimed.upserted_id is None:
         return
@@ -223,7 +224,7 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     roll = random.SystemRandom().randint(1, 100)
     triggered = chance >= roll
     await rebellion_checks.update_one({"tg_id": player["tg_id"], "day": day_key}, {"$set": {
-        "popularity": popularity, "chance": chance, "roll": roll, "triggered": triggered,
+        "popularity": popularity, "chance": chance, "roll": roll, "triggered": triggered, "processed_real_at":real_now(),
     }})
     if triggered:
         await _trigger_rebellion(player, popularity, chance, roll, settings)
@@ -234,11 +235,11 @@ async def expire_roleplay_deadlines():
         await rebellions.update_one({"_id": r["_id"]}, {"$set": {"status": "expired"}})
         await _notify_admins(f"⌛ مهلت رول شورش {r['player_name']} در {r.get('castle') or 'قلمرو'} تمام شد.")
 
-async def evaluate_rebellions():
+async def evaluate_rebellions(force=False):
     global _last_evaluation_hour
     await expire_roleplay_deadlines()
     hour_key = now().strftime("%Y-%m-%d-%H")
-    if _last_evaluation_hour == hour_key:
+    if not force and _last_evaluation_hour == hour_key:
         return
     _last_evaluation_hour = hour_key
     settings = await get_settings()

@@ -17,7 +17,7 @@ class CancelledBattleTests(unittest.IsolatedAsyncioTestCase):
    return enemy
   with patch.object(war,'campaigns') as db,patch.object(war,'now',return_value=at),patch.object(war,'get_war_window',AsyncMock(return_value={'open':True})),patch.object(war,'all_castle_names_and_ports',AsyncMock(return_value=(['ریوران'],[]))),patch.object(war,'reject_hostile_order_during_pact',AsyncMock()),patch.object(war,'owner_of_castle',AsyncMock(return_value={'tg_id':uid})),patch.object(war,'all_castle_terrain',AsyncMock(side_effect=ReachedRoutes)):
    db.find_one=AsyncMock(side_effect=find)
-   await war.move_campaign(str(oid),war.MoveCampaignBody(target_castle='ریوران',op_type='garrison'),{'id':uid})
+   await war._move_campaign(str(oid),war.MoveCampaignBody(target_castle='ریوران',op_type='garrison'),{'id':uid})
  async def test_cancelled_attack_does_not_block_departure(self):
   with self.assertRaises(ReachedRoutes):await self.check_block(True)
  async def test_unresolved_attack_still_blocks_departure(self):

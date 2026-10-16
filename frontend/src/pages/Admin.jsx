@@ -1,3 +1,4 @@
+import AdminFormations from '../components/AdminFormations.jsx';
 import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
 import AdminInstitutions from '../components/AdminInstitutions.jsx';
 import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
@@ -102,13 +103,14 @@ const TAB_GROUPS = [
       { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
       { key: 'rumor_admin', label: 'مدیریت توییت‌ها', description: 'دیدن نویسنده و حذف توییت' },
       { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
-      { key: 'profiles', label: 'مشخصات بازیکن', description: 'ویرایش نام، عکس و بک‌استوری بازیکن' },
+
     ],
   },
   {
     key: 'players', label: 'بازیکنان و جهان',
     description: 'ثبت‌نام، قلمروها، منابع و نقشه',
     tabs: [
+      { key:'profiles',label:'مشخصات بازیکنان',description:'کاراکترها، تصاویر، پرچم و وضعیت زندگی' },
       {key:'character_profiles',label:'درخواست‌های کاراکتر',description:'تأیید نام، عکس، بک‌استوری و پرچم',fullOnly:true},
       { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
       { key: 'character_travel', label:'حضور و سفر کاراکترها',description:'مقرها، مهمانان، اسارت و سفر',fullOnly:true },
@@ -240,6 +242,7 @@ export default function Admin() {
   const [addCastleBusyId, setAddCastleBusyId] = useState(null);
   const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
 
+  const [armySearch,setArmySearch]=useState('');
   const [warSubTab, setWarSubTab] = useState('campaigns'); // campaigns | ambushes | battles | espionage
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
@@ -1161,11 +1164,11 @@ export default function Admin() {
     });
   };
 
-  const dismissBattle = async (battle) => {
-    if (!window.confirm(`نبرد «${battle.name}» منحل شود؟ نتیجه و برنده‌ای ثبت نمی‌شود و لشکرها آزاد می‌شوند.`)) return;
+  const dismissBattle = async (battle, stay=false) => {
+    if (!window.confirm(`نبرد «${battle.name}» بدون نتیجه بسته شود؟ ${stay?'تمام لشکرها در محل درگیری می‌مانند.':'قواعد بازگشت لشکرها اجرا می‌شود.'}`)) return;
     setRoleplayBusyId(battle.campaign_id);
     try {
-      await api.adminDismissBattle(battle.campaign_id);
+      await api.adminDismissBattle(battle.campaign_id,stay);
       haptic('medium'); toast('نبرد منحل و لشکرهای درگیر آزاد شدند');
       loadBattles(); loadRoleplayPending(); loadCampaigns();
     } catch (e) { toast(e.message); }
@@ -2034,7 +2037,9 @@ export default function Admin() {
             {(!campaignsInfo || campaignsInfo.length === 0) && (
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
             )}
-            {campaignsInfo && campaignsInfo.map(s => (
+            <input aria-label="جست‌وجوی لشکرکشی" placeholder="نام لشکر، فرمانده، بازیکن یا محل…" value={armySearch} onChange={e=>setArmySearch(e.target.value)}/>
+            <AdminFormations toast={toast} canManage={isFull} query={armySearch} onChanged={()=>{loadCampaigns();loadBattles();}}/>
+            {campaignsInfo && campaignsInfo.filter(s=>!s.merge_group_id&&`${s.player} ${s.name} ${s.from} ${s.to}`.toLowerCase().includes(armySearch.toLowerCase())).map(s => (
               <div className="card" key={s.id} style={{ marginBottom: 10 }}>
                 <div className="res">
                   <div className="ic"><Shield s={16} /></div>
@@ -2056,6 +2061,8 @@ export default function Admin() {
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
                     {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
                   </div>
+                  {s.active && isFull && <AdminArmyRelocation army={s} toast={toast} onMoved={()=>{loadCampaigns();loadBattles();}}/>}
+                  {s.active && isFull && <button className="btn ghost" onClick={()=>destroyCampaign(s.id)}>انهدام کامل</button>}
                   {s.active && isFull && (
                     <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
                             disabled={disbandBusyId === s.id} onClick={() => disbandCampaign(s.id)}>
@@ -2149,6 +2156,7 @@ export default function Admin() {
                 <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
                 <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
                 <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
+                <button className="btn ghost" disabled={roleplayBusyId===b.campaign_id} onClick={()=>dismissBattle(b,true)}>بستن نبرد و استقرار همه در محل</button>
               </AdminDossier>;
             })}
           </div>
@@ -2436,6 +2444,10 @@ export default function Admin() {
               {profileDraft.profile_image && <img src={profileDraft.profile_image} alt="پیش‌نمایش پروفایل" className="admin-profile-preview" />}
               <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readAdminImage(e.target.files?.[0], image=>setProfileDraft(p=>({...p,profile_image:image})), toast)} />
               {profileDraft.profile_image && <button className="btn ghost" style={{marginTop:8}} onClick={()=>setProfileDraft(p=>({...p,profile_image:null}))}>حذف عکس</button>}
+              <label className="f">پرچم کاراکتر <small>حداکثر ۲۵۶ کیلوبایت</small></label>
+              {profileDraft.flag_image&&<img src={profileDraft.flag_image} alt="پرچم بازیکن" className="admin-profile-preview" style={{objectFit:'contain'}}/>}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file?.size>256*1024){toast('حداکثر حجم پرچم ۲۵۶ کیلوبایت است');return;}readAdminImage(file,flag_image=>setProfileDraft(p=>({...p,flag_image})),toast);}}/>
+              {profileDraft.flag_image&&<button className="btn ghost" onClick={()=>setProfileDraft(p=>({...p,flag_image:null}))}>حذف پرچم</button>}
               <button className="btn" style={{marginTop:14}} disabled={profileBusy} onClick={savePlayerProfile}>{profileBusy?'در حال ذخیره...':'ذخیره مشخصات بازیکن'}</button>
             </>}
           </div>
@@ -3092,6 +3104,7 @@ export default function Admin() {
                 {resCampaigns && resCampaigns.length === 0 && (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>این بازیکن لشکری ندارد</div>
                 )}
+                {resTarget.length>0&&<AdminFormations key={resTarget[0].tg_id} leaderId={resTarget[0].tg_id} toast={toast} onChanged={()=>{api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns);loadCampaigns();loadBattles();}}/>}
                 {resCampaigns && resCampaigns.map(c => (
                   <div className="card" key={c.id} style={{ marginBottom: 10 }}>
                     <div className="res">

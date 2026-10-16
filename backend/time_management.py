@@ -49,11 +49,13 @@ SOURCES = {
 async def overview(user=Depends(admin)):
     await game_clock.load()
     zone = await display_zone()
+    from daily_schedule import view as daily_view
+    schedules=await daily_view()
     season = await game_settings.find_one({'_id': 'season_clock'}) or {}
     from control_settings import get as rule
     from config import FEAST_COOLDOWN_HOURS, RUMOR_COOLDOWN_HOURS
     return {**game_clock.status(), 'real_now': iso(game_clock.real_now()), 'offset_seconds': game_clock._state.get('offset_seconds', 0),
-            'timezone': zone, 'storage_timezone': 'UTC', 'calendar': await season_day(), 'season_started_at': iso(season.get('started_at')),
+            'schedules':schedules,'timezone': zone, 'storage_timezone': 'UTC', 'calendar': await season_day(), 'season_started_at': iso(season.get('started_at')),
             'sources': [{'key': key, 'name': item[0], 'fields': item[2]} for key,item in SOURCES.items()],
             'workers': {key:game_clock.timing(key) for key in game_clock.TIMING_DEFAULTS}, 'durations': [
                 {'name':'فرصت رول شورش', 'value':rule('war.roleplay_hours',6), 'unit':'ساعت بازی', 'edit':'قوانین و نرخ‌ها / جنگ'},
@@ -173,3 +175,17 @@ async def correct_rebellion(timer_id: str, body: TimerCorrection, user=Depends(a
     if not result.matched_count:
         raise HTTPException(409, 'مهلت یا وضعیت تغییر کرده؛ فهرست را تازه کن. رول ارسال‌شده یا پروندهٔ تمام‌شده بازنویسی نمی‌شود')
     return {'ok':True, **deadline_view(stamp)}
+
+class DailySetting(BaseModel):
+    task:str
+    enabled:bool
+    clock:str=Field(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')
+
+@router.put('/daily-schedule')
+async def save_daily(body:DailySetting,user=Depends(admin)):
+    from daily_schedule import TASKS,next_slot
+    if body.task not in TASKS:raise HTTPException(400,'نوع رسیدگی نامعتبر است')
+    await db.daily_schedules.update_one({'_id':body.task},{'$set':{
+        'enabled':body.enabled,'clock':body.clock,'next_at':next_slot(game_clock.now(),body.clock),
+        'changed_by':user['id'],'changed_at':game_clock.real_now()}},upsert=True)
+    return {'ok':True}

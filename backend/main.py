@@ -218,8 +218,11 @@ async def _arrival_watcher():
                     await expire_unpaid_tributes()
                     await pay_daily_salaries()
                     from food_settlement import tick as tick_food
-                    await tick_food()
-                    await evaluate_rebellions()
+                    from daily_schedule import run as run_daily
+                    from routers.rebellions import expire_roleplay_deadlines
+                    await run_daily('food',tick_food)
+                    await expire_roleplay_deadlines()
+                    await run_daily('rebellions',evaluate_rebellions,lambda:evaluate_rebellions(force=True))
         except Exception:
             logger.exception("arrival watcher tick failed")
         await asyncio.sleep(game_clock.timing('arrival_poll_seconds'))
@@ -528,3 +531,6 @@ app.include_router(map_management.router)
 
 from routers import character_profiles
 app.include_router(character_profiles.router)
+
+from admin_formations import router as admin_formations_router
+app.include_router(admin_formations_router)
