@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from login_audit import request_ip, record_login
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
-from db import players, campaigns, alliances, game_settings
+from db import db, players, campaigns, alliances, game_settings
 from game import now, apply_production, effective_caps, owned_castles, production_fields
 from medals import medal_rows, normalize_stats, sync_medals
 from admin_notifications import notify_admins
@@ -163,6 +163,11 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
         else:
             await players.update_one({"tg_id": user["id"]}, {"$unset": {"telegram_username": ""}})
         p["telegram_username"] = current_username
+    if p.get('landless') and not p.get('castle'):
+        return {'registered':True,'pending':False,'landless':True,'name':p['name'],'tg_id':p['tg_id'],
+                'gender':p.get('gender','lord'),'title':p.get('title'),'region':p.get('region'),
+                'castle':None,'resources':p.get('resources',{}),'points':p.get('points',0),
+                'medals':medal_rows(p),'profile_image':p.get('profile_image'),'admin_role':None}
     if not p.get("region") or not p.get("castle"):
         return {
             "registered": True, "pending": True,
@@ -265,8 +270,15 @@ async def search(q: str = "", user: dict = Depends(get_user)):
     if len(q) < 2:
         return []
     from player_search import find_matches
-    rows = await players.find({"tg_id": {"$ne": user["id"]}, "is_dead": {"$ne": True}},
-        {"tg_id":1,"name":1,"castle":1,"castle_buildings":1,"region":1,"title":1,"username":1,"telegram_username":1}).to_list(None)
+    rows = await players.find({"tg_id": {"$ne": user["id"]}},
+        {"tg_id":1,"name":1,"castle":1,"castle_buildings":1,"region":1,"title":1,"username":1,"telegram_username":1,"is_dead":1,"landless":1,"registration_reset":1}).to_list(None)
+    retired_ids=[p['tg_id'] for p in rows if p.get('registration_reset')]
+    if retired_ids:
+        latest={}
+        async for old in db.character_archives.find({'tg_id':{'$in':retired_ids}}, {'tg_id':1,'name':1,'title':1,'death_snapshot.region':1}).sort('died_at',-1):
+            latest.setdefault(old['tg_id'],old)
+        rows=[{**p,'name':latest[p['tg_id']]['name'],'is_dead':True,
+               'region':latest[p['tg_id']].get('death_snapshot',{}).get('region')} if p.get('registration_reset') and p['tg_id'] in latest else p for p in rows]
     return find_matches(rows, q)
 
 

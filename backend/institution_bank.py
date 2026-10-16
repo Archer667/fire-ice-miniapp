@@ -54,7 +54,7 @@ async def settings():
 
 async def living(uid):
     p = await players.find_one({'tg_id':uid})
-    if not p or p.get('is_dead') or p.get('registration_reset') or p.get('pending') or not p.get('castle') or not p.get('region') or await get_admin_role({'id':uid}):
+    if not p or p.get('is_dead') or p.get('registration_reset') or p.get('pending') or not (p.get('castle') or p.get('landless')) or not p.get('region') or await get_admin_role({'id':uid}):
         raise HTTPException(403,'بازیکن باید زنده و دارای خاندان تأییدشده باشد')
     return p
 

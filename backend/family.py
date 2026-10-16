@@ -23,7 +23,7 @@ def key(p):
     return f"{p['tg_id']}:{p.get('created_at')}"
 
 def active(p):
-    return bool(p and p.get('castle') and p.get('region') and not p.get('is_dead') and not p.get('registration_reset'))
+    return bool(p and (p.get('castle') or p.get('landless')) and p.get('region') and not p.get('is_dead') and not p.get('registration_reset'))
 
 async def settings():
     row = await db.game_settings.find_one({'_id': 'family'}) or {}

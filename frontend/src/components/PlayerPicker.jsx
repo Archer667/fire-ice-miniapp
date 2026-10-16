@@ -61,7 +61,7 @@ export default function PlayerPicker({ value, onChange, placeholder = 'نام، 
             <div className="ppicker-empty">{loading ? 'در حال جست‌وجو…' : error || 'لردی با این مشخصات پیدا نشد'}</div>
           ) : results.map(p => (
             <button type="button" className="rbtn ppicker-row" key={p.tg_id} onClick={() => pick(p)}>
-              <span>{p.name}</span>
+              <span>{p.name}{p.is_dead?' · کشته‌شده':p.landless?' · بدون قلعه':''}</span>
               <small>{p.telegram_username ? `@${p.telegram_username.replace(/^@/, '')} · ` : ''}{castleLabel(p.castle)} · {p.region_name}</small>
             </button>
           ))}

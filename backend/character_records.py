@@ -91,11 +91,13 @@ async def retire(tg_id, body, actor, *, system_death=False):
     for collection in (db.alliances, db.tributes):
         await collection.update_many({'$or': [{'from_id': tg_id}, {'to_id': tg_id}], 'status': {'$in': ['pending', 'accepted']}}, {'$set': {'status': 'cancelled'}})
     await players.update_one({'tg_id': tg_id}, {'$set': {
-        'is_dead': False, 'registration_reset': True, 'castle': None, 'region': None,
+        'is_dead': body.action == 'death', 'registration_reset': body.action != 'death', 'landless': False, 'castle': None, 'region': None,
         'house': None, 'is_port': False, 'buildings': {}, 'castle_buildings': {},
         'resources': deepcopy(rule('economy.starting_resources', STARTING_RESOURCES)),
         'troops': {}, 'equipment': {}, 'last_tick': now(),
     }})
+    from character_travel import end_character as end_presence
+    await end_presence(target)
     if body.action == 'death':
         await db.character_announcements.update_one({'_id': key}, {'$set': {'ready': True}})
     return {'ok': True}

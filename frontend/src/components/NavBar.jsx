@@ -1,4 +1,5 @@
 import FamilyIcon from './FamilyIcon.jsx';
+import {useGame} from '../store.jsx';
 import {CharacterIcon, InstitutionsIcon} from './InstitutionIcon.jsx';
 import { haptic } from '../telegram.js';
 import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart, Scroll, Warehouse } from './Icons.jsx';
@@ -24,12 +25,15 @@ export const EXTRA_PAGES = [
   { index: 11, Icon: FamilyIcon, label: 'خاندان و خانواده' },
   { index: 12, Icon: CharacterIcon, label: 'ساخت و ویرایش کاراکتر' },
   { index: 13, Icon: InstitutionsIcon, label: 'نهادها' },
+  { index: 14, Icon: FamilyIcon, label: 'کاراکتر و سفر' },
 ];
 
 export default function NavBar({ tab, onChange }) {
+  const {me}=useGame();
+  const items=me?.landless?[EXTRA_PAGES.find(p=>p.index===14),EXTRA_PAGES.find(p=>p.index===11),NAV_ITEMS.find(p=>p.index===3),EXTRA_PAGES.find(p=>p.index===4)]:NAV_ITEMS;
   return (
     <nav className="nav" aria-label="ناوبری اصلی">
-      {NAV_ITEMS.map(({ index, Icon, label }) => (
+      {items.map(({ index, Icon, label }) => (
         <button key={index} type="button" className={`rbtn nv ${tab === index ? 'on' : ''}`}
              aria-current={tab === index ? 'page' : undefined}
              onClick={() => { haptic(); onChange(index); }}>

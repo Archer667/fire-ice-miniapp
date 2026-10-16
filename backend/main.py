@@ -151,6 +151,8 @@ from time_management import router as time_router
 app.include_router(time_router)
 from routers import characters as characters_router
 app.include_router(characters_router.router)
+from routers import character_travel as character_travel_router
+app.include_router(character_travel_router.router)
 app.include_router(players.router)
 from army_groups import router as army_groups_router
 app.include_router(army_groups_router)
@@ -203,6 +205,8 @@ async def _arrival_watcher():
                 await repair_open_battle_rosters()
                 if not game_clock.paused():
                     await tick_family()
+                    from character_travel import tick as tick_character_travel
+                    await tick_character_travel()
                     await institution_bank.tick()
                     await institution_finance.recover()
                     await institution_mercenaries.tick()
@@ -266,6 +270,11 @@ async def _ensure_indexes():
     from db import db
     await db.family_marriages.create_index([('parent_keys', 1), ('status', 1)])
     await db.family_children.create_index([('patron_key', 1), ('status', 1)])
+    await db.character_locations.create_index([('place', 1)])
+    await db.character_locations.create_index([('tg_id', 1)])
+    await db.character_trips.create_index([('status', 1), ('arrival_at', 1)])
+    await db.character_trips.create_index([('character', 1), ('created_at', -1)])
+    await db.character_captures.create_index([('status', 1)])
     for collection in (db.family_operations, db.family_successions, db.family_notices):
         await collection.create_index('complete')
     """ایندکس‌های یکتا برای جلوگیری از رکورد دوتایی زیر بار همزمان (race condition) —

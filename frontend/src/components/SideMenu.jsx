@@ -22,7 +22,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         <div className="sidemenu-scroll" tabIndex={0} aria-label="بخش‌های بازی">
         <div className="sidemenu-list">
           {[...NAV_ITEMS, ...EXTRA_PAGES]
-            .filter(p => !p.adminOnly || me?.admin_role)
+            .filter(p => (!p.adminOnly || me?.admin_role) && (!me?.landless || [3,4,9,10,11,12,13,14].includes(p.index)))
             .sort((a, b) => a.index - b.index)
             .map(({ index, Icon, label }) => (
               <button type="button" key={index} className={`rbtn sidemenu-item ${tab === index ? 'on' : ''}`}

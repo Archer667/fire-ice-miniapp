@@ -18,6 +18,7 @@ import Trade from './pages/Trade.jsx';
 import Roleplay from './pages/Roleplay.jsx';
 import Assets from './pages/Assets.jsx';
 import Family from './pages/Family.jsx';
+import CharacterTravel from './pages/CharacterTravel.jsx';
 import Header from './components/Header.jsx';
 import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
@@ -27,7 +28,7 @@ import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel];
 const RAVENS_INDEX = 4;
 const ADMIN_INDEX = 6;
 
@@ -75,7 +76,7 @@ export default function App() {
       <button className="btn ghost" onClick={() => api.me().then(setMe).catch(e => toast(e.message))}>بررسی وضعیت</button>
     </div><Toast /></div>;
   }
-  const Page = PAGES[tab];
+  const Page = me.landless && ![3,4,9,10,11,12,13,14].includes(tab) ? CharacterTravel : PAGES[tab];
   const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
     <div className={`shell ${showPauseBanner ? 'game-paused' : ''}`}>

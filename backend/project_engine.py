@@ -54,7 +54,7 @@ async def wallet_once(member, amounts, key, debit=False):
         return  # Never pay an old character's proceeds to a newly registered character.
     if p.get('project_receipts', {}).get(receipt_key(key)):
         return
-    if debit and (p.get('is_dead') or not p.get('castle')):
+    if debit and (p.get('is_dead') or not (p.get('castle') or p.get('landless'))):
         raise HTTPException(403, 'فقط بازیکن زنده و خاندان‌دار می‌تواند سرمایه‌گذاری کند')
     p = apply_production(p)
     await players.update_one({'tg_id': p['tg_id']}, {'$set': production_fields(p)})

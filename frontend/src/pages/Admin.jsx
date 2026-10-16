@@ -1,3 +1,4 @@
+import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
 import AdminInstitutions from '../components/AdminInstitutions.jsx';
 import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
 import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
@@ -110,6 +111,7 @@ const TAB_GROUPS = [
     tabs: [
       {key:'character_profiles',label:'درخواست‌های کاراکتر',description:'تأیید نام، عکس، بک‌استوری و پرچم',fullOnly:true},
       { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
+      { key: 'character_travel', label:'حضور و سفر کاراکترها',description:'مقرها، مهمانان، اسارت و سفر',fullOnly:true },
       { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
       { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
       { key: 'player-buildings', label: 'ساختمان‌های بازیکن', description: 'تغییر سطح ساختمان‌های قلعه‌های بازیکن', fullOnly: true },
@@ -2418,9 +2420,11 @@ export default function Admin() {
           </div>
           </>
           )}
+      {tab === 'character_travel' && isFull && <AdminCharacterTravel toast={toast}/> }
       {tab === 'profiles' && (
         <>
-          <div className="sect up u2">ویرایش مشخصات بازیکن</div>
+          <div className="sect up u2">مشخصات بازیکنان</div>
+          {isFull && <AdminCharacterTravel toast={toast} playersOnly onSelect={p=>setProfileTarget([p])}/>}
           <div className="page-sub up u2" style={{ marginTop: -10 }}>این ابزار برای اصلاح نام، بک‌استوری یا عکس نامناسب است و قلعه، منابع و امتیاز بازیکن را تغییر نمی‌دهد.</div>
           <div className="card up u2">
             <label className="f" style={{marginTop:0}}>بازیکن</label><PlayerPicker value={profileTarget} onChange={setProfileTarget} single placeholder="نام بازیکن یا قلعه را جست‌وجو کن..." />

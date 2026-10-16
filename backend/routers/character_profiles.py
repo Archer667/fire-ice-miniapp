@@ -17,7 +17,7 @@ def character_key(p):
 async def administrator(user=Depends(get_user)):return await get_full_admin(user)
 async def current_player(uid):
     p=await players.find_one({'tg_id':uid})
-    if not p or not p.get('castle') or p.get('is_dead') or p.get('registration_reset'):raise HTTPException(403,'ابتدا کاراکتر فعال داشته باش')
+    if not p or not (p.get('castle') or p.get('landless')) or p.get('is_dead') or p.get('registration_reset'):raise HTTPException(403,'ابتدا کاراکتر فعال داشته باش')
     return p
 
 def visible_request(r):

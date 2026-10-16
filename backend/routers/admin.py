@@ -1822,7 +1822,7 @@ async def _add_castle(tg_id: int, body: AddCastleBody):
     target = await players.find_one({"tg_id": tg_id})
     if not target:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    if target.get("is_dead") or not target.get("region") or not target.get("castle"):
+    if target.get("is_dead") or target.get("registration_reset") or not (target.get("castle") or target.get("landless")):
         raise HTTPException(400, "گیرنده باید زنده باشد و خاندان و قلعهٔ اصلی داشته باشد")
     castle_region = await _castle_region_map()
     if body.castle not in castle_region:
@@ -1857,7 +1857,12 @@ async def _add_castle(tg_id: int, body: AddCastleBody):
                     f"قلعهٔ اصلی‌ات «{body.castle}» واگذار شد — حالا «{new_home}» قلعهٔ اصلی‌ات است.",
                 )
             else:
-                await _mark_player_dead(previous_owner, f"آخرین قلعه‌ات «{body.castle}» واگذار شد.")
+                from character_travel import state
+                await state(previous_owner)
+                await players.update_one({"tg_id":previous_owner["tg_id"]},{"$set":{
+                    "castle":None,"castle_buildings":{},"buildings":{},"is_port":False,"landless":True,
+                }})
+                await send_system_message(previous_owner["tg_id"],previous_owner["name"],"آخرین قلعه‌ات واگذار شد؛ کاراکترت زنده است و می‌تواند سفر کند.")
         else:
             captured_buildings = previous_owner.get("castle_buildings", {}).get(body.castle, {})
             await players.update_one({"tg_id": previous_owner["tg_id"]}, {"$unset": {f"castle_buildings.{body.castle}": ""}})
@@ -1865,7 +1870,13 @@ async def _add_castle(tg_id: int, body: AddCastleBody):
                 previous_owner["tg_id"], previous_owner["name"], f"قلعهٔ «{body.castle}» واگذار شد.",
             )
 
-    await players.update_one({"tg_id": tg_id}, {"$set": {f"castle_buildings.{body.castle}": captured_buildings}})
+    if target.get('landless') and not target.get('castle'):
+        terrain = await all_castle_terrain()
+        await players.update_one({'tg_id':tg_id},{'$set':{'castle':body.castle,'region':castle_region[body.castle],
+            'buildings':captured_buildings,'castle_buildings':{},'landless':False,'last_tick':now(),
+            'is_port':terrain.get(body.castle,'land') in ('coastal','sea'),'house':CASTLE_HOUSES.get(body.castle)}})
+    else:
+        await players.update_one({"tg_id": tg_id}, {"$set": {f"castle_buildings.{body.castle}": captured_buildings}})
     if body.mode == "conquest":
         await bump_player_stat(tg_id, "attack_wins")
         await bump_player_stat(tg_id, "castles_captured")

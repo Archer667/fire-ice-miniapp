@@ -1,3 +1,4 @@
+import CharacterTravel from './CharacterTravel.jsx';
 import { useEffect, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
@@ -330,6 +331,6 @@ export default function Dashboard({ goTo }) {
         <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(7); }}><div className="qi"><Eye s={19} /></div>جاسوسی</button>
         <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(5); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</button>
       </div>
-    </>
+    <CharacterTravel guestsOnly /></>
   );
 }

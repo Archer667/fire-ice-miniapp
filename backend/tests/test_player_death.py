@@ -136,6 +136,8 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
         for mod in (admin, auth, leaderboard, player_routes, war):
             self.stack.enter_context(patch.object(mod, 'players', self.people))
         self.stack.enter_context(patch.object(admin, 'campaigns', self.armies))
+        self.stack.enter_context(patch.object(war, 'campaigns', self.armies))
+        self.stack.enter_context(patch.object(war, 'players_are_friendly', AsyncMock(return_value=False)))
         self.stack.enter_context(patch.object(admin, 'ambushes', self.ambushes))
         self.stack.enter_context(patch.object(admin, 'roleplays', self.roles))
         self.stack.enter_context(patch.object(admin, 'hierarchy', Collection()))
@@ -179,13 +181,16 @@ class PlayerDeathTests(unittest.IsolatedAsyncioTestCase):
         self.capture_stat.assert_any_await(2, 'castles_captured')
         self.capture_stat.assert_any_await(2, 'attack_wins')
 
-    async def test_last_castle_capture_kills_and_preserves_score(self):
+    async def test_last_castle_capture_preserves_living_character(self):
         self.people.rows[0]['castle_buildings'] = {}
         before = copy.deepcopy(self.people.rows[0])
-        await admin.admin_add_castle(2, admin.AddCastleBody(castle='A', mode='conquest'), {})
+        with patch('character_travel.state', AsyncMock()):
+            await admin.admin_add_castle(2, admin.AddCastleBody(castle='A', mode='conquest'), {})
         dead = await self.people.find_one({'tg_id': 1})
-        self.assertTrue(dead['is_dead'])
-        self.assertEqual(dead['death_snapshot']['score'], round(base_score(before)))
+        self.assertFalse(dead.get('is_dead', False))
+        self.assertTrue(dead['landless'])
+        self.assertIsNone(dead['castle'])
+        self.assertEqual(dead['points'], before['points'])
         self.assertEqual((await self.people.find_one({'tg_id': 2}))['castle_buildings']['A'], before['buildings'])
         self.capture_stat.assert_any_await(2, 'castles_captured')
         self.capture_stat.assert_any_await(2, 'attack_wins')
