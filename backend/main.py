@@ -43,7 +43,7 @@ import game_clock
 from routers import pause as pause_router
 
 # API deployment marker: battle-centered roleplay/admin endpoints are available.
-app = FastAPI(title="والریا : سیزن اول — API", version="1.0")
+app = FastAPI(title="والریا — API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,7 +94,7 @@ async def serialize_game_state(request: Request, call_next):
     # Selector search is read-only; authentication remains in the route dependency.
     if request.method == 'GET' and path == '/api/players/search':
         return await call_next(request)
-    if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
+    if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata', '/api/season-branding'):
         async with game_state_lock:
             await game_clock.load()
             from item_store import recover as recover_item_store
@@ -545,3 +545,5 @@ from admin_formations import router as admin_formations_router
 app.include_router(admin_formations_router)
 from routers import item_store as item_store_router
 app.include_router(item_store_router.router)
+from season_branding import router as season_branding_router
+app.include_router(season_branding_router)

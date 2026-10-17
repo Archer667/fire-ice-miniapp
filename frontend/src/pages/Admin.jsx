@@ -3,6 +3,7 @@ import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
 import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
 import AdminInstitutions from '../components/AdminInstitutions.jsx';
 import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
+import AdminSeasonBranding from '../components/AdminSeasonBranding.jsx';
 import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
 import AdminMapManagement from '../components/AdminMapManagement.jsx';
 import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
@@ -148,6 +149,7 @@ const TAB_GROUPS = [
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
     tabs: [
+      {key:'season_branding',label:'شماره و نام سیزن',description:'عنوان سیزن جاری در بازی و بات',fullOnly:true},
       {key:'time_management',label:'زمان و تقویم',description:'ساعت‌ها، منطقهٔ نمایش و اصلاح مهلت‌ها',fullOnly:true},
       {key:'map_management',label:'مدیریت نقشه',description:'جانمایی، مدل بناها، فصل و انتشار نقشه',fullOnly:true},
       { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
@@ -2503,6 +2505,7 @@ export default function Admin() {
       {tab === 'character_profiles' && isFull && <AdminCharacterProfiles toast={toast}/>}
       {tab.startsWith('institution_') && isFull && <AdminInstitutions institution={tab.slice(12)} toast={toast}/>}
       {tab === 'time_management' && isFull && <AdminTimeManagement toast={toast}/>}
+      {tab === 'season_branding' && isFull && <AdminSeasonBranding/>}
       {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
 
       {tab === 'titles' && (

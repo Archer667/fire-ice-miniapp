@@ -52,7 +52,7 @@ function MedalChips({ medals, onSelect, player }) {
 }
 
 export default function Leaderboard() {
-  const { toast } = useGame();
+  const { toast, seasonBranding } = useGame();
   const [tab, setTab] = useState('regions');
   const [regionRows, setRegionRows] = useState(null);
   const [lordPage, setLordPage] = useState(1);
@@ -106,7 +106,7 @@ export default function Leaderboard() {
   const pager = <nav className="leader-pager" aria-label="صفحه‌بندی لردها"><button className="rbtn" disabled={lordBusy||lordPage<=1} onClick={()=>setLordPage(p=>p-1)}>قبلی</button><span>صفحهٔ {lordPage.toLocaleString('fa-IR')} از {lordPages.toLocaleString('fa-IR')}</span><button className="rbtn" disabled={lordBusy||lordPage>=lordPages} onClick={()=>setLordPage(p=>p+1)}>بعدی</button></nav>;
   return (
     <>
-      <div className="page-title up">والریا : سیزن اول</div>
+      <div className="page-title up">{seasonBranding.title}</div>
       <div className="page-sub up">هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</div>
 
       <div className="tabs up u1" role="tablist">

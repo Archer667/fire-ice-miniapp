@@ -5,6 +5,19 @@ const Ctx = createContext(null);
 
 export function GameProvider({ children }) {
   const [me, setMe] = useState(null);          // null = درحال بارگذاری
+  const [seasonBranding, setSeasonBranding] = useState({ number: 1, name: '', revision: 0, title: 'والریا' });
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      if (document.hidden) return;
+      api.seasonBranding().then(value => { if (active) setSeasonBranding(current => value.revision >= current.revision ? value : current); }).catch(() => {});
+    };
+    refresh();
+    const timer = setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { active = false; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
+  useEffect(() => { document.title = seasonBranding.title; }, [seasonBranding.title]);
   const [toastMsg, setToastMsg] = useState('');
   const [show, setShow] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -51,6 +64,6 @@ export function GameProvider({ children }) {
     return () => clearInterval(id);
   }, [me?.registered, refreshUnread]);
 
-  return <Ctx.Provider value={{ me, setMe, toast, toastMsg, show, unread, unreadBreakdown, refreshUnread, tweetAlert, dismissTweetAlert: () => setTweetAlert(null) }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ me, setMe, seasonBranding, setSeasonBranding, toast, toastMsg, show, unread, unreadBreakdown, refreshUnread, tweetAlert, dismissTweetAlert: () => setTweetAlert(null) }}>{children}</Ctx.Provider>;
 }
 export const useGame = () => useContext(Ctx);

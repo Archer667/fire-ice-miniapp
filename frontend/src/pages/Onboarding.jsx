@@ -6,7 +6,7 @@ import { Keep } from '../components/Icons.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
 
 export default function Onboarding() {
-  const { setMe, toast } = useGame();
+  const { setMe, toast, seasonBranding } = useGame();
   const [name, setName] = useState(getTgUser()?.first_name || '');
   const [gender, setGender] = useState('lord');
   const [requestedCastles, setRequestedCastles] = useState([]);
@@ -36,7 +36,7 @@ export default function Onboarding() {
     <div className="view view-noheader">
       <div className="hero up">
         <div className="mark"><Keep s={40} /></div>
-        <h1>والریا : سیزن اول</h1>
+        <h1>{seasonBranding.title}</h1>
         <p>هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</p>
       </div>
       <div className="up u1">

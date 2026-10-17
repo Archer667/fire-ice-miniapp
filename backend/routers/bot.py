@@ -2,11 +2,11 @@ from fastapi import APIRouter, Header, Request
 from config import MINI_APP_URL
 import telegram_bot
 from db import players
+from season_branding import read_branding
 
 router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
 WELCOME_TEXT = (
-    "🏰 به «والریا : سیزن اول» خوش آمدی!\n\n"
     "با دکمهٔ پایین وارد بازی شو — اسم و جنسیتت را بده، بعد صبر کن تا ادمین خاندان و "
     "قلعه‌ات را دستی مشخص کند."
 )
@@ -40,6 +40,7 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
             {"inline_keyboard": [[{"text": "🎮 ورود به بازی", "web_app": {"url": MINI_APP_URL}}]]}
             if MINI_APP_URL else None
         )
-        telegram_bot.push(chat_id, WELCOME_TEXT, reply_markup=reply_markup)
+        branding = await read_branding()
+        telegram_bot.push(chat_id, f"🏰 به «{branding['title']}» خوش آمدی!\n\n" + WELCOME_TEXT, reply_markup=reply_markup)
 
     return {"ok": True}

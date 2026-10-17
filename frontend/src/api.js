@@ -1,4 +1,6 @@
 import { getInitData } from './telegram.js';
+import { seasonTitle } from './seasonBranding.js';
+let mockSeasonBranding = { number: 1, name: '', revision: 0, title: seasonTitle(1) };
 
 // در production نبودن VITE_API_URL یعنی API از همان origin و از مسیر /api
 // سرو می‌شود (مثلاً rewrite ورسل). حالت mock فقط باید صریحاً فعال شود؛ وگرنه
@@ -1643,6 +1645,8 @@ export const api = {
   adminMarketFloors: () => req('/api/admin/player-market-limits'),
   adminSaveMarketFloors: (prices, ceilings) => req('/api/admin/player-market-floors', { method: 'POST', body: JSON.stringify({ prices, ceilings }) }),
   gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
+  seasonBranding: () => MOCK ? Promise.resolve({ ...mockSeasonBranding }) : req('/api/season-branding', { cache: 'no-store' }),
+  adminSaveSeasonBranding: settings => MOCK ? Promise.resolve(mockSeasonBranding = { ...settings, name: settings.name.trim(), revision: settings.revision + 1, title: seasonTitle(settings.number, settings.name) }) : req('/api/admin/season-branding', { method: 'PUT', body: JSON.stringify(settings) }),
   me:        () => MOCK ? Promise.resolve(M.me()) : req('/api/players/me'),
   musicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/players/music'),
   adminMusicSettings: () => MOCK ? Promise.resolve({ enabled: false, title: 'موسیقی والریا', audio_url: '', volume: 35, loop: true, autoplay: true }) : req('/api/admin/music'),
