@@ -29,7 +29,7 @@ class AdminRoleTests(unittest.IsolatedAsyncioTestCase):
         for target in ('item_effects.recover_item_effects', 'food_settlement.recover_pending_food',
                        'army_groups.recover_moves', 'battle_passage.recover', 'character_records.recover_swaps',
                        'road_victory.recover', 'pact_exits.recover_exits', 'institution_bank.recover',
-                       'institution_finance.recover', 'system_reports.begin_admin'):
+                       'institution_finance.recover', 'item_store.recover', 'system_reports.begin_admin'):
             self.enterContext(patch(target, AsyncMock(return_value=None)))
         with patch.object(auth,'OWNER_ID',1), patch.object(auth,'ADMIN_IDS',[]), \
              patch.object(auth,'DEV_MODE',True), patch.object(auth,'players') as players, \

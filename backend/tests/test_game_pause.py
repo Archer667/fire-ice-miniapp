@@ -12,7 +12,7 @@ class ClockTests(unittest.IsolatedAsyncioTestCase):
         for target in ('item_effects.recover_item_effects', 'food_settlement.recover_pending_food',
                        'army_groups.recover_moves', 'battle_passage.recover',
                        'road_victory.recover', 'pact_exits.recover_exits',
-                       'institution_bank.recover', 'institution_finance.recover'):
+                       'institution_bank.recover', 'institution_finance.recover', 'item_store.recover'):
             self.enterContext(patch(target, AsyncMock()))
 
     async def test_food_settlement_does_not_write_while_paused(self):
@@ -65,6 +65,8 @@ class ClockTests(unittest.IsolatedAsyncioTestCase):
                     response = await client.request(method,path,json={})
                     self.assertEqual(response.status_code,423)
                 self.assertEqual((await client.get('/api/game/status')).status_code,200)
+                # The real-time store remains authenticated, rather than returning 423.
+                self.assertEqual((await client.post('/api/item-store', json={})).status_code,401)
                 self.assertEqual((await client.post('/api/admin/game-pause',json={'paused':False})).status_code,401)
                 main.app.dependency_overrides[get_owner] = lambda: {'id': 1}
                 try:

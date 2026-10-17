@@ -97,6 +97,8 @@ async def serialize_game_state(request: Request, call_next):
     if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata'):
         async with game_state_lock:
             await game_clock.load()
+            from item_store import recover as recover_item_store
+            await recover_item_store()
             from item_effects import recover_item_effects
             await recover_item_effects()
             from food_settlement import recover_pending_food
@@ -121,7 +123,7 @@ async def serialize_game_state(request: Request, call_next):
             if path.startswith('/api/war') or path == '/api/admin/battles':
                 from routers.war import reconcile_battle_locks
                 await reconcile_battle_locks()
-            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
+            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith('/api/item-store') and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
                 return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
             from system_reports import begin_admin, finish_admin
             ticket = await begin_admin(request)
@@ -203,6 +205,8 @@ async def _arrival_watcher():
                 from road_victory import recover as recover_road_victories
                 await recover_road_victories()
                 await repair_open_battle_rosters()
+                from item_store import tick as tick_item_store
+                await tick_item_store()
                 if not game_clock.paused():
                     await tick_family()
                     from character_travel import tick as tick_character_travel
@@ -263,6 +267,11 @@ async def _market_watcher():
         await asyncio.sleep(game_clock.timing('market_poll_seconds'))
 
 async def _ensure_indexes():
+    from db import db
+    await db.item_store_listings.create_index([('status', 1), ('ends_at', 1)])
+    await db.item_store_listings.create_index([('seller_id', 1), ('created_at', -1)])
+    await db.item_store_listings.create_index('highest.person.tg_id')
+    await db.item_store_operations.create_index([('complete', 1), ('real_at', 1)])
     from db import db
     await db.item_grants.create_index('effect_pending')
     await db.item_grants.create_index([('tg_id', 1), ('granted_at', -1)])
@@ -534,3 +543,5 @@ app.include_router(character_profiles.router)
 
 from admin_formations import router as admin_formations_router
 app.include_router(admin_formations_router)
+from routers import item_store as item_store_router
+app.include_router(item_store_router.router)

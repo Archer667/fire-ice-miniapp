@@ -1,4 +1,5 @@
 import AdminFormations from '../components/AdminFormations.jsx';
+import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
 import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
 import AdminInstitutions from '../components/AdminInstitutions.jsx';
 import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
@@ -137,6 +138,7 @@ const TAB_GROUPS = [
       { key: 'market-floors', label: 'بازهٔ قیمت کالاها', description: 'حداقل و حداکثر قیمت بازار بازیکنان', fullOnly: true },
       { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
       { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
+      { key: 'item_store', label: 'فروشگاه آیتم‌ها', description: 'آگهی‌ها، مزایده و تأیید خرید', fullOnly: true },
       { key: 'balance', label: 'تعادل ساختمان و نیرو', description: 'هزینه، بازدهی، نیروها و ادوات', ownerOnly: true },
       { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
       { key: 'control_center', label: 'قوانین و نرخ‌ها', description: 'مرکز کنترل تمام فرمول‌ها و قابلیت‌ها', ownerOnly: true },
@@ -404,6 +406,7 @@ export default function Admin() {
   const [itemDuration, setItemDuration] = useState(Object.keys(ITEM_DURATIONS)[0]);
   const [itemDurationHours, setItemDurationHours] = useState('24');
   const [itemDescription, setItemDescription] = useState('');
+  const [itemImage, setItemImage] = useState(null);
   const [grantRequestId, setGrantRequestId] = useState(() => crypto.randomUUID());
   const [itemColor, setItemColor] = useState('gray');
   const [itemBuilding, setItemBuilding] = useState('');
@@ -1357,12 +1360,13 @@ export default function Admin() {
         name: itemName.trim(), type: itemType, duration: itemDuration,
         duration_hours: itemDuration === 'temporary' ? +itemDurationHours : null,
         description: itemDescription.trim(), color: itemColor,
+        image: itemImage,
         building_id: itemType === 'economy' && itemBuilding ? itemBuilding : null,
         yield_percent: itemType === 'economy' && itemBuilding ? Number(itemYield) : 0,
       });
       haptic('medium');
       toast('آیتم ساخته شد');
-      setItemName(''); setItemDescription(''); setItemDurationHours('24');
+      setItemName(''); setItemDescription(''); setItemDurationHours('24'); setItemImage(null);
       loadItems();
     } catch (e) { toast(e.message); }
     setItemBusy(false);
@@ -2551,12 +2555,16 @@ export default function Admin() {
         </>
       )}
 
+      {tab === 'item_store' && isFull && <AdminItemStore />}
       {tab === 'items' && isFull && (
         <>
           <div className="sect up u2">ساخت آیتم تازه</div>
           <div className="card up u2">
             <label className="f" style={{ marginTop: 0 }}>نام آیتم</label>
             <input value={itemName} onChange={e => setItemName(e.target.value)} maxLength={60} placeholder="مثلاً «شمشیر فولاد والریایی»" />
+            <label className="f">تصویر آیتم · اختیاری، حداکثر ۲۵۶ کیلوبایت</label>
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value=''; if(!file)return; if(file.size>256*1024){toast('حجم تصویر باید حداکثر ۲۵۶ کیلوبایت باشد');return;} if(!['image/png','image/jpeg','image/webp'].includes(file.type)){toast('تصویر PNG، JPG یا WebP انتخاب کن');return;} const reader=new FileReader();reader.onload=()=>setItemImage(reader.result);reader.onerror=()=>toast('تصویر خوانده نشد');reader.readAsDataURL(file); }} />
+            {itemImage && <div style={{ marginTop: 12 }}><ItemPicture item={{ image:itemImage, name:itemName, color:itemColor }} large /><button className="btn ghost" onClick={()=>setItemImage(null)}>حذف تصویر</button></div>}
             <label className="f">نوع</label>
             <select value={itemType} onChange={e => setItemType(e.target.value)}>
               {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -2598,6 +2606,7 @@ export default function Admin() {
             )}
             {itemsList && itemsList.map(it => (
               <div className="card" key={it.id} style={{ marginBottom: 10 }}>
+                {it.image && <div style={{ marginBottom: 12 }}><ItemPicture item={it} large /></div>}
                 <div className="res">
                   <div className="ic"><Warehouse s={16} /></div>
                   <div className="n">

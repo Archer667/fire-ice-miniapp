@@ -1559,6 +1559,17 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  itemStore: (scope = 'market', offset = 0) => req(`/api/item-store?scope=${scope}&offset=${offset}`),
+  storeCreate: body => req('/api/item-store', { method: 'POST', body: JSON.stringify(body) }),
+  storeOffer: (id, body) => req(`/api/item-store/${id}/offer`, { method: 'POST', body: JSON.stringify(body) }),
+  storeCancel: id => req(`/api/item-store/${id}/cancel`, { method: 'POST' }),
+  adminStore: (offset = 0, status = 'all') => req(`/api/admin/item-store?offset=${offset}&status=${status}`),
+  adminStoreSettings: body => req('/api/admin/item-store/settings', { method: 'PUT', body: JSON.stringify(body) }),
+  adminStoreDecision: (id, body) => req(`/api/admin/item-store/${id}/decision`, { method: 'POST', body: JSON.stringify(body) }),
+  adminStoreEdit: (id, body) => req(`/api/admin/item-store/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  adminStoreInventory: uid => req(`/api/admin/item-store/inventory/${uid}`),
+  adminStoreCreate: (uid, body) => req(`/api/admin/item-store/inventory/${uid}`, { method: 'POST', body: JSON.stringify(body) }),
+  adminStoreRecover: () => req('/api/admin/item-store/recover', { method: 'POST' }),
   institutionServices: (kind,admin=false,page=1)=>req(`/api/institutions/${admin?'admin/':''}services/${kind}?page=${page}`),
   institutionAction: (path,body={},method='POST')=>req(`/api/institutions/${path}`,{method,body:JSON.stringify(body)}),
   goldenCompany: (admin=false,page=1)=>req(`/api/institutions/${admin?'admin/':''}golden-company?page=${page}`),

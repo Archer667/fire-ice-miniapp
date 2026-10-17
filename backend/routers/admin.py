@@ -2233,6 +2233,7 @@ async def admin_list_items(user: dict = Depends(full_admin_user)):
             "duration_hours": tpl.get("duration_hours"),
             "description": tpl.get("description", ""),
             "grant_count": grant_count, "color": tpl.get('color', 'gray'),
+            "image": tpl.get('image'),
             "building_id": tpl.get('building_id'), "yield_percent": tpl.get('yield_percent', 0),
             "building_name": BUILDINGS.get(tpl.get('building_id'), {}).get('name'),
         })
@@ -2247,9 +2248,12 @@ class ItemBody(BaseModel):
     color: str = "gray"
     building_id: str | None = None
     yield_percent: float = 0
+    image: str | None = None
 
 @router.post("/items")
 async def admin_create_item(body: ItemBody, user: dict = Depends(full_admin_user)):
+    from character_images import map_flag_image
+    image = map_flag_image(body.image) if body.image else None
     name = body.name.strip()
     if not name:
         raise HTTPException(400, "نام آیتم را بنویس")
@@ -2277,6 +2281,7 @@ async def admin_create_item(body: ItemBody, user: dict = Depends(full_admin_user
         "name": name[:60], "type": body.type, "duration": body.duration,
         "duration_hours": duration_hours, "description": body.description.strip()[:300],
         "color": body.color, "building_id": body.building_id, "yield_percent": body.yield_percent,
+        "image": image,
         "created_by": user["id"], "created_at": now(),
     }
     res = await items.insert_one(doc)
@@ -2291,6 +2296,8 @@ async def admin_delete_item(item_id: str, user: dict = Depends(full_admin_user))
     if not await items.find_one({'_id': oid}):
         raise HTTPException(404, 'این آیتم پیدا نشد')
     grants = await item_grants.find({'item_id': oid}).to_list(None)
+    if any(g.get('store_listing_id') for g in grants):
+        raise HTTPException(409, 'آیتم در فروشگاه رزرو شده؛ ابتدا آگهی را لغو یا خرید را تعیین تکلیف کن')
     grant_ids = [str(g['_id']) for g in grants]
     if grant_ids and await campaigns.find_one({'active': True, 'item_ids': {'$in': grant_ids}}):
         raise HTTPException(409, 'این آیتم همراه لشکر فعال است؛ ابتدا لشکر را برگردان یا منحل کن')
@@ -2912,7 +2919,8 @@ async def _clear_season_history():
                  'institution_service_cases','institution_transfers','institution_service_treasuries',
                  'institution_faith_accounts','institution_faith_withdrawals','institution_donors',
                  'institution_mercenary_offers','institution_mercenary_contracts','institution_citadel_cases',
-                 'institution_loans','institution_treasuries','institution_bank_operations','institution_bank_capital','institution_audit'):
+                 'institution_loans','institution_treasuries','institution_bank_operations','institution_bank_capital','institution_audit',
+                 'item_store_listings','item_store_operations'):
         await db[name].delete_many({})
     """پرونده‌های مربوط به یک فصل را پاک می‌کند؛ داده‌های تنظیمی ادمین دست‌نخورده‌اند."""
     for collection in (

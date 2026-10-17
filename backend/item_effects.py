@@ -32,7 +32,7 @@ async def recover_item_effects():
     from db import item_grants, players
     async for grant in item_grants.find({'effect_pending': True}):
         player = await players.find_one({'tg_id': grant['tg_id']})
-        if player and character_matches(grant, player):
+        if player and not grant.get('store_listing_id') and character_matches(grant, player):
             await players.update_one({'tg_id': grant['tg_id'], 'created_at': player['created_at']},
                                      {'$set': {f"item_effects.{grant['_id']}": grant['effect']}})
         await item_grants.update_one({'_id': grant['_id']}, {'$unset': {'effect_pending': ''}})
@@ -54,6 +54,8 @@ async def select_war_items(player, ids):
         grant = await item_grants.find_one({'_id': oid, 'tg_id': player['tg_id']})
         if not grant or not character_matches(grant, player):
             raise HTTPException(403, 'این آیتم متعلق به کاراکتر فعلی تو نیست')
+        if grant.get('store_listing_id'):
+            raise HTTPException(409, 'این آیتم در فروشگاه رزرو شده است')
         if grant.get('expires_at') and instant(grant['expires_at']) <= now():
             raise HTTPException(400, 'آیتم انتخاب‌شده منقضی شده است')
         template = await items.find_one({'_id': grant['item_id']})

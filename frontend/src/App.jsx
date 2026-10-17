@@ -17,6 +17,7 @@ import Espionage from './pages/Espionage.jsx';
 import Trade from './pages/Trade.jsx';
 import Roleplay from './pages/Roleplay.jsx';
 import Assets from './pages/Assets.jsx';
+import ItemStore from './pages/ItemStore.jsx';
 import Family from './pages/Family.jsx';
 import CharacterTravel from './pages/CharacterTravel.jsx';
 import Header from './components/Header.jsx';
@@ -28,7 +29,7 @@ import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore];
 const RAVENS_INDEX = 4;
 const ADMIN_INDEX = 6;
 
@@ -80,7 +81,7 @@ export default function App() {
   const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
     <div className={`shell ${showPauseBanner ? 'game-paused' : ''}`}>
-      {showPauseBanner && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>مشاهدهٔ صفحات آزاد است؛ اقدامات، زمان بازی، تولید، مصرف و پرداخت‌ها متوقف‌اند. پس از ادامه، زمان باقی‌مانده حفظ می‌شود.</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
+      {showPauseBanner && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>{tab === 15 ? 'فروشگاه آیتم‌ها و مزایده‌ها با زمان واقعی فعال‌اند. اعتبار زمانی آیتم‌ها همچنان از ساعت بازی پیروی می‌کند.' : 'مشاهدهٔ صفحات آزاد است؛ زمان بازی، تولید، مصرف و محاسبات دوره‌ای متوقف‌اند. فروشگاه آیتم‌ها با زمان واقعی فعال می‌ماند.'}</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
       {!me.registered ? (
         <Onboarding />
       ) : (

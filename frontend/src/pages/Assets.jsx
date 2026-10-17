@@ -5,6 +5,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Coin, Pick, Rock, Wood, Wheat, Wine, People, Hammer, Market, Farm, Ranch, Winery, Warehouse } from '../components/Icons.jsx';
 import { ITEM_RARITY_HEX, castleLabel } from '../gamedata.js';
+import { ItemPicture } from './ItemStore.jsx';
 
 const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat, wine: Wine, men: People };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا', wine: 'شراب', men: 'نیروی انسانی' };
@@ -122,6 +123,7 @@ export default function Assets() {
           )}
           {items && items.map(it => (
             <div className="card" key={it.id} style={{ marginBottom: 10, borderInlineStart: `3px solid ${ITEM_RARITY_HEX[it.color] || 'var(--edge)'}` }}>
+              {it.image && <div style={{ marginBottom: 12 }}><ItemPicture item={it} large /></div>}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <b style={{ fontSize: 13.5 }}>{it.name}</b>
                 <span className="title-tag" style={{ marginInlineStart: 0, color: ITEM_RARITY_HEX[it.color] }}>{it.color_name}</span>

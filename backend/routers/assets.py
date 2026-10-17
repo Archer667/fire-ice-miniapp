@@ -57,6 +57,8 @@ async def my_items(user: dict = Depends(get_user)):
     out = []
     cur = item_grants.find({"tg_id": user["id"]}).sort("granted_at", -1)
     async for g in cur:
+        if g.get('store_listing_id'):
+            continue
         expires_at = g.get("expires_at")
         if not character_matches(g, player) or (expires_at and now() >= instant(expires_at)):
             continue
@@ -66,6 +68,7 @@ async def my_items(user: dict = Depends(get_user)):
         attached = await campaign_for_grant(g['_id'])
         color = g.get('color', tpl.get('color', 'gray'))
         out.append({
+            "image": tpl.get('image'),
             "building_id": tpl.get('building_id'), "yield_percent": tpl.get('yield_percent', 0),
             "building_name": BUILDINGS.get(tpl.get('building_id'), {}).get('name'),
             "campaign_id": str(attached['_id']) if attached else None,
