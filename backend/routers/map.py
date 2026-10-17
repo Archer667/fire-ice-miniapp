@@ -127,7 +127,7 @@ async def get_map(user: dict = Depends(get_user)):
                 "op_type": s["op_type"] if mine else None,
                 "name": s.get("name", "") if mine else "لشکر در حرکت",
                 "mine": mine,
-                "player_name": s.get("player_name", ""),
+                "player_name": (owner.get("name") if owner else None) or s.get("player_name", ""),
                 "owner_region": owner.get("region") if owner else None,
                 "route_path": s.get("route_path") or [s["origin_castle"], s["target_castle"]],
                 "departed_at": departed_at.isoformat() if departed_at else None,

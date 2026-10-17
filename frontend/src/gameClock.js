@@ -9,3 +9,4 @@ export function gameNow() {
   if (!snapshot) return Date.now();
   return Date.parse(snapshot.game_now) + (snapshot.paused ? 0 : performance.now() - receivedAt);
 }
+export function gameClockPaused() { return !!snapshot?.paused; }
