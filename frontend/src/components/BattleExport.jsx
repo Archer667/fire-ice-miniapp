@@ -1,26 +1,38 @@
 import { useState } from 'react';
 import { NAVAL_TROOP_IDS } from '../gamedata.js';
 import { arrivalText, battleExportText } from '../battleExport.js';
+import { req } from '../api.js';
 
 export default function BattleExport({ battle, toast }) {
   const [conditions, setConditions] = useState(null);
   const [deadline, setDeadline] = useState('');
+  const [busy, setBusy] = useState(false);
   const text = battleExportText(battle, NAVAL_TROOP_IDS, conditions ?? arrivalText(battle), deadline);
-  async function copy() {
+  async function download() {
+    if (busy) return;
+    setBusy(true);
     try {
-      try { await navigator.clipboard.writeText(text); }
-      catch {
-        const field = document.createElement('textarea');
-        field.value = text; field.style.position = 'fixed'; field.style.opacity = '0';
-        document.body.appendChild(field);
-        try { field.focus(); field.select(); if (!document.execCommand('copy')) throw new Error('copy'); }
-        finally { field.remove(); }
+      const report = await req('/api/admin/battle-reports', {method:'POST',body:JSON.stringify({
+        title: `گزارش نبرد ${battle.name || battle.location || 'نامشخص'}`.slice(0,200), text,
+      })});
+      const url = new URL(report.path, location.origin).href;
+      const tg = window.Telegram?.WebApp;
+      if (tg?.downloadFile && tg.isVersionAtLeast?.('8.0')) {
+        tg.downloadFile({url, file_name:report.filename}, accepted => {
+          toast(accepted ? 'دانلود گزارش درخواست شد' : 'دانلود انجام نشد؛ برای تلاش دوباره دکمهٔ دانلود را بزنید');
+        });
+      } else {
+        const link = document.createElement('a');
+        link.href = url; link.download = report.filename;
+        document.body.appendChild(link); link.click(); link.remove();
+        toast('دانلود گزارش کامل نبرد آغاز شد');
       }
-      toast('اطلاعات نبرد کپی شد');
-    } catch { toast('کپی خودکار انجام نشد؛ متن پیش‌نمایش را انتخاب و کپی کن'); }
+    } catch (error) { toast(error.status===404?'برای دانلود گزارش، نسخهٔ سرور باید به‌روز شود.':error.message || 'دانلود انجام نشد؛ دوباره تلاش کنید'); }
+    finally { setBusy(false); }
   }
   return <div style={{ marginTop: 10 }}>
-    <button type="button" className="btn ghost" onClick={copy}>کپی اطلاعات نبرد</button>
+    <button type="button" className="btn ghost" disabled={busy} onClick={download}>{busy?'در حال آماده‌سازی فایل…':'دانلود گزارش کامل نبرد'}</button>
+    <div className="page-sub" style={{marginTop:6}}>فایل فارسی و قابل چاپ؛ شامل متن کامل گزارش، شرایط و مهلت درج‌شده در پیش‌نمایش.</div>
     <details style={{ marginTop: 8 }}>
       <summary className="page-sub" style={{ cursor: 'pointer' }}>ویرایش شرایط و مهلت · پیش‌نمایش خروجی</summary>
       <label className="f">شرایط نبرد و ترتیب ورود نیروها</label>

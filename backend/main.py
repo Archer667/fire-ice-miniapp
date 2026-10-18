@@ -91,6 +91,8 @@ async def serialize_game_state(request: Request, call_next):
     # Legacy economy handlers use read/modify/write. Serialize with project wallets
     # in this single-Uvicorn-worker deployment, including production-on-read routes.
     path = request.scope['path']
+    if request.method in ('GET','HEAD') and re.fullmatch(r'/api/battle-report-files/[A-Za-z0-9_-]{43}', path):
+        return await call_next(request)
     # Selector search is read-only; authentication remains in the route dependency.
     if request.method == 'GET' and path == '/api/players/search':
         return await call_next(request)
@@ -547,3 +549,6 @@ from routers import item_store as item_store_router
 app.include_router(item_store_router.router)
 from season_branding import router as season_branding_router
 app.include_router(season_branding_router)
+
+from battle_report_files import router as battle_report_files_router
+app.include_router(battle_report_files_router)

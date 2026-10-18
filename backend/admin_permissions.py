@@ -8,7 +8,7 @@ _READ = {
     '/api/admin/war-window', '/api/admin/roleplay', '/api/admin/roleplay-score/settings',
 }
 _WRITE = {
-    'POST': [r'/api/admin/roleplay-score/settings',
+    'POST': [r'/api/admin/battle-reports', r'/api/admin/roleplay-score/settings',
              r'/api/admin/roleplay/[^/]+/(?:score|respond)',
              r'/api/admin/battles/[^/]+/(?:loot|dismiss|resolve)',
              r'/api/admin/ambushes/[^/]+/score', r'/api/admin/espionage/[^/]+/score'],
