@@ -29,13 +29,11 @@ async def get_user(
     x_dev_user: str = Header(default=""),
 ) -> dict:
     """کاربر تأییدشدهٔ تلگرام. در DEV_MODE هدر X-Dev-User (id:name) پذیرفته می‌شود."""
-    if DEV_MODE and x_dev_user:
-        uid, _, name = x_dev_user.partition(":")
-        user = {"id": int(uid), "first_name": name or "Dev"}
-    else:
-        if not authorization.startswith("tma "):
-            raise HTTPException(401, "توکن تلگرام ارسال نشده")
-        user = _validate_init_data(authorization[4:])
+    if request is None:
+        raise HTTPException(401, 'برای ادامه وارد حساب شوید')
+    from web_auth import identity
+    authenticated = await identity(request)
+    user = {k: v for k, v in authenticated.items() if not k.startswith('_web')}
     if request and request.url.path != "/api/players/me":
         if request.scope.get('method', 'GET') not in ('GET', 'HEAD', 'OPTIONS') and request.url.path != '/api/players/register':
             retired = await players.find_one({'tg_id': user['id'], 'registration_reset': True}, {'_id': 1})
@@ -46,7 +44,7 @@ async def get_user(
             raise HTTPException(403, "کشته شد — تا حذف خاندان توسط ادمین امکان بازی نداری", headers={"X-Player-Dead": "1"})
     if request and request.scope.get('method','GET') not in ('GET','HEAD','OPTIONS') and not await get_admin_role(user):
         landless = await players.find_one({'tg_id':user['id'],'landless':True,'castle':None})
-        personal = ('/api/character-travel/', '/api/character/profile', '/api/family/', '/api/ravens', '/api/institutions/', '/api/roleplay', '/api/item-store')
+        personal = ('/api/character-travel/', '/api/character/profile', '/api/family/', '/api/ravens', '/api/institutions/', '/api/roleplay', '/api/item-store', '/api/notifications')
         if landless and not request.url.path.startswith(personal):
             raise HTTPException(403, 'این امکان به داشتن قلمرو نیاز دارد؛ سفر و امور شخصی همچنان در دسترس است')
     if request:

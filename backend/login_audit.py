@@ -83,7 +83,7 @@ async def record_login(user, address):
             except DuplicateKeyError:
                 continue
             if claim.modified_count or claim.upserted_id:
-                telegram_bot.push(OWNER_ID,
+                await telegram_bot.push(OWNER_ID,
                     '🔎 هشدار ورود از IP مشترک\n'
                     f"بازیکن اول: {player.get('name', uid)} ({uid})\n"
                     f"بازیکن دوم: {current.get('name', peer['tg_id'])} ({peer['tg_id']})\n"

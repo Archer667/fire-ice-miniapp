@@ -76,7 +76,7 @@ async def notify_admins(
         message += f"\nاقدام پیشنهادی: {action}"
     if bool(route.get("bot", True)):
         for tg_id in await _admin_ids(audience_roles):
-            telegram_bot.push(tg_id, message)
+            await telegram_bot.push(tg_id, message)
     return True
 
 

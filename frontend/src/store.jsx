@@ -17,7 +17,7 @@ export function GameProvider({ children }) {
     document.addEventListener('visibilitychange', refresh);
     return () => { active = false; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
   }, []);
-  useEffect(() => { document.title = seasonBranding.title; }, [seasonBranding.title]);
+  useEffect(() => { document.title = 'Valyria Web App · ' + seasonBranding.title; }, [seasonBranding.title]);
   const [toastMsg, setToastMsg] = useState('');
   const [show, setShow] = useState(false);
   const [unread, setUnread] = useState(0);

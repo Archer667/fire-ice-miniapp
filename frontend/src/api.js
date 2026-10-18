@@ -1,4 +1,4 @@
-import { getInitData } from './telegram.js';
+import { getCsrf } from './webSession.js';
 import { seasonTitle } from './seasonBranding.js';
 let mockSeasonBranding = { number: 1, name: '', revision: 0, title: seasonTitle(1) };
 
@@ -9,18 +9,20 @@ let mockSeasonBranding = { number: 1, name: '', revision: 0, title: seasonTitle(
 // مسیر /api می‌خوانند. این کار مانع می‌شود یک Environment Variable قدیمی
 // (مثلاً آدرس Railway) داخل bundle باقی بماند و احراز هویت را دور بزند.
 const BASE = import.meta.env.PROD ? '' : (import.meta.env.VITE_API_URL || '');
-export const MOCK = import.meta.env.VITE_MOCK === 'true' || (import.meta.env.DEV && !BASE);
+export const MOCK = import.meta.env.VITE_MOCK === 'true';
 
 export async function req(path, opts = {}) {
   const res = await fetch(BASE + path, {
     ...opts,
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'tma ' + getInitData(),
-      ...(import.meta.env.DEV ? { 'X-Dev-User': '1:لرد آزمایشی' } : {}),
+      'X-Valyria-Client': 'web',
+      'X-Valyria-CSRF': getCsrf(),
       ...opts.headers,
     },
   });
+  if (res.status === 401) window.dispatchEvent(new Event('web-auth-expired'));
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     if (res.headers.get('X-Player-Dead') === '1') window.dispatchEvent(new Event('player-dead'));
@@ -1644,6 +1646,8 @@ export const api = {
   marketFloors: () => MOCK ? Promise.resolve(Object.fromEntries(TRADE_GOODS.map(g => [g, 10]))) : req('/api/market/price-floors'),
   adminMarketFloors: () => req('/api/admin/player-market-limits'),
   adminSaveMarketFloors: (prices, ceilings) => req('/api/admin/player-market-floors', { method: 'POST', body: JSON.stringify({ prices, ceilings }) }),
+  notifications: filters => req('/api/notifications?'+new URLSearchParams(filters)),
+  notificationAction: (action,ids=[]) => req('/api/notifications/action',{method:'POST',body:JSON.stringify({action,ids})}),
   gamedata:  () => MOCK ? Promise.resolve(M.gamedata) : req('/api/gamedata'),
   seasonBranding: () => MOCK ? Promise.resolve({ ...mockSeasonBranding }) : req('/api/season-branding', { cache: 'no-store' }),
   adminSaveSeasonBranding: settings => MOCK ? Promise.resolve(mockSeasonBranding = { ...settings, name: settings.name.trim(), revision: settings.revision + 1, title: seasonTitle(settings.number, settings.name) }) : req('/api/admin/season-branding', { method: 'PUT', body: JSON.stringify(settings) }),

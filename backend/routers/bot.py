@@ -41,6 +41,6 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
             if MINI_APP_URL else None
         )
         branding = await read_branding()
-        telegram_bot.push(chat_id, f"🏰 به «{branding['title']}» خوش آمدی!\n\n" + WELCOME_TEXT, reply_markup=reply_markup)
+        await telegram_bot.push(chat_id, f"🏰 به «{branding['title']}» خوش آمدی!\n\n" + WELCOME_TEXT, reply_markup=reply_markup)
 
     return {"ok": True}

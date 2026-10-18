@@ -1,4 +1,4 @@
-name: valyria
+name: valyria-web-app
 
 services:
   mongodb:
@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     command: ["mongod", "--bind_ip_all"]
     volumes:
-      - /opt/valyria/data/mongodb:/data/db
+      - web_mongodb:/data/db
     networks:
       - internal
 
@@ -54,5 +54,6 @@ networks:
     driver: bridge
 
 volumes:
+  web_mongodb:
   caddy_data:
   caddy_config:

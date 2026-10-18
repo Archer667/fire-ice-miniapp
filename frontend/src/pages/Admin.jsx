@@ -1843,7 +1843,7 @@ export default function Admin() {
                     <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
                       {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
                       {p.telegram_username
-                        ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
+                        ? <span className="telegram-username" dir="ltr">{p.telegram_username}</span>
                         : <span>username ثبت نشده</span>}
                     </small></div>
                   </div>
@@ -1934,7 +1934,7 @@ export default function Admin() {
                     <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
                       {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
                       {p.telegram_username
-                        ? <a className="telegram-username" dir="ltr" href={`https://t.me/${p.telegram_username}`} target="_blank" rel="noreferrer">@{p.telegram_username}</a>
+                        ? <span className="telegram-username" dir="ltr">{p.telegram_username}</span>
                         : <span>username ثبت نشده</span>}
                     </small></div>
                   </div>

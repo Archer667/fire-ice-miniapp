@@ -1,3 +1,4 @@
+import Notifications from './pages/Notifications.jsx';
 import CharacterProfile from './pages/CharacterProfile.jsx';
 import Institutions from './pages/Institutions.jsx';
 import { useEffect, useState } from 'react';
@@ -29,8 +30,8 @@ import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore];
-const RAVENS_INDEX = 4;
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Notifications];
+const RAVENS_INDEX = 16;
 const ADMIN_INDEX = 6;
 
 export default function App() {
@@ -77,7 +78,7 @@ export default function App() {
       <button className="btn ghost" onClick={() => api.me().then(setMe).catch(e => toast(e.message))}>بررسی وضعیت</button>
     </div><Toast /></div>;
   }
-  const Page = me.landless && ![3,4,9,10,11,12,13,14].includes(tab) ? CharacterTravel : PAGES[tab];
+  const Page = me.landless && ![3,4,9,10,11,12,13,14,15,16].includes(tab) ? CharacterTravel : PAGES[tab];
   const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
     <div className={`shell ${showPauseBanner ? 'game-paused' : ''}`}>
@@ -88,7 +89,7 @@ export default function App() {
         <>
           <Header onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
           <div className="view" key={tab}>
-            {me.pending && !me.admin_role && tab !== ADMIN_INDEX ? <Pending goTo={setTab} /> : <Page goTo={setTab} />}
+            {me.pending && !me.admin_role && ![ADMIN_INDEX,16].includes(tab) ? <Pending goTo={setTab} /> : <Page goTo={setTab} />}
           </div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />

@@ -4,6 +4,7 @@ from auth import get_user
 from db import players, messages, rumors, rumor_views
 from game import now
 from config import SYSTEM_SENDER_ID, SYSTEM_SENDER_NAME
+from datetime import datetime, timezone
 import telegram_bot
 from player_labels import normalize_player_names, titled_name
 from control_settings import notification_route
@@ -18,15 +19,13 @@ async def send_system_message(
 ):
     """پیام سیستمی داخل کلاغ و تلگرام؛ ایونت می‌تواند تصویر و بازهٔ زمانی هم داشته باشد."""
     route = notification_route(kind)
-    via_raven = via_raven and bool(route.get("raven", True))
-    via_bot = via_bot and bool(route.get("bot", True))
-    if kind in ("character_death", "rebellion_result"):
-        via_raven = via_bot = True
+    via_raven = True
+    via_bot = False
     text = await normalize_player_names(text)
     doc = {
         "from_id": SYSTEM_SENDER_ID, "to_id": to_tg_id,
         "from_name": SYSTEM_SENDER_NAME, "to_name": to_name,
-        "text": text[:4000 if kind in ("character_death", "rebellion_result") else 2000], "kind": kind, "read": False, "created_at": now(),
+        "text": text[:4000 if kind in ("character_death", "rebellion_result") else 2000], "kind": kind, "read": False, "created_at": now(), "real_created_at": datetime.now(timezone.utc),
     }
     if image_url:
         doc["image_url"] = image_url[:3_500_000]
@@ -38,8 +37,8 @@ async def send_system_message(
         await messages.insert_one(doc)
     if via_bot:
         caption = bot_text or f"{SYSTEM_SENDER_NAME}: {text}"
-        if image_url: telegram_bot.push_photo(to_tg_id, image_url, caption, parse_mode=bot_parse_mode)
-        else: telegram_bot.push(to_tg_id, caption, parse_mode=bot_parse_mode)
+        if image_url: await telegram_bot.push_photo(to_tg_id, image_url, caption, parse_mode=bot_parse_mode)
+        else: await telegram_bot.push(to_tg_id, caption, parse_mode=bot_parse_mode)
 
 class SendBody(BaseModel):
     to_tg_ids: list[int]
@@ -66,13 +65,11 @@ async def send(body: SendBody, user: dict = Depends(get_user)):
         "from_name": me["name"], "to_name": t["name"],
         "text": text[:1000], "read": False, "created_at": now(),
     } for t in targets])
-    for t in targets:
-        telegram_bot.push(t["tg_id"], f"نامه‌ای از {titled_name(me)}: {text[:300]}")
     return {"ok": True, "sent_to": len(targets)}
 
 @router.get("/unread")
 async def unread(user: dict = Depends(get_user)):
-    system_filter = {"to_id": user["id"], "from_id": SYSTEM_SENDER_ID, "read": False}
+    system_filter = {"to_id": user["id"], "from_id": SYSTEM_SENDER_ID, "read": False, "archived": {"$ne": True}}
     personal_filter = {"to_id": user["id"], "from_id": {"$ne": SYSTEM_SENDER_ID}, "read": False}
     announcements = await messages.count_documents(system_filter)
     personal = await messages.count_documents(personal_filter)

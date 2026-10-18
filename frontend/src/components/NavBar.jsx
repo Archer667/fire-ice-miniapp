@@ -16,6 +16,7 @@ export const NAV_ITEMS = [
 
 // صفحه‌هایی که فقط از منوی کشویی/هدر قابل‌دسترسی‌اند (توی نوار پایین جا نمی‌شوند)
 export const EXTRA_PAGES = [
+  { index: 16, Icon: Mail, label: 'صندوق اعلان' },
   { index: 4, Icon: Mail,   label: 'کلاغ‌ها' },
   { index: 6, Icon: Shield, label: 'پنل ادمین', adminOnly: true },
   { index: 7, Icon: Eye,    label: 'جاسوسی' },

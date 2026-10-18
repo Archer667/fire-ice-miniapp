@@ -1700,7 +1700,7 @@ async def notify_campaign_departure(army):
                 f"زمان رسیدن: {clock.text(army['arrival_at'])} (به وقت تهران)")
         settings = await game_settings.find_one({'_id': 'campaign_channel'}) or {}
         if settings.get('chat_id'):
-            telegram_bot.push(settings['chat_id'], text)
+            await telegram_bot.push(settings['chat_id'], text)
         target = await owner_of_castle(army['target_castle'])
         if target and target['tg_id'] != army['tg_id']:
             await send_system_message(target['tg_id'], target['name'], text)

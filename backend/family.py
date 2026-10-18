@@ -55,7 +55,6 @@ async def flush_notices():
                 'from_id': SYSTEM_SENDER_ID, 'from_name': SYSTEM_SENDER_NAME, 'to_id': uid,
                 'to_name': '', 'text': n['text'], 'kind': 'family', 'read': False, 'created_at': now(),
             }}, upsert=True)
-            telegram_bot.push(uid, n['text'])
             await db.family_notices.update_one({'_id': n['_id']}, {'$addToSet': {'sent': uid}})
         await db.family_notices.update_one({'_id': n['_id']}, {'$set': {'complete': True}})
 

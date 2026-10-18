@@ -14,7 +14,7 @@ async def enqueue(event, recipients, text):
         key = f"{event}:{player['tg_id']}"
         await outbox.update_one({'_id': key}, {'$setOnInsert': {
             'to_id': player['tg_id'], 'to_name': player['name'], 'text': text,
-            'raven_done': not route.get('raven', True), 'bot_done': not route.get('bot', True),
+            'raven_done': False, 'bot_done': True,
             'complete': False, 'attempts': 0, 'next_attempt': datetime.utcnow(),
             'created_at': datetime.utcnow(),
         }}, upsert=True)
@@ -31,28 +31,11 @@ async def flush():
                     'from_id': SYSTEM_SENDER_ID, 'from_name': SYSTEM_SENDER_NAME,
                     'to_id': item['to_id'], 'to_name': item['to_name'],
                     'text': await normalize_player_names(item['text']), 'kind': 'battle',
-                    'read': False, 'created_at': now(),
+                    'read': False, 'created_at': now(), 'real_created_at': datetime.utcnow(),
                 }}, upsert=True)
                 changes['raven_done'] = True
                 await outbox.update_one({'_id': item['_id']}, {'$set': changes})
-            if not item['bot_done'] and BOT_TOKEN and not DEV_MODE:
-                chunks = [item['text'][i:i+3000] for i in range(0,len(item['text']),3000)] or ['']
-                async with httpx.AsyncClient(timeout=10) as client:
-                    for part in range(item.get('bot_part', 0), len(chunks)):
-                        response = await client.post(f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
-                            json={'chat_id': item['to_id'], 'text': f"{SYSTEM_SENDER_NAME}: {chunks[part]}"})
-                        result = response.json()
-                        if response.status_code == 200 and result.get('ok'):
-                            changes.update(bot_part=part+1, telegram_message_id=result.get('result', {}).get('message_id'))
-                            await outbox.update_one({'_id': item['_id']}, {'$set': changes})
-                        elif response.status_code == 403:
-                            changes.update(bot_done=True, delivery_error='recipient_unavailable')
-                            break
-                        else:
-                            changes['delivery_error'] = f"telegram_{response.status_code}"
-                            break
-                    else:
-                        changes.update(bot_done=True, delivery_error=None)
+            changes['bot_done'] = True
             if (item['raven_done'] or changes.get('raven_done')) and (item['bot_done'] or changes.get('bot_done')):
                 changes['complete'] = True
         except (httpx.HTTPError, ValueError):

@@ -43,7 +43,7 @@ import game_clock
 from routers import pause as pause_router
 
 # API deployment marker: battle-centered roleplay/admin endpoints are available.
-app = FastAPI(title="والریا — API", version="1.0")
+app = FastAPI(title="Valyria Web App — API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -94,7 +94,7 @@ async def serialize_game_state(request: Request, call_next):
     # Selector search is read-only; authentication remains in the route dependency.
     if request.method == 'GET' and path == '/api/players/search':
         return await call_next(request)
-    if path.startswith('/api/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata', '/api/season-branding'):
+    if path.startswith('/api/') and not path.startswith('/api/web-auth/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata', '/api/season-branding'):
         async with game_state_lock:
             await game_clock.load()
             from item_store import recover as recover_item_store
@@ -123,7 +123,7 @@ async def serialize_game_state(request: Request, call_next):
             if path.startswith('/api/war') or path == '/api/admin/battles':
                 from routers.war import reconcile_battle_locks
                 await reconcile_battle_locks()
-            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith('/api/item-store') and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
+            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith(('/api/item-store','/api/notifications')) and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
                 return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
             from system_reports import begin_admin, finish_admin
             ticket = await begin_admin(request)
@@ -267,6 +267,8 @@ async def _market_watcher():
         await asyncio.sleep(game_clock.timing('market_poll_seconds'))
 
 async def _ensure_indexes():
+    from web_auth import ensure_indexes as ensure_web_indexes
+    await ensure_web_indexes()
     from db import db
     await db.item_store_listings.create_index([('status', 1), ('ends_at', 1)])
     await db.item_store_listings.create_index([('seller_id', 1), ('created_at', -1)])
@@ -547,3 +549,25 @@ from routers import item_store as item_store_router
 app.include_router(item_store_router.router)
 from season_branding import router as season_branding_router
 app.include_router(season_branding_router)
+
+from web_auth import router as web_auth_router, identity as web_identity
+app.include_router(web_auth_router)
+
+@app.middleware('http')
+async def require_browser_session(request: Request, call_next):
+    path = request.url.path
+    if path.startswith('/api/telegram/'):
+        return JSONResponse(status_code=404, content={'detail':'این مسیر در نسخهٔ وب فعال نیست'})
+    public = ('/api/health','/api/gamedata','/api/season-branding','/api/game/status')
+    if path.startswith('/api/') and not path.startswith('/api/web-auth/') and path not in public and request.method!='OPTIONS':
+        try:
+            await web_identity(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code,content={'detail':exc.detail})
+    response = await call_next(request)
+    if path.startswith('/api/'):
+        response.headers['Cache-Control']='no-store'
+    return response
+
+from web_notifications import router as web_notifications_router
+app.include_router(web_notifications_router)

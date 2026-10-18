@@ -95,7 +95,6 @@ async def flush_notices():
                        'read': False, 'created_at': now()}
                 await messages.update_one({'_id': message_id}, {'$setOnInsert': doc}, upsert=True)
                 markup = {'inline_keyboard': [[{'text': '🏰 ورود به بازی و مشاهدهٔ پروژه', 'web_app': {'url': MINI_APP_URL}}]]} if MINI_APP_URL else None
-                telegram_bot.push(tg_id, notice['text'], reply_markup=markup)
                 await projects.update_one({'_id': project['_id']}, {'$addToSet': {f'notices.{event}.sent': tg_id}})
         await projects.update_one({'_id': project['_id']}, {'$set': {'notices_pending': False}})
 
