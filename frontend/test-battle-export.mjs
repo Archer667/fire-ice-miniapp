@@ -27,3 +27,18 @@ assert.equal(arrivalDelay({},{}),'تأخیر نامشخص');
 assert.equal(arrivalDelay(start,{joined_at:'2026-09-12T18:53:59'}),'با ۳ ساعت تأخیر به نبرد رسید');
 assert.ok(arrivalText({...start,battle_joins:[{player_name:'دانل',joined_at:'2026-09-12T18:53:59',joined_at_real:'2026-09-14T21:10:00Z'}]}).includes('(به وقت تهران) | با ۳ ساعت تأخیر به نبرد رسید'));
 console.log('Narrative arrival delays passed');
+
+const detailedBattle={name:'آزمون',location:'روکزرست',attacker_armies:[
+ {tg_id:1,name:'نیزه‌های شمال',player_name:'الف',troops:[{id:'spear',name:'نیزه‌دار',count:123},{id:'ship',name:'کشتی جنگی',count:4}],equipment:[{id:'ram',name:'دژکوب',count:3}]},
+ {tg_id:1,name:'تیراندازان شمال',player_name:'الف',troops:[{id:'archer',name:'کماندار',count:80}],equipment:[]}
+],defender_armies:[{tg_id:2,name:'دفاع قلعه',player_name:'ب',troops:[{id:'guard',name:'نگهبان',count:50}],equipment:[]}]};
+const summary=battleExportText(detailedBattle,['ship'],'شرایط ویژه','مهلت نهایی');
+const full=battleExportText(detailedBattle,['ship'],'شرایط ویژه','مهلت نهایی',{detailed:true});
+assert(!summary.includes('نیزه‌دار:'));assert(full.includes('نیزه‌دار: ۱۲۳ نفر'));
+assert(full.includes('کشتی جنگی: ۴ فروند'));assert(full.includes('دژکوب: ۳ دستگاه'));
+assert(full.includes('کماندار: ۸۰ نفر'));assert(full.includes('نگهبان: ۵۰ نفر'));
+assert(full.includes('۲۰۳ سرباز'));assert(!full.includes('۲۰۷ سرباز'));
+assert(full.includes('بدون ادوات جنگی'));assert(full.includes('شرایط ویژه'));assert(full.includes('مهلت نهایی'));
+const parties=battleExportText({...detailedBattle,multi_party:true,parties:[{tg_id:1,player_name:'الف',hostile_to:[2],peace_with:[]},{tg_id:2,player_name:'ب',hostile_to:[1],peace_with:[]}]},['ship'],'','',{detailed:true});
+assert(parties.includes('طرف مستقل'));assert(parties.includes('کشتی جنگی: ۴ فروند'));assert(parties.includes('نگهبان: ۵۰ نفر'));
+console.log('Summary/detail separation, per-army unit counts, ships, equipment and independent parties passed');

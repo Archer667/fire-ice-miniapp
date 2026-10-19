@@ -31,8 +31,18 @@ export function arrivalText(b) {
   const dated = rows.filter(j => j.joined_at && Number.isFinite(Date.parse(j.joined_at))).sort((a, z) => Date.parse(a.joined_at) - Date.parse(z.joined_at));
   return [b.started_at ? `شروع نبرد: ${battleTime(b.started_at_real, b.started_at)}` : '', ...dated.map(j => `لشکر «${j.army_name || 'بی‌نام'}» — ${j.player_name || 'بی‌نام'} — ${b.multi_party ? 'طرف مستقل' : j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)} | ${arrivalDelay(b, j)}`)].filter(Boolean).join('\n') || 'زمان ورود نیروها ثبت نشده است.';
 }
-export function battleExportText(b, navalIds, conditions = arrivalText(b), deadline = '') {
-  const side = (armies, fallback, icon, title) => {
+export function battleExportText(b, navalIds, conditions = arrivalText(b), deadline = '', options = {}) {
+  const breakdown = army => {
+    const troops = (army.troops || []).filter(t => Number(t.count) > 0);
+    const equipment = (army.equipment || []).filter(t => Number(t.count) > 0);
+    const rows = (items, unit, empty) => items.length ? items.map(t => `  • ${t.name || t.id || 'نامشخص'}: ${fa(t.count)} ${unit}`).join('\n') : `  ${empty}`;
+    return [
+      '🪖 نیروهای زمینی:', rows(troops.filter(t => !navalIds.includes(t.id)), 'نفر', 'بدون نیروی زمینی'),
+      '🚢 کشتی‌ها:', rows(troops.filter(t => navalIds.includes(t.id)), 'فروند', 'بدون کشتی'),
+      '☄ ادوات جنگی:', rows(equipment, 'دستگاه', 'بدون ادوات جنگی'),
+    ].join('\n');
+  };
+  const side = (armies, fallback, icon, title, detailed = options.detailed) => {
     const names = [...new Set(armies.map(a => a.player_name).filter(Boolean))];
     let men = 0, ships = 0, equipment = 0;
     for (const a of armies) {
@@ -41,7 +51,7 @@ export function battleExportText(b, navalIds, conditions = arrivalText(b), deadl
       ships += (a.troops || []).filter(t => navalIds.includes(t.id)).reduce((n, t) => n + Number(t.count || 0), 0);
       equipment += (a.equipment || []).reduce((n, t) => n + Number(t.count || 0), 0);
     }
-    const arrivals=armies.map(a=>`لشکر «${a.name||'بی‌نام'}» — ${a.player_name||'نامشخص'}\nرسیدن: ${armyArrival(b,a)} | ${arrivalDelay(b,armyJoin(b,a))}${a.war_items?.length ? `\nآیتم‌ها: ${a.war_items.map(it => it.name).join('، ')}` : ''}`).join('\n');
+    const arrivals=armies.map(a=>`لشکر «${a.name||'بی‌نام'}» — ${a.player_name||'نامشخص'}\nرسیدن: ${armyArrival(b,a)} | ${arrivalDelay(b,armyJoin(b,a))}${detailed ? `\n${breakdown(a)}` : ''}${a.war_items?.length ? `\nآیتم‌ها: ${a.war_items.map(it => it.name).join('، ')}` : ''}`).join(detailed ? '\n\n' : '\n');
     return `${icon} ${title}: ${names.join(' - ') || fallback || 'بدون نیرو'}\n${arrivals}\n\n⚔ آمار ارتش: ${fa(men)} سرباز\n☄ ادوات جنگی: ${equipment ? `${fa(equipment)} ادوات جنگی` : 'فاقد ادوات جنگی'}\n🚢 آمار کشتی‌ها: ${ships ? `${fa(ships)} کشتی` : 'فاقد کشتی'}`;
   };
   const attackers = b.attacker_armies ?? (b.attacker_army ? [b.attacker_army] : []);
@@ -56,7 +66,7 @@ export function battleExportText(b, navalIds, conditions = arrivalText(b), deadl
   }
   // Count actual players, not armies: several armies owned by two players
   // must not turn a duel into a multiplayer report.
-  const individual = participants.size > 2 ? `\n\n${divider}\n\nآمار هر لرد و لیدی\n\n` + [...participants.values()].map(p => side(p.armies, p.name, '👤', [...p.sides].join(' / '))).join('\n\n') : '';
+  const individual = participants.size > 2 ? `\n\n${divider}\n\nآمار هر لرد و لیدی\n\n` + [...participants.values()].map(p => side(p.armies, p.name, '👤', [...p.sides].join(' / '), false)).join('\n\n') : '';
   if (b.multi_party && b.parties?.length) {
     const armies = [...attackers, ...defenders];
     const parties = b.parties.map(p => side(armies.filter(a => a.tg_id === p.tg_id), p.player_name, '👤', 'طرف مستقل') +
