@@ -1,4 +1,5 @@
 import { gameNow } from '../gameClock.js';
+import { buildingArt, wallArtStage } from '../buildingArt.js';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
@@ -135,12 +136,19 @@ function subtractCost(resources, cost) {
 }
 
 function BuildingRow({ row, busy, isPort, clock, onAct }) {
-  const pct = Math.round((row.level / row.max_level) * 100);
+  const art = buildingArt(row);
+  const [failedArt, setFailedArt] = useState(null);
+  const pct = Math.min(100, Math.max(0, Math.round((row.level / row.max_level) * 100)));
+  const wallStageName = ['دیوار چوبی', 'دیوار چوبی و سنگی', 'دیوار سنگی'][wallArtStage(row.level, row.max_level) - 1];
   const locked = row.requires_port && row.level === 0 && !isPort;
   const canUpgrade = !locked && !row.upgrading && row.next_level;
   const RowIcon = BUILDING_ICON[row.id] || (row.type === 'defense' ? Bastion : Hammer);
   return (
     <div className="bld">
+      {art && failedArt !== art && <div className={`bld-art ${row.level === 0 ? 'bld-art-unbuilt' : ''}`}>
+        <img src={art} alt={row.id === 'wall' ? wallStageName : row.name} width="768" height="512" loading="lazy" decoding="async" onError={() => setFailedArt(art)} />
+        {row.id === 'wall' && <span className="bld-art-stage">{row.level === 0 ? 'دیوار ساخته نشده' : wallStageName}</span>}
+      </div>}
       <div className="bld-top">
         <div className="bld-ic"><RowIcon s={18} /></div>
         <div className="bld-n">
