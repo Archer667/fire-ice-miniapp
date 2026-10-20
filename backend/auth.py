@@ -45,9 +45,12 @@ async def get_user(
         if dead and not await get_admin_role(user):
             raise HTTPException(403, "کشته شد — تا حذف خاندان توسط ادمین امکان بازی نداری", headers={"X-Player-Dead": "1"})
     if request and request.scope.get('method','GET') not in ('GET','HEAD','OPTIONS') and not await get_admin_role(user):
-        landless = await players.find_one({'tg_id':user['id'],'landless':True,'castle':None})
-        personal = ('/api/character-travel/', '/api/character/profile', '/api/family/', '/api/ravens', '/api/institutions/', '/api/roleplay', '/api/item-store')
-        if landless and not request.url.path.startswith(personal):
+        from character_access import status, personal_write
+        character = await players.find_one({'tg_id': user['id']})
+        state = status(character)
+        if state in ('pending', 'unregistered') and request.url.path != '/api/players/register':
+            raise HTTPException(403, 'ابتدا درخواست کاراکتر باید توسط ادمین تأیید شود')
+        if state == 'landless' and not (personal_write(request.url.path)):
             raise HTTPException(403, 'این امکان به داشتن قلمرو نیاز دارد؛ سفر و امور شخصی همچنان در دسترس است')
     if request:
         user['_admin_request'] = (request.scope.get('method', 'GET'), request.url.path)

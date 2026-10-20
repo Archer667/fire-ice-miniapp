@@ -31,7 +31,7 @@ export default function Pending({ goTo }) {
         <h1>{me.admin_role ? 'مدیر' : (me.gender === 'lady' ? 'لیدی' : 'لرد')} {me.name}</h1>
         <p>{me.admin_role
           ? 'حساب مدیریت فعال است؛ برای ادامه وارد پنل ادمین شو'
-          : 'ثبت‌نامت انجام شد. پس از تأیید درخواست و تعیین اقلیم و قلعه، می‌توانی وارد وستروس شوی.'}</p>
+          : 'ثبت‌نامت انجام شد. پس از تأیید درخواست و تعیین اقلیم و محل حضور یا قلعه، می‌توانی وارد وستروس شوی.'}</p>
       </div>
       {!me.admin_role && <div className="up u1">
         <button className="btn ghost" disabled={checking} onClick={checkNow}>

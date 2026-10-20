@@ -1,3 +1,4 @@
+import CharacterAdmission from '../components/CharacterAdmission.jsx';
 import AdminFormations from '../components/AdminFormations.jsx';
 import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
 import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
@@ -1833,7 +1834,7 @@ export default function Admin() {
               <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کسی منتظر نیست</div>
             )}
             {pendingPlayers && pendingPlayers.map(p => {
-              const regionId = assignRegion[p.tg_id] || Object.keys(REGIONS_STATIC)[0];
+              const regionId = assignRegion[p.tg_id] || p.requested_region || Object.keys(REGIONS_STATIC)[0];
               const region = REGIONS_STATIC[regionId];
               const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
               return (
@@ -1847,6 +1848,8 @@ export default function Admin() {
                         : <span>username ثبت نشده</span>}
                     </small></div>
                   </div>
+                  <div className="page-sub">نوع درخواست: {p.registration_mode === 'character' ? 'کاراکتر بدون قلعه' : 'فرمانروای قلعه'}</div>
+                  {isFull && <CharacterAdmission player={p} toast={toast} onApproved={() => {loadPendingPlayers();loadRoster();}} />}
                   {p.requested_castles && p.requested_castles.length > 0 && (
                     <div style={{ margin: '2px 0 12px' }}>
                       <div className="page-sub" style={{ margin: '0 4px 6px' }}>درخواستِ خودِ بازیکن (به‌ترتیب اولویت):</div>

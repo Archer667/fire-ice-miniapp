@@ -1,3 +1,4 @@
+import {canOpenPage} from './characterAccess.js';
 import CharacterProfile from './pages/CharacterProfile.jsx';
 import Institutions from './pages/Institutions.jsx';
 import { useEffect, useState } from 'react';
@@ -77,7 +78,7 @@ export default function App() {
       <button className="btn ghost" onClick={() => api.me().then(setMe).catch(e => toast(e.message))}>بررسی وضعیت</button>
     </div><Toast /></div>;
   }
-  const Page = me.landless && ![3,4,9,10,11,12,13,14].includes(tab) ? CharacterTravel : PAGES[tab];
+  const Page = !canOpenPage(me, tab) ? CharacterTravel : PAGES[tab];
   const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
     <div className={`shell ${showPauseBanner ? 'game-paused' : ''}`}>

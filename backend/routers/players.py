@@ -3,6 +3,7 @@ from portrait_thumbnails import flag_thumbnail
 import re
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from login_audit import request_ip, record_login
+from typing import Literal
 from pydantic import BaseModel
 from auth import get_user, get_admin_role
 from db import db, players, campaigns, alliances, game_settings
@@ -37,6 +38,8 @@ async def background_music(user: dict = Depends(get_user)):
 MAX_REQUESTED_CASTLES = 5
 
 class RegisterBody(BaseModel):
+    registration_mode: Literal["castle", "character"] = "castle"
+    requested_region: str | None = None
     name: str
     gender: str   # "lord" | "lady"
     requested_castles: list[str] = []   # اولویتِ خودِ بازیکن — چون ممکنه اولی‌ها قبلاً اشغال شده باشن
@@ -56,7 +59,11 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         raise HTTPException(409, "قبلاً ثبت‌نام کرده‌ای")
 
     requested = list(dict.fromkeys(c.strip() for c in body.requested_castles if c.strip()))[:MAX_REQUESTED_CASTLES]
-    if not requested:
+    if body.registration_mode == 'character':
+        if body.requested_region not in REGIONS:
+            raise HTTPException(400, 'اقلیم مورد درخواست را انتخاب کن')
+        requested = []
+    elif not requested:
         raise HTTPException(400, "انتخاب دست‌کم یک قلعه الزامی است")
     names, _ports = await all_castle_names_and_ports()
     bad = [c for c in requested if c not in names]
@@ -84,6 +91,8 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         "castle": None,
         "is_port": False,
         "requested_castles": requested,
+        "registration_mode": body.registration_mode, "requested_region": body.requested_region,
+        "landless": False,
         "backstory": "",
         "profile_image": None,
         "resources": rule("economy.starting_resources", STARTING_RESOURCES),
@@ -104,7 +113,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
             raise HTTPException(409, "درخواست قبلاً ثبت شده است")
     else:
         await players.insert_one(doc)
-    requested_text = "، ".join(requested) if requested else "بدون اولویت قلعه"
+    requested_text = "، ".join(requested) if requested else "کاراکتر بدون قلعه؛ اقلیم درخواستی: " + REGIONS.get(body.requested_region, {}).get("name", "")
     from character_records import blacklist
     blacklisted = bool(await blacklist.find_one({'_id': user['id']}))
     await notify_admins(
@@ -115,7 +124,7 @@ async def register(body: RegisterBody, user: dict = Depends(get_user)):
         priority="normal",
         player_name=doc["name"],
         player_tg_id=user["id"],
-        action="از پنل ادمین ← ثبت‌نام، اقلیم و قلعه را مشخص کن.",
+        action="از پنل ادمین ← ثبت‌نام، نوع عضویت و اقلیم و محل حضور یا قلعه را مشخص کن.",
         audience_roles=("owner", "full"),
     )
     return {"ok": True}
@@ -163,10 +172,13 @@ async def me(request: Request, background_tasks: BackgroundTasks, user: dict = D
         else:
             await players.update_one({"tg_id": user["id"]}, {"$unset": {"telegram_username": ""}})
         p["telegram_username"] = current_username
-    if p.get('landless') and not p.get('castle'):
+    from character_access import status as character_status
+    if character_status(p) == 'landless':
         return {'registered':True,'pending':False,'landless':True,'name':p['name'],'tg_id':p['tg_id'],
                 'gender':p.get('gender','lord'),'title':p.get('title'),'region':p.get('region'),
-                'castle':None,'resources':p.get('resources',{}),'points':p.get('points',0),
+                'castle':None,'castles':[], 'house':p.get('house'), 'region_name':REGIONS.get(p.get('region'),{}).get('name'),
+                'backstory':p.get('backstory',''), 'flag_image':flag_thumbnail(p.get('flag_map_image') or p.get('flag_image')),
+                'resources':p.get('resources',{}),'points':p.get('points',0),
                 'medals':medal_rows(p),'profile_image':p.get('profile_image'),'admin_role':None}
     if not p.get("region") or not p.get("castle"):
         return {

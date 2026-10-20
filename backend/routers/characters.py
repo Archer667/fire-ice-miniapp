@@ -46,3 +46,25 @@ async def swap(body: SwapBody, user=Depends(full_administrator)):
     from character_records import swap_castles
     async with castle_transfer_lock:
         return await swap_castles(body.first_id, body.first_castle, body.second_id, body.second_castle)
+
+class CharacterAdmissionBody(BaseModel):
+    region: str = Field(max_length=80)
+    place: str = Field(min_length=1, max_length=150)
+    character_key: str = Field(default='', max_length=200)
+
+@router.get('/character-admission/options')
+async def admission_options(user=Depends(full_administrator)):
+    import character_travel as travel
+    places = [{'id':name,'name':name} for name in sorted(travel.TRAVEL_GRAPH)]
+    places += [{'id':p['_id'],'name':p['name']} async for p in travel.places.find({'enabled':True})]
+    return {'places':places}
+
+@router.post('/players/{tg_id}/approve-character')
+async def approve_character(tg_id:int, body:CharacterAdmissionBody, user=Depends(full_administrator)):
+    from routers.admin import castle_transfer_lock
+    from character_admission import approve
+    from auth import get_admin_role
+    from fastapi import HTTPException
+    if await get_admin_role({'id':tg_id}): raise HTTPException(400,'حساب مدیریت از ثبت‌نام بازیکن جداست')
+    async with castle_transfer_lock:
+        return await approve(tg_id,body.region,body.place,user['id'],body.character_key)

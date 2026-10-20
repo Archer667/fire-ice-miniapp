@@ -27,8 +27,8 @@ function fmtRemaining(iso) {
 }
 
 export default function Assets() {
-  const { toast } = useGame();
-  const [tab, setTab] = useState('castle');
+  const { me, toast } = useGame();
+  const [tab, setTab] = useState(me?.landless ? 'items' : 'castle');
   const [myCastles, setMyCastles] = useState(null);
   const [activeCastle, setActiveCastle] = useState(null);
   const [castle, setCastle] = useState(null);
@@ -38,9 +38,9 @@ export default function Assets() {
   const loadItems = () => api.myItems().then(setItems).catch(e => { toast(e.message); setItems([]); });
 
   useEffect(() => {
-    loadCastle();
+    if (!me?.landless) loadCastle();
     loadItems();
-    api.myCastles().then(list => { setMyCastles(list); setActiveCastle(list.find(c => c.home)?.name || list[0]?.name || null); }).catch(() => setMyCastles([]));
+    if (!me?.landless) api.myCastles().then(list => { setMyCastles(list); setActiveCastle(list.find(c => c.home)?.name || list[0]?.name || null); }).catch(() => setMyCastles([]));
   }, []);
 
   const switchCastle = (name) => {
@@ -57,7 +57,7 @@ export default function Assets() {
       <div className="page-sub up">ساختمان‌ها، تولید روزانه و آیتم‌های خاندان</div>
 
       <div className="tabs up u1" role="tablist">
-        {TABS.map(t => (
+        {TABS.filter(t => !me?.landless || t.key === 'items').map(t => (
           <button type="button" key={t.key} role="tab" aria-selected={tab === t.key}
                className={`rbtn tab ${tab === t.key ? 'on' : ''}`}
                onClick={() => { haptic(); setTab(t.key); }}>{t.label}</button>

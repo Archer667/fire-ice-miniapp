@@ -73,7 +73,7 @@ async def management(user=Depends(admin)):
     people=[]
     async for p in players.find({}, {'profile_image':0,'backstory':0,'flag_image':0,'flag_map_image':0,'resources':0,'buildings':0,'castle_buildings':0}).sort('name',1):
         if p['tg_id'] in admin_ids:continue
-        people.append({'character_key':key(p),**{k:v for k,v in p.items() if k in ('tg_id','name','created_at','castle','landless','is_dead','registration_reset','points','stats','medals','profile_image','backstory','death_reason')}})
+        people.append({'character_key':key(p),**{k:v for k,v in p.items() if k in ('tg_id','name','created_at','castle','landless','is_dead','registration_reset','region','registration_mode','points','stats','medals','profile_image','backstory','death_reason')}})
     archived=[]
     async for a in db.character_archives.find({}).sort('died_at',-1):
         archived.append({k:v for k,v in a.items() if k in ('name','tg_id','created_at','died_at','points','stats','medals','death_reason','archive_id')})

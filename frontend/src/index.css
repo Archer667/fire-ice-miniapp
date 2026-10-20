@@ -1394,3 +1394,5 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .bld-art img{display:block;width:100%;height:100%;object-fit:cover}
 .bld-art-stage{position:absolute;inset:auto 0 0;padding:24px 12px 9px;background:linear-gradient(transparent,#100b09e8);color:#ecd3a2;font-size:11px;font-weight:600}
 .bld-art-unbuilt img{filter:saturate(.65);opacity:.8}
+
+.character-admission{margin:14px 0;padding:14px;border:1px solid rgba(213,172,97,.45);border-radius:10px;background:linear-gradient(135deg,#44201b55,#251c1355)}.character-admission summary{cursor:pointer;color:var(--gold);font-weight:700;font-size:12px}.character-admission form>.btn{margin-top:12px;width:100%}

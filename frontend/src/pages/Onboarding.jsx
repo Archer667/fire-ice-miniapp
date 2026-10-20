@@ -4,11 +4,14 @@ import { api } from '../api.js';
 import { haptic, getTgUser } from '../telegram.js';
 import { Keep } from '../components/Icons.jsx';
 import CastlePicker from '../components/CastlePicker.jsx';
+import {REGIONS_STATIC} from '../gamedata.js';
 
 export default function Onboarding() {
   const { setMe, toast, seasonBranding } = useGame();
   const [name, setName] = useState(getTgUser()?.first_name || '');
   const [gender, setGender] = useState('lord');
+  const [mode,setMode]=useState('castle');
+  const [requestedRegion,setRequestedRegion]=useState(Object.keys(REGIONS_STATIC)[0]);
   const [requestedCastles, setRequestedCastles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [registrationRegions, setRegistrationRegions] = useState([]);
@@ -20,14 +23,14 @@ export default function Onboarding() {
   const enter = async () => {
     if (!name.trim()) { toast('نامت را بنویس، لرد بی‌نام'); return; }
     if (!gender) { toast('عنوان کاراکتر را انتخاب کن'); return; }
-    if (requestedCastles.length === 0) { toast('دست‌کم یک قلعه را به‌عنوان اولویت انتخاب کن'); return; }
+    if (mode === 'castle' && requestedCastles.length === 0) { toast('دست‌کم یک قلعه را به‌عنوان اولویت انتخاب کن'); return; }
     setBusy(true);
     try {
-      await api.register({ name: name.trim(), gender, requested_castles: requestedCastles });
+      await api.register({ name: name.trim(), gender, registration_mode:mode, requested_region:mode === 'character' ? requestedRegion : null, requested_castles:mode === 'castle' ? requestedCastles : [] });
       const me = await api.me();
       haptic('medium');
       setMe(me);
-      toast(`خوش آمدی، ${gender === 'lady' ? 'لیدی' : 'لرد'} ${name.trim()} — منتظر بمان تا ادمین خاندانت را مشخص کند`);
+      toast(`خوش آمدی، ${gender === 'lady' ? 'لیدی' : 'لرد'} ${name.trim()} — درخواستت برای بررسی مدیریت فرستاده شد`);
     } catch (e) { toast(e.message); }
     setBusy(false);
   };
@@ -56,17 +59,12 @@ export default function Onboarding() {
           </button>
         </div>
       </div>
-      <div className="up u1" style={{ marginTop: 12 }}>
-        <label className="f">قلعه‌های درخواستی (اجباری، به‌ترتیب اولویت)</label>
-        <CastlePicker value={requestedCastles} onChange={setRequestedCastles} regionStates={registrationRegions} />
-        <div className="page-sub" style={{ margin: '6px 4px 0' }}>
-          قلعه‌های دلخواهت را به‌ترتیب اولویت انتخاب کن. چند انتخاب از اقلیم‌های مختلف، امکان واگذاری قلعه را بیشتر می‌کند.
-        </div>
-      </div>
+      <div className="up u1" style={{marginTop:16}}><label className="f">نوع ورود به جهان والریا</label><div className="grid2" role="radiogroup" aria-label="نوع کاراکتر">{[['castle','فرمانروای قلعه'],['character','کاراکتر بدون قلعه']].map(([id,label])=><button key={id} type="button" role="radio" aria-checked={mode===id} className={`rbtn pick ${mode===id?'sel':''}`} onClick={()=>setMode(id)}><div className="n">{label}</div></button>)}</div></div>
+      {mode==='castle'?<div className="up u1" style={{marginTop:12}}><label className="f">قلعه‌های درخواستی، به‌ترتیب اولویت</label><CastlePicker value={requestedCastles} onChange={setRequestedCastles} regionStates={registrationRegions}/><p className="page-sub">دست‌کم یک قلعه انتخاب کن؛ مالکیت پس از تأیید مدیریت واگذار می‌شود.</p></div>:<div className="card up u1" style={{marginTop:16}}><label className="f">اقلیم درخواستی<select value={requestedRegion} onChange={e=>setRequestedRegion(e.target.value)}>{Object.entries(REGIONS_STATIC).map(([id,r])=><option key={id} value={id}>{r.name}</option>)}</select></label><p className="page-sub">با تأیید مدیریت و تعیین محل اقامت، سفر، خانواده، نهادها و امور شخصی در دسترس قرار می‌گیرند. اقامت در یک قلعه به معنای مالکیت آن نیست.</p></div>}
       <div className="page-sub up u2" style={{ margin: '4px 4px 0' }}>
         برای تأیید درخواست، باید در تنظیمات حساب تلگرام خود نام کاربری (Username / @ID) تعیین کرده باشی. بعد از تنظیم، بازی را دوباره باز کن.
         <br />
-        اقلیم و قلعهٔ خاندان پس از بررسی درخواست عضویت، با توجه به اولویت‌هایت تعیین می‌شوند.
+        نوع عضویت، اقلیم و محل اقامت یا قلعه پس از بررسی درخواست مشخص می‌شوند.
       </div>
       <div className="up u2" style={{ marginTop: 16 }}>
         <button className="btn" onClick={enter} disabled={busy}>
