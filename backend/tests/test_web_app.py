@@ -140,3 +140,40 @@ class BrowserAccounts(unittest.IsolatedAsyncioTestCase):
         with patch.object(game_clock,'paused',return_value=True):
             response=await self.client.post('/api/notifications/action',json={'action':'read_all'})
         self.assertEqual(response.status_code,200,response.text)
+
+    async def test_battle_download_ticket_does_not_open_other_private_routes(self):
+        data=await self.signup()
+        payload={'title':'نبرد آزمایشی','text':'گزارش کامل\nپایان گزارش'}
+        self.assertEqual((await self.client.post('/api/admin/battle-reports',json=payload)).status_code,403)
+        await self.db.admin_roles.insert_one({'tg_id':data['account']['id'],'role':'full'})
+        self.assertEqual((await self.client.post('/api/admin/battle-reports',json=payload,headers={'x-valyria-csrf':''})).status_code,403)
+        response=await self.client.post('/api/admin/battle-reports',json=payload)
+        self.assertEqual(response.status_code,200,response.text)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app),base_url='https://web.test') as anonymous:
+            download=await anonymous.get(response.json()['path'])
+            self.assertEqual(download.status_code,200,download.text)
+            self.assertIn('پایان گزارش',download.text)
+            self.assertEqual((await anonymous.get('/api/battle-report-files/'+'A'*43)).status_code,404)
+            self.assertEqual((await anonymous.get('/api/admin/battles')).status_code,401)
+
+    async def test_notification_filter_aliases_return_to_all_and_privacy(self):
+        data=await self.signup();uid=data['account']['id']
+        from game import now
+        await self.db.messages.insert_many([
+            {'from_id':0,'to_id':uid,'text':'The clash is settled','kind':'battle','read':False,'created_at':now()},
+            {'from_id':0,'to_id':uid,'text':'بی چهره ها سفارش را پذیرفتند','kind':'general','read':False,'created_at':now()},
+            {'from_id':0,'to_id':uid+1,'text':'private clash','kind':'battle','read':False,'created_at':now()},
+        ])
+        for url,total in [('/api/notifications',2),('/api/notifications?kind=war',1),('/api/notifications?kind=institution',1),('/api/notifications?kind=family',0),('/api/notifications?kind=',2),('/api/notifications?q=clash&kind=war',1)]:
+            response=await self.client.get(url);self.assertEqual(response.status_code,200,response.text);self.assertEqual(response.json()['total'],total,url)
+
+    async def test_word_limit_settings_require_full_admin_and_update_immediately(self):
+        data=await self.signup();uid=data['account']['id']
+        payload={'roleplays':3,'projects':1,'roleplay_words':45,'scenario_words':72,'request_words':80}
+        self.assertEqual((await self.client.post('/api/admin/submission-limits',json=payload)).status_code,403)
+        await self.db.admin_roles.insert_one({'tg_id':uid,'role':'full'})
+        result=await self.client.post('/api/admin/submission-limits',json=payload)
+        self.assertEqual(result.status_code,200,result.text)
+        self.assertEqual((await self.client.get('/api/text-limits')).json(),{'roleplay_words':45,'scenario_words':72,'request_words':80})
+        self.assertEqual((await self.client.post('/api/admin/submission-limits',json={'roleplays':3,'projects':1})).status_code,200)
+        self.assertEqual((await self.client.get('/api/text-limits')).json()['scenario_words'],72)

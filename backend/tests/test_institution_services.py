@@ -19,6 +19,7 @@ class Database:
 
 class ServicesTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.enterContext(patch("text_limits.game_settings",Collection()))
         self.at=datetime(2026,10,11,12);self.clock=self.at;self.db=Database()
         self.people=Collection([{'tg_id':uid,'name':'Player '+str(uid),'created_at':self.at,'castle':'Castle '+str(uid),'region':'north','resources':{'gold':1000,'wood':500,'food':500,'men':100}} for uid in (1,2,3,4)],name='players')
         self.db.collections['players']=self.people

@@ -1,3 +1,4 @@
+from text_limits import check_text
 from system_reports import check_quota, consume, CATEGORIES
 from datetime import timedelta
 from bson import ObjectId
@@ -28,6 +29,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     if body.category not in ROLEPLAY_CATEGORIES:
         raise HTTPException(400, "دسته‌بندی نامعتبر است")
     text = body.text.strip()
+    await check_text(text, "roleplay_words")
     if len(text) < TEXT_MIN_LEN:
         raise HTTPException(400, "رول خیلی کوتاه است — کمی بیشتر بنویس")
 
@@ -90,7 +92,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     result_required = body.category not in ("security", "scout")
     doc = {
         "tg_id": user["id"], "player_name": p["name"], "castle": p["castle"],
-        "category": body.category, "text": text[:4000], "campaign_id": campaign_id,
+        "category": body.category, "text": text, "campaign_id": campaign_id,
         "target_tg_id": target_player["tg_id"] if target_player else None,
         "target_player_name": target_player["name"] if target_player else None,
         "result": None, "resolved": not result_required,
@@ -118,7 +120,7 @@ async def send(body: RoleplayBody, user: dict = Depends(get_user)):
     admin_detail = (
         f"فرستنده: {p['name']}\n"
         f"دسته: {ROLEPLAY_CATEGORIES[body.category]}{target_line}\n"
-        f"متن کامل رول:\n{text[:2800]}"
+        f"پیش‌نمایش رول (متن کامل در پرونده):\n{text[:2800]}"
     )
     if campaign_id:
         submitted = await roleplays.count_documents({"campaign_id": campaign_id})

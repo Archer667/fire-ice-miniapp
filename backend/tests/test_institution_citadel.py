@@ -12,6 +12,7 @@ import institution_citadel as c
 
 class CitadelTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.enterContext(patch("text_limits.game_settings",Collection()))
         self.at=datetime(2026,10,11,12)
         self.people=Collection([{'tg_id':uid,'name':f'Player {uid}','created_at':self.at,'castle':'Castle','region':'north'} for uid in (1,2,3)])
         self.cases=Collection();self.messages=Collection();self.audit=Collection()

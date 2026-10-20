@@ -1,3 +1,4 @@
+from text_limits import check_text
 from army_upkeep import civilian_food_rate
 import random
 from datetime import timedelta
@@ -328,6 +329,7 @@ async def set_ration(body: RationBody, user: dict = Depends(get_user)):
 @router.post("/{rebellion_id}/roleplay")
 async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = Depends(get_user)):
     text = body.text.strip()
+    await check_text(text, "roleplay_words")
     if len(text) < 10:
         raise HTTPException(400, "رول خیلی کوتاه است")
     try:
@@ -336,7 +338,7 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
         raise HTTPException(400, "شناسه شورش نامعتبر است")
     result = await rebellions.update_one(
         {"_id": oid, "tg_id": user["id"], "status": "awaiting_roleplay", "deadline": {"$gt": now()}},
-        {"$set": {"roleplay_text": text[:4000], "roleplay_submitted_at": now(), "status": "roleplay_submitted"}},
+        {"$set": {"roleplay_text": text, "roleplay_submitted_at": now(), "status": "roleplay_submitted"}},
     )
     if not result.modified_count:
         raise HTTPException(400, "شورش فعال نیست یا مهلت رول گذشته است")
@@ -346,7 +348,7 @@ async def submit_roleplay(rebellion_id: str, body: RoleplayBody, user: dict = De
         "✍️ رول شورش آمادهٔ داوری است",
         f"فرستنده: {row.get('player_name', 'بازیکن')}\n"
         f"هدف: شورشِ {row.get('castle') or 'قلعه نامشخص'}\n"
-        f"متن کامل رول شورش:\n{text[:2800]}",
+        f"پیش‌نمایش رول (متن کامل در پرونده) شورش:\n{text[:2800]}",
         dedupe_key=f"rebellion-roleplay:{oid}",
         priority="high",
         player_name=row.get("player_name"),
@@ -407,7 +409,7 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
     result_text = body.result.strip()
     await players.update_one({"tg_id": p["tg_id"]}, {"$set": {"popularity": popularity, "resources": resources}})
     await rebellions.update_one({"_id": oid}, {"$set": {
-        "resolved": True, "status": body.outcome, "result": result_text[:4000],
+        "resolved": True, "status": body.outcome, "result": result_text,
         "resolved_at": now(), "resolved_by": user["id"],
     }})
     image = body.image_url if body.image_url and body.image_url.startswith(("https://", "data:image/")) and len(body.image_url) <= 3_500_000 else None

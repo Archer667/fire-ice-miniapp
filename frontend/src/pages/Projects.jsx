@@ -1,3 +1,4 @@
+import LimitedText from '../components/LimitedText.jsx';
 import { WEAPON_NAMES } from '../gamedata.js';
 import SubmissionQuota from '../components/SubmissionQuota.jsx';
 
@@ -141,8 +142,8 @@ export default function Projects({ admin = false }) {
           <h3 className="project-step">۱. هویت و هدف پروژه</h3>
           <label className="f">نوع پروژه<select value={form.kind} onChange={e => field('kind', e.target.value)}><option value="shared">مشترک — با سرمایه‌گذار</option><option value="personal">شخصی — تمام سرمایه با خودم</option></select></label>
           <label className="f">نام پروژه<input required minLength={3} maxLength={80} value={form.name} onChange={e => field('name', e.target.value)} /></label>
-          <label className="f">چشم‌انداز و هدف<textarea required minLength={10} maxLength={250} value={form.goal} onChange={e => field('goal', e.target.value)} /></label>
-          <label className="f">توضیح و شیوهٔ رسیدن به هدف<textarea required minLength={20} maxLength={600} value={form.description} onChange={e => field('description', e.target.value)} /></label>
+          <label className="f">چشم‌انداز و هدف<LimitedText limitKind="request_words" required minLength={10} value={form.goal} onChange={e => field('goal', e.target.value)} /></label>
+          <label className="f">توضیح و شیوهٔ رسیدن به هدف<LimitedText limitKind="request_words" required minLength={20} value={form.description} onChange={e => field('description', e.target.value)} /></label>
           <h3 className="project-step">۲. سرمایه و تقسیم سهام</h3>
           <Resources title="کل بودجهٔ موردنیاز" values={form.budget} change={v => field('budget', v)} />
           <div className="project-resource-grid"><label className="f">تعداد کل سهام<input required type="number" min="1" max="10000" step="1" value={form.total_shares} onChange={e => field('total_shares', Number(e.target.value))} /></label>

@@ -182,10 +182,12 @@ function paintPermanentNorthSnow(){
  if(!hybridMeta||!center)return;
  const ctx=groundCanvas.getContext('2d'),w=canvas.clientWidth,h=canvas.clientHeight,m=hybridMeta,scale=zoom*h/2,size=m.span*scale;
  const ends=window.valyriaNorth.wallEndpoints(saved),{east,west}=ends;
- const boundary=x=>{const t=Math.max(0,Math.min(1,(x-west.x)/(east.x-west.x)));return west.z+(east.z-west.z)*t;};
- const edge=[];for(let i=0;i<=64;i++){const x=-1.2+i/64*2.4;edge.push(projectEffect([x,.037,boundary(x)]));}
- ctx.save();ctx.beginPath();ctx.moveTo(-100000,-100000);ctx.lineTo(100000,-100000);for(let i=edge.length-1;i>=0;i--)ctx.lineTo(...edge[i]);ctx.closePath();ctx.clip();
+ // Beyond the Wall, the snow edge follows the sea between the northern
+ // headland, Bear Island, Skagos and the mainland, rather than cutting islands.
  const ox=m.xmin*scale+(pan[0]+1)*w/2,oy=(1.1-pan[1])*h/2-m.ymax*scale;
+ const atlas=(x,y)=>[ox+x*size,oy+y*size];
+ const edge=[atlas(-1,.79),atlas(1.58,.79),projectEffect([west.x,.037,west.z]),projectEffect([east.x,.037,east.z]),atlas(2.98,.64),atlas(2.98,.84),atlas(m.cols+1,.84)];
+ ctx.save();ctx.beginPath();ctx.moveTo(-100000,-100000);ctx.lineTo(100000,-100000);for(let i=edge.length-1;i>=0;i--)ctx.lineTo(...edge[i]);ctx.closePath();ctx.clip();
  if(snowOverview)ctx.drawImage(snowOverview,ox,oy,size*m.cols,size);else fetchNorthSnow('overview','north-snow/overview.webp',im=>snowOverview=im);
  if(size*Math.min(devicePixelRatio,2)>384)for(let col=0;col<m.cols;col++){
   const x=ox+col*size;if(x>w||x+size<0||oy>h||oy+size<0)continue;

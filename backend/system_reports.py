@@ -8,6 +8,7 @@ from db import db, players, game_settings
 from auth import get_user, get_admin, get_full_admin, get_admin_role
 from game import now
 from season_clock import season_day
+from text_limits import text_limits
 
 CATEGORIES = ['sabotage','other','economy','diplomacy']
 async def limits():
@@ -89,14 +90,21 @@ async def full(user=Depends(get_user)): return await get_full_admin(user)
 class LimitsBody(BaseModel):
     roleplays: StrictInt = Field(ge=0,le=1000)
     projects: StrictInt = Field(ge=0,le=1000)
+    roleplay_words: StrictInt = Field(default=1000,ge=1,le=50000)
+    scenario_words: StrictInt = Field(default=1000,ge=1,le=50000)
+    request_words: StrictInt = Field(default=1000,ge=1,le=50000)
+@router.get('/text-limits')
+async def read_text_limits(user=Depends(get_user)):
+    return await text_limits()
+
 @router.get('/submission-limits')
 async def read_limits(user=Depends(get_user)):
     window = await quota_window()
-    return {**await limits(), **window, 'roleplays_used':await usage(user['id'],'roleplays',window),'projects_used':await usage(user['id'],'projects',window)}
+    return {**await limits(), **await text_limits(), **window, 'roleplays_used':await usage(user['id'],'roleplays',window),'projects_used':await usage(user['id'],'projects',window)}
 @router.post('/admin/submission-limits')
 async def save_limits(body:LimitsBody,user=Depends(full)):
-    await game_settings.update_one({'_id':'weekly_submission_limits'},{'$set':body.model_dump()},upsert=True)
-    return await limits()
+    await game_settings.update_one({'_id':'weekly_submission_limits'},{'$set':body.model_dump(exclude_unset=True)},upsert=True)
+    return {**await limits(), **await text_limits()}
 @router.get('/admin/reports/{kind}')
 async def report(kind:str,user=Depends(full)):
     from display_clock import display_clock, tehran_text

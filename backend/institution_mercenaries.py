@@ -1,3 +1,4 @@
+from text_limits import check_text
 """Admin-approved, fixed-term armies with surviving-force return."""
 from datetime import timedelta
 from uuid import uuid4
@@ -41,13 +42,14 @@ async def dashboard(page:int=1,user=Depends(get_user)):
 class Listing(BaseModel):
     request_id:str
     name:str=Field(min_length=3,max_length=60)
-    description:str=Field(min_length=10,max_length=2000)
+    description:str=Field(min_length=10,max_length=500000)
     troops:dict[str,StrictInt]=Field(max_length=50)
     equipment:dict[str,StrictInt]=Field(default_factory=dict,max_length=20)
     price:StrictInt=Field(ge=1,le=10**9)
     duration_hours:StrictInt=Field(ge=1,le=720)
 @router.post('/golden-company/offers')
 async def create(body:Listing,user=Depends(get_user)):
+    await check_text(body.description, "request_words")
     p,cfg=await services.manager('golden-company',user)
     if not cfg['enabled']:raise HTTPException(400,'ثبت لشکر تازه متوقف است')
     troops,equipment=composition(body.troops,body.equipment);name=services.clean(body.name);description=services.clean(body.description,10)

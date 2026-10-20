@@ -1,3 +1,4 @@
+import LimitedText from '../components/LimitedText.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { useGame } from '../store.jsx';
 import { api } from '../api.js';
@@ -124,7 +125,7 @@ export default function Espionage() {
               )}
 
               <label className="f">نقشهٔ جاسوسی</label>
-              <textarea value={scenario} onChange={e => setScenario(e.target.value)}
+              <LimitedText limitKind="scenario_words" value={scenario} onChange={e => setScenario(e.target.value)}
                         placeholder="روش آموزش، اعزام و نفوذ جاسوس‌ها را شرح بده. کیفیت نقشهٔ تو در داوری مأموریت مؤثر است." />
 
               <div className={`cost ${overGold || overMen ? 'over' : ''}`}>

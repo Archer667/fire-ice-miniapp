@@ -1,3 +1,4 @@
+from text_limits import check_text
 from troop_materials import snapshot as naval_material_snapshot, refund as naval_material_refund
 from army_upkeep import food_rate, campaign_food
 from public_audience import public_recipients, public_players
@@ -505,6 +506,7 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     if body.target_castle not in TRAVEL_GRAPH.get(body.origin_castle, {}):
         raise HTTPException(400, "کمین فقط روی جادهٔ مستقیم بین قلعهٔ تو و قلعهٔ بعدی ساخته می‌شود")
     scenario = body.scenario.strip()
+    await check_text(scenario)
     if len(scenario) < 20:
         raise HTTPException(400, "سناریوی کمین باید حداقل ۲۰ نویسه باشد")
     edge_key = ambush_edge_key(body.origin_castle, body.target_castle)
@@ -532,13 +534,13 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
         "target_castle": body.target_castle, "edge_key": edge_key, "sea": is_sea,
         "troops": {k: int(v or 0) for k, v in body.troops.items() if int(v or 0) > 0},
         "men_committed": men, "soldiers_committed": land_men, "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "weapons_cost": weapons,
-        "food_per_day": food_per_day, "scenario": scenario[:4000], "status": "pending_score", "created_at": now(),
+        "food_per_day": food_per_day, "scenario": scenario, "status": "pending_score", "created_at": now(),
     }
     res = await ambushes.insert_one(doc)
     await notify_admins(
         "ambush_pending", "🏹 کمین تازه منتظر ضریب است",
         f"فرستنده: {p['name']}\nهدف: مسیر {body.origin_castle} — {body.target_castle}\n"
-        f"نیروی کمین: {land_men} سرباز\nمتن کامل رول کمین:\n{scenario[:2800]}",
+        f"نیروی کمین: {land_men} سرباز\nپیش‌نمایش رول (متن کامل در پرونده) کمین:\n{scenario[:2800]}",
         dedupe_key=f"ambush:{res.inserted_id}", priority="urgent", player_name=p["name"], player_tg_id=user["id"], source_id=str(res.inserted_id),
     )
     return {"ok": True, "id": str(res.inserted_id), "status": "pending_score"}

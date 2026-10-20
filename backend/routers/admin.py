@@ -1,3 +1,4 @@
+from text_limits import check_text
 from army_upkeep import food_rate, campaign_food
 from public_audience import public_recipients, public_players
 from typing import Literal
@@ -628,6 +629,7 @@ class AmbushEditBody(BaseModel):
 @router.put("/ambushes/{ambush_id}")
 async def admin_edit_ambush(ambush_id: str, body: AmbushEditBody, user: dict = Depends(full_admin_user)):
     scenario = body.scenario.strip()
+    await check_text(scenario)
     if len(scenario) < 20:
         raise HTTPException(400, "سناریوی کمین باید حداقل ۲۰ نویسه باشد")
     if not 0 <= body.coefficient <= 10 or not 0 <= body.ambush_score <= 100:
@@ -638,7 +640,7 @@ async def admin_edit_ambush(ambush_id: str, body: AmbushEditBody, user: dict = D
         raise HTTPException(400, "شناسهٔ کمین نامعتبر است")
     result = await ambushes.update_one(
         {"_id": oid, "status": {"$in": ["pending_score", "active"]}},
-        {"$set": {"scenario": scenario[:4000], "coefficient": round(body.coefficient, 2),
+        {"$set": {"scenario": scenario, "coefficient": round(body.coefficient, 2),
                   "ambush_score": body.ambush_score, "status": "active", "edited_at": now(), "edited_by": user["id"]}},
     )
     if not result.matched_count:

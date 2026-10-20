@@ -29,7 +29,9 @@ async def list_notices(page:int=1,kind:str='',unread:bool=False,archived:bool=Fa
     query={'to_id':user['id'],'from_id':SYSTEM_SENDER_ID,'archived':True if archived else {'$ne':True}}
     if kind:
         patterns={'war':'نبرد|لشکر|محاصره|حمله','rebellion':'شورش','building':'ساختمان|ارتقا','trade':'تجارت|کاروان|بازار','diplomacy':'پیمان|اتحاد','family':'خانواده|فرزند|ازدواج','project':'پروژه','institution':'سیتادل|بانک|نهاد|کیمیا|گروهان|ایمان|نگهبان|بی‌چهره'}
-        query['$or']=[{'kind':kind},{'text':{'$regex':patterns.get(kind,re.escape(kind))}}]
+        aliases={'war':['war','battle','campaign','siege','attack','army','ambush'],'building':['building','construction','upgrade'],'trade':['trade','market','caravan'],'family':['family','marriage','birth'],'institution':['institution','citadel','bank','alchemists','faceless','faith','watch','golden-company']}
+        pattern=patterns.get(kind,re.escape(kind)).replace('بی‌چهره','بی[\u200c\\s]*چهره')
+        query['$or']=[{'kind':{'$in':aliases.get(kind,[kind])}},{'text':{'$regex':pattern,'$options':'i'}}]
     if unread: query['read']={'$ne':True}
     if q.strip(): query['text']={'$regex':re.escape(q.strip()),'$options':'i'}
     rows=[]

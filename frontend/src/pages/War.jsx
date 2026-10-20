@@ -1,3 +1,4 @@
+import LimitedText from '../components/LimitedText.jsx';
 import PassageConsent from '../components/PassageConsent.jsx';
 import ArmyGroups from '../components/ArmyGroups.jsx';
 import { gameNow } from '../gameClock.js';
@@ -508,7 +509,7 @@ export default function War() {
 
             {opType === 'ambush' && <>
               <label className="f">سناریوی کمین</label>
-              <textarea rows={5} maxLength={4000} value={ambushScenario} onChange={e => setAmbushScenario(e.target.value)}
+              <LimitedText limitKind="scenario_words" rows={5} value={ambushScenario} onChange={e => setAmbushScenario(e.target.value)}
                 placeholder="نحوهٔ پنهان‌شدن نیروها، زمان یورش و نقشهٔ کمین را بنویس..." />
               <div className="page-sub" style={{ margin: '8px 4px 0' }}>کمین را در جادهٔ میان دو قلعهٔ همسایه برپا کن. کیفیت سناریو، قدرت کمین را تعیین می‌کند.</div>
             </>}

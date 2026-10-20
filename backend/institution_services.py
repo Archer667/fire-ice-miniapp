@@ -1,3 +1,4 @@
+from text_limits import check_text
 """Paid narrative services, confidential contracts, and the Faith treasury."""
 from datetime import timedelta
 from uuid import uuid4
@@ -65,10 +66,11 @@ class Request(BaseModel):
     request_id:str
     kind:str=Field(max_length=50)
     title:str=Field(min_length=3,max_length=100)
-    description:str=Field(min_length=20,max_length=4000)
+    description:str=Field(min_length=20,max_length=500000)
     resources:dict[str,StrictInt]=Field(default_factory=dict,max_length=7)
 @router.post('/services/{institution}/requests')
 async def request(institution:str,body:Request,user=Depends(get_user)):
+    await check_text(body.description, "request_words")
     p=await living(user['id']);cfg=await settings(institution)
     if institution=='golden-company':raise HTTPException(400,'درخواست سناریو را از قرارداد لشکر ثبت کن')
     if not cfg['enabled']:raise HTTPException(400,'پذیرش درخواست این نهاد متوقف است')
@@ -109,10 +111,12 @@ async def accept(institution:str,case_id:str,body:Revision,user=Depends(get_user
     return public(row,p)
 
 class Submission(Revision):
-    scenario:str=Field(min_length=20,max_length=8000)
-    proposal:str=Field(min_length=3,max_length=2000)
+    scenario:str=Field(min_length=20,max_length=500000)
+    proposal:str=Field(min_length=3,max_length=500000)
 @router.post('/services/{institution}/cases/{case_id}/submit')
 async def submit(institution:str,case_id:str,body:Submission,user=Depends(get_user)):
+    await check_text(body.scenario)
+    await check_text(body.proposal)
     p,_=await manager(institution,user);row=await fetch(institution,case_id,body.version,['working'])
     if not matches(p,row.get('assigned')):raise HTTPException(403,'فقط عضو مسئول این سفارش می‌تواند نتیجه ارسال کند')
     if institution=='faceless' and not row.get('quota_used'):

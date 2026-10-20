@@ -86,3 +86,8 @@ docker compose exec backend python -m web_auth reset-password
 آزمون‌های مکانیک مشترک شامل نهادها، فروشگاه، سفر و کنترل لشکر نیز جدا اجرا شده‌اند. آزمون‌های قدیمی مخصوص احراز هویت تلگرام معیار ورود وب نیستند و باید با نشست مرورگر اجرا شوند. آزمون مرورگر توسعه، ورود و ثبت‌نام واقعی در سرور حافظه‌ای، کد بازیابی، صندوق، بایگانی، خروج، کوکی، service worker و صفحهٔ قطع اتصال را بررسی می‌کند. در آن مسیر، درخواست خارجی مشاهده نشده است. آزمون روی گوشی واقعی و MongoDB واقعیِ محیط نهایی جایگزین نشده است.
 
 مراجع طراحی: [ذخیرهٔ رمز](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)، [نشست امن](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)، [پیشگیری از CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)، [نصب PWA](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Making_PWAs_installable).
+
+
+### نصب بدون دریافت بستهٔ نقشه
+
+راهنمای `/?install=1` نصب از Chrome در اندروید و افزودن به صفحهٔ اصلی در Safari آیفون را توضیح می‌دهد. دریافت بستهٔ کامل نقشه لازم نیست و گزینهٔ آن حذف شده است. با فعال‌شدن نسخهٔ جدید، کش مخصوص بستهٔ قدیمی پاک می‌شود؛ حساب و داده‌های ورود دست‌نخورده می‌مانند. تصاویر و مدل‌های مورد نیاز هنگام نمایش دریافت می‌شوند. نمایش مرورگری همچنان به دریافت فایل‌های نمایشی نیاز دارد؛ این روش مانع استخراج آن فایل‌ها نیست.
