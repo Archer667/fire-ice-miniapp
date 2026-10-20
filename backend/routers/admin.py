@@ -1617,6 +1617,8 @@ async def list_pending_players(user: dict = Depends(admin_user)):
         "$or": [{"region": None}, {"castle": None}],
     }).sort("created_at", 1)
     async for p in cur:
+        from character_access import status
+        if status(p) != 'pending': continue
         requested = [
             {"name": c, "region": castle_region.get(c), "occupied": c in occupied}
             for c in p.get("requested_castles", [])
@@ -1627,6 +1629,8 @@ async def list_pending_players(user: dict = Depends(admin_user)):
             "blacklisted": bool(await __import__("character_records").blacklist.find_one({"_id": p["tg_id"]})),
             "gender": p.get("gender"), "created_at": p["created_at"].isoformat(),
             "requested_castles": requested,
+            "registration_mode":p.get("registration_mode","castle"), "requested_region":p.get("requested_region"),
+            "character_key":f"{p['tg_id']}:{p.get('created_at')}",
         })
     return out
 
@@ -1634,16 +1638,16 @@ async def list_pending_players(user: dict = Depends(admin_user)):
 async def list_roster(user: dict = Depends(full_admin_user)):
     """همهٔ بازیکن‌های خاندان‌دار — برای مرور، حذف از خاندان یا تخصیص دوباره"""
     out = []
-    cur = players.find({"$or": [{"region": {"$ne": None}, "castle": {"$ne": None}}, {"is_dead": True}]},
+    cur = players.find({"$or": [{"region": {"$ne": None}, "castle": {"$ne": None}}, {"landless": True, "registration_reset": {"$ne":True}}, {"is_dead": True}]},
         {"tg_id": 1, "name": 1, "created_at": 1, "is_dead": 1, "death_snapshot.castle": 1,
          "death_snapshot.region": 1, "title": 1, "telegram_username": 1, "region": 1,
-         "castle": 1, "is_port": 1, "house": 1, "castle_buildings": 1}).sort("name", 1)
+         "castle": 1, "is_port": 1, "house": 1, "castle_buildings": 1, "landless":1}).sort("name", 1)
     async for p in cur:
         if p.get("is_dead"):
             p = {**p, "castle": p.get("death_snapshot", {}).get("castle"), "region": p.get("death_snapshot", {}).get("region")}
         out.append({
             "character_key": f"{p['tg_id']}:{p.get('created_at')}",
-            "is_dead": bool(p.get("is_dead")),
+            "is_dead": bool(p.get("is_dead")), "landless":bool(p.get("landless")),
             "tg_id": p["tg_id"], "name": p["name"], "title": p.get("title"),
             "telegram_username": p.get("telegram_username"),
             "region": p["region"], "region_name": REGIONS.get(p["region"], {}).get("name", p["region"]),
@@ -1711,6 +1715,8 @@ async def _admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = De
     capacities = await registration_state()
     if target.get("region") != body.region and capacities[body.region]["full"]:
         raise HTTPException(409, "ظرفیت این اقلیم تکمیل شده؛ ابتدا سقف را بیشتر کن یا یک بازیکن را جابه‌جا کن")
+    target = apply_production(target)
+    await players.update_one({"tg_id":tg_id},{"$set":production_fields(target)})
     old_castle = target.get("castle")
     extra_castles = dict(target.get("castle_buildings", {}))
     # انتقال خاندان یعنی قلعهٔ قبلی واقعاً آزاد می‌شود. ساختمان‌های قلعهٔ مقصد فقط
@@ -1728,6 +1734,7 @@ async def _admin_assign_house(tg_id: int, body: AssignHouseBody, user: dict = De
     await players.update_one({"tg_id": tg_id}, {"$set": {
         "region": body.region, "castle": body.castle, "is_port": is_port,
         "house": house, "buildings": new_home_buildings, "castle_buildings": extra_castles,
+        "landless":False, "pending":False, "approved_at":now(), "last_tick":now(),
     }})
     house_note = f" نامِ خاندانت «خاندان {house}» شد." if house else ""
     msg = (
@@ -1937,7 +1944,7 @@ async def delete_pending_player(tg_id: int, user: dict = Depends(full_admin_user
     target = await players.find_one({"tg_id": tg_id})
     if not target:
         raise HTTPException(404, "بازیکن پیدا نشد")
-    if target.get("region") or target.get("castle"):
+    if target.get("region") or target.get("castle") or target.get("landless"):
         raise HTTPException(400, "این بازیکن وارد بازی شده — اول باید از خاندانش خارجش کنی")
     await players.delete_one({"tg_id": tg_id})
     return {"ok": True}

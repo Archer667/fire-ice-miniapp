@@ -27,11 +27,10 @@ def _utc_iso(value) -> str | None:
 def _resolve_castle(p: dict, castle: str | None) -> str:
     """قلعه‌ای که این درخواست برایش است — پیش‌فرض قلعهٔ اصلی؛ اگر castle داده شده
     باید یکی از قلعه‌های همین بازیکن باشد (اصلی یا هرکدام از قلعه‌های اضافه‌اش)"""
-    if not castle:
-        return p["castle"]
-    if castle not in owned_castles(p):
+    target = castle or p.get('castle')
+    if not target or target not in owned_castles(p):
         raise HTTPException(403, "این قلعه مالِ تو نیست")
-    return castle
+    return target
 
 @router.get("")
 async def list_buildings(castle: str | None = None, user: dict = Depends(get_user)):
