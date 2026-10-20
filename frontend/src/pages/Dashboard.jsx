@@ -1,3 +1,4 @@
+import LimitedText from '../components/LimitedText.jsx';
 import CharacterTravel from './CharacterTravel.jsx';
 import { useEffect, useState } from 'react';
 import { useGame } from '../store.jsx';
@@ -309,7 +310,7 @@ export default function Dashboard({ goTo }) {
                 </div>
                 {rebellion.active.status === 'awaiting_roleplay' ? (
                   <>
-                    <textarea rows={5} value={rebellionText} onChange={e => setRebellionText(e.target.value)}
+                    <LimitedText limitKind="roleplay_words" rows={5} value={rebellionText} onChange={e => setRebellionText(e.target.value)}
                               placeholder="سناریوی برخورد، مذاکره یا سرکوب شورش را بنویس..." />
                     <button className="btn" style={{ marginTop: 10 }} disabled={rebellionBusy} onClick={submitRebellion}>
                       {rebellionBusy ? 'در حال ارسال...' : 'ارسال رول شورش'}

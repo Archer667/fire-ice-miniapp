@@ -1,3 +1,4 @@
+import LimitedText from '../components/LimitedText.jsx';
 import CharacterAdmission from '../components/CharacterAdmission.jsx';
 import AdminFormations from '../components/AdminFormations.jsx';
 import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
@@ -156,7 +157,7 @@ const TAB_GROUPS = [
       { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
       { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
       { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
-      { key: 'submission_limits', label: 'سهمیه‌های هفتگی', description: 'سقف رول و درخواست پروژه', fullOnly:true },
+      { key: 'submission_limits', label: 'سهمیه و محدودیت متن', description: 'سقف ارسال و تعداد کلمات', fullOnly:true },
       { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
@@ -2090,7 +2091,7 @@ export default function Admin() {
             {ambushesList && ambushesList.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی ثبت نشده</div>}
             {(ambushesList || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 10 }}>
               <div className="res"><div className="ic"><Eye s={16} /></div><div className="n">{a.player}<small>{castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)} · {a.men_committed.toLocaleString('fa-IR')} نفر</small></div></div>
-              {isFull && ['pending_score', 'active'].includes(a.status) ? <textarea value={ambushScenarios[a.id] ?? a.scenario} onChange={e => setAmbushScenarios(p => ({ ...p, [a.id]: e.target.value }))} style={{ margin: '10px 0' }} /> : <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>}
+              {isFull && ['pending_score', 'active'].includes(a.status) ? <LimitedText limitKind="scenario_words" value={ambushScenarios[a.id] ?? a.scenario} onChange={e => setAmbushScenarios(p => ({ ...p, [a.id]: e.target.value }))} style={{ margin: '10px 0' }} /> : <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>}
               <div style={{ fontSize: 11.5, marginBottom: 8 }}>نیروها: {a.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ')}</div>
               {isFull && ['pending_score', 'active'].includes(a.status) ? <div className="grid2">
                 <div><label className="f" style={{ marginTop: 0 }}>ضریب تلفات دشمن</label><input type="number" min="0" max="10" step="0.1" placeholder="۰ تا ۱۰" value={ambushScores[a.id] ?? a.coefficient ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
@@ -2937,11 +2938,12 @@ export default function Admin() {
       {isFull && [['admin-activity','فعالیت ادمین‌ها','اقدام، ادمین، زمان و تغییرات بازیکنان'],['market','معاملات بازار','خریدار، فروشنده، کالا، حجم و قیمت'],['caravans','کاروان‌های تجاری','فرستنده، گیرنده، آیدی‌ها، محموله، مسیر و وضعیت']].map(([kind,title,description])=><div className="card system-report-card" key={kind}><div><div className="system-report-name">{title}</div><div className="system-report-meta">TXT · {description} · داخل تلگرام، فایل در چت بات دریافت می‌شود</div></div><button className="btn ghost" disabled={reportBusy} onClick={()=>downloadSystemReport(kind)}>دانلود فایل</button></div>)}
       </>}
       {tab === 'submission_limits' && isFull && <div className="card">
-        <div className="sect" style={{marginTop:0}}>سهمیه‌های هفتگی</div><p className="page-sub">از دوشنبه ساعت ۰۰:۰۰ به وقت UTCِ بازی؛ صفر یعنی ارسال این بخش بسته است. تغییر سقف، مصرف قبلی هفته را پاک نمی‌کند.</p>
-        {weeklyLimits && <form onSubmit={async e=>{e.preventDefault();setLimitsBusy(true);try{await api.saveSubmissionLimits({roleplays:Number(weeklyLimits.roleplays),projects:Number(weeklyLimits.projects)});toast('سهمیه‌ها ذخیره شد');}catch(err){toast(err.message);}finally{setLimitsBusy(false);}}}>
+        <div className="sect" style={{marginTop:0}}>سهمیه و محدودیت متن</div><p className="page-sub">سهمیه‌ها در بازه‌های هفت‌روزهٔ تقویم بازی محاسبه می‌شوند. صفر، ارسال آن بخش را می‌بندد. تغییر سقف، مصرف قبلی را پاک نمی‌کند. سقف متن بر حسب کلمه است و برای متن‌های تازه و ویرایش‌ها اعمال می‌شود.</p>
+        {weeklyLimits && <form onSubmit={async e=>{e.preventDefault();setLimitsBusy(true);try{await api.saveSubmissionLimits({roleplays:Number(weeklyLimits.roleplays),projects:Number(weeklyLimits.projects),...Object.fromEntries(["roleplay_words","scenario_words","request_words"].map(key=>[key,Number(weeklyLimits[key]??1000)]))});window.dispatchEvent(new Event("text-limits-changed"));toast('سهمیه‌ها ذخیره شد');}catch(err){toast(err.message);}finally{setLimitsBusy(false);}}}>
           <label className="f">سهمیهٔ مشترک رول خرابکاری، آزاد، اقتصادی و دیپلماسی<input type="number" min="0" max="1000" required value={weeklyLimits.roleplays} onChange={e=>setWeeklyLimits(p=>({...p,roleplays:e.target.value}))}/></label>
           <label className="f">درخواست پروژه در هفته<input type="number" min="0" max="1000" required value={weeklyLimits.projects} onChange={e=>setWeeklyLimits(p=>({...p,projects:e.target.value}))}/></label>
-          <button className="btn" disabled={limitsBusy}>ذخیره سهمیه‌ها</button></form>}
+          {[['roleplay_words','سقف کلمات رول‌ها و رول شورش'],['scenario_words','سقف کلمات سناریو، جاسوسی، کمین و نتیجهٔ پیشنهادی نهاد'],['request_words','سقف کلمات شرح درخواست نهاد و پروژه']].map(([key,label])=><label className="f" key={key}>{label}<input type="number" min="1" max="50000" required value={weeklyLimits[key]??1000} onChange={e=>setWeeklyLimits(p=>({...p,[key]:e.target.value}))}/></label>)}
+          <button className="btn" disabled={limitsBusy}>ذخیره تنظیمات</button></form>}
       </div>}
       {tab === 'market-floors' && isFull && <div className="card">
         <h2 className="page-title">بازهٔ قیمت بازار بازیکنان</h2>

@@ -1,3 +1,4 @@
+from text_limits import check_text
 import game_clock
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -47,8 +48,8 @@ class Proposal(BaseModel):
     request_id: str
     kind: str = 'shared'
     name: str = Field(min_length=3, max_length=80)
-    goal: str = Field(min_length=10, max_length=250)
-    description: str = Field(min_length=20, max_length=600)
+    goal: str = Field(min_length=10, max_length=500000)
+    description: str = Field(min_length=20, max_length=500000)
     budget: dict[str, StrictInt]
     total_shares: StrictInt = Field(ge=1, le=10000)
     owner_shares: StrictInt = Field(ge=1, le=10000)
@@ -65,6 +66,8 @@ async def rules(user=Depends(get_user)):
 
 @router.post('')
 async def submit(body: Proposal, user=Depends(get_user)):
+    await check_text(body.goal, "request_words")
+    await check_text(body.description, "request_words")
     p = await living_player(user)
     pid = clean_key(body.request_id)
     budget, output = validate_basket(body.budget), validate_basket(body.period_return)

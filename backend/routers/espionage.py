@@ -1,3 +1,4 @@
+from text_limits import check_text
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -27,6 +28,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
         raise HTTPException(403, "اول ثبت‌نام کن")
 
     scenario = body.scenario.strip()
+    await check_text(scenario)
     if len(scenario) < SCENARIO_MIN_LEN:
         raise HTTPException(400, "سناریوی جاسوسی خیلی کوتاه است — نقشه‌ات را کمی بیشتر توضیح بده")
 
@@ -52,7 +54,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
     doc = {
         "tg_id": user["id"], "player_name": p["name"],
         "origin_castle": p["castle"], "target_castle": body.target_castle, "target_tg_id": target["tg_id"],
-        "scenario": scenario[:4000],
+        "scenario": scenario,
         "gold_cost": gold_cost, "men_sent": men_cost,
         "travel_minutes": travel, "arrival_at": arrival_at,
         "admin_score": None, "resolved": False, "success": None, "report": None,
@@ -65,7 +67,7 @@ async def send(body: SpyBody, user: dict = Depends(get_user)):
         f"فرستنده: {p['name']}\n"
         f"مبدأ: {p['castle']}\n"
         f"هدف: {target['name']} · {body.target_castle}\n"
-        f"متن کامل رول جاسوسی:\n{scenario[:2800]}",
+        f"پیش‌نمایش رول (متن کامل در پرونده) جاسوسی:\n{scenario[:2800]}",
         dedupe_key=f"spy-submitted:{res.inserted_id}",
         priority="normal",
         player_name=p["name"],

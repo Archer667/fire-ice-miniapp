@@ -1,3 +1,4 @@
+from text_limits import check_text
 """Citadel service cases. API middleware serializes mutations with game state."""
 from datetime import timedelta
 from typing import Literal
@@ -54,9 +55,10 @@ class Request(BaseModel):
     request_id:str
     kind:Literal['research','healing']
     title:str=Field(min_length=3,max_length=100)
-    description:str=Field(min_length=20,max_length=4000)
+    description:str=Field(min_length=20,max_length=500000)
 @router.post('/citadel/requests')
 async def request(body:Request,user=Depends(get_user)):
+    await check_text(body.description, "request_words")
     p=await living(user['id']);cfg=await settings()
     if not cfg['enabled'] or not cfg[body.kind+'_enabled']:raise HTTPException(400,'پذیرش این خدمت فعلاً فعال نیست')
     if len(body.title.strip())<3 or len(body.description.strip())<20:raise HTTPException(400,'عنوان و شرح درخواست را کامل بنویس')
@@ -86,10 +88,12 @@ async def start(case_id:str,body:Start,user=Depends(get_user)):
     await notice('citadel:'+case_id+':start',[owner['tg_id']],f"رسیدگی سیتادل به «{row['title']}» آغاز شد.")
     return public(row)
 class Submission(Revision):
-    scenario:str=Field(min_length=20,max_length=8000)
-    proposal:str=Field(min_length=10,max_length=2000)
+    scenario:str=Field(min_length=20,max_length=500000)
+    proposal:str=Field(min_length=10,max_length=500000)
 @router.post('/citadel/cases/{case_id}/submit')
 async def submit(case_id:str,body:Submission,user=Depends(get_user)):
+    await check_text(body.scenario)
+    await check_text(body.proposal)
     await manager(user)
     if len(body.scenario.strip())<20 or len(body.proposal.strip())<10:raise HTTPException(400,'سناریو و نتیجهٔ پیشنهادی را کامل بنویس')
     row=await fetch(case_id,body.version,['working'])

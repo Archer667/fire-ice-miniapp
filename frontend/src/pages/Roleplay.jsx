@@ -1,3 +1,4 @@
+import LimitedText from '../components/LimitedText.jsx';
 import SubmissionQuota from '../components/SubmissionQuota.jsx';
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
@@ -118,7 +119,7 @@ export default function Roleplay() {
           )}
 
           <label className="f">متن رول</label>
-          <textarea value={text} onChange={e => setText(e.target.value)}
+          <LimitedText limitKind="roleplay_words" value={text} onChange={e => setText(e.target.value)}
                     placeholder="سناریوت را بنویس... چه می‌کنی، چطور، و هدفت چیست؟" />
 
           <button className="btn" style={{ marginTop: 14 }} disabled={textTooShort || noBattleChosen || noSabotageTarget || busy} onClick={send}>

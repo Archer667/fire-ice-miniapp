@@ -931,7 +931,7 @@ export const SMALL_COUNCIL_SEATS = {
   whispers: 'استاد نجواها',
   ships:    'استاد کشتی‌ها',
   laws:     'استاد قوانین',
-  war:      'استاد جنگ',
+  war:      'فرمانده گارد',
 };
 
 export const ALLIANCE_TYPES = {

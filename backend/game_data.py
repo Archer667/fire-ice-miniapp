@@ -69,7 +69,7 @@ SMALL_COUNCIL_SEATS = {
     "whispers": "استاد نجواها",
     "ships":    "استاد کشتی‌ها",
     "laws":     "استاد قوانین",
-    "war":      "استاد جنگ",
+    "war":      "فرمانده گارد",
 }
 
 COMMON_TROOPS = {
