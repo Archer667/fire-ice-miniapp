@@ -119,6 +119,7 @@ async def serialize_game_state(request: Request, call_next):
             await recover_bank()
             import institution_finance
             await institution_finance.recover()
+            await social_world.recover()
             if not game_clock.paused() and path.startswith('/api/war'):
                 from institution_mercenaries import tick as tick_mercenaries
                 await tick_mercenaries()
@@ -157,6 +158,8 @@ from routers import characters as characters_router
 app.include_router(characters_router.router)
 from routers import character_travel as character_travel_router
 app.include_router(character_travel_router.router)
+import social_world
+app.include_router(social_world.router)
 app.include_router(players.router)
 from army_groups import router as army_groups_router
 app.include_router(army_groups_router)
@@ -211,6 +214,7 @@ async def _arrival_watcher():
                 await tick_item_store()
                 if not game_clock.paused():
                     await tick_family()
+                    await social_world.tick()
                     from character_travel import tick as tick_character_travel
                     await tick_character_travel()
                     await institution_bank.tick()
@@ -490,6 +494,7 @@ async def start_background_watchers():
     await recover_pending_food()
     await _ensure_indexes()
     await institution_bank.ensure_indexes()
+    await social_world.ensure_indexes()
     await institution_citadel.ensure_indexes()
     await institution_finance.ensure_indexes()
     await institution_services.ensure_indexes()

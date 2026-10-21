@@ -4,7 +4,7 @@ import {useGame} from '../store.jsx';
 import '../styles/character-travel.css';
 
 export const travelStatus={pending:'منتظر پذیرش',travelling:'در راه',arrived:'رسیده',rejected:'پذیرفته نشد',redirected:'مسیر تغییر کرد',superseded:'جایگزین شد',held:'متوقف توسط ادمین',cancelled:'لغو شده'};
-export default function CharacterTravel({guestsOnly=false}){
+export default function CharacterTravel({guestsOnly=false,goTo}){
  const {toast}=useGame();const [data,setData]=useState(null),[error,setError]=useState(''),[target,setTarget]=useState(''),[children,setChildren]=useState([]),[busy,setBusy]=useState(false),[section,setSection]=useState('journey');
  const refresh=()=>req('/api/character-travel').then(v=>{setData(v);setError('');}).catch(e=>setError(e.message));
  useEffect(()=>{refresh();const timer=setInterval(refresh,30000);return()=>clearInterval(timer);},[]);
@@ -21,7 +21,7 @@ export default function CharacterTravel({guestsOnly=false}){
  </div></details>)}</>;
  if(guestsOnly)return <section className="card travel-panel" dir="rtl">{guests}</section>;
  return <section className="travel-panel" dir="rtl"><header className="travel-hero"><span className="travel-eyebrow">سفرنامهٔ خاندان</span><h1>کاراکتر و سفر</h1><p>{state.name} · {state.captive?'در اسارت':trip?'در مسیر '+trip.target:state.place||'در انتظار تعیین محل توسط ادمین'}</p><span className="travel-chip">{data.free_travel?'سفر رایگان برای کاراکتر بدون قلعه':'۱۰ شراب برای هر مسافر'}</span></header>
- <nav className="travel-tabs"><button className={'btn '+(section==='journey'?'':'ghost')} onClick={()=>setSection('journey')}>حضور و سفر</button><button className={'btn '+(section==='guests'?'':'ghost')} onClick={()=>setSection('guests')}>مهمانان {incoming.length>0&&`(${incoming.length})`}</button></nav>
+ <button className="btn ghost" onClick={()=>goTo?.(17)}>تالار و زندگی در اقامتگاه</button><nav className="travel-tabs"><button className={'btn '+(section==='journey'?'':'ghost')} onClick={()=>setSection('journey')}>حضور و سفر</button><button className={'btn '+(section==='guests'?'':'ghost')} onClick={()=>setSection('guests')}>مهمانان {incoming.length>0&&`(${incoming.length})`}</button></nav>
  {section==='guests'?<div className="card">{guests}</div>:<>
  {state.captive&&<div className="card">در وضعیت اسارت، سفر تا زمان آزادسازی غیرفعال است.</div>}
  {trip&&<div className="card"><strong>{travelStatus[trip.status]}</strong><p>{trip.origin} ← {trip.target}</p><p>زمان باقی‌مانده: {Math.max(0,Math.ceil((new Date(trip.arrival_at+'Z')-new Date(data.game_now+'Z'))/60000)).toLocaleString('fa-IR')} دقیقهٔ بازی</p></div>}
