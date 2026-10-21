@@ -177,3 +177,26 @@ class BrowserAccounts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.get('/api/text-limits')).json(),{'roleplay_words':45,'scenario_words':72,'request_words':80})
         self.assertEqual((await self.client.post('/api/admin/submission-limits',json={'roleplays':3,'projects':1})).status_code,200)
         self.assertEqual((await self.client.get('/api/text-limits')).json()['scenario_words'],72)
+
+    async def test_social_features_real_browser_auth_landless_escrow_and_csrf(self):
+        from uuid import uuid4
+        from game import now
+        import game_clock
+        data=await self.signup();uid=data['account']['id'];at=now()
+        await self.db.players.insert_one({'tg_id':uid,'name':'لیدی آلیس','created_at':at,'last_tick':at,'region':'north','castle':None,'landless':True,'resources':{'gold':1000},'buildings':{},'castle_buildings':{}})
+        import family
+        await self.db.character_locations.insert_one({'_id':family.key(await self.db.players.find_one({'tg_id':uid})),'tg_id':uid,'name':'لیدی آلیس','place':'وینترفل','trip':None,'captive':None})
+        body={'request_id':str(uuid4()),'title':'تأمین چوب بندر','description':'تأمین چوب برای تعمیر اسکله و تحویل به بندر','kind':'trade','place':'بندر سفید','reward':100,'duration_days':3}
+        self.assertEqual((await self.client.post('/api/contracts',json=body,headers={'x-valyria-csrf':''})).status_code,403)
+        response=await self.client.post('/api/contracts',json=body);self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual((await self.db.players.find_one({'tg_id':uid}))['resources']['gold'],900)
+        repeat=await self.client.post('/api/contracts',json=body);self.assertEqual(repeat.status_code,200,repeat.text)
+        self.assertEqual((await self.db.players.find_one({'tg_id':uid}))['resources']['gold'],900)
+        self.assertEqual((await self.client.get('/api/castle-life')).status_code,200)
+        with patch.object(game_clock,'paused',return_value=True):
+            paused=await self.client.post('/api/contracts',json={**body,'request_id':str(uuid4())})
+            self.assertEqual(paused.status_code,423,paused.text)
+        news=await self.client.post('/api/newspaper',json={'request_id':str(uuid4()),'title':'خبری از بندر سفید','body':'کشتی‌های بازرگانی به بندر رسیده‌اند.','source':'خبرنگار بندر','image':'port'})
+        self.assertEqual(news.status_code,200,news.text)
+        self.assertEqual((await self.client.get('/api/newspaper')).json()['articles'],[])
+        self.assertEqual((await self.client.post('/api/admin/social/news/'+news.json()['id']+'/review',json={'version':1,'action':'publish'})).status_code,403)

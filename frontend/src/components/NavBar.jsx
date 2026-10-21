@@ -28,6 +28,9 @@ export const EXTRA_PAGES = [
   { index: 13, Icon: InstitutionsIcon, label: 'نهادها' },
   { index: 14, Icon: FamilyIcon, label: 'کاراکتر و سفر' },
   { index: 15, Icon: Cart, label: 'فروشگاه آیتم‌ها' },
+  { index: 17, Icon: Scroll, label: 'تابلوی قراردادها' },
+  { index: 18, Icon: Realm, label: 'زندگی در قلعه' },
+  { index: 19, Icon: Scroll, label: 'روزنامه' },
 ];
 
 export default function NavBar({ tab, onChange }) {

@@ -53,7 +53,7 @@ async def flush_notices():
                 continue
             await db.messages.update_one({'_id': f"family:{n['_id']}:{uid}"}, {'$setOnInsert': {
                 'from_id': SYSTEM_SENDER_ID, 'from_name': SYSTEM_SENDER_NAME, 'to_id': uid,
-                'to_name': '', 'text': n['text'], 'kind': 'family', 'read': False, 'created_at': now(),
+                'to_name': '', 'text': n['text'], 'kind': 'social' if str(n['_id']).startswith('world:') else 'family', 'read': False, 'created_at': now(),
             }}, upsert=True)
             await db.family_notices.update_one({'_id': n['_id']}, {'$addToSet': {'sent': uid}})
         await db.family_notices.update_one({'_id': n['_id']}, {'$set': {'complete': True}})

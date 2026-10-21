@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {api} from '../api.js';
 import {useGame} from '../store.jsx';
 
-const TYPES=[['','همهٔ رخدادها'],['war','جنگ و لشکرکشی'],['rebellion','شورش'],['building','ساخت‌وساز'],['trade','تجارت و کاروان'],['diplomacy','پیمان‌ها'],['family','خانواده'],['project','پروژه‌ها'],['institution','نهادها']];
+const TYPES=[['','همهٔ رخدادها'],['war','جنگ و لشکرکشی'],['rebellion','شورش'],['building','ساخت‌وساز'],['trade','تجارت و کاروان'],['diplomacy','پیمان‌ها'],['family','خانواده'],['social','عهدنامه و تالار'],['social','عهدنامه و تالار'],['social','عهدنامه و تالار'],['project','پروژه‌ها'],['institution','نهادها']];
 export default function Notifications({goTo}){
   const {toast,refreshUnread}=useGame();
   const [data,setData]=useState(null),[page,setPage]=useState(1),[kind,setKind]=useState(''),[unread,setUnread]=useState(false),[archived,setArchived]=useState(false),[query,setQuery]=useState(''),[search,setSearch]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reload,setReload]=useState(0);

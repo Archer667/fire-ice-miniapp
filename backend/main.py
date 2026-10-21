@@ -91,6 +91,8 @@ async def serialize_game_state(request: Request, call_next):
     # Legacy economy handlers use read/modify/write. Serialize with project wallets
     # in this single-Uvicorn-worker deployment, including production-on-read routes.
     path = request.scope['path']
+    if request.method in ('GET','HEAD') and re.fullmatch(r'/api/battle-report-files/[A-Za-z0-9_-]{43}', path):
+        return await call_next(request)
     # Selector search is read-only; authentication remains in the route dependency.
     if request.method == 'GET' and path == '/api/players/search':
         return await call_next(request)
@@ -117,6 +119,7 @@ async def serialize_game_state(request: Request, call_next):
             await recover_bank()
             import institution_finance
             await institution_finance.recover()
+            await social_world.recover()
             if not game_clock.paused() and path.startswith('/api/war'):
                 from institution_mercenaries import tick as tick_mercenaries
                 await tick_mercenaries()
@@ -155,6 +158,9 @@ from routers import characters as characters_router
 app.include_router(characters_router.router)
 from routers import character_travel as character_travel_router
 app.include_router(character_travel_router.router)
+import social_world
+app.include_router(social_world.router)
+app.include_router(social_world.news_router)
 app.include_router(players.router)
 from army_groups import router as army_groups_router
 app.include_router(army_groups_router)
@@ -209,6 +215,7 @@ async def _arrival_watcher():
                 await tick_item_store()
                 if not game_clock.paused():
                     await tick_family()
+                    await social_world.tick()
                     from character_travel import tick as tick_character_travel
                     await tick_character_travel()
                     await institution_bank.tick()
@@ -490,6 +497,7 @@ async def start_background_watchers():
     await recover_pending_food()
     await _ensure_indexes()
     await institution_bank.ensure_indexes()
+    await social_world.ensure_indexes()
     await institution_citadel.ensure_indexes()
     await institution_finance.ensure_indexes()
     await institution_services.ensure_indexes()
@@ -559,7 +567,8 @@ async def require_browser_session(request: Request, call_next):
     if path.startswith('/api/telegram/'):
         return JSONResponse(status_code=404, content={'detail':'این مسیر در نسخهٔ وب فعال نیست'})
     public = ('/api/health','/api/gamedata','/api/season-branding','/api/game/status')
-    if path.startswith('/api/') and not path.startswith('/api/web-auth/') and path not in public and request.method!='OPTIONS':
+    report_download = request.method in ('GET','HEAD') and re.fullmatch(r'/api/battle-report-files/[A-Za-z0-9_-]{43}', path)
+    if path.startswith('/api/') and not path.startswith('/api/web-auth/') and path not in public and not report_download and request.method!='OPTIONS':
         try:
             await web_identity(request)
         except HTTPException as exc:
@@ -571,3 +580,6 @@ async def require_browser_session(request: Request, call_next):
 
 from web_notifications import router as web_notifications_router
 app.include_router(web_notifications_router)
+
+from battle_report_files import router as battle_report_files_router
+app.include_router(battle_report_files_router)
