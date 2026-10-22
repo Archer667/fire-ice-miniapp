@@ -7,6 +7,15 @@ import { castleLabel } from '../gamedata.js';
 
 export default function SideMenu({ open, tab, onChange, onClose }) {
   const { me, toast } = useGame();
+  const pages = [...NAV_ITEMS, ...EXTRA_PAGES]
+    .filter(p => (!p.adminOnly || me?.admin_role) && canOpenPage(me, p.index));
+  const groups = [
+    ['realm', 'قلمرو و فرماندهی'],
+    ['world', 'جهان و داستان'],
+    ['services', 'بازار و خدمات'],
+    ['character', 'کاراکتر و خاندان'],
+    ['admin', 'مدیریت'],
+  ];
   return (
     <>
       <div className={`sidemenu-overlay ${open ? 'show' : ''}`} onClick={onClose} aria-hidden="true" />
@@ -21,20 +30,21 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         </div>
 
         <div className="sidemenu-scroll" tabIndex={0} aria-label="بخش‌های بازی">
-        <div className="sidemenu-list">
-          {[...NAV_ITEMS, ...EXTRA_PAGES]
-            .filter(p => (!p.adminOnly || me?.admin_role) && canOpenPage(me, p.index))
-            .sort((a, b) => a.index - b.index)
-            .map(({ index, Icon, label }) => (
+        {groups.map(([key, title]) => {
+          const items = pages.filter(p => p.group === key);
+          return items.length > 0 && <section className="sidemenu-group" key={key}>
+            <h2>{title}</h2>
+            <div className="sidemenu-list">{items.map(({ index, Icon, label }) => (
               <button type="button" key={index} className={`rbtn sidemenu-item ${tab === index ? 'on' : ''}`}
                    aria-current={tab === index ? 'page' : undefined}
                    onClick={() => { haptic(); onChange(index); onClose(); }}>
                 <Icon s={18} /> {label}
               </button>
-            ))}
-        </div>
+            ))}</div>
+          </section>;
+        })}
 
-        <div className="sidemenu-list">
+        <div className="sidemenu-list sidemenu-help">
           <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('راهنما — به‌زودی'); onClose(); }}>راهنمای بازی</button>
           <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('پشتیبانی — به‌زودی'); onClose(); }}>پشتیبانی</button>
         </div>
