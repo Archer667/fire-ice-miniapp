@@ -259,7 +259,7 @@ def document(title,subtitle,body,at=None):
     font_css=''
     font=Path(__file__).with_name('report_assets')/'peyda-regular.woff2'
     if font.exists():font_css="@font-face{font-family:ReportPeyda;src:url(data:font/woff2;base64,"+base64.b64encode(font.read_bytes()).decode()+")}"
-    return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\';style-src \'unsafe-inline\';font-src data:;base-uri \'none\';form-action \'none\'"><title>'+esc(title)+'</title><style>'+font_css+CSS+'</style></head><body><main><header><div class="wordmark">V</div><small>VALYRIA · THE ROYAL ARCHIVES</small><div class="ornament">'+ORNAMENT+'</div><h1>'+esc(title)+'</h1><p class="sub">'+esc(subtitle)+'</p><svg class="svg-line" viewBox="0 0 140 15" aria-hidden="true"><path d="M0 8H57L70 1L83 8H140M57 8L70 14L83 8" fill="none" stroke="#b99b58"/></svg><p class="period">تهیهٔ گزارش: '+stamp(at or real_now())+' · زمان واقعی تهران</p></header>'+body+'<footer>'+ORNAMENT+'<p>والریا · بایگانی محرمانهٔ مدیریت · داده‌های ثبت‌شده، مبنای این گزارش‌اند.</p></footer></main></body></html>'
+    return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\';style-src \'unsafe-inline\';font-src data:;base-uri \'none\';form-action \'none\'"><title>'+esc(title)+'</title><style>'+font_css+CSS+'</style></head><body><main><header><div class="wordmark">V</div><small>VALYRIA · THE ROYAL ARCHIVES</small><div class="ornament">'+ORNAMENT+'</div><h1>'+esc(title)+'</h1><p class="sub">'+esc(subtitle)+'</p><svg class="svg-line" viewBox="0 0 140 15" aria-hidden="true"><path d="M0 8H57L70 1L83 8H140M57 8L70 14L83 8" fill="none" stroke="#b99b58"/></svg><p class="period">تهیهٔ سالنامه: '+stamp(at or real_now())+'</p></header>'+body+'<footer>'+ORNAMENT+'<p>والریا · سالنامهٔ فصل</p></footer></main></body></html>'
 
 def table_html(headers,rows):
     return '<div class="table-wrap"><table><thead><tr>'+''.join('<th>'+esc(h)+'</th>' for h in headers)+'</tr></thead><tbody>'+''.join('<tr>'+''.join('<td>'+str(c)+'</td>' for c in row)+'</tr>' for row in rows)+'</tbody></table></div>'
@@ -270,12 +270,12 @@ def render_season(season,data):
     people=list(data['players'].values());tot=lambda metric:sum(r['metrics'].get(metric,0) for r in people)
     elapsed=min(30,max(0,(now()-season['epoch']).days+1))
     body='<div class="grid">'+''.join('<div class="stat"><b>'+num(value)+'</b><span>'+esc(label)+'</span></div>' for label,value in [('بازیکن دارای سابقه',len(people)),('رول ثبت‌شده',tot('roles')),('فرمان تهاجمی',tot('attacks')),('روز تحت پوشش فعلی',elapsed)])+'</div>'
-    body+='<div class="notice">بازهٔ فصل: روز ۱ تا ۳۰ شمارندهٔ بازی؛ از '+stamp(season['epoch'])+' تا پیش از '+stamp(season['end'])+'، بر اساس ساعت داخلی بازی. '+('این نسخه میان‌فصل است؛ روزهای آینده هنوز داده ندارند.' if now()<season['end'] else 'این گزارش محدود به همین بازهٔ سی‌روزه است.')+'<br>رکوردها بر اساس سوابق باقی‌مانده و بایگانی تحلیلی محاسبه شده‌اند. سابقهٔ حذف‌شده پیش از فعال‌سازی قابل بازسازی نیست. آرشیو تحلیلی از '+stamp(season['first_observed_real'])+' به وقت واقعی فعال شده است.</div>'
+    body+='<div class="notice">بازهٔ فصل: روز ۱ تا ۳۰ شمارندهٔ بازی؛ از '+stamp(season['epoch'])+' تا پیش از '+stamp(season['end'])+'. '+('در گزارش میان‌فصل، روزهای آینده خالی نمایش داده می‌شوند.' if now()<season['end'] else 'این سالنامه مخصوص همین فصل است.')+'</div>'
     body+='<h2>نشان‌های فصل</h2><div class="rank-grid">'
     for metric,title,unit in METRICS:
         ranked=sorted((r for r in people if r['metrics'].get(metric,0)>0),key=lambda r:(-r['metrics'][metric],r['name']))[:5]
         body+='<section class="ranking"><span class="eyebrow">نشان افتخار</span><h3>'+esc(title)+'</h3>'
-        if not ranked:body+='<p class="empty">سابقهٔ قابل محاسبه موجود نیست.</p>'
+        if not ranked:body+='<p class="empty">برای این نشان رکوردی ثبت نشده است.</p>'
         else:
             maximum=ranked[0]['metrics'][metric]
             ties=sum(r['metrics'].get(metric,0)==maximum for r in people)
@@ -285,7 +285,7 @@ def render_season(season,data):
                 body+='<div class="bar-row"><span>'+num(i+1)+'</span><span>'+esc(r['name'])+'</span><b>'+num(value)+'</b><div class="track"><i style="width:'+str(round(width,2))+'%"></i></div></div>'
             body+='<p class="section-note">واحد: '+esc(unit)+'</p>'
         body+='</section>'
-    body+='</div><h2>ضرب‌آهنگ سی روز</h2><p class="section-note">طلایی: رول‌ها · قرمز: فرمان‌های تهاجمی. روزهای بدون سابقه با روزهای آینده یکسان تلقی نمی‌شوند.</p><div class="table-wrap panel"><div class="chart">'
+    body+='</div><h2>ضرب‌آهنگ سی روز</h2><p class="section-note">طلایی: رول‌ها · قرمز: فرمان‌های تهاجمی</p><div class="table-wrap panel"><div class="chart">'
     maximum=max([1]+[max(d['roles'],d['attacks']) for d in data['daily']])
     for d in data['daily']:
         body+='<div class="day" title="روز '+num(d['day'])+' · رول '+num(d['roles'])+' · حمله '+num(d['attacks'])+'"><div class="column"><i style="height:'+str(d['roles']/maximum*120)+'px"></i><i class="red" style="height:'+str(d['attacks']/maximum*120)+'px"></i></div>'+num(d['day'])+'</div>'
@@ -298,8 +298,6 @@ def render_season(season,data):
         if r['role_resources']:
             body+='<h3>خالص تغییر منابع ناشی از نتیجهٔ رول</h3>'+table_html(['منبع','تغییر خالص ثبت‌شده'],[[esc(RESOURCE_NAMES.get(k,k)),num(v)] for k,v in r['role_resources'].items()])
         body+='</details>'
-    body+='<h2>راهنمای خواندن آمار</h2><div class="panel"><p>سکهٔ دریافتی رول، جمع افزایش‌های مثبت و واقعاً اعمال‌شده به نویسنده است؛ خالص تغییر منابع جداگانه آمده است. مجموع منابع متفاوت به‌عنوان یک ثروت واحد جمع زده نمی‌شود.</p><p>اعزام نفرات، مجموع نفرات در فرمان‌های تهاجمی است؛ اعزام دوبارهٔ یک لشکر دوباره شمرده می‌شود و شمار افراد یکتا نیست. استقرار دفاعی در رکورد حمله وارد نمی‌شود. پیروزی چند لشکر در یک پرونده برای هر بازیکن یک بار شمرده می‌شود.</p><p>امتیاز رول، آخرین امتیاز موجود هر رول در همین بازه است؛ بازامتیازدهی دوباره به مجموع اضافه نمی‌شود. پیش‌قراولِ قابل ویرایش، در سوابق قدیمی فقط آخرین نسخهٔ موجود را دارد. ادمین‌ها در رقابت بازیکنان وارد نمی‌شوند.</p></div>'
-    body+='<h2>پوشش منابع داده</h2>'+table_html(['منبع','رکورد موجود در بایگانی'],[[esc(k),num(v)] for k,v in data['sources'].items()])
     return document(season['title']+' · سالنامهٔ فصل','روایت آماری رقابت، قلم و فرماندهی · روزهای ۱ تا ۳۰',body)
 
 async def freeze_season(reason='manual'):
