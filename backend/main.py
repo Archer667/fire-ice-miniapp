@@ -91,7 +91,7 @@ async def serialize_game_state(request: Request, call_next):
     # Legacy economy handlers use read/modify/write. Serialize with project wallets
     # in this single-Uvicorn-worker deployment, including production-on-read routes.
     path = request.scope['path']
-    if request.method in ('GET','HEAD') and re.fullmatch(r'/api/battle-report-files/[A-Za-z0-9_-]{43}', path):
+    if request.method in ('GET','HEAD') and re.fullmatch(r'/api/(?:battle-report|analytics)-files/[A-Za-z0-9_-]{43}', path):
         return await call_next(request)
     # Selector search is read-only; authentication remains in the route dependency.
     if request.method == 'GET' and path == '/api/players/search':
@@ -160,6 +160,8 @@ from routers import character_travel as character_travel_router
 app.include_router(character_travel_router.router)
 import social_world
 app.include_router(social_world.router)
+import season_analytics
+app.include_router(season_analytics.router)
 app.include_router(players.router)
 from army_groups import router as army_groups_router
 app.include_router(army_groups_router)
@@ -495,6 +497,7 @@ async def start_background_watchers():
     await _ensure_indexes()
     await institution_bank.ensure_indexes()
     await social_world.ensure_indexes()
+    await season_analytics.ensure_indexes()
     await institution_citadel.ensure_indexes()
     await institution_finance.ensure_indexes()
     await institution_services.ensure_indexes()
@@ -522,6 +525,7 @@ async def start_background_watchers():
     asyncio.create_task(_project_watcher())
     from rank_history import watcher as rank_history_watcher
     asyncio.create_task(rank_history_watcher())
+    asyncio.create_task(season_analytics.watcher())
     from battle_notices import watcher as battle_notice_watcher
     asyncio.create_task(battle_notice_watcher())
 

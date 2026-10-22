@@ -1,5 +1,6 @@
 import LimitedText from '../components/LimitedText.jsx';
 import {AdminSocial} from './SocialWorld.jsx';
+import AdminAnalytics from '../components/AdminAnalytics.jsx';
 import CharacterAdmission from '../components/CharacterAdmission.jsx';
 import AdminFormations from '../components/AdminFormations.jsx';
 import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
@@ -161,6 +162,7 @@ const TAB_GROUPS = [
       { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
       { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
       { key: 'submission_limits', label: 'سهمیه و محدودیت متن', description: 'سقف ارسال و تعداد کلمات', fullOnly:true },
+      {key:'analytics_reports',label:'آمار سیزن و گزارش ساعتی',description:'سالنامهٔ فصل و تاریخچهٔ دارایی بازیکنان',fullOnly:true},
       { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
@@ -2937,6 +2939,7 @@ export default function Admin() {
       </div>}
       {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
       {tab === 'family' && isFull && <AdminFamily />}
+      {tab === 'analytics_reports' && isFull && <AdminAnalytics/>}
       {tab === 'system_reports' && <><div className="card system-report-card">
         <div><div className="system-report-name">لیست سیاه بازیکنان</div><div className="system-report-meta">فایل TXT · نام، آیدی عددی و دلیل ثبت</div></div>
         <button type="button" className="btn ghost" disabled={reportBusy} onClick={downloadBlacklist}>{reportBusy ? 'در حال دریافت…' : 'دانلود فایل'}</button>

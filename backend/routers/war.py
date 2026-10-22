@@ -698,6 +698,8 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "created_at": now(), "last_food_tick": now(),
     }
     res = await campaigns.insert_one(doc)
+    from season_analytics import archive_row
+    await archive_row("campaigns", {**doc,"_id":res.inserted_id})
     await notify_campaign_departure(doc)
     return {
         "ok": True, "id": str(res.inserted_id), "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "men_committed": men, "power": power,
