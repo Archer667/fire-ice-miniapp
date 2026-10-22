@@ -132,6 +132,7 @@ const TAB_GROUPS = [
     tabs: [
       { key: 'world_contracts', label: 'عهدنامه‌ها و داوری', description: 'پاداش‌های رزروشده، اختلاف‌ها و تنظیمات قرارداد', fullOnly: true },
       { key: 'castle_life', label: 'تالارهای قلعه‌ها', description: 'بازبینی اعلامیه‌ها، رویدادها و ملاقات‌ها', fullOnly: true },
+      { key: 'world_news', label: 'تحریریهٔ روزنامه', description: 'بررسی خبرها، اصلاح و انتشار شماره‌ها', fullOnly: true },
       { key: 'alliances', label: 'اتحادها', description: 'مرور و مدیریت پیمان‌های بازیکنان', fullOnly: true },
       { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا', fullOnly: true },
       { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
@@ -1671,6 +1672,7 @@ export default function Admin() {
 
       {tab === 'world_contracts' && isFull && <AdminSocial section="contracts"/>}
       {tab === 'castle_life' && isFull && <AdminSocial section="castles"/>}
+      {tab === 'world_news' && isFull && <AdminSocial section="news"/>}
 
       {tab === 'notifications' && (
         <>

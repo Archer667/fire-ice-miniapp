@@ -1396,3 +1396,10 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 .bld-art-unbuilt img{filter:saturate(.65);opacity:.8}
 
 .character-admission{margin:14px 0;padding:14px;border:1px solid rgba(213,172,97,.45);border-radius:10px;background:linear-gradient(135deg,#44201b55,#251c1355)}.character-admission summary{cursor:pointer;color:var(--gold);font-weight:700;font-size:12px}.character-admission form>.btn{margin-top:12px;width:100%}
+
+/* Shared mobile frame and navigation hierarchy. */
+:root{--page-inline:18px;--page-top:82px;--page-bottom:126px}
+.view{padding:var(--page-top) var(--page-inline) var(--page-bottom);scroll-padding-top:var(--page-top)}
+.view>section{width:100%;min-width:0;margin:0 auto}.view>section>.sect:first-child{margin-top:8px}.view>section>.page-title:first-child,.view>section>h1:first-child{margin-top:8px;font-size:clamp(22px,6vw,28px);line-height:1.45}.view>section>.page-sub{font-size:12px;line-height:1.9}
+.sidemenu-scroll{display:flex;flex-direction:column;gap:17px}.sidemenu-group{padding:0 2px}.sidemenu-group+.sidemenu-group{padding-top:15px;border-top:1px solid rgba(218,179,106,.16)}.sidemenu-group h2{margin:0 10px 7px;color:#9c8767;font-size:10px;font-weight:800;letter-spacing:.06em}.sidemenu-help{margin-top:2px;padding-top:14px;border-top:1px solid var(--iron)}
+@media(max-width:380px){:root{--page-inline:14px;--page-top:76px;--page-bottom:116px}.header{gap:7px;padding-inline:13px}.header-ticker{gap:6px;padding:6px 8px}.header-ticker span{font-size:9px}.nav{left:10px;right:10px;bottom:12px;padding:7px}.nv{font-size:8.5px}.card{padding:16px}}

@@ -7,28 +7,29 @@ import { Realm, Build, Swords, Crown, Mail, Heart, Shield, Eye, Cart, Scroll, Wa
 // هر آیتم index خودش رو جدا نگه می‌داره (نه ترتیب آرایه) چون همین index مستقیم
 // به PAGES توی App.jsx اشاره می‌کنه — هر صفحهٔ جدید همین‌جا و اونجا اضافه شود
 export const NAV_ITEMS = [
-  { index: 0, Icon: Realm,  label: 'قلمرو' },
-  { index: 1, Icon: Build,  label: 'ساختمان‌ها' },
-  { index: 2, Icon: Swords, label: 'نیرو' },
-  { index: 3, Icon: Crown,  label: 'تاج‌وتخت' },
-  { index: 5, Icon: Heart,  label: 'دیپلماسی' },
+  { index: 0, Icon: Realm,  label: 'قلمرو', group: 'realm' },
+  { index: 1, Icon: Build,  label: 'ساختمان‌ها', group: 'realm' },
+  { index: 2, Icon: Swords, label: 'نیرو', group: 'realm' },
+  { index: 3, Icon: Crown,  label: 'تاج‌وتخت', group: 'realm' },
+  { index: 5, Icon: Heart,  label: 'دیپلماسی', group: 'world' },
 ];
 
 // صفحه‌هایی که فقط از منوی کشویی/هدر قابل‌دسترسی‌اند (توی نوار پایین جا نمی‌شوند)
 export const EXTRA_PAGES = [
-  { index: 4, Icon: Mail,   label: 'کلاغ‌ها' },
-  { index: 6, Icon: Shield, label: 'پنل ادمین', adminOnly: true },
-  { index: 7, Icon: Eye,    label: 'جاسوسی' },
-  { index: 8, Icon: Cart,   label: 'تجارت' },
-  { index: 9, Icon: Scroll, label: 'رول‌ها' },
-  { index: 10, Icon: Warehouse, label: 'دارایی‌ها' },
-  { index: 11, Icon: FamilyIcon, label: 'خاندان و خانواده' },
-  { index: 12, Icon: CharacterIcon, label: 'ساخت و ویرایش کاراکتر' },
-  { index: 13, Icon: InstitutionsIcon, label: 'نهادها' },
-  { index: 14, Icon: FamilyIcon, label: 'کاراکتر و سفر' },
-  { index: 15, Icon: Cart, label: 'فروشگاه آیتم‌ها' },
-  { index: 16, Icon: Scroll, label: 'تابلوی قراردادها' },
-  { index: 17, Icon: Realm, label: 'زندگی در قلعه' },
+  { index: 4, Icon: Mail, label: 'کلاغ‌ها', group: 'world' },
+  { index: 6, Icon: Shield, label: 'پنل ادمین', adminOnly: true, group: 'admin' },
+  { index: 7, Icon: Eye, label: 'جاسوسی', group: 'services' },
+  { index: 8, Icon: Cart, label: 'تجارت', group: 'services' },
+  { index: 9, Icon: Scroll, label: 'رول‌ها', group: 'world' },
+  { index: 10, Icon: Warehouse, label: 'دارایی‌ها', group: 'realm' },
+  { index: 11, Icon: FamilyIcon, label: 'خاندان و خانواده', group: 'character' },
+  { index: 12, Icon: CharacterIcon, label: 'ساخت و ویرایش کاراکتر', group: 'character' },
+  { index: 13, Icon: InstitutionsIcon, label: 'نهادها', group: 'services' },
+  { index: 14, Icon: FamilyIcon, label: 'کاراکتر و سفر', group: 'character' },
+  { index: 15, Icon: Cart, label: 'فروشگاه آیتم‌ها', group: 'services' },
+  { index: 16, Icon: Scroll, label: 'تابلوی قراردادها', group: 'world' },
+  { index: 17, Icon: Realm, label: 'زندگی در قلعه', group: 'world' },
+  { index: 18, Icon: Scroll, label: 'روزنامه', group: 'world' },
 ];
 
 export default function NavBar({ tab, onChange }) {

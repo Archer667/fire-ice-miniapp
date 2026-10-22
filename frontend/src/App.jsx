@@ -1,5 +1,5 @@
 import {canOpenPage} from './characterAccess.js';
-import Contracts, {CastleLife} from './pages/SocialWorld.jsx';
+import Contracts, {CastleLife, Newspaper} from './pages/SocialWorld.jsx';
 import CharacterProfile from './pages/CharacterProfile.jsx';
 import Institutions from './pages/Institutions.jsx';
 import { useEffect, useState } from 'react';
@@ -31,7 +31,7 @@ import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Contracts, CastleLife];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Contracts, CastleLife, Newspaper];
 const RAVENS_INDEX = 4;
 const ADMIN_INDEX = 6;
 
