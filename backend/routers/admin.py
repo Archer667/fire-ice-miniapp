@@ -105,6 +105,8 @@ async def score_roleplay(roleplay_id: str, body: RoleplayScoreBody, user: dict =
         player = await players.find_one({"tg_id": row["tg_id"]}, {"points": 1})
         if player:
             await players.update_one({"tg_id": row["tg_id"]}, {"$set": {"points": max(0, int(player.get("points", 0)) + delta)}})
+    from season_analytics import archive_row
+    await archive_row("roleplays", await roleplays.find_one({"_id":oid}))
     return {"ok": True, "score": score, "max_score": limits["max_score"], "applied_delta": 0 if row.get("category") == "scout" else delta}
 
 @router.get("/control-settings")
@@ -306,6 +308,8 @@ async def cleanup_data(body: CleanupBody, user: dict = Depends(owner_user)):
     if body.confirm.strip() != expected:
         raise HTTPException(400, f"برای تایید باید دقیقاً {expected} را وارد کنی")
 
+    from season_analytics import capture as preserve_analytics
+    await preserve_analytics(force=True)
     if body.category == "messages":
         deleted = (await messages.delete_many({})).deleted_count
     elif body.category == "rumors":
@@ -1470,6 +1474,10 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
         "admin_adjustments": adjustment_results,
         **({"winner_tg_id": winner_tg_ids[0], "winner_tg_ids": winner_tg_ids, "loser_tg_ids": loser_tg_ids, "combat_outcome": combat_outcome} if combat_outcome else {}),
     }})
+
+    from season_analytics import archive_row
+    for resolved_id in ids_to_resolve:
+        await archive_row("roleplays", await roleplays.find_one({"_id":resolved_id}))
 
     # شروع و پایان جنگ رویداد عمومی‌اند؛ گزینهٔ visibility برای رول‌های غیرجنگی
     # همچنان معتبر است، اما نتیجهٔ خودِ نبرد همیشه برای همه می‌رود.
@@ -2948,6 +2956,8 @@ async def reset_season(body: ResetGameBody, user: dict = Depends(owner_user)):
     """
     if body.confirm.strip() != "NEWSEASON":
         raise HTTPException(400, "برای تایید، دقیقاً عبارت NEWSEASON را تایپ کن")
+    from season_analytics import freeze_season
+    await freeze_season('season-reset')
     started_at = now()
     from season_clock import start_season
     await start_season(started_at)
@@ -3006,6 +3016,8 @@ async def reset_game(body: ResetGameBody, user: dict = Depends(owner_user)):
     if body.confirm.strip() != "RESET":
         raise HTTPException(400, "برای تایید، دقیقاً عبارت RESET را تایپ کن")
 
+    from season_analytics import freeze_season
+    await freeze_season('game-reset')
     admin_ids = await _current_admin_ids()
 
     # ادمین‌هایی که نگه داشته می‌شن ممکنه لشکرکشیِ فعال داشته باشن — قبل از پاک‌کردنِ

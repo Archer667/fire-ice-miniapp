@@ -200,3 +200,27 @@ class BrowserAccounts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(news.status_code,200,news.text)
         self.assertEqual((await self.client.get('/api/newspaper')).json()['articles'],[])
         self.assertEqual((await self.client.post('/api/admin/social/news/'+news.json()['id']+'/review',json={'version':1,'action':'publish'})).status_code,403)
+
+    async def test_analytics_full_admin_exports_and_scoped_private_download(self):
+        data=await self.signup();uid=data['account']['id']
+        from game import now
+        target=1001;at=now()
+        await self.db.players.insert_one({'tg_id':target,'name':'لرد آزمون','created_at':at,'last_tick':at,'region':'north','landless':True,'castle':None,'resources':{'gold':800,'men':300},'troops':{'infantry':30,'ship':2},'buildings':{},'castle_buildings':{},'points':100,'stats':{}})
+        self.assertEqual((await self.client.get('/api/admin/analytics')).status_code,403)
+        await self.db.admin_roles.insert_one({'tg_id':uid,'role':'limited'})
+        self.assertEqual((await self.client.post('/api/admin/analytics/players/1001/hourly',json={})).status_code,403)
+        await self.db.admin_roles.update_one({'tg_id':uid},{'$set':{'role':'full'}})
+        metadata=await self.client.get('/api/admin/analytics');self.assertEqual(metadata.status_code,200,metadata.text)
+        self.assertEqual(metadata.json()['players'][0]['id'],1001)
+        self.assertEqual((await self.client.post('/api/admin/analytics/players/1001/hourly',json={},headers={'x-valyria-csrf':''})).status_code,403)
+        tickets=[]
+        for route,body in [('/api/admin/analytics/season',{}),('/api/admin/analytics/players/1001/hourly',{})]:
+            result=await self.client.post(route,json=body);self.assertEqual(result.status_code,200,result.text);tickets.append(result.json())
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app),base_url='https://web.test') as anonymous:
+            for ticket in tickets:
+                result=await anonymous.get(ticket['path']);self.assertEqual(result.status_code,200,result.text)
+                self.assertIn('꧁─꩜༺᪥༻꩜─꧂',result.text);self.assertIn('attachment',result.headers['content-disposition'])
+            self.assertEqual((await anonymous.get('/api/admin/analytics')).status_code,401)
+            self.assertEqual((await anonymous.get('/api/analytics-files/'+'a'*43)).status_code,404)
+        self.assertEqual((await self.db.players.find_one({'tg_id':target}))['resources']['gold'],800)
+        self.assertEqual(await self.db.analytics_hourly.count_documents({'uid':1001}),1)
