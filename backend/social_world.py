@@ -18,7 +18,7 @@ from text_limits import check_text
 from admin_notifications import notify_admins
 
 router = APIRouter(prefix='/api')
-news_router = APIRouter(prefix='/api')  # Included only in the browser edition.
+news_router = APIRouter(prefix='/api')
 contracts = db.world_contracts
 entries = db.castle_life
 articles = db.world_news

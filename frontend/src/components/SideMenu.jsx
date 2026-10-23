@@ -32,8 +32,8 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         <div className="sidemenu-scroll" tabIndex={0} aria-label="بخش‌های بازی">
         {groups.map(([key, title]) => {
           const items = pages.filter(p => p.group === key);
-          return items.length > 0 && <section className="sidemenu-group" key={key}>
-            <h2>{title}</h2>
+          return items.length > 0 && <details className="sidemenu-group" key={key} defaultOpen={items.some(p => p.index === tab) || key === 'realm'}>
+            <summary><span>{title}</span><small>{items.length.toLocaleString('fa-IR')}</small></summary>
             <div className="sidemenu-list">{items.map(({ index, Icon, label }) => (
               <button type="button" key={index} className={`rbtn sidemenu-item ${tab === index ? 'on' : ''}`}
                    aria-current={tab === index ? 'page' : undefined}
@@ -41,7 +41,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
                 <Icon s={18} /> {label}
               </button>
             ))}</div>
-          </section>;
+          </details>;
         })}
 
         <div className="sidemenu-list sidemenu-help">

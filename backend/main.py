@@ -160,6 +160,7 @@ from routers import character_travel as character_travel_router
 app.include_router(character_travel_router.router)
 import social_world
 app.include_router(social_world.router)
+app.include_router(social_world.news_router)
 import season_analytics
 app.include_router(season_analytics.router)
 app.include_router(players.router)
