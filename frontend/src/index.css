@@ -1431,3 +1431,15 @@ label.f { display: block; font-size: 12px; font-weight: 700; color: var(--az); t
 @media(max-width:380px){.sidemenu{width:91%;padding-inline:10px}.sidemenu-head{min-height:112px;grid-template-columns:50px minmax(0,1fr) 34px}.sidemenu-avatar{width:47px!important;height:47px!important}.sidemenu-scroll{padding-top:13px}.sidemenu-group summary{min-height:48px}.sidemenu-group-emblem{width:31px;height:31px;flex-basis:31px}.sidemenu-item{min-height:40px}}
 @media(prefers-reduced-motion:reduce){.sidemenu,.sidemenu-group,.sidemenu-group summary:after,.sidemenu-item,.sidemenu-item-icon{transition:none!important}}
 
+/* Stable nested scrolling for long navigation lists. */
+.sidemenu{height:100dvh;max-height:100dvh;min-height:0;overflow:hidden;contain:layout paint}
+.sidemenu-head{flex:0 0 auto}.sidemenu-scroll{display:flex;align-items:stretch;flex:1 1 auto;min-height:0;max-height:none;overflow-x:hidden;overflow-y:auto!important;scrollbar-gutter:stable;overscroll-behavior-y:contain;touch-action:pan-y;padding-inline-end:7px}
+.sidemenu-group{flex:0 0 auto;min-width:0;scroll-margin-block:12px}.sidemenu-group summary{width:100%;min-width:0}.sidemenu-group summary>span{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sidemenu-group summary small{flex:0 0 auto}.sidemenu-group[open]>.sidemenu-list{max-height:min(42dvh,310px);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;scrollbar-gutter:stable;padding-inline-end:11px!important}
+.sidemenu-item{flex:0 0 auto;width:100%;min-width:0}.sidemenu-item>span:nth-child(2){flex:1;min-width:0;white-space:normal;line-height:1.55}.sidemenu-item-icon,.sidemenu-item-mark{flex-shrink:0}
+.sidemenu-scroll,.sidemenu-group>.sidemenu-list{scrollbar-width:thin;scrollbar-color:#b78435 rgba(9,7,7,.58)}
+.sidemenu-scroll::-webkit-scrollbar{width:6px}.sidemenu-group>.sidemenu-list::-webkit-scrollbar{width:4px}
+.sidemenu-scroll::-webkit-scrollbar-track,.sidemenu-group>.sidemenu-list::-webkit-scrollbar-track{margin-block:8px;border:1px solid rgba(202,154,72,.1);border-radius:99px;background:linear-gradient(90deg,rgba(0,0,0,.52),rgba(95,18,18,.1),rgba(0,0,0,.52))}
+.sidemenu-scroll::-webkit-scrollbar-thumb,.sidemenu-group>.sidemenu-list::-webkit-scrollbar-thumb{border-radius:99px;background:linear-gradient(180deg,#f0cf83 0%,#a9782f 42%,#731315 100%);box-shadow:0 0 8px rgba(213,158,61,.42),inset 0 0 0 1px rgba(255,231,175,.3)}
+.sidemenu-scroll::-webkit-scrollbar-thumb:hover,.sidemenu-group>.sidemenu-list::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#ffe4a5,#c3933e 45%,#9e171b)}
+@supports not (height:100dvh){.sidemenu{height:100vh;max-height:100vh}.sidemenu-group[open]>.sidemenu-list{max-height:min(42vh,310px)}}
+

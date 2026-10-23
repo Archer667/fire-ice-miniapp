@@ -36,7 +36,9 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         {groups.map(([key, title, emblem]) => {
           const items = pages.filter(p => p.group === key);
           const active = items.some(p => p.index === tab);
-          return items.length > 0 && <details className={`sidemenu-group ${active ? 'is-active' : ''}`} data-group={key} key={key} defaultOpen={active || key === 'realm'}>
+          return items.length > 0 && <details className={`sidemenu-group ${active ? 'is-active' : ''}`} data-group={key} key={key} defaultOpen={active || key === 'realm'} onToggle={event => {
+            if (event.currentTarget.open) requestAnimationFrame(() => event.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+          }}>
             <summary><i className="sidemenu-group-emblem" aria-hidden="true">{emblem}</i><span>{title}</span><small>{items.length.toLocaleString('fa-IR')}</small></summary>
             <div className="sidemenu-list">{items.map(({ index, Icon, label }) => (
               <button type="button" key={index} className={`rbtn sidemenu-item ${tab === index ? 'on' : ''}`}
