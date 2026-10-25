@@ -22,6 +22,7 @@ import Assets from './pages/Assets.jsx';
 import ItemStore from './pages/ItemStore.jsx';
 import Family from './pages/Family.jsx';
 import CharacterTravel from './pages/CharacterTravel.jsx';
+import PlayerGuide from './pages/PlayerGuide.jsx';
 import Header from './components/Header.jsx';
 import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
@@ -31,7 +32,7 @@ import { syncGameClock } from './gameClock.js';
 
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Contracts, CastleLife, Newspaper];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Contracts, CastleLife, Newspaper, PlayerGuide];
 const RAVENS_INDEX = 4;
 const ADMIN_INDEX = 6;
 

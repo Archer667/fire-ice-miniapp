@@ -52,7 +52,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
 
         <div className="sidemenu-list sidemenu-help">
           <span className="sidemenu-help-title">همراهی در مسیر</span>
-          <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('راهنما — به‌زودی'); onClose(); }}>راهنمای بازی</button>
+          <button type="button" className="rbtn sidemenu-item" onClick={() => { haptic(); onChange(19); onClose(); }}>راهنمای بازی</button>
           <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('پشتیبانی — به‌زودی'); onClose(); }}>پشتیبانی</button>
         </div>
         </div>
