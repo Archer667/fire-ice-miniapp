@@ -9,6 +9,7 @@ import AdminInstitutions from '../components/AdminInstitutions.jsx';
 import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
 import AdminSeasonBranding from '../components/AdminSeasonBranding.jsx';
 import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
+import AdminSharedIPs from '../components/AdminSharedIPs.jsx';
 import AdminMapManagement from '../components/AdminMapManagement.jsx';
 import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
 import BattleExport from '../components/BattleExport.jsx';
@@ -155,6 +156,7 @@ const TAB_GROUPS = [
   {
     key: 'system', label: 'مدیریت سامانه',
     description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
+    ownerOnly: true,
     tabs: [
       {key:'season_branding',label:'شماره و نام سیزن',description:'عنوان سیزن جاری در بازی و بات',fullOnly:true},
       {key:'time_management',label:'زمان و تقویم',description:'ساعت‌ها، منطقهٔ نمایش و اصلاح مهلت‌ها',fullOnly:true},
@@ -164,6 +166,7 @@ const TAB_GROUPS = [
       { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
       { key: 'submission_limits', label: 'سهمیه و محدودیت متن', description: 'سقف ارسال و تعداد کلمات', fullOnly:true },
       {key:'analytics_reports',label:'آمار سیزن و گزارش ساعتی',description:'سالنامهٔ فصل و تاریخچهٔ دارایی بازیکنان',fullOnly:true},
+      {key:'shared_ips',label:'آی‌پی‌های مشترک',description:'حساب‌هایی که از یک IP وارد وب‌اپ شده‌اند',ownerOnly:true},
       { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
       { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
     ],
@@ -172,6 +175,7 @@ const TAB_GROUPS = [
 const TABS = TAB_GROUPS.flatMap(g => g.tabs);
 const TAB_BY_KEY = Object.fromEntries(TABS.map(t => [t.key, t]));
 const JUDGMENT_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'judgment').tabs.map(tab => tab.key));
+const SYSTEM_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'system').tabs.map(tab => tab.key));
 
 const LIMITED_TAB_KEYS = new Set([...JUDGMENT_TAB_KEYS, 'registration', 'system_reports']);
 
@@ -195,15 +199,19 @@ export default function Admin() {
   const allowedTabKeys = isAdjudicator ? new Set(['war', 'roleplays']) : LIMITED_TAB_KEYS;
   const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
   const availGroups = TAB_GROUPS
-    .filter(group => isFull || group.tabs.some(item => allowedTabKeys.has(item.key)))
+    .filter(group => (!group.ownerOnly || isOwner) && (isFull || group.tabs.some(item => allowedTabKeys.has(item.key))))
     .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || allowedTabKeys.has(item.key))) }))
     .filter(group => group.tabs.length);
   const [tab, setTab] = useState(isAdjudicator ? 'war' : 'overview');
   const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
 
   useEffect(() => {
+    if (!isOwner && SYSTEM_TAB_KEYS.has(tab)) {
+      setTab(isAdjudicator ? 'war' : 'overview');
+      return;
+    }
     if (!isFull && !allowedTabKeys.has(tab)) setTab('war');
-  }, [isFull, isAdjudicator, tab]);
+  }, [isOwner, isFull, isAdjudicator, tab]);
 
   const [pendingPlayers, setPendingPlayers] = useState(null);
   const [roster, setRoster] = useState(null);
@@ -1567,6 +1575,10 @@ export default function Admin() {
 
   const openTab = (key) => {
     const target = TAB_BY_KEY[key];
+    if (!isOwner && SYSTEM_TAB_KEYS.has(key)) {
+      toast('مدیریت سامانه فقط برای مالک سامانه در دسترس است');
+      return;
+    }
     if (!isFull && !allowedTabKeys.has(key)) {
       toast(isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند' : 'ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
       return;
@@ -2521,6 +2533,7 @@ export default function Admin() {
       {tab === 'time_management' && isFull && <AdminTimeManagement toast={toast}/>}
       {tab === 'season_branding' && isFull && <AdminSeasonBranding/>}
       {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
+      {tab === 'shared_ips' && isOwner && <AdminSharedIPs toast={toast}/>}
 
       {tab === 'titles' && (
         <>

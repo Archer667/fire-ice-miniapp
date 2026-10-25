@@ -142,6 +142,8 @@ async def register(body: Credentials, request: Request, response: Response):
     if not feature_enabled('registration'): raise HTTPException(503,'ثبت‌نام در حال حاضر بسته است')
     row,code=await new_account(name,body.password)
     await db.web_auth_events.insert_one({'uid':row['uid'],'event':'registered','at':real_now()})
+    from web_ip_audit import record
+    await record(request,row['uid'],row['username'],'registered')
     return {**await start_session(row,response),'recovery_code':code}
 
 @router.post('/login')
@@ -154,6 +156,8 @@ async def login(body: Credentials, request: Request, response: Response):
     valid=await verify_password(body.password, row['password_hash'] if row else 'scrypt$32768$8$3$'+'0'*32+'$'+'0'*128)
     if not row or not valid: raise HTTPException(401,'نام کاربری یا رمز عبور نادرست است')
     await db.web_auth_events.insert_one({'uid':row['uid'],'event':'login','at':real_now()})
+    from web_ip_audit import record
+    await record(request,row['uid'],row['username'],'login')
     return await start_session(row,response)
 
 @router.get('/session')
@@ -180,6 +184,8 @@ async def change_password(body: PasswordChange, request: Request, response: Resp
     if not changed: raise HTTPException(409,'حساب تغییر کرده است؛ دوباره وارد شوید')
     await sessions.delete_many({'uid':row['uid'],'auth_version':{'$lte':row['auth_version']}})
     await db.web_auth_events.insert_one({'uid':row['uid'],'event':'password_changed','at':real_now()})
+    from web_ip_audit import record
+    await record(request,row['uid'],row['username'],'password_changed')
     return {**await start_session(changed,response),'recovery_code':code}
 
 @router.post('/recover')
@@ -194,6 +200,8 @@ async def recover(body: Recovery, request: Request, response: Response):
     if not changed: raise HTTPException(409,'این کد قبلاً استفاده شده است')
     await sessions.delete_many({'uid':row['uid'],'auth_version':{'$lte':row['auth_version']}})
     await db.web_auth_events.insert_one({'uid':row['uid'],'event':'recovered','at':real_now()})
+    from web_ip_audit import record
+    await record(request,row['uid'],row['username'],'recovered')
     return {**await start_session(changed,response),'recovery_code':code}
 
 async def admin_cli(action):

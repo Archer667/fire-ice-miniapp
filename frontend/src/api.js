@@ -1928,6 +1928,7 @@ export const api = {
   adminClosePoll: (id) => MOCK ? Promise.resolve(M.adminClosePoll()) : req(`/api/polls/admin/${id}/close`, { method: 'POST' }),
   adminDeletePoll: (id) => MOCK ? Promise.resolve(M.adminDeletePoll()) : req(`/api/polls/admin/${id}`, { method: 'DELETE' }),
   adminListAdmins: () => MOCK ? Promise.resolve(M.adminListAdmins()) : req('/api/admin/admins'),
+  adminSharedIPs: (days = 30) => MOCK ? Promise.resolve({days,retention_days:90,total_shared_ips:0,rows:[]}) : req(`/api/admin/web-ip-audit?days=${encodeURIComponent(days)}`),
   adminAddAdmin: (tgId, role = 'limited') => MOCK ? Promise.resolve(M.adminAddAdmin())
     : req('/api/admin/admins', { method: 'POST', body: JSON.stringify({ tg_id: tgId, role }) }),
   adminRemoveAdmin: (tgId) => MOCK ? Promise.resolve(M.adminRemoveAdmin())

@@ -70,6 +70,21 @@ class BrowserAccounts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ok.status_code,200)
         cookie=ok.headers['set-cookie'];self.assertIn('HttpOnly',cookie);self.assertIn('Secure',cookie);self.assertIn('SameSite=strict',cookie)
 
+    async def test_owner_can_review_shared_successful_login_ips(self):
+        self.client.headers['x-forwarded-for']='203.0.113.42'
+        first=await self.signup('player_one')
+        await self.client.post('/api/web-auth/logout')
+        second=await self.signup('player_two')
+        await self.db.admin_roles.insert_one({'tg_id':second['account']['id'],'role':'owner'})
+        response=await self.client.get('/api/admin/web-ip-audit?days=7')
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(response.json()['total_shared_ips'],1)
+        row=response.json()['rows'][0]
+        self.assertEqual(row['ip'],'203.0.113.42')
+        self.assertEqual({account['username'] for account in row['accounts']},{'player_one','player_two'})
+        await self.db.admin_roles.update_one({'tg_id':second['account']['id']},{'$set':{'role':'full'}})
+        self.assertEqual((await self.client.get('/api/admin/web-ip-audit')).status_code,403)
+
     async def test_sessions_expire_with_real_time_and_disabled_account(self):
         data=await self.signup()
         await self.auth.sessions.update_many({}, {'$set':{'expires_at':datetime.now(timezone.utc)-timedelta(seconds=1)}})

@@ -278,6 +278,8 @@ async def _market_watcher():
 async def _ensure_indexes():
     from web_auth import ensure_indexes as ensure_web_indexes
     await ensure_web_indexes()
+    from web_ip_audit import ensure_indexes as ensure_web_ip_indexes
+    await ensure_web_ip_indexes()
     from db import db
     await db.item_store_listings.create_index([('status', 1), ('ends_at', 1)])
     await db.item_store_listings.create_index([('seller_id', 1), ('created_at', -1)])
@@ -564,6 +566,8 @@ app.include_router(season_branding_router)
 
 from web_auth import router as web_auth_router, identity as web_identity
 app.include_router(web_auth_router)
+from web_ip_audit import router as web_ip_audit_router
+app.include_router(web_ip_audit_router)
 
 @app.middleware('http')
 async def require_browser_session(request: Request, call_next):
