@@ -1,3608 +1,3611 @@
-import LimitedText from '../components/LimitedText.jsx';
-import {AdminSocial} from './SocialWorld.jsx';
-import AdminAnalytics from '../components/AdminAnalytics.jsx';
-import CharacterAdmission from '../components/CharacterAdmission.jsx';
-import AdminFormations from '../components/AdminFormations.jsx';
-import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
-import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
-import AdminInstitutions from '../components/AdminInstitutions.jsx';
-import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
-import AdminSeasonBranding from '../components/AdminSeasonBranding.jsx';
-import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
-import AdminSharedIPs from '../components/AdminSharedIPs.jsx';
-import AdminMapManagement from '../components/AdminMapManagement.jsx';
-import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
-import BattleExport from '../components/BattleExport.jsx';
-import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
-import { gameNow } from '../gameClock.js';
-import { syncGameClock } from '../gameClock.js';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { api } from '../api.js';
-import { useGame } from '../store.jsx';
-import { haptic } from '../telegram.js';
-import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse, Swords } from '../components/Icons.jsx';
-import PlayerPicker from '../components/PlayerPicker.jsx';
-import CastlePicker from '../components/CastlePicker.jsx';
-import AdminArmyRelocation from '../components/AdminArmyRelocation.jsx';
-import { MapFrame } from '../components/WesterosMap.jsx';
-import ZoomPanMap from '../components/ZoomPanMap.jsx';
-import AdminControlCenter from '../components/AdminControlCenter.jsx';
-import AdminEspionage from '../components/AdminEspionage.jsx';
-import AdminTickets from '../components/AdminTickets.jsx';
-import AdminRealmSystems from '../components/AdminRealmSystems.jsx';
-import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, BUILDINGS_STATIC, buildingProduces, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
-
-import Projects from './Projects.jsx';
-import AdminDossier from '../components/AdminDossier.jsx';
-import { AdminFamily } from './Family.jsx';
-
-const NEW_CASTLE = '__new__';
-
-function readAdminImage(file, setter, toast) {
-  if (!file) { setter(null); return; }
-  if (file.size > 2.5 * 1024 * 1024) { toast('حجم تصویر باید حداکثر ۲٫۵ مگابایت باشد'); return; }
-  const reader = new FileReader(); reader.onload = () => setter(reader.result); reader.readAsDataURL(file);
-}
-
-async function copyPlainText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    const copied = document.execCommand('copy');
-    document.body.removeChild(area);
-    return copied;
-  }
-}
-
-const CASTLE_REPORT_REGIONS = {
-  north: { icon: '❄️', name: 'شمال' },
-  iron:  { icon: '⚓️', name: 'جزایر آهنین' },
-  river: { icon: '🌊', name: 'ریورلندز' },
-  west:  { icon: '🦁', name: 'وسترلندز' },
-  reach: { icon: '🌹', name: 'ریچ' },
-  vale:  { icon: '🦅', name: 'درهٔ ویل' },
-  storm: { icon: '⚡️', name: 'استورملندز' },
-  dorne: { icon: '☀️', name: 'دورن' },
-  crown: { icon: '👑', name: 'کرون‌لندز' },
-};
-
-const SPECIAL_MEDAL_PRESETS = [
-  { key: 'season_champion', name: 'قهرمان فصل', icon: '🏆' },
-  { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🪽' },
-  { key: 'immortal', name: 'نامیرا', icon: '♾️' },
-  { key: 'golden_quill', name: 'صاحب قلم زرین', icon: '✒️' },
-  { key: 'crown_enemy', name: 'دشمن تاج', icon: '🗡️' },
-];
-
-const MAP_KINDS = [
-  { key: 'castle', label: 'قلعه' },
-  { key: 'city',   label: 'شهر' },
-  { key: 'ruin',   label: 'مخروبه' },
-  { key: 'port',   label: 'بندر ⚓' },
-];
-
-// هر تب توضیح کوتاه و سطح دسترسی خودش را دارد تا ادمین تازه‌کار هم مسیر را گم نکند
-const TAB_GROUPS = [
-  {key:'institutions',label:'مدیریت نهادها',description:'مدیران، خزانه و قراردادهای نهادها',tabs:[{key:'institution_bank',label:'بانک آهنین',description:'مدیریت نهاد',fullOnly:true},{key:'institution_citadel',label:'سیتادل',description:'مدیریت نهاد',fullOnly:true},{key:'institution_golden-company',label:'گروه طلایی',description:'مدیریت نهاد',fullOnly:true},{key:'institution_alchemists',label:'صنف کیمیاگران',description:'مدیریت نهاد',fullOnly:true},{key:'institution_faceless',label:'بی‌چهره‌ها',description:'مدیریت نهاد',fullOnly:true},{key:'institution_faith',label:'ایمان هفت',description:'مدیریت نهاد',fullOnly:true},{key:'institution_watch',label:'نگهبانان شب',description:'مدیریت نهاد',fullOnly:true}]},
-
-  {
-    key: 'desk', label: 'پیشخوان',
-    description: 'وضعیت امروز و کارهای منتظر',
-    tabs: [
-      { key: 'overview',   label: 'راهنمای پنل', description: 'کارهای روزانه و مسیر پیشنهادی' },
-      { key: 'notifications', label: 'کارهای منتظر', description: 'اعلان‌ها، مهلت‌ها و پرونده‌های تازه' },
-      { key: 'tickets', label: 'تیکت‌ها', description: 'پاسخ‌گویی به درخواست‌های پشتیبانی', fullOnly: true },
-    ],
-  },
-  {
-    key: 'judgment', label: 'داوری و ارتباط',
-    description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
-    tabs: [
-      { key: 'war',         label: 'جنگ', description: 'لشکرکشی‌ها، کمین‌ها و نبردها' },
-      { key: 'espionage', label: 'جاسوسی', description: 'داوری استقرار، پاسخ به سؤال‌ها و کنترل شبکه‌ها', fullOnly: true },
-      { key: 'roleplays',   label: 'رول‌ها', description: 'بررسی و اعلام نتیجهٔ سناریوهای بازیکنان' },
-      { key: 'security_archive', label: 'آرشیو امنیتی', description: 'جست‌وجوی رول‌های دفاعی و امنیتی' },
-      { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
-      { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
-      { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
-      { key: 'rumor_admin', label: 'مدیریت توییت‌ها', description: 'دیدن نویسنده و حذف توییت' },
-      { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
-
-    ],
-  },
-  {
-    key: 'players', label: 'بازیکنان و جهان',
-    description: 'ثبت‌نام، قلمروها، منابع و نقشه',
-    tabs: [
-      { key:'profiles',label:'فهرست بازیکنان',description:'وضعیت، تصویر، پرچم، مرگ و بازگرداندن بازیکن' },
-      {key:'character_profiles',label:'ویرایش‌های کاراکتر',description:'درخواست تغییر نام، عکس، بک‌استوری و پرچم',fullOnly:true},
-      { key: 'registration', label: 'ورودی‌های ثبت‌نام', description: 'تأیید بازیکن تازه و ظرفیت اقلیم‌ها' },
-      { key: 'character_travel', label:'حضور و سفر کاراکترها',description:'مقرها، مهمانان، اسارت و سفر',fullOnly:true },
-      { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
-      { key: 'onboarding', label: 'واگذاری خاندان و قلعه', description: 'تخصیص یا تغییر خاندان و قلعهٔ آغازین', fullOnly: true },
-      { key: 'player-buildings', label: 'ساختمان‌های بازیکن', description: 'تغییر سطح ساختمان‌های قلعه‌های بازیکن', fullOnly: true },
-      { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
-    ],
-  },
-  {
-    key: 'politics', label: 'سیاست و محتوا',
-    description: 'پیمان‌ها، مقام‌ها و محتوای فصل',
-    tabs: [
-      { key: 'world_contracts', label: 'عهدنامه‌ها و داوری', description: 'پاداش‌های رزروشده، اختلاف‌ها و تنظیمات قرارداد', fullOnly: true },
-      { key: 'castle_life', label: 'تالارهای قلعه‌ها', description: 'بازبینی اعلامیه‌ها، رویدادها و ملاقات‌ها', fullOnly: true },
-      { key: 'world_news', label: 'تحریریهٔ روزنامه', description: 'بررسی خبرها، اصلاح و انتشار شماره‌ها', fullOnly: true },
-      { key: 'alliances', label: 'اتحادها', description: 'مرور و مدیریت پیمان‌های بازیکنان', fullOnly: true },
-      { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا', fullOnly: true },
-      { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
-      { key: 'realm_systems', label: 'شورای قلمرو و قراردادها', description: 'قواعد شورا، نتایج پیشنهادها و قراردادهای تأمین', fullOnly: true },
-    ],
-  },
-  {
-    key: 'economy', label: 'اقتصاد و تنظیمات',
-    description: 'ابزارهای حساس و سراسری بازی',
-    tabs: [
-      { key: 'projects', label: 'پروژه‌ها', description: 'بررسی طرح، زمان عرضه و اعلام شکست', fullOnly: true },
-      { key: 'market-floors', label: 'محدودهٔ قیمت بازیکنان', description: 'فقط کف و سقف مجاز آگهی‌های بازیکنان', fullOnly: true },
-      { key: 'market',  label: 'نرخ و موجودی بازارها', description: 'قیمت و موجودی بازار عمومی و بازار سیاه', fullOnly: true },
-      { key: 'items',   label: 'ساخت و اعطای آیتم', description: 'تعریف آیتم، تصویر و دادن آن به بازیکن', fullOnly: true },
-      { key: 'item_store', label: 'معاملات فروشگاه آیتم', description: 'آگهی، مزایده و تأیید نهایی خرید', fullOnly: true },
-      { key: 'balance', label: 'اعداد ساختمان و نیرو', description: 'هزینه، بازدهی، یگان، سلاح و ادوات', ownerOnly: true },
-      { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
-      { key: 'control_center', label: 'قوانین سراسری بازی', description: 'روشن‌کردن قابلیت‌ها و فرمول‌های عمومی', ownerOnly: true },
-    ],
-  },
-  {
-    key: 'system', label: 'مدیریت سامانه',
-    description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
-    ownerOnly: true,
-    tabs: [
-      {key:'season_branding',label:'شماره و نام سیزن',description:'عنوان سیزن جاری در بازی و بات',fullOnly:true},
-      {key:'time_management',label:'زمان و تقویم',description:'ساعت‌ها، منطقهٔ نمایش و اصلاح مهلت‌ها',fullOnly:true},
-      {key:'map_management',label:'مدیریت نقشه',description:'جانمایی، مدل بناها، فصل و انتشار نقشه',fullOnly:true},
-      { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
-      { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
-      { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
-      { key: 'submission_limits', label: 'سهمیه و محدودیت متن', description: 'سقف ارسال و تعداد کلمات', fullOnly:true },
-      {key:'analytics_reports',label:'آمار سیزن و گزارش ساعتی',description:'سالنامهٔ فصل و تاریخچهٔ دارایی بازیکنان',fullOnly:true},
-      {key:'shared_ips',label:'آی‌پی‌های مشترک',description:'حساب‌هایی که از یک IP وارد وب‌اپ شده‌اند',ownerOnly:true},
-      { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
-      { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
-    ],
-  },
-];
-const TABS = TAB_GROUPS.flatMap(g => g.tabs);
-const TAB_BY_KEY = Object.fromEntries(TABS.map(t => [t.key, t]));
-const JUDGMENT_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'judgment').tabs.map(tab => tab.key));
-const SYSTEM_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'system').tabs.map(tab => tab.key));
-
-const LIMITED_TAB_KEYS = new Set([...JUDGMENT_TAB_KEYS, 'registration', 'system_reports']);
-const ADMIN_GROUP_ORDER = ['desk','judgment','players','politics','economy','institutions','system'];
-const ADMIN_GROUP_MARKS = {desk:'✦',judgment:'⚔',players:'♟',politics:'♛',economy:'⚖',institutions:'V',system:'⌘'};
-
-const PLAYER_RES = [
-  { key: 'gold',  label: 'طلا',  Icon: Coin },
-  { key: 'wood',  label: 'چوب',  Icon: Wood },
-  { key: 'stone', label: 'سنگ',  Icon: Rock },
-  { key: 'iron',  label: 'آهن',  Icon: Pick },
-  { key: 'food',  label: 'غذا',  Icon: Wheat },
-  { key: 'wine',  label: 'شراب', Icon: Wine },
-  { key: 'men',   label: 'نیروی انسانی', Icon: People },
-  ...Object.entries(WEAPON_NAMES).map(([key, label]) => ({ key, label, Icon: Swords })),
-];
-const RES_LABEL = Object.fromEntries(PLAYER_RES.map(r => [r.key, r.label]));
-
-export default function Admin() {
-  const { me, toast } = useGame();
-  const isOwner = me.is_owner || me.admin_role === 'owner';
-  const isFull = isOwner || me.admin_role === 'full';
-  const isAdjudicator = me.admin_role === 'war_roleplay';
-  const allowedTabKeys = isAdjudicator ? new Set(['war', 'roleplays']) : LIMITED_TAB_KEYS;
-  const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
-  const availGroups = TAB_GROUPS
-    .filter(group => (!group.ownerOnly || isOwner) && (isFull || group.tabs.some(item => allowedTabKeys.has(item.key))))
-    .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || allowedTabKeys.has(item.key))) }))
-    .filter(group => group.tabs.length)
-    .sort((a,b)=>ADMIN_GROUP_ORDER.indexOf(a.key)-ADMIN_GROUP_ORDER.indexOf(b.key));
-  const [adminNavQuery,setAdminNavQuery]=useState('');
-  const adminNavNeedle=adminNavQuery.trim().toLocaleLowerCase('fa');
-  const adminNavResults=adminNavNeedle ? availGroups.flatMap(group=>group.tabs.filter(item=>(`${item.label} ${item.description} ${group.label}`).toLocaleLowerCase('fa').includes(adminNavNeedle)).map(item=>({...item,groupLabel:group.label,groupKey:group.key}))) : [];
-  const [tab, setTab] = useState(isAdjudicator ? 'war' : 'overview');
-  const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
-
-  useEffect(() => {
-    if (!isOwner && SYSTEM_TAB_KEYS.has(tab)) {
-      setTab(isAdjudicator ? 'war' : 'overview');
-      return;
-    }
-    if (!isFull && !allowedTabKeys.has(tab)) setTab('war');
-  }, [isOwner, isFull, isAdjudicator, tab]);
-
-  const [pendingPlayers, setPendingPlayers] = useState(null);
-  const [roster, setRoster] = useState(null);
-  const [assignRegion, setAssignRegion] = useState({}); // tg_id -> regionId
-  const [assignCastle, setAssignCastle] = useState({}); // tg_id -> castle name
-  const [assignBusyId, setAssignBusyId] = useState(null);
-  const [unassignBusyId, setUnassignBusyId] = useState(null);
-  const [deletePendingBusyId, setDeletePendingBusyId] = useState(null);
-  const [telegramSyncBusy, setTelegramSyncBusy] = useState(false);
-  const [castleReportBusy, setCastleReportBusy] = useState(false);
-  const [castleReport, setCastleReport] = useState('');
-  const [rosterQuery, setRosterQuery] = useState('');
-  const deferredRosterQuery = useDeferredValue(rosterQuery);
-  const [rosterLimit, setRosterLimit] = useState(25);
-  useEffect(() => { setRosterLimit(25); }, [deferredRosterQuery]);
-  const [registrationSettings, setRegistrationSettings] = useState(null);
-  const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
-  const [reassignOpenId, setReassignOpenId] = useState(null);
-  const [addCastleMode, setAddCastleMode] = useState('normal');
-  const [swapDraft, setSwapDraft] = useState(null);
-  const [swapBusy, setSwapBusy] = useState(false);
-  const [retireDialog, setRetireDialog] = useState(null);
-  const [weeklyLimits, setWeeklyLimits] = useState(null);
-  const [limitsBusy, setLimitsBusy] = useState(false);
-  useEffect(()=>{if(tab==='submission_limits')api.submissionLimits().then(setWeeklyLimits).catch(e=>toast(e.message));},[tab]);
-  const downloadSystemReport = async kind => {
-    setReportBusy(true);
-    try { if(window.Telegram?.WebApp?.initData){await api.sendSystemReport(kind);toast('فایل گزارش در چت بات برایت فرستاده شد');return;} const result=await api.systemReport(kind); const url=URL.createObjectURL(new Blob(['\uFEFF'+result.text],{type:'text/plain;charset=utf-8'})); const a=document.createElement('a');a.href=url;a.download=result.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000); }
-    catch(e){toast(e.message);}finally{setReportBusy(false);}
-  };
-  const [reportBusy, setReportBusy] = useState(false);
-  const downloadBlacklist = async () => {
-    setReportBusy(true);
-    try {
-      if(window.Telegram?.WebApp?.initData){await api.sendSystemReport('blacklist');toast('فایل لیست سیاه در چت بات برایت فرستاده شد');return;}
-      const rows = await api.adminBlacklist();
-      const lines = ['لیست سیاه بازیکنان', 'تاریخ گزارش: ' + new Date().toLocaleString('fa-IR'), 'تعداد: ' + rows.length, ''];
-      rows.forEach((p, i) => lines.push(`${i + 1}. ${p.name || 'بدون نام'}`, `آیدی عددی تلگرام: ${p.tg_id}`, `دلیل: ${p.reason || 'ثبت نشده'}`, ''));
-      if (!rows.length) lines.push('لیست سیاه خالی است.');
-      const url = URL.createObjectURL(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8' }));
-      const link = document.createElement('a'); link.href = url; link.download = 'valyria-blacklist.txt';
-      document.body.appendChild(link); link.click(); link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (e) { toast(e.message); } finally { setReportBusy(false); }
-  };
-  const [addCastleOpenId, setAddCastleOpenId] = useState(null);
-  const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
-  const [addCastleBusyId, setAddCastleBusyId] = useState(null);
-  const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
-
-  const [armySearch,setArmySearch]=useState('');
-  const [warSubTab, setWarSubTab] = useState('campaigns');
-  const [campaignsInfo, setCampaignsInfo] = useState(null);
-  const [disbandBusyId, setDisbandBusyId] = useState(null);
-  const [campaignLosses, setCampaignLosses] = useState({});
-  const [ambushesList, setAmbushesList] = useState(null);
-  const [ambushScores, setAmbushScores] = useState({});
-  const [ambushQualityScores, setAmbushQualityScores] = useState({});
-  const [ambushScenarios, setAmbushScenarios] = useState({});
-  const [ambushBusyId, setAmbushBusyId] = useState(null);
-  const [warWindow, setWarWindow] = useState(null);
-  const [warWindowBusy, setWarWindowBusy] = useState(false);
-  const [eventTitle, setEventTitle] = useState('');
-  const [eventDescription, setEventDescription] = useState('');
-  const [eventImage, setEventImage] = useState(null);
-  const [eventBusy, setEventBusy] = useState(false);
-  const [musicSettings, setMusicSettings] = useState(null);
-  const [musicBusy, setMusicBusy] = useState(false);
-  const [botMessage, setBotMessage] = useState('');
-  const [botMessageImage, setBotMessageImage] = useState(null);
-  const [botAudience, setBotAudience] = useState('all');
-  const [botTargets, setBotTargets] = useState([]);
-  const [botMessageBusy, setBotMessageBusy] = useState(false);
-  const [botViaBot, setBotViaBot] = useState(true);
-  const [botViaRaven, setBotViaRaven] = useState(false);
-  const [medalTarget, setMedalTarget] = useState([]);
-  const [medalTier, setMedalTier] = useState('bronze');
-  const [medalReason, setMedalReason] = useState('');
-  const [medalBusy, setMedalBusy] = useState(false);
-  const [specialMedalTarget, setSpecialMedalTarget] = useState([]);
-  const [specialMedalPreset, setSpecialMedalPreset] = useState('season_champion');
-  const [specialMedalName, setSpecialMedalName] = useState('');
-  const [specialMedalIcon, setSpecialMedalIcon] = useState('');
-  const [specialMedalTier, setSpecialMedalTier] = useState('gold');
-  const [specialMedalReason, setSpecialMedalReason] = useState('');
-  const [specialMedalBusy, setSpecialMedalBusy] = useState(false);
-  const [alliancesList, setAlliancesList] = useState(null);
-  const [allianceSearch, setAllianceSearch] = useState('');
-  const normalizePactSearch = value => String(value || '').toLowerCase().replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[@\s\u200c]/g,'');
-  const filteredAlliances = (alliancesList || []).filter(a => !allianceSearch.trim() || normalizePactSearch([a.name,a.from,a.to,...(a.members || []).flatMap(m=>[m.name,m.current_name,m.username,m.tg_id])].join(' ')).includes(normalizePactSearch(allianceSearch)));
-
-  const [dissolveBusyId, setDissolveBusyId] = useState(null);
-  const [overlordTarget, setOverlordTarget] = useState([]);
-  const [overlordRegion, setOverlordRegion] = useState('north');
-  const [officeHolders, setOfficeHolders] = useState(null);
-  useEffect(() => { if (tab === 'titles') api.titles().then(setOfficeHolders).catch(e => toast(e.message)); }, [tab]);
-  const [wardenTarget, setWardenTarget] = useState([]);
-  const [wardenGroup, setWardenGroup] = useState('south');
-  const [kingTarget, setKingTarget] = useState([]);
-  const [epithetTarget, setEpithetTarget] = useState([]);
-  const [epithetText, setEpithetText] = useState('');
-  const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOptions, setPollOptions] = useState(['', '']);
-  const [pollEligible, setPollEligible] = useState([]);
-  const [polls, setPolls] = useState(null);
-  const [admins, setAdmins] = useState(null);
-  const [newAdminRole, setNewAdminRole] = useState('limited');
-  const [newAdminTarget, setNewAdminTarget] = useState([]);
-  const [resetPreview, setResetPreview] = useState(null);
-  const [resetConfirmText, setResetConfirmText] = useState('');
-  const [resetBusy, setResetBusy] = useState(false);
-  const [seasonResetConfirm, setSeasonResetConfirm] = useState('');
-  const [seasonResetBusy, setSeasonResetBusy] = useState(false);
-  const [scoreResetConfirm, setScoreResetConfirm] = useState('');
-  const [scoreResetBusy, setScoreResetBusy] = useState(false);
-
-  const [mapRegion, setMapRegion] = useState('north');
-  const [mapData, setMapData] = useState(null);
-  const [mapError, setMapError] = useState(false);
-  const [mapOptions, setMapOptions] = useState(null);
-  const [pendingPin, setPendingPin] = useState(null); // {x,y}
-  const [pickName, setPickName] = useState('');
-  const [castleQuery, setCastleQuery] = useState('');
-  const [castleResultsOpen, setCastleResultsOpen] = useState(false);
-  const [newCastleName, setNewCastleName] = useState('');
-  const [pinKind, setPinKind] = useState('castle');
-  const [pinTerrain, setPinTerrain] = useState('land');
-  const [editingCastle, setEditingCastle] = useState(null);
-  const [editKind, setEditKind] = useState('castle');
-  const [editTerrain, setEditTerrain] = useState('land');
-  const [editRegion, setEditRegion] = useState('north');
-
-  const [marketListings, setMarketListings] = useState(null);
-  const [marketFloors, setMarketFloors] = useState(null);
-  const [marketCeilings, setMarketCeilings] = useState({});
-  const [floorsBusy, setFloorsBusy] = useState(false);
-  const [gamePause, setGamePause] = useState(null);
-  const [pauseReason, setPauseReason] = useState('بررسی و رسیدگی به وضعیت بازی');
-  const [pauseBusy, setPauseBusy] = useState(false);
-  useEffect(() => {
-    const receive = e => setGamePause(prev => ({...prev, ...e.detail}));
-    window.addEventListener('game-status', receive);
-    api.gameStatus().then(setGamePause).catch(() => {});
-    return () => window.removeEventListener('game-status', receive);
-  }, []);
-  const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
-  const [marketQty, setMarketQty] = useState('');
-  const [marketPrice, setMarketPrice] = useState('');
-  const [blackListings, setBlackListings] = useState(null);
-  const [blackResource, setBlackResource] = useState(TRADE_GOODS[0]);
-  const [blackQty, setBlackQty] = useState('');
-  const [blackPrice, setBlackPrice] = useState('');
-  const [blackHours, setBlackHours] = useState('6');
-
-  const [resTarget, setResTarget] = useState([]);
-  const [resValues, setResValues] = useState(null);
-  const [resCaps, setResCaps] = useState(null);
-  const [resPoints, setResPoints] = useState(null);
-  const [resPopularity, setResPopularity] = useState(null);
-  const [pointDelta, setPointDelta] = useState('');
-  const [pointBusy, setPointBusy] = useState(false);
-  const [popularityDelta, setPopularityDelta] = useState('');
-  const [popularityBusy, setPopularityBusy] = useState(false);
-  const [resBusy, setResBusy] = useState(false);
-  const [resCampaigns, setResCampaigns] = useState(null);
-  const [bulkField, setBulkField] = useState('gold');
-  const [bulkDelta, setBulkDelta] = useState('');
-  const [bulkRegion, setBulkRegion] = useState('all');
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkResult, setBulkResult] = useState(null);
-
-
-  const [roleplayPending, setRoleplayPending] = useState(null);
-  const [roleplayCategoryTab, setRoleplayCategoryTab] = useState('all');
-  const [securityRoleplays, setSecurityRoleplays] = useState(null);
-  const [securityQuery, setSecurityQuery] = useState('');
-  const [securityPlayer, setSecurityPlayer] = useState([]);
-  const [securitySearching, setSecuritySearching] = useState(false);
-  const [battles, setBattles] = useState(null);
-  const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
-  const [retreatDestinations, setRetreatDestinations] = useState({});
-  const [battleResultImages, setBattleResultImages] = useState({});
-  const [battleLoot, setBattleLoot] = useState({});
-  const [lootBusy, setLootBusy] = useState(null);
-  const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
-  const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
-  const [roleplayWinners, setRoleplayWinners] = useState({}); // battleId -> winner tg_id[]
-  const [roleplayLosses, setRoleplayLosses] = useState({}); // roleplayId -> {attacker:{troopId:n}, defender:{troopId:n}}
-  const [roleplayAdjustments, setRoleplayAdjustments] = useState({}); // roleplayId -> actor/target resource and popularity deltas
-  const [roleplayBusyId, setRoleplayBusyId] = useState(null);
-  const [roleplayScores, setRoleplayScores] = useState({});
-  const [roleplayScoreBusyId, setRoleplayScoreBusyId] = useState(null);
-  const [roleplayScoreMax, setRoleplayScoreMax] = useState(100);
-  const [roleplayScoreSettingsBusy, setRoleplayScoreSettingsBusy] = useState(false);
-
-  const [profileTarget, setProfileTarget] = useState([]);
-  const [profileDraft, setProfileDraft] = useState(null);
-  const [profileBusy, setProfileBusy] = useState(false);
-  const [controlSettings, setControlSettings] = useState(null);
-  const [controlSettingsBusy, setControlSettingsBusy] = useState(false);
-
-  const [itemsList, setItemsList] = useState(null);
-  const [itemName, setItemName] = useState('');
-  const [itemType, setItemType] = useState(Object.keys(ITEM_TYPES)[0]);
-  const [itemDuration, setItemDuration] = useState(Object.keys(ITEM_DURATIONS)[0]);
-  const [itemDurationHours, setItemDurationHours] = useState('24');
-  const [itemDescription, setItemDescription] = useState('');
-  const [itemImage, setItemImage] = useState(null);
-  const [grantRequestId, setGrantRequestId] = useState(() => crypto.randomUUID());
-  const [itemColor, setItemColor] = useState('gray');
-  const [itemBuilding, setItemBuilding] = useState('');
-  const [itemYield, setItemYield] = useState('15');
-  const itemBuildings = Object.entries(BUILDINGS_STATIC).map(([id, b]) => ({ ...b, id, produces_per_level: buildingProduces(id) }));
-  const [itemBusy, setItemBusy] = useState(false);
-  const [grantOpenId, setGrantOpenId] = useState(null);
-  const [grantTarget, setGrantTarget] = useState([]);
-  const [grantColor, setGrantColor] = useState(Object.keys(ITEM_RARITY_COLORS)[0]);
-  const [grantBusy, setGrantBusy] = useState(false);
-
-  const [balanceList, setBalanceList] = useState(null);
-  const [balanceDrafts, setBalanceDrafts] = useState({});
-  const [balanceBusyId, setBalanceBusyId] = useState(null);
-  const [gameplayBalance, setGameplayBalance] = useState(null);
-  const [gameplayBalanceBusy, setGameplayBalanceBusy] = useState(false);
-  const [buildingAdminMode, setBuildingAdminMode] = useState('global');
-  const [playerBuildingTarget, setPlayerBuildingTarget] = useState([]);
-  const [playerBuildingData, setPlayerBuildingData] = useState(null);
-  const [playerBuildingCastle, setPlayerBuildingCastle] = useState('');
-  const [playerBuildingDrafts, setPlayerBuildingDrafts] = useState({});
-  const [playerBuildingBusyId, setPlayerBuildingBusyId] = useState(null);
-  const [rebellionSettings, setRebellionSettings] = useState(null);
-  const [rebellionsList, setRebellionsList] = useState(null);
-  const [rebellionSettingsBusy, setRebellionSettingsBusy] = useState(false);
-  const [rebellionDrafts, setRebellionDrafts] = useState({});
-  const [rebellionBusyId, setRebellionBusyId] = useState(null);
-  const [adminNotifications, setAdminNotifications] = useState(null);
-  const [notificationFilter, setNotificationFilter] = useState('unread');
-  const [adminRumors, setAdminRumors] = useState(null);
-  const [rumorDeleteBusy, setRumorDeleteBusy] = useState(null);
-  const [cleanupPreview, setCleanupPreview] = useState(null);
-  const [cleanupConfirm, setCleanupConfirm] = useState({});
-  const [cleanupBusy, setCleanupBusy] = useState(null);
-
-  const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
-  const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
-  const loadRegistrationSettings = () => api.adminRegistrationSettings().then(setRegistrationSettings).catch(e => toast(e.message));
-  const saveRegistrationSettings = async () => {
-    setRegistrationSettingsBusy(true);
-    try {
-      const capacities = Object.fromEntries((registrationSettings?.regions || []).map(r => [r.id, Number(r.capacity)]));
-      const saved = await api.adminSaveRegistrationSettings(capacities);
-      setRegistrationSettings(saved);
-      toast('ظرفیت اقلیم‌ها ذخیره شد');
-    } catch (e) { toast(e.message); }
-    setRegistrationSettingsBusy(false);
-  };
-  const syncTelegramUsernames = async () => {
-    setTelegramSyncBusy(true);
-    try {
-      const result = await api.adminSyncTelegramUsernames();
-      await Promise.all([api.adminListPendingPlayers().then(setPendingPlayers), api.adminListRoster().then(setRoster)]);
-      haptic('medium');
-      toast(`${result.found.toLocaleString('fa-IR')} نام کاربری دریافت شد${result.unavailable ? ` · ${result.unavailable.toLocaleString('fa-IR')} حساب در دسترس بات نبود` : ''}`);
-    } catch (e) { toast(e.message); }
-    setTelegramSyncBusy(false);
-  };
-  const buildCastleReport = async () => {
-    setCastleReportBusy(true);
-    try {
-      // هر بار خروجی از API تازه ساخته می‌شود؛ به state قبلی پنل تکیه نمی‌کنیم.
-      const freshRoster = await api.adminListRoster();
-      setRoster(freshRoster);
-      const ownerByCastle = new Map();
-      freshRoster.forEach(player => {
-        if (player.castle) ownerByCastle.set(player.castle, player);
-        (player.castles || []).forEach(castle => ownerByCastle.set(castle, player));
-      });
-
-      const lines = [
-        '🔴 گرفته‌شده',
-        '⚪️ آزاد',
-        '⚓️ بندر یا قلعهٔ دریایی',
-        '',
-        '🏰 وضعیت قلعه‌های والریا',
-        '',
-      ];
-      const regions = Object.entries(REGIONS_STATIC);
-      regions.forEach(([regionId, region], regionIndex) => {
-        const meta = CASTLE_REPORT_REGIONS[regionId] || { icon: '🏰', name: region.name };
-        const castles = [
-          ...region.castles.map(name => ({ name, port: false })),
-          ...region.ports.map(name => ({ name, port: true })),
-        ];
-        const occupied = castles.filter(c => ownerByCastle.has(c.name)).length;
-        lines.push(`${meta.icon} ${meta.name} — ${occupied.toLocaleString('fa-IR')} گرفته‌شده، ${(castles.length - occupied).toLocaleString('fa-IR')} آزاد`);
-        lines.push('');
-        castles.forEach(castle => {
-          const owner = ownerByCastle.get(castle.name);
-          const port = castle.port ? ' ⚓️' : '';
-          if (!owner) {
-            lines.push(`⚪️ ${castle.name}${port} — آزاد`);
-            return;
-          }
-          const username = owner.telegram_username ? `@${owner.telegram_username.replace(/^@/, '')}` : 'بدون username';
-          lines.push(`🔴 ${castle.name}${port} — ${owner.name} | ${username}`);
-        });
-        if (regionIndex < regions.length - 1) lines.push('', '━━━━━━━━━━━━━━', '');
-      });
-
-      const report = lines.join('\n');
-      setCastleReport(report);
-      const copied = await copyPlainText(report);
-      haptic('medium');
-      toast(copied ? 'فهرست به‌روز قلعه‌ها برای تلگرام کپی شد' : 'فهرست ساخته شد؛ از کادر پایین دستی کپی کن');
-    } catch (e) { toast(e.message); }
-    setCastleReportBusy(false);
-  };
-  const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
-  const loadAmbushes = () => api.adminAmbushes().then(setAmbushesList).catch(e => toast(e.message));
-  const loadWarWindow = () => api.adminGetWarWindow().then(setWarWindow).catch(e => toast(e.message));
-  const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
-  const loadSecurityRoleplays = async () => {
-    setSecuritySearching(true);
-    try { setSecurityRoleplays(await api.adminSecurityRoleplays(securityQuery.trim(), securityPlayer[0]?.tg_id || null)); }
-    catch (e) { toast(e.message); setSecurityRoleplays([]); }
-    setSecuritySearching(false);
-  };
-  const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
-  const loadAlliances = () => api.adminListAlliances().then(setAlliancesList).catch(e => toast(e.message));
-  const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
-  const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
-  const loadResetPreview = () => api.adminResetGamePreview().then(setResetPreview).catch(e => toast(e.message));
-  const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
-  const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
-  const loadMarket = () => api.adminMarketList().then(setMarketListings).catch(e => toast(e.message));
-  const loadBlackMarket = () => api.adminBlackMarketList().then(setBlackListings).catch(e => toast(e.message));
-  const loadItems = () => api.adminListItems().then(setItemsList).catch(e => toast(e.message));
-  const loadBalance = () => api.adminGetBuildingBalance().then(list => {
-    setBalanceList(list);
-    setBalanceDrafts(Object.fromEntries(list.map(b => [b.id, {
-      cost: Object.fromEntries(Object.keys(b.base_cost || {}).map(k => [k, String(b.cost?.[k] ?? b.base_cost[k])])),
-      cost_step_percent: String(b.cost_step_percent ?? b.base_cost_step_percent ?? 15),
-      hours: String(b.hours ?? b.base_hours ?? 1),
-      max_level: String(b.max_level ?? b.base_max_level ?? 30),
-      produces: Object.fromEntries(Object.keys(b.base_produces || {}).map(k => [k, String(b.produces?.[k] ?? b.base_produces[k])])),
-      cap_bonus: Object.fromEntries(Object.keys(b.base_cap_bonus || {}).map(k => [k, String(b.cap_bonus?.[k] ?? b.base_cap_bonus[k])])),
-    }])));
-  }).catch(e => toast(e.message));
-  const loadGameplayBalance = () => api.adminGetGameplayBalance().then(setGameplayBalance).catch(e => toast(e.message));
-
-  const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
-  const loadAdminRumors = () => api.adminRumors().then(setAdminRumors).catch(e => toast(e.message));
-  const loadCleanupPreview = () => api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message));
-  const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
-  const loadRebellionSettings = () => {
-    if (!isOwner) return;
-    api.adminRebellionSettings().then(setRebellionSettings).catch(e => toast(e.message));
-  };
-  const setRebellionNumber = (key, value) => setRebellionSettings(prev => ({ ...prev, [key]: Number(value) }));
-  const saveRebellionSettings = async () => {
-    setRebellionSettingsBusy(true);
-    try {
-      const saved = await api.adminSaveRebellionSettings(rebellionSettings);
-      setRebellionSettings(saved);
-      toast('تنظیمات شورش ذخیره شد');
-    } catch (e) { toast(e.message); }
-    setRebellionSettingsBusy(false);
-  };
-  const resolveRebellion = async (row) => {
-    const draft = rebellionDrafts[row.id] || {};
-    if (!(draft.result || '').trim()) { toast('متن نتیجه شورش را بنویس'); return; }
-    setRebellionBusyId(row.id);
-    try {
-      await api.adminResolveRebellion(row.id, {
-        result: draft.result.trim(),
-        popularity_delta: Number(draft.popularity_delta || 0),
-        gold_delta: Number(draft.gold_delta || 0),
-        food_delta: Number(draft.food_delta || 0),
-        men_delta: Number(draft.men_delta || 0),
-        outcome: draft.outcome || 'resolved',
-        image_url: draft.image_url || null,
-      });
-      toast('نتیجه شورش ثبت و برای بازیکن ارسال شد');
-      loadRebellions();
-    } catch (e) { toast(e.message); }
-    setRebellionBusyId(null);
-  };
-
-  useEffect(() => { if (!isAdjudicator) loadAdminNotifications(); }, [isAdjudicator]);
-
-  useEffect(() => {
-    // Fetch only the active panel; unrelated heavy requests must not queue saves.
-    if (tab === 'notifications') loadAdminNotifications();
-    if (tab === 'rumor_admin') loadAdminRumors();
-    if (tab === 'war') {
-      loadWarWindow();
-      if (warSubTab === 'campaigns') loadCampaigns();
-      if (warSubTab === 'ambushes') loadAmbushes();
-      if (warSubTab === 'battles') loadBattles();
-    }
-    if (tab === 'roleplays') {
-      loadRoleplayPending();
-      api.adminRoleplayScoreSettings().then(r => setRoleplayScoreMax(r.max_score)).catch(e => toast(e.message));
-    }
-    if (tab === 'security_archive') loadSecurityRoleplays();
-    if (tab === 'rebellions') { loadRebellions(); if (isOwner) loadRebellionSettings(); }
-    if (tab === 'registration') { loadPendingPlayers(); if (isFull) { loadRegistrationSettings(); loadMapData(); } }
-    if (!isFull) return;
-    if (tab === 'onboarding') { loadRoster(); loadMapData(); }
-    if (tab === 'alliances') loadAlliances();
-    if (tab === 'map') loadMapData();
-    if (tab === 'polls') loadPolls();
-    if (tab === 'market') { loadMarket(); loadBlackMarket(); }
-    if (tab === 'items') loadItems();
-    if (tab === 'market-floors') api.adminMarketFloors().then(data => {setMarketFloors(data.prices); setMarketCeilings(data.ceilings || {});}).catch(e => toast(e.message));
-    if (tab === 'music') api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
-    if (!isOwner) return;
-    if (tab === 'balance') { loadBalance(); loadGameplayBalance(); }
-    if (tab === 'admins') { loadAdmins(); loadCleanupPreview(); loadResetPreview(); }
-    if (['control_center', 'population_growth', 'food_consumption', 'road_victory'].includes(tab)) api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
-  }, [tab, tab === 'war' ? warSubTab : null, isFull, isOwner]);
-
-  useEffect(() => {
-    if (!profileTarget.length) { setProfileDraft(null); return; }
-    setProfileDraft(null);
-    api.adminGetPlayerProfile(profileTarget[0].tg_id).then(setProfileDraft).catch(e => toast(e.message));
-  }, [profileTarget]);
-
-  useEffect(() => {
-    if (!isFull || tab !== 'map') return;
-    loadMapOptions();
-    resetCastlePicker();
-    setEditingCastle(null);
-  }, [mapRegion, tab]);
-
-  useEffect(() => {
-    if (!playerBuildingTarget.length) {
-      setPlayerBuildingData(null); setPlayerBuildingCastle(''); setPlayerBuildingDrafts({});
-      return;
-    }
-    setPlayerBuildingData(null);
-    api.adminPlayerBuildings(playerBuildingTarget[0].tg_id).then(data => {
-      setPlayerBuildingData(data);
-      const firstCastle = data.castles?.[0]?.castle || '';
-      setPlayerBuildingCastle(firstCastle);
-      setPlayerBuildingDrafts(Object.fromEntries(
-        (data.castles || []).flatMap(castle => castle.buildings.map(b => [`${castle.castle}::${b.id}`, String(b.level)]))
-      ));
-    }).catch(e => toast(e.message));
-  }, [playerBuildingTarget]);
-
-  useEffect(() => {
-    if (!resTarget.length) { setResValues(null); setResCaps(null); setResPoints(null); setResPopularity(null); setResCampaigns(null); return; }
-    setResValues(null); setResCaps(null); setResPoints(null); setResPopularity(null); setPointDelta(''); setPopularityDelta(''); setResCampaigns(null);
-    api.adminGetPlayerResources(resTarget[0].tg_id)
-      .then(r => {
-        setResValues(r.resources);
-        setResCaps(r.resource_caps || {});
-        setResPoints(r.points ?? 0);
-        setResPopularity(r.popularity ?? 50);
-      })
-      .catch(e => { toast(e.message); setResTarget([]); });
-    api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message));
-  }, [resTarget]);
-
-  const filteredCastleOptions = (mapOptions || []).filter(o =>
-    !castleQuery.trim() || o.name.includes(castleQuery.trim())
-  );
-
-  const pickCastle = (name) => {
-    haptic();
-    setPickName(name); setCastleQuery(name); setCastleResultsOpen(false);
-    const o = (mapOptions || []).find(o => o.name === name);
-    setPinKind(o?.kind || 'castle');
-    setPinTerrain(o?.terrain || 'land');
-  };
-  const pickNewCastle = () => {
-    haptic();
-    setPickName(NEW_CASTLE); setNewCastleName(castleQuery.trim()); setCastleResultsOpen(false);
-    setPinKind('castle'); setPinTerrain('land');
-  };
-
-  const resetCastlePicker = () => {
-    setPendingPin(null); setPickName(''); setCastleQuery(''); setCastleResultsOpen(false);
-    setNewCastleName(''); setPinKind('castle'); setPinTerrain('land');
-  };
-
-  const addMapCastle = async () => {
-    if (!pendingPin) return;
-    if (!pickName) { toast('یک قلعه/شهر را انتخاب کن'); return; }
-    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y, kind: pinKind, terrain: pinTerrain };
-    if (pickName === NEW_CASTLE) {
-      if (!newCastleName.trim()) { toast('نام قلعه/شهر تازه را بنویس'); return; }
-      body.new_name = newCastleName.trim();
-    } else {
-      body.name = pickName;
-    }
-    try {
-      await api.adminAddMapCastle(body);
-      haptic('medium');
-      toast('قلعه/شهر به نقشه اضافه شد');
-      resetCastlePicker();
-      loadMapData(); loadMapOptions();
-    } catch (e) { toast(e.message); }
-  };
-
-  const deleteMapCastle = async (name) => {
-    try {
-      await api.adminDeleteMapCastle(name);
-      haptic('medium');
-      toast(`نشانهٔ «${name}» از نقشه حذف شد`);
-      loadMapData(); loadMapOptions();
-    } catch (e) { toast(e.message); }
-  };
-
-  const startEditMapCastle = (c) => {
-    haptic();
-    setEditingCastle(c.name); setEditKind(c.kind || 'castle'); setEditTerrain(c.terrain || 'land'); setEditRegion(mapRegion);
-  };
-  const cancelEditMapCastle = () => setEditingCastle(null);
-  const saveEditMapCastle = async () => {
-    try {
-      await api.adminEditMapCastle(editingCastle, { kind: editKind, terrain: editTerrain, region: editRegion });
-      haptic('medium');
-      toast(`نشانهٔ «${editingCastle}» به‌روزرسانی شد`);
-      setEditingCastle(null);
-      setMapRegion(editRegion); loadMapData(); loadMapOptions();
-    } catch (e) { toast(e.message); }
-  };
-
-  const setMarketListing = async () => {
-    const qty = parseInt(marketQty, 10), price = parseInt(marketPrice, 10);
-    if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(price) || price <= 0) {
-      toast('مقدار و قیمت را درست وارد کن'); return;
-    }
-    try {
-      await api.adminMarketSet({ resource: marketResource, qty, price });
-      haptic('medium');
-      toast(`بازار وستروس برای «${TRADE_GOOD_NAMES[marketResource]}» به‌روز شد`);
-      setMarketQty(''); setMarketPrice('');
-      loadMarket();
-    } catch (e) { toast(e.message); }
-  };
-
-  const deleteMarketListing = async (resource) => {
-    try {
-      await api.adminMarketDelete(resource);
-      haptic('medium');
-      toast(`«${TRADE_GOOD_NAMES[resource]}» از بازار وستروس برداشته شد`);
-      loadMarket();
-    } catch (e) { toast(e.message); }
-  };
-
-  const createBlackMarketListing = async () => {
-    const qty = parseInt(blackQty, 10), price = parseInt(blackPrice, 10), hours = parseInt(blackHours, 10);
-    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0 || !Number.isFinite(hours) || hours <= 0) {
-      toast('مقدار، قیمت و مدت را درست وارد کن'); return;
-    }
-    try {
-      await api.adminBlackMarketCreate({ resource: blackResource, qty, price, hours });
-      haptic('medium');
-      toast(`جنس تازه به بازار سیاه اضافه شد`);
-      setBlackQty(''); setBlackPrice(''); setBlackHours('6');
-      loadBlackMarket();
-    } catch (e) { toast(e.message); }
-  };
-
-  const deleteBlackMarketListing = async (id) => {
-    try {
-      await api.adminBlackMarketDelete(id);
-      haptic('medium');
-      toast('از بازار سیاه برداشته شد');
-      loadBlackMarket();
-    } catch (e) { toast(e.message); }
-  };
-
-  const saveResources = async () => {
-    if (!resTarget.length || !resValues) return;
-    setResBusy(true);
-    try {
-      await api.adminSetPlayerResources(resTarget[0].tg_id, resValues);
-      haptic('medium');
-      toast(`منابع «${resTarget[0].name}» به‌روزرسانی شد`);
-    } catch (e) { toast(e.message); }
-    setResBusy(false);
-  };
-
-  const adjustPoints = async () => {
-    if (!resTarget.length) return;
-    const delta = Number(pointDelta);
-    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش امتیاز را وارد کن'); return; }
-    setPointBusy(true);
-    try {
-      const result = await api.adminAdjustPlayerPoints(resTarget[0].tg_id, delta);
-      setResPoints(result.points);
-      setPointDelta('');
-      haptic('medium');
-      toast(`امتیاز «${resTarget[0].name}» به ${result.points.toLocaleString('fa-IR')} رسید`);
-    } catch (e) { toast(e.message); }
-    setPointBusy(false);
-  };
-
-  const adjustPopularity = async () => {
-    if (!resTarget.length) return;
-    const delta = Number(popularityDelta);
-    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش محبوبیت را وارد کن'); return; }
-    setPopularityBusy(true);
-    try {
-      const result = await api.adminAdjustPlayerPopularity(resTarget[0].tg_id, delta);
-      setResPopularity(result.popularity); setPopularityDelta(''); haptic('medium');
-      toast(`محبوبیت «${resTarget[0].name}» به ${result.popularity.toLocaleString('fa-IR')} رسید`);
-    } catch (e) { toast(e.message); }
-    setPopularityBusy(false);
-  };
-
-  const applyBulkAdjustment = async () => {
-    const delta = Number(bulkDelta);
-    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش را درست وارد کن'); return; }
-    const fieldName = bulkField === 'popularity' ? 'محبوبیت' : (RES_LABEL[bulkField] || bulkField);
-    const scopeName = bulkRegion === 'all' ? 'همهٔ بازیکنان' : `بازیکنان اقلیم ${REGIONS_STATIC[bulkRegion]?.name || bulkRegion}`;
-    if (!window.confirm(`${delta > 0 ? 'افزودن' : 'کم‌کردن'} ${Math.abs(delta).toLocaleString('fa-IR')} ${fieldName} برای ${scopeName} انجام شود؟`)) return;
-    setBulkBusy(true); setBulkResult(null);
-    try {
-      const result = await api.adminBulkAdjustPlayers(bulkField, delta, bulkRegion === 'all' ? null : bulkRegion);
-      setBulkResult(result); setBulkDelta(''); haptic('medium');
-      toast(`تغییر جمعی برای ${result.changed.toLocaleString('fa-IR')} بازیکن ثبت شد`);
-    } catch (e) { toast(e.message); }
-    setBulkBusy(false);
-  };
-
-  const toggleWarWindow = async () => {
-    if (!warWindow) return;
-    setWarWindowBusy(true);
-    try {
-      const res = await api.adminSetWarWindow(!warWindow.open);
-      haptic('medium');
-      toast(res.open ? 'پنجرهٔ لشکرکشی برای همه باز شد' : 'پنجرهٔ لشکرکشی برای همه بسته شد');
-      loadWarWindow();
-    } catch (e) { toast(e.message); }
-    setWarWindowBusy(false);
-  };
-
-  const sendEvent = async () => {
-    if (!eventTitle.trim() || !eventDescription.trim()) { toast('عنوان و توضیحِ رویداد را بنویس'); return; }
-    setEventBusy(true);
-    try {
-      await api.adminAnnounceEvent(eventTitle.trim(), eventDescription.trim(), eventImage);
-      haptic('medium');
-      toast('رویداد برای همهٔ بازیکنان با کلاغ فرستاده شد');
-      setEventTitle(''); setEventDescription(''); setEventImage(null);
-    } catch (e) { toast(e.message); }
-    setEventBusy(false);
-  };
-
-  const sendBotMessage = async () => {
-    const text = botMessage.trim();
-    if (!text) { toast('متن پیام را بنویس'); return; }
-    if (!botViaBot && !botViaRaven) { toast('بات، کلاغ یا هر دو را انتخاب کن'); return; }
-    if (botAudience === 'selected' && botTargets.length === 0) { toast('حداقل یک بازیکن را انتخاب کن'); return; }
-    setBotMessageBusy(true);
-    try {
-      const res = await api.adminSendBotMessage(
-        text,
-        botAudience === 'all',
-        botTargets.map(p => p.tg_id),
-        botViaBot,
-        botViaRaven,
-        botMessageImage,
-      );
-      haptic('medium');
-      toast(`پیام برای ${(res.sent_to ?? 0).toLocaleString('fa-IR')} بازیکن ارسال شد`);
-      setBotMessage(''); setBotMessageImage(null);
-      setBotTargets([]);
-    } catch (e) { toast(e.message); }
-    setBotMessageBusy(false);
-  };
-
-  const awardStoryteller = async () => {
-    if (!medalTarget.length) { toast('یک بازیکن انتخاب کن'); return; }
-    setMedalBusy(true);
-    try {
-      await api.adminAwardStoryteller(medalTarget[0].tg_id, medalTier, medalReason.trim());
-      haptic('medium'); toast('مدال راوی قلمرو اعطا شد');
-      setMedalTarget([]); setMedalReason('');
-    } catch (e) { toast(e.message); }
-    setMedalBusy(false);
-  };
-
-  const awardSpecialMedal = async () => {
-    if (!specialMedalTarget.length) { toast('بازیکن دریافت‌کننده را انتخاب کن'); return; }
-    const preset = SPECIAL_MEDAL_PRESETS.find(m => m.key === specialMedalPreset);
-    const medalName = specialMedalPreset === 'custom' ? specialMedalName.trim() : preset?.name;
-    const medalIcon = specialMedalIcon.trim() || preset?.icon || '🏅';
-    if (!medalName) { toast('نام مدال را بنویس'); return; }
-    setSpecialMedalBusy(true);
-    try {
-      await api.adminAwardSpecialMedal(specialMedalTarget[0].tg_id, {
-        name: medalName, icon: medalIcon, tier: specialMedalTier,
-        reason: specialMedalReason.trim(),
-      });
-      haptic('medium'); toast('مدال ویژهٔ ادمین اعطا شد');
-      setSpecialMedalTarget([]); setSpecialMedalName(''); setSpecialMedalIcon('');
-      setSpecialMedalReason('');
-    } catch (e) { toast(e.message); }
-    setSpecialMedalBusy(false);
-  };
-
-  const resetGame = async () => {
-    if (resetConfirmText.trim() !== 'RESET') { toast('عبارت RESET را دقیقاً همون‌جوری تایپ کن'); return; }
-    if (!window.confirm('مطمئنی؟ این کار بازگشت‌ناپذیره — همهٔ بازیکن‌های غیرادمین حذف می‌شن و تاریخچهٔ بازی پاک می‌شه.')) return;
-    setResetBusy(true);
-    try {
-      const res = await api.adminResetGame(resetConfirmText.trim());
-      haptic('medium');
-      toast(`بازی ری‌استارت شد — ${(res.players_deleted ?? 0).toLocaleString('fa-IR')} بازیکن حذف شد`);
-      setResetConfirmText('');
-      loadResetPreview();
-      // ری‌استارت این‌ها رو کامل خالی می‌کنه (لشکرکشی، جاسوسی، رول، اتحاد، رای‌گیری) —
-      // بدونِ رفرشِ همه‌شون، پنل ادمین تا رفرشِ دستیِ صفحه دادهٔ حذف‌شده نشون می‌ده
-      loadPendingPlayers(); loadRoster(); loadCampaigns(); loadMapData();
-      loadRoleplayPending(); loadAlliances(); loadPolls();
-    } catch (e) { toast(e.message); }
-    setResetBusy(false);
-  };
-
-  const disbandCampaign = async (id) => {
-    setDisbandBusyId(id);
-    try {
-      const res = await api.adminDisbandCampaign(id);
-      haptic('medium');
-      toast(res.battle_closed ? 'لشکر منحل شد و چون یک سمت خالی ماند، نبرد هم بسته شد' : res.battle_member_removed ? 'لشکر منحل و فقط همان عضو از نبرد خارج شد' : 'لشکر منحل شد و تمام هزینه‌هایش برگشت');
-      if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(() => {});
-      loadCampaigns(); loadBattles(); loadRoleplayPending();
-    } catch (e) { toast(e.message); }
-    setDisbandBusyId(null);
-  };
-
-  const expelAlliance = async (a, member) => {
-    const penalty = member.penalty_gold || a.members?.find(m => !m.creator && m.status === 'accepted')?.penalty_gold || 0;
-    if (!window.confirm(`اخراج ${member.name}؟ غرامت ${penalty.toLocaleString('fa-IR')} سکه بین سایر اعضا تقسیم می‌شود و موجودی ناکافی منفی می‌شود.${member.creator ? ' کل گروه منحل می‌شود.' : ''}`)) return;
-    setDissolveBusyId(a.id);
-    try { await api.adminExpelAlliance(member.alliance_id || a.id, member.tg_id); toast('اخراج و تسویهٔ غرامت انجام شد'); loadAlliances(); }
-    catch (e) { toast(e.message); }
-    setDissolveBusyId(null);
-  };
-
-  const dissolveAlliance = async (id) => {
-    if (!window.confirm("کل پیمان و دعوت‌های باز آن بدون غرامت منحل شوند؟ برای جریمهٔ بازیکن از اخراج استفاده کن.")) return;
-    setDissolveBusyId(id);
-    try {
-      await api.adminDissolveAlliance(id);
-      haptic('medium');
-      toast('کل پیمان منحل شد؛ اعلان اعضا ثبت شد');
-      loadAlliances();
-    } catch (e) { toast(e.message); }
-    setDissolveBusyId(null);
-  };
-
-  const respondRoleplay = async (roleplayId) => {
-    const result = (roleplayResults[roleplayId] || '').trim();
-    if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
-    const visibility = roleplayVisibility[roleplayId] || 'participants';
-    const otherLords = (roleplayOtherLords[roleplayId] || []).map(p => p.tg_id);
-    const roleplay = roleplayPending?.find(r => r.id === roleplayId);
-    if (roleplay?.category === 'war') {
-      setTab('war'); setWarSubTab('battles');
-      toast('نتیجه و تلفات جنگ فقط از پروندهٔ یکپارچهٔ نبرد ثبت می‌شود');
-      return;
-    }
-    const winnerTgId = roleplayWinners[roleplayId] || null;
-    if (roleplay?.category === 'war' && !winnerTgId) { toast('برندهٔ نبرد را مشخص کن'); return; }
-    setRoleplayBusyId(roleplayId);
-    try {
-      const losses = roleplayLosses[roleplayId] || {};
-      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId, losses.attacker || {}, losses.defender || {}, roleplayAdjustments[roleplayId] || {});
-      haptic('medium');
-      toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
-      setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
-      setRoleplayVisibility(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
-      setRoleplayOtherLords(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
-      setRoleplayWinners(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
-      setRoleplayLosses(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
-      setRoleplayAdjustments(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
-      loadRoleplayPending();
-    } catch (e) { toast(e.message); }
-    setRoleplayBusyId(null);
-  };
-
-  const chooseMusicFile = (file) => {
-    if (!file) return;
-    if (!file.type.startsWith('audio/')) { toast('فقط فایل صوتی انتخاب کن'); return; }
-    if (file.size > 7 * 1024 * 1024) { toast('حجم موسیقی باید حداکثر ۷ مگابایت باشد'); return; }
-    const reader = new FileReader();
-    reader.onload = () => setMusicSettings(p => ({ ...(p || {}), audio_url: String(reader.result || ''), title: p?.title || file.name.replace(/\.[^.]+$/, '') }));
-    reader.onerror = () => toast('خواندن فایل موسیقی ناموفق بود');
-    reader.readAsDataURL(file);
-  };
-
-  const saveMusic = async () => {
-    if (!musicSettings) return;
-    setMusicBusy(true);
-    try {
-      const saved = await api.adminSaveMusicSettings({
-        ...musicSettings, volume: Math.max(0, Math.min(100, Number(musicSettings.volume) || 0)),
-      });
-      setMusicSettings(saved); haptic('medium'); toast('تنظیمات موسیقی بازی ذخیره شد');
-    } catch (e) { toast(e.message); }
-    setMusicBusy(false);
-  };
-
-  const scoreAmbush = async (id) => {
-    const coefficient = Number(ambushScores[id]);
-    const ambushScore = Number(ambushQualityScores[id]);
-    if (Number.isNaN(coefficient) || coefficient < 0 || coefficient > 10) { toast('ضریب باید بین صفر تا ۱۰ باشد'); return; }
-    if (Number.isNaN(ambushScore) || ambushScore < 0 || ambushScore > 100) { toast('امتیاز کمین باید بین صفر تا ۱۰۰ باشد'); return; }
-    setAmbushBusyId(id);
-    const row = ambushesList?.find(a => a.id === id);
-    const scenario = (ambushScenarios[id] ?? row?.scenario ?? '').trim();
-    if (scenario.length < 20) { toast('سناریوی کمین باید حداقل ۲۰ نویسه باشد'); return; }
-    try { await api.adminEditAmbush(id, scenario, coefficient, ambushScore); haptic('medium'); toast('کمین ذخیره و فعال شد'); loadAmbushes(); }
-    catch (e) { toast(e.message); }
-    setAmbushBusyId(null);
-  };
-
-  const deleteAmbush = async (id) => {
-    if (!window.confirm('این کمین حذف شود؟ اگر هنوز مصرف نشده باشد، نفرات، سکه و تسلیحاتش به سازنده برمی‌گردد.')) return;
-    setAmbushBusyId(id);
-    try { await api.adminDeleteAmbush(id); haptic('medium'); toast('کمین حذف و هزینه‌های قابل بازگشت مسترد شد'); loadAmbushes(); }
-    catch (e) { toast(e.message); }
-    setAmbushBusyId(null);
-  };
-
-  const reduceCampaign = async (campaign) => {
-    const troops = campaignLosses[campaign.id] || {};
-    if (!Object.values(troops).some(v => Number(v) > 0)) { toast('تلفات حداقل یک نیرو را وارد کن'); return; }
-    setDisbandBusyId(campaign.id);
-    try { await api.adminReduceCampaign(campaign.id, troops); toast('تلفات لشکر ثبت شد؛ چیزی به بازیکن برنگشت'); loadCampaigns(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
-    catch (e) { toast(e.message); }
-    setDisbandBusyId(null);
-  };
-
-  const destroyCampaign = async (id) => {
-    if (!window.confirm('این لشکر کامل منهدم شود؟ هیچ نفر، سکه، سلاح یا ادواتی برنمی‌گردد.')) return;
-    setDisbandBusyId(id);
-    try { const res = await api.adminDestroyCampaign(id); toast(res.battle_closed ? 'لشکر منهدم شد و چون یک سمت خالی ماند، نبرد هم بسته شد' : res.battle_member_removed ? 'لشکر منهدم و فقط همان عضو از نبرد خارج شد' : 'لشکر کاملاً منهدم شد'); loadCampaigns(); loadBattles(); loadRoleplayPending(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
-    catch (e) { toast(e.message); }
-    setDisbandBusyId(null);
-  };
-
-  const resetSeason = async () => {
-    if (seasonResetConfirm.trim() !== 'NEWSEASON') { toast('عبارت NEWSEASON را دقیق تایپ کن'); return; }
-    if (!window.confirm('فصل تازه شروع شود؟ پیشرفت همه صفر می‌شود، اما بازیکن‌ها و قلعه‌هایشان باقی می‌مانند.')) return;
-    setSeasonResetBusy(true);
-    try {
-      const res = await api.adminResetSeason(seasonResetConfirm.trim());
-      haptic('medium'); toast(`فصل تازه شروع شد؛ ${res.players_reset ?? 0} بازیکن ریست شد`);
-      setSeasonResetConfirm(''); loadRoster(); loadCampaigns(); loadMapData();
-    } catch (e) { toast(e.message); }
-    setSeasonResetBusy(false);
-  };
-
-  const resetScoreboard = async () => {
-    if (scoreResetConfirm.trim() !== 'SCOREBOARD') { toast('عبارت SCOREBOARD را دقیق تایپ کن'); return; }
-    if (!window.confirm('مبنای امتیاز همهٔ بازیکن‌ها از همین لحظه صفر شود؟')) return;
-    setScoreResetBusy(true);
-    try {
-      const res = await api.adminResetScoreboard(scoreResetConfirm.trim());
-      haptic('medium'); toast(`جدول امتیازات ${res.players_reset ?? 0} بازیکن صفر شد`);
-      setScoreResetConfirm(''); loadRoster();
-    } catch (e) { toast(e.message); }
-    setScoreResetBusy(false);
-  };
-
-  const resolveBattle = async (battle) => {
-    const id = battle.campaign_id;
-    const result = (roleplayResults[id] || '').trim();
-    const winners = roleplayWinners[id] || [];
-    if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
-    if (!winners.length) { toast('حداقل یک برندهٔ نبرد را مشخص کن'); return; }
-    setRoleplayBusyId(id);
-    try {
-      const losses = roleplayLosses[id] || {};
-      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {}, battleResultImages[id] || null, retreatDestinations[id] || {});
-      toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
-      loadBattles(); loadRoleplayPending(); loadCampaigns();
-    } catch (e) { toast(e.message); }
-    setRoleplayBusyId(null);
-  };
-
-  const scoreRoleplay = async (roleplayId, category = '') => {
-    const maxScore = category === 'scout' ? 100 : roleplayScoreMax;
-    const score = Number(roleplayScores[roleplayId]);
-    if (!Number.isInteger(score) || score < 0 || score > maxScore) { toast(`امتیاز باید بین ۰ تا ${maxScore.toLocaleString('fa-IR')} باشد`); return; }
-    setRoleplayScoreBusyId(roleplayId);
-    try {
-      await api.adminScoreRoleplay(roleplayId, score);
-      haptic('medium'); toast(category === 'scout' ? 'امتیاز پیش‌قراول ثبت شد' : 'امتیاز رول ثبت و به امتیاز بازیکن اعمال شد');
-      loadRoleplayPending();
-      api.adminSecurityRoleplays(securityQuery, securityPlayer[0]?.tg_id).then(setSecurityRoleplays).catch(() => {});
-    } catch (e) { toast(e.message); }
-    setRoleplayScoreBusyId(null);
-  };
-
-  const saveRoleplayScoreMax = async () => {
-    const value = Number(roleplayScoreMax);
-    if (!Number.isInteger(value) || value < 1) { toast('سقف امتیاز باید عددی مثبت باشد'); return; }
-    setRoleplayScoreSettingsBusy(true);
-    try { const r = await api.adminSaveRoleplayScoreSettings(value); setRoleplayScoreMax(r.max_score); toast('سقف امتیاز رول ذخیره شد'); }
-    catch (e) { toast(e.message); }
-    setRoleplayScoreSettingsBusy(false);
-  };
-
-  const savePlayerProfile = async () => {
-    if (!profileTarget.length || !profileDraft) return;
-    if (!profileDraft.name?.trim() || profileDraft.backstory?.trim().length < 40) { toast('نام و بک‌استوری حداقل ۴۰ نویسه‌ای را کامل کن'); return; }
-    setProfileBusy(true);
-    try {
-      const saved = await api.adminEditPlayerProfile(profileTarget[0].tg_id, profileDraft);
-      setProfileDraft(saved); haptic('medium'); toast('مشخصات بازیکن ذخیره شد');
-    } catch (e) { toast(e.message); }
-    setProfileBusy(false);
-  };
-
-  const saveControlSettings = async () => {
-    setControlSettingsBusy(true);
-    try { const r = await api.adminSaveControlSettings(controlSettings); setControlSettings(r.settings); toast('تمام قوانین و نرخ‌ها ذخیره شدند'); }
-    catch (e) { toast(e.message); }
-    setControlSettingsBusy(false);
-  };
-
-  const resetControlSettings = async () => {
-    if (!window.confirm('همهٔ نرخ‌ها و قوانین این صفحه به پیش‌فرض برگردند؟')) return;
-    setControlSettingsBusy(true);
-    try { const r = await api.adminResetControlSettings(); setControlSettings(r.settings); toast('تنظیمات پیش‌فرض بازی برگشت'); }
-    catch (e) { toast(e.message); }
-    setControlSettingsBusy(false);
-  };
-
-  const toggleBattleWinner = (battleId, tgId) => {
-    setRoleplayWinners(prev => {
-      const current = prev[battleId] || [];
-      const selected = current.includes(tgId);
-      if (selected) return { ...prev, [battleId]: current.filter(id => id !== tgId) };
-      return { ...prev, [battleId]: [...current, tgId] };
-    });
-  };
-
-  const dismissBattle = async (battle, stay=false) => {
-    if (!window.confirm(`نبرد «${battle.name}» بدون نتیجه بسته شود؟ ${stay?'تمام لشکرها در محل درگیری می‌مانند.':'قواعد بازگشت لشکرها اجرا می‌شود.'}`)) return;
-    setRoleplayBusyId(battle.campaign_id);
-    try {
-      await api.adminDismissBattle(battle.campaign_id,stay);
-      haptic('medium'); toast('نبرد منحل و لشکرهای درگیر آزاد شدند');
-      loadBattles(); loadRoleplayPending(); loadCampaigns();
-    } catch (e) { toast(e.message); }
-    setRoleplayBusyId(null);
-  };
-
-  const setOverlord = async () => {
-    if (!overlordTarget.length) { toast('یک لرد را انتخاب کن'); return; }
-    try {
-      await api.adminSetOverlord(overlordRegion, overlordTarget[0].tg_id); api.titles().then(setOfficeHolders);
-      haptic('medium');
-      toast('بالادستی تعیین شد');
-      setOverlordTarget([]);
-    } catch (e) { toast(e.message); }
-  };
-
-  const setWarden = async () => {
-    if (!wardenTarget.length) { toast('یک لرد را انتخاب کن'); return; }
-    try {
-      await api.adminSetWarden(wardenGroup, wardenTarget[0].tg_id); api.titles().then(setOfficeHolders);
-      haptic('medium');
-      toast('والی تعیین شد');
-      setWardenTarget([]);
-    } catch (e) { toast(e.message); }
-  };
-
-  const setKing = async () => {
-    if (!kingTarget.length) { toast('یک والی را انتخاب کن'); return; }
-    try {
-      await api.adminSetKing(kingTarget[0].tg_id); api.titles().then(setOfficeHolders);
-      haptic('medium');
-      toast('پادشاه/ملکه تعیین شد');
-      setKingTarget([]);
-    } catch (e) { toast(e.message); }
-  };
-
-  const setEpithet = async () => {
-    if (!epithetTarget.length || !epithetText.trim()) { toast('لرد و عنوان را مشخص کن'); return; }
-    try {
-      await api.adminSetEpithet(epithetTarget[0].tg_id, epithetText.trim());
-      haptic('medium');
-      toast('عنوان ثبت شد');
-      setEpithetTarget([]); setEpithetText('');
-    } catch (e) { toast(e.message); }
-  };
-
-  const createPoll = async () => {
-    const opts = pollOptions.map(o => o.trim()).filter(Boolean);
-    if (!pollQuestion.trim() || opts.length < 2 || !pollEligible.length) {
-      toast('سوال، حداقل دو گزینه، و حداقل یک واجد شرایط لازم است'); return;
-    }
-    try {
-      await api.adminCreatePoll(pollQuestion.trim(), opts, pollEligible.map(p => p.tg_id));
-      haptic('medium');
-      toast('رای‌گیری ساخته شد');
-      setPollQuestion(''); setPollOptions(['', '']); setPollEligible([]);
-      loadPolls();
-    } catch (e) { toast(e.message); }
-  };
-
-  const closePoll = async (id) => {
-    try { await api.adminClosePoll(id); haptic(); toast('رای‌گیری بسته شد'); loadPolls(); }
-    catch (e) { toast(e.message); }
-  };
-
-  const deletePoll = async (id) => {
-    try { await api.adminDeletePoll(id); haptic(); toast('رای‌گیری حذف شد'); loadPolls(); }
-    catch (e) { toast(e.message); }
-  };
-
-  const addAdmin = async () => {
-    if (!newAdminTarget.length) { toast('یک لرد را انتخاب کن'); return; }
-    if (newAdminRole === 'owner' && !window.confirm('این فرد دقیقاً تمام دسترسی‌های ادمین اصلی را می‌گیرد؛ از جمله مدیریت ادمین‌ها و ریست فصل. مطمئنی؟')) return;
-    try {
-      await api.adminAddAdmin(newAdminTarget[0].tg_id, newAdminRole);
-      haptic('medium');
-      toast(newAdminRole === 'owner' ? 'ادمین اصلی ثبت شد' : newAdminRole === 'full' ? 'ادمین کامل ثبت شد' : 'ادمین اجرایی ثبت شد');
-      setNewAdminTarget([]);
-      loadAdmins();
-    } catch (e) { toast(e.message); }
-  };
-
-  const removeAdmin = async (tgId) => {
-    if (!window.confirm('دسترسی ادمین این فرد حذف شود؟')) return;
-    try { await api.adminRemoveAdmin(tgId); haptic(); toast('ادمین حذف شد'); loadAdmins(); }
-    catch (e) { toast(e.message); }
-  };
-
-  const editAdminRole = (admin) => {
-    setNewAdminTarget([{ tg_id: admin.tg_id, name: admin.name || String(admin.tg_id), castle: admin.castle }]);
-    setNewAdminRole(admin.role);
-    document.getElementById('admin-role-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
-  const assignHouse = async (tgId) => {
-    const current = roster?.find(p => p.tg_id === tgId) || pendingPlayers?.find(p => p.tg_id === tgId);
-    const regionId = assignRegion[tgId] || current?.region || Object.keys(REGIONS_STATIC)[0];
-    const castle = assignCastle[tgId];
-    if (!castle) { toast('یک قلعه انتخاب کن'); return; }
-    setAssignBusyId(tgId);
-    try {
-      const res = await api.adminAssignHouse(tgId, regionId, castle);
-      haptic('medium');
-      toast(res.moved ? 'خاندان و قلعه جابه‌جا شد — کلاغی برایش رفت' : 'خاندان و قلعه تعیین شد — کلاغی برایش رفت');
-      setAssignCastle(prev => { const n = { ...prev }; delete n[tgId]; return n; });
-      setReassignOpenId(null);
-      loadPendingPlayers(); loadRoster(); loadMapData(); loadRegistrationSettings();
-    } catch (e) { toast(e.message); }
-    setAssignBusyId(null);
-  };
-
-  const unassignHouse = async (tgId) => {
-    setUnassignBusyId(tgId);
-    try {
-      await api.adminUnassignHouse(tgId);
-      haptic('medium');
-      toast('خاندان و قلعه از این بازیکن گرفته شد');
-      loadPendingPlayers(); loadRoster(); loadMapData(); loadRegistrationSettings();
-    } catch (e) { toast(e.message); }
-    setUnassignBusyId(null);
-  };
-
-  const addCastle = async (tgId) => {
-    const castle = addCastleValue[0];
-    if (!castle) { toast('یک قلعه انتخاب کن'); return; }
-    const holder = roster?.find(p => !p.is_dead && (p.castle === castle || p.castles?.includes(castle)));
-    if (holder && holder.tg_id !== tgId && !window.confirm(`قلعهٔ «${castle}» از «${holder.name}» گرفته شود؟ ساختمان‌ها منتقل می‌شوند و منابع مشترک باقی می‌مانند.${new Set([holder.castle, ...(holder.castles || [])].filter(Boolean)).size === 1 ? ' این آخرین قلعهٔ اوست؛ بازیکن کشته و تمام لشکرهایش حذف می‌شوند.' : ''}`)) return;
-    setAddCastleBusyId(tgId);
-    try {
-      const res = await api.adminAddCastle(tgId, castle, addCastleMode);
-      haptic('medium');
-      toast(res.captured_from ? `قلعه از «${res.captured_from}» گرفته شد و به این بازیکن اضافه شد` : 'قلعهٔ اضافه به این بازیکن داده شد');
-      setAddCastleValue([]);
-      setAddCastleOpenId(null);
-      // فتحِ قلعه ممکنه صاحبِ قبلی رو بی‌خاندان کنه (اگه تنها قلعه‌اش بوده) — پس باید
-      // لیستِ در-انتظار هم دوباره لود بشه، نه فقط roster
-      loadRoster(); loadPendingPlayers(); loadMapData();
-    } catch (e) { toast(e.message); }
-    setAddCastleBusyId(null);
-  };
-
-  const removeCastle = async (tgId, castle) => {
-    setRemoveCastleBusyKey(`${tgId}:${castle}`);
-    try {
-      await api.adminRemoveCastle(tgId, castle);
-      haptic('medium');
-      toast(`قلعهٔ «${castle}» از این بازیکن گرفته شد`);
-      loadRoster(); loadMapData();
-    } catch (e) { toast(e.message); }
-    setRemoveCastleBusyKey(null);
-  };
-
-  const deletePendingPlayer = async (tgId, name) => {
-    if (!window.confirm(`درخواستِ ثبت‌نامِ «${name}» کاملاً پاک بشه؟ این کار برگشت‌ناپذیره.`)) return;
-    setDeletePendingBusyId(tgId);
-    try {
-      await api.adminDeletePendingPlayer(tgId);
-      haptic('medium');
-      toast('درخواست ثبت‌نام حذف شد');
-      loadPendingPlayers();
-    } catch (e) { toast(e.message); }
-    setDeletePendingBusyId(null);
-  };
-
-  const toggleReassign = (tgId) => {
-    haptic();
-    setReassignOpenId(prev => prev === tgId ? null : tgId);
-    setAssignCastle(prev => ({ ...prev, [tgId]: '' }));
-  };
-
-  const toggleAddCastle = (tgId) => {
-    haptic();
-    setAddCastleMode('normal');
-    setAddCastleOpenId(prev => prev === tgId ? null : tgId);
-    setAddCastleValue([]);
-  };
-
-  const createItem = async () => {
-    if (!itemName.trim()) { toast('نام آیتم را بنویس'); return; }
-    if (itemDuration === 'temporary' && (!itemDurationHours || +itemDurationHours <= 0)) {
-      toast('برای آیتم موقتی، مدت (ساعت) را مشخص کن'); return;
-    }
-    setItemBusy(true);
-    try {
-      await api.adminCreateItem({
-        name: itemName.trim(), type: itemType, duration: itemDuration,
-        duration_hours: itemDuration === 'temporary' ? +itemDurationHours : null,
-        description: itemDescription.trim(), color: itemColor,
-        image: itemImage,
-        building_id: itemType === 'economy' && itemBuilding ? itemBuilding : null,
-        yield_percent: itemType === 'economy' && itemBuilding ? Number(itemYield) : 0,
-      });
-      haptic('medium');
-      toast('آیتم ساخته شد');
-      setItemName(''); setItemDescription(''); setItemDurationHours('24'); setItemImage(null);
-      loadItems();
-    } catch (e) { toast(e.message); }
-    setItemBusy(false);
-  };
-
-  const deleteItem = async (id) => {
-    try { await api.adminDeleteItem(id); haptic(); toast('آیتم حذف شد'); loadItems(); }
-    catch (e) { toast(e.message); }
-  };
-
-  const openGrant = (id) => {
-    haptic();
-    setGrantOpenId(prev => prev === id ? null : id);
-    setGrantRequestId(crypto.randomUUID());
-    setGrantTarget([]); setGrantColor(itemsList?.find(it => it.id === id)?.color || 'gray');
-  };
-
-  const grantItem = async (id) => {
-    if (!grantTarget.length) { toast('یک لرد را انتخاب کن'); return; }
-    setGrantBusy(true);
-    try {
-      await api.adminGrantItem(id, grantTarget[0].tg_id, grantColor, grantRequestId);
-      haptic('medium');
-      toast(`آیتم به «${grantTarget[0].name}» داده شد`);
-      setGrantOpenId(null); setGrantTarget([]);
-      loadItems();
-    } catch (e) { toast(e.message); }
-    setGrantBusy(false);
-  };
-
-  const setBalanceDraft = (bid, section, key, value) => {
-    setBalanceDrafts(prev => ({
-      ...prev,
-      [bid]: {
-        ...prev[bid],
-        [section]: key === null ? value : { ...(prev[bid]?.[section] || {}), [key]: value },
-      },
-    }));
-  };
-
-  const parseBalanceMap = (values, errorText) => {
-    const out = {};
-    for (const [key, value] of Object.entries(values || {})) {
-      const n = parseInt(value, 10);
-      if (isNaN(n) || n < 0) throw new Error(errorText);
-      out[key] = n;
-    }
-    return out;
-  };
-
-  const saveBalance = async (b) => {
-    const draft = balanceDrafts[b.id] || {};
-    let payload;
-    try {
-      const step = Number(draft.cost_step_percent);
-      if (!Number.isFinite(step) || step < 0 || step > 500) throw new Error('درصد رشد هزینه باید بین صفر تا ۵۰۰ باشد');
-      payload = {
-        building_id: b.id,
-        cost: parseBalanceMap(draft.cost, 'هزینه‌ها باید عدد صحیح و غیرمنفی باشند'),
-        cost_step_percent: step,
-        hours: Number(draft.hours),
-        max_level: parseInt(draft.max_level, 10),
-        produces: parseBalanceMap(draft.produces, 'مقدار تولید باید عدد صحیح و غیرمنفی باشد'),
-        cap_bonus: parseBalanceMap(draft.cap_bonus, 'افزایش سقف باید عدد صحیح و غیرمنفی باشد'),
-      };
-      if (!Number.isFinite(payload.hours) || payload.hours <= 0) throw new Error('زمان پایه باید بیشتر از صفر باشد');
-      if (!Number.isInteger(payload.max_level) || payload.max_level < 1 || payload.max_level > 100) throw new Error('سقف سطح باید بین ۱ تا ۱۰۰ باشد');
-    } catch (e) { toast(e.message); return; }
-    setBalanceBusyId(b.id);
-    try {
-      await api.adminSetBuildingBalance(payload);
-      applyRuntimeGamedata(await api.gamedata());
-      haptic('medium');
-      toast(`تنظیمات «${b.name}» ذخیره شد`);
-      loadBalance();
-    } catch (e) { toast(e.message); }
-    setBalanceBusyId(null);
-  };
-
-  const resetBalance = async (b) => {
-    setBalanceBusyId(b.id);
-    try {
-      await api.adminResetBuildingBalance(b.id);
-      applyRuntimeGamedata(await api.gamedata());
-      haptic();
-      toast(`«${b.name}» به مقدار پیش‌فرض برگشت`);
-      loadBalance();
-    } catch (e) { toast(e.message); }
-    setBalanceBusyId(null);
-  };
-
-  const setGameplayRule = (key, value) => setGameplayBalance(prev => ({ ...prev, rules: { ...prev.rules, [key]: value } }));
-  const setGameplayRow = (section, id, key, value) => setGameplayBalance(prev => ({
-    ...prev,
-    [section]: prev[section].map(row => row.id === id ? { ...row, [key]: value } : row),
-  }));
-  const setEquipmentCost = (id, key, value) => setGameplayBalance(prev => ({
-    ...prev,
-    equipment: prev.equipment.map(row => row.id === id ? { ...row, cost: { ...row.cost, [key]: value } } : row),
-  }));
-  const saveGameplayBalance = async () => {
-    setGameplayBalanceBusy(true);
-    try {
-      const saved = await api.adminSetGameplayBalance(gameplayBalance);
-      setGameplayBalance(saved);
-      applyRuntimeGamedata(await api.gamedata());
-      loadBalance();
-      haptic('medium'); toast('تعادل نیروها و ادوات ذخیره شد');
-    } catch (e) { toast(e.message); }
-    setGameplayBalanceBusy(false);
-  };
-  const resetGameplayBalance = async () => {
-    setGameplayBalanceBusy(true);
-    try {
-      const saved = await api.adminResetGameplayBalance();
-      setGameplayBalance(saved);
-      applyRuntimeGamedata(await api.gamedata());
-      loadBalance();
-      haptic(); toast('تعادل نیروها و ادوات به پیش‌فرض برگشت');
-    } catch (e) { toast(e.message); }
-    setGameplayBalanceBusy(false);
-  };
-
-  const savePlayerBuilding = async (row) => {
-    if (!playerBuildingTarget.length || !playerBuildingCastle) return;
-    const key = `${playerBuildingCastle}::${row.id}`;
-    const level = parseInt(playerBuildingDrafts[key], 10);
-    const maxLevel = row.max_level || playerBuildingData?.max_level || 30;
-    if (isNaN(level) || level < 0 || level > maxLevel) {
-      toast(`سطح باید بین صفر تا ${maxLevel.toLocaleString('fa-IR')} باشد`); return;
-    }
-    setPlayerBuildingBusyId(row.id);
-    try {
-      await api.adminSetPlayerBuilding(playerBuildingTarget[0].tg_id, row.id, playerBuildingCastle, level);
-      haptic('medium');
-      toast(level === 0 ? `«${row.name}» حذف شد` : `سطح «${row.name}» روی ${level.toLocaleString('fa-IR')} ثبت شد`);
-      const data = await api.adminPlayerBuildings(playerBuildingTarget[0].tg_id);
-      setPlayerBuildingData(data);
-      setPlayerBuildingDrafts(Object.fromEntries(
-        (data.castles || []).flatMap(castle => castle.buildings.map(b => [`${castle.castle}::${b.id}`, String(b.level)]))
-      ));
-    } catch (e) { toast(e.message); }
-    setPlayerBuildingBusyId(null);
-  };
-
-  const deleteAdminRumor = async (row) => {
-    if (!window.confirm(`توییتٔ «${row.text.slice(0, 60)}» حذف شود؟ محبوبیت کم‌شده برنمی‌گردد.`)) return;
-    setRumorDeleteBusy(row.id);
-    try {
-      await api.adminDeleteRumor(row.id);
-      setAdminRumors(prev => prev?.filter(x => x.id !== row.id));
-      toast('توییت حذف شد');
-    } catch (e) { toast(e.message); }
-    setRumorDeleteBusy(null);
-  };
-
-  const runCleanup = async (category, token, label) => {
-    if ((cleanupConfirm[category] || '').trim() !== token) {
-      toast(`برای پاک‌سازی باید دقیقاً ${token} را بنویسی`);
-      return;
-    }
-    if (!window.confirm(`تاریخچهٔ ${label} پاک شود؟ این کار برگشت‌ناپذیر است.`)) return;
-    setCleanupBusy(category);
-    try {
-      const result = await api.adminCleanup(category, token);
-      toast(`${result.deleted.toLocaleString('fa-IR')} مورد از ${label} پاک شد`);
-      setCleanupConfirm(prev => ({ ...prev, [category]: '' }));
-      loadCleanupPreview();
-      if (category === 'rumors') loadAdminRumors();
-    } catch (e) { toast(e.message); }
-    setCleanupBusy(null);
-  };
-
-  const markNotificationRead = async (id) => {
-    try {
-      await api.adminReadNotification(id);
-      setAdminNotifications(prev => prev?.map(x => x.id === id ? { ...x, read: true } : x));
-    } catch (e) { toast(e.message); }
-  };
-
-  const markAllNotificationsRead = async () => {
-    try {
-      await api.adminReadAllNotifications();
-      setAdminNotifications(prev => prev?.map(x => ({ ...x, read: true })));
-      toast('همهٔ اعلان‌ها خوانده شدند');
-    } catch (e) { toast(e.message); }
-  };
-
-  const openTab = (key) => {
-    const target = TAB_BY_KEY[key];
-    if (!isOwner && SYSTEM_TAB_KEYS.has(key)) {
-      toast('مدیریت سامانه فقط برای مالک سامانه در دسترس است');
-      return;
-    }
-    if (!isFull && !allowedTabKeys.has(key)) {
-      toast(isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند' : 'ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
-      return;
-    }
-    if (target?.ownerOnly && !isOwner) {
-      toast('مدیریت ادمین‌ها فقط برای ادمین اصلی باز است');
-      return;
-    }
-    if (target?.fullOnly && !isFull) {
-      toast('این بخش فقط برای ادمین اصلی یا ادمین کامل باز است');
-      return;
-    }
-    haptic();
-    setTab(key);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const openGroup = (group) => {
-    const first = group.tabs[0];
-    if (first) openTab(first.key);
-  };
-
-  const tabBadge = (key) => {
-    if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
-    if (key === 'registration') return pendingPlayers?.length || 0;
-    if (key === 'war') return (battles?.length || 0) + (ambushesList?.filter(a => a.status === 'pending_score').length || 0);
-    if (key === 'roleplays') return roleplayPending?.length || 0;
-    if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
-    return 0;
-  };
-
-  const normalizedRosterQuery = deferredRosterQuery.trim().toLocaleLowerCase('fa-IR');
-  const visibleRoster = useMemo(() => !normalizedRosterQuery ? (roster || []) : (roster || []).filter(player => [
-    player.name, player.telegram_username, player.region_name, player.castle, ...(player.castles || []),
-  ].some(value => String(value || '').toLocaleLowerCase('fa-IR').includes(normalizedRosterQuery))), [roster, normalizedRosterQuery]);
-
-  if (!me.admin_role) {
-    return (
-      <>
-        <div className="page-title up">پنل ادمین</div>
-        <div className="card up u1" style={{ textAlign: 'center', color: 'var(--mid)' }}>دسترسی نداری</div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <div className="page-title up">پنل ادمین</div>
-      <div className={`admin-game-strip ${gamePause?.paused ? 'is-paused' : ''}`} role="status">
-        <span>روز <b>{gamePause?.day ? gamePause.day.toLocaleString('fa-IR') : '—'}</b> بازی</span>
-        <span className="admin-game-state"><i aria-hidden="true" />{gamePause ? (gamePause.paused ? 'متوقف' : 'در حال اجرا') : 'در حال دریافت…'}</span>
-      </div>
-      <div className="admin-role-card up">
-        <div>
-          <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : isAdjudicator ? 'ادمین رول و جنگ' : 'ادمین اجرایی'}</strong>
-          <small>{isOwner
-            ? 'به تمام بخش‌ها، مدیریت ادمین‌ها و ابزارهای فصل دسترسی داری.'
-            : isFull
-              ? 'به همهٔ بخش‌های بازی دسترسی داری؛ تب مدیریت ادمین‌ها فقط برای ادمین اصلی است.'
-              : isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند.' : 'فقط بخش داوری و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
-        </div>
-        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : isAdjudicator ? 'داوری رول و جنگ' : 'دسترسی اجرایی'}</span>
-      </div>
-
-      <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
-        <div className="admin-command-bar up u1">
-          <div><b>مرکز فرماندهی</b><small>{availGroups.reduce((sum,group)=>sum+group.tabs.length,0).toLocaleString('fa-IR')} ابزار در دسترس تو</small></div>
-          <label><span>جست‌وجوی ابزار</span><input value={adminNavQuery} onChange={event=>setAdminNavQuery(event.target.value)} placeholder="مثلاً لشکر، ثبت‌نام، بازار یا زمان"/></label>
-          {adminNavQuery&&<button type="button" className="rbtn" onClick={()=>setAdminNavQuery('')}>پاک‌کردن</button>}
-        </div>
-        {adminNavNeedle ? <section className="admin-search-results up u1">
-          <header><strong>نتیجهٔ جست‌وجو</strong><span>{adminNavResults.length.toLocaleString('fa-IR')} ابزار پیدا شد</span></header>
-          <div>{adminNavResults.map(item=>{const count=tabBadge(item.key);return <button type="button" className={`rbtn admin-search-result ${tab===item.key?'on':''}`} key={item.key} onClick={()=>{openTab(item.key);setAdminNavQuery('')}}><i>{ADMIN_GROUP_MARKS[item.groupKey]}</i><span><b>{item.label}</b><small>{item.groupLabel} · {item.description}</small></span>{count>0&&<em>{count.toLocaleString('fa-IR')}</em>}</button>})}</div>
-          {!adminNavResults.length&&<p>چیزی با این عبارت پیدا نشد؛ اسم کوتاه‌تری بنویس.</p>}
-        </section> : <>
-        {!isAdjudicator && <div className="admin-section-switcher up u1" role="tablist" aria-label="دسته‌های پنل">
-          {availGroups.map(group => {
-            const selected = activeGroup?.key === group.key;
-            const count = group.tabs.reduce((sum, item) => sum + tabBadge(item.key), 0);
-            return <button type="button" key={group.key} role="tab" aria-selected={selected}
-              className={`rbtn admin-section-button ${selected ? 'on' : ''}`} onClick={() => openGroup(group)}>
-              <i>{ADMIN_GROUP_MARKS[group.key]}</i><span>{group.label}</span><small>{group.description}</small>
-              {count > 0 && <b>{count.toLocaleString('fa-IR')}</b>}
-            </button>;
-          })}
-        </div>}
-        {activeGroup && (
-          <section className="admin-active-section up u1">
-            <div className="admin-active-section-heading">
-              <strong>{activeGroup.label}</strong><span>{activeGroup.description}</span>
-            </div>
-            <div className="tabs admin-tabs" role="tablist" aria-label={activeGroup.label}>
-              {activeGroup.tabs.map(item => {
-                const count = tabBadge(item.key);
-                return <button type="button" key={item.key} role="tab" aria-selected={tab === item.key}
-                  className={`rbtn tab admin-tab ${tab === item.key ? 'on' : ''}`} onClick={() => openTab(item.key)}>
-                  <span>{item.label}</span><small>{item.description}</small>
-                  {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
-                </button>;
-              })}
-            </div>
-          </section>
-        )}
-        </>}
-      </nav>
-
-      {tab !== 'overview' && TAB_BY_KEY[tab] && (
-        <div className="admin-current-guide up u2">
-          <strong>{TAB_BY_KEY[tab].label}</strong>
-          <span>{TAB_BY_KEY[tab].description}</span>
-          {isFull && <button type="button" className="rbtn" onClick={() => openTab('overview')}>راهنمای پنل</button>}
-        </div>
-      )}
-
-      {tab === 'world_contracts' && isFull && <AdminSocial section="contracts"/>}
-      {tab === 'castle_life' && isFull && <AdminSocial section="castles"/>}
-      {tab === 'world_news' && isFull && <AdminSocial section="news"/>}
-      {tab === 'espionage' && isFull && <AdminEspionage/>}
-      {tab === 'tickets' && isFull && <AdminTickets/>}
-      {tab === 'realm_systems' && isFull && <AdminRealmSystems/>}
-
-      {tab === 'notifications' && (
-        <>
-          <div className="sect up u2">صندوق اعلان‌های مدیریتی</div>
-          <div className="admin-notification-toolbar up u2">
-            <div className="tabs" role="tablist" aria-label="فیلتر اعلان‌ها">
-              <button type="button" className={`rbtn tab ${notificationFilter === 'unread' ? 'on' : ''}`}
-                      onClick={() => setNotificationFilter('unread')}>
-                خوانده‌نشده ({(adminNotifications?.filter(x => !x.read).length || 0).toLocaleString('fa-IR')})
-              </button>
-              <button type="button" className={`rbtn tab ${notificationFilter === 'all' ? 'on' : ''}`}
-                      onClick={() => setNotificationFilter('all')}>همه</button>
-            </div>
-            <button type="button" className="btn ghost" disabled={!adminNotifications?.some(x => !x.read)}
-                    onClick={markAllNotificationsRead}>همه را خواندم</button>
-          </div>
-          <div className="page-sub up u2" style={{ margin: '0 4px 12px', lineHeight: 1.9 }}>
-            تلگرام فقط هشدار کوتاه می‌فرسته؛ جزئیات، مهلت و کار پیشنهادی هر پرونده این‌جا می‌مونه.
-          </div>
-          <div className="admin-notification-list up u3">
-            {adminNotifications === null && <div className="loading">در حال گرفتن اعلان‌ها...</div>}
-            {adminNotifications && adminNotifications.filter(x => notificationFilter === 'all' || !x.read).length === 0 && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>
-                {notificationFilter === 'unread' ? 'اعلان خوانده‌نشده‌ای نداری' : 'هنوز اعلان مدیریتی ثبت نشده'}
-              </div>
-            )}
-            {adminNotifications && adminNotifications
-              .filter(x => notificationFilter === 'all' || !x.read)
-              .map(n => {
-                const deadline = n.deadline ? new Date(n.deadline) : null;
-                const remainingMinutes = deadline ? Math.floor((deadline.getTime() - gameNow()) / 60000) : null;
-                return (
-                  <article key={n.id} className={`admin-notification-card ${n.read ? 'read' : ''} priority-${n.priority || 'normal'}`}>
-                    <header>
-                      <div><strong>{n.title}</strong><small>{new Date(n.created_at).toLocaleString('fa-IR')}</small></div>
-                      <span>{({ urgent: 'فوری', high: 'مهم', normal: 'عادی' })[n.priority] || 'عادی'}</span>
-                    </header>
-                    <p>{n.detail}</p>
-                    {(n.player_name || n.castle) && (
-                      <div className="admin-notification-meta">
-                        {n.player_name && <span>بازیکن: {n.player_name}</span>}
-                        {n.castle && <span>قلعه: {castleLabel(n.castle)}</span>}
-                      </div>
-                    )}
-                    {deadline && (
-                      <div className={`admin-notification-deadline ${remainingMinutes !== null && remainingMinutes <= 120 ? 'near' : ''}`}>
-                        مهلت: {deadline.toLocaleString('fa-IR')}
-                        {remainingMinutes !== null && remainingMinutes > 0 ? ` · ${Math.ceil(remainingMinutes / 60).toLocaleString('fa-IR')} ساعت مانده` : ' · مهلت تمام شده'}
-                      </div>
-                    )}
-                    {n.action && <div className="admin-notification-action"><b>کاری که باید بکنی:</b> {n.action}</div>}
-                    {!n.read && <button type="button" className="btn ghost" onClick={() => markNotificationRead(n.id)}>دیدم؛ خوانده شد</button>}
-                  </article>
-                );
-              })}
-          </div>
-        </>
-      )}
-
-      {tab === 'overview' && (
-        <>
-          <div className="sect up u2">مسیر پیشنهادی امروز</div>
-          <div className="admin-help-card card up u2">
-            <p>عدد قرمز یعنی کاری منتظر رسیدگیه. اول اعلان‌ها رو ببین، بعد پرونده را در بخش مربوط باز کن و در پایان نتیجه یا پیام را ثبت کن.</p>
-            <div className="admin-workflow">
-              <button type="button" className="rbtn" onClick={() => openTab('notifications')}>
-                <b>۱. کارهای منتظر</b><span>اعلان تازه و مهلت نزدیک را از اینجا پیدا کن</span>
-              </button>
-              <button type="button" className="rbtn" onClick={() => openTab('war')}>
-                <b>۲. جنگ و جاسوسی</b><span>نبرد، لشکر، کمین و جاسوسی را بررسی کن</span>
-              </button>
-              <button type="button" className="rbtn" onClick={() => openTab('roleplays')}>
-                <b>۳. رول‌ها</b><span>سناریوهای منتظر را بخوان و نتیجه را ثبت کن</span>
-              </button>
-              <button type="button" className="rbtn" onClick={() => openTab('bot_messages')}>
-                <b>۴. ارتباط با بازیکن</b><span>پیام را در بات، کلاغ یا هر دو مسیر بفرست</span>
-              </button>
-              {isFull && <button type="button" className="rbtn" onClick={() => openTab('registration')}>
-                <b>ثبت‌نام‌های تازه</b><span>ظرفیت، درخواست و تخصیص قلعه را مدیریت کن</span>
-              </button>}
-              {isFull && <button type="button" className="rbtn" onClick={() => openTab('balance')}>
-                <b>تنظیمات بازی</b><span>قبل از فصل، قیمت‌ها و فرمول‌ها را بازبینی کن</span>
-              </button>}
-            </div>
-          </div>
-          <div className="admin-help-grid up u3">
-            <div className="card">
-              <strong>دسترسی فعلی تو</strong>
-              <p>{isOwner ? 'همهٔ بخش‌ها، مدیریت ادمین‌ها و عملیات فصل.' : isFull ? 'همهٔ امور بازی به‌جز مدیریت ادمین‌ها و عملیات مالک.' : 'فقط داوری جنگ، رول، شورش، مدال، توییت و ارتباط با بازیکن‌ها.'}</p>
-            </div>
-            <div className="card">
-              <strong>ثبت نتیجه</strong>
-              <p>قبل از تایید، طرفین، تلفات، برنده‌ها و دامنهٔ انتشار پیام را دوباره چک کن؛ نتیجه ممکنه منابع و آمار بازیکن را تغییر بده.</p>
-            </div>
-            <div className="card">
-              <strong>پیام بات یا رویداد؟</strong>
-              <p>«پیام بات» فقط به چت تلگرام می‌ره؛ «رویداد همگانی» داخل صندوق کلاغ‌های بازی هم ثبت می‌شه.</p>
-            </div>
-            <div className="card">
-              <strong>{isFull ? 'تغییرهای حساس' : 'اگر ابزار بیشتری لازم داری'}</strong>
-              <p>{isFull ? 'انتقال قلعه، ویرایش منابع، تعادل و پاک‌سازی روی کل بازی اثر می‌ذارن؛ توضیح هر فرم را قبل از ثبت بخون.' : 'تخصیص خاندان، منابع، نقشه و تنظیمات عمداً برای ادمین اجرایی نمایش داده نمی‌شن؛ از یک ادمین کامل کمک بگیر.'}</p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {tab === 'projects' && <Projects admin />}
-      {tab === 'onboarding' && (
-        <>
-          <div className="card up u2" style={{ marginBottom: 14 }}>
-            <div className="res" style={{ marginBottom: 8 }}>
-              <div className="ic"><Scroll s={16} /></div>
-              <div className="n">خروجی وضعیت قلعه‌ها<small>فهرست آمادهٔ تلگرام؛ همراه مالک، username، بندر و شمارندهٔ هر اقلیم</small></div>
-            </div>
-            <button type="button" className="btn" disabled={castleReportBusy} onClick={buildCastleReport}>
-              {castleReportBusy ? 'در حال ساخت فهرست تازه...' : 'ساخت و کپی فهرست به‌روز قلعه‌ها'}
-            </button>
-            {castleReport && (
-              <>
-                <textarea readOnly dir="rtl" value={castleReport} rows={10}
-                          style={{ marginTop: 10, fontSize: 11, lineHeight: 1.9, userSelect: 'text' }} />
-                <button type="button" className="btn ghost" style={{ marginTop: 8 }}
-                        onClick={async () => {
-                          const copied = await copyPlainText(castleReport);
-                          toast(copied ? 'فهرست دوباره کپی شد' : 'کپی خودکار ممکن نبود؛ متن کادر را انتخاب کن');
-                        }}>
-                  کپی دوباره
-                </button>
-              </>
-            )}
-          </div>
-
-        </>
-      )}
-
-      {tab === 'registration' && (
-        <>
-          {isFull && <><div className="sect up u1">ظرفیت ثبت‌نام اقلیم‌ها</div>
-          <div className="page-sub up u1" style={{ marginTop: -10 }}>
-            وقتی تعداد بازیکن‌های تخصیص‌داده‌شده به سقف برسد، تمام قلعه‌های آن اقلیم در فرم ثبت‌نام قفل می‌شوند.
-          </div>
-          <div className="card up u1" style={{ marginBottom: 14 }}>
-            <div className="registration-capacity-grid">
-              {(registrationSettings?.regions || []).map(region => (
-                <label key={region.id} className={`registration-capacity ${region.full ? 'full' : ''}`}>
-                  <span><strong>{region.name}</strong><small>{region.assigned.toLocaleString('fa-IR')} بازیکن تخصیص داده شده</small></span>
-                  <input type="number" min="0" max="250" value={region.capacity}
-                         disabled={!isFull}
-                         onChange={e => setRegistrationSettings(prev => ({ ...prev, regions: prev.regions.map(r => r.id === region.id ? { ...r, capacity: e.target.value } : r) }))} />
-                </label>
-              ))}
-            </div>
-            <button className="btn" style={{ marginTop: 12 }} disabled={!isFull || !registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
-              {registrationSettingsBusy ? 'در حال ذخیره...' : 'ذخیره ظرفیت اقلیم‌ها'}
-            </button>
-            {!isFull && <div className="page-sub" style={{ marginTop: 10 }}>تغییر ظرفیت فقط برای ادمین اصلی یا کامل باز است.</div>}
-          </div>
-
-          </>}
-          <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
-          </div>
-          {isFull && <button type="button" className="btn ghost up u2" disabled={telegramSyncBusy}
-                  style={{ width: 'auto', margin: '0 0 12px' }} onClick={syncTelegramUsernames}>
-            {telegramSyncBusy ? 'در حال دریافت از تلگرام...' : 'بازیابی username پلیرهای قبلی'}
-          </button>}
-          <div className="up u2">
-            {(!pendingPlayers || pendingPlayers.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کسی منتظر نیست</div>
-            )}
-            {pendingPlayers && pendingPlayers.map(p => {
-              const regionId = assignRegion[p.tg_id] || p.requested_region || Object.keys(REGIONS_STATIC)[0];
-              const region = REGIONS_STATIC[regionId];
-              const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
-              return (
-                <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
-                  <div className="res">
-                    <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
-                      {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
-                      {p.telegram_username
-                        ? <span className="telegram-username" dir="ltr">{p.telegram_username}</span>
-                        : <span>username ثبت نشده</span>}
-                    </small></div>
-                  </div>
-                  <div className="page-sub">نوع درخواست: {p.registration_mode === 'character' ? 'کاراکتر بدون قلعه' : 'فرمانروای قلعه'}</div>
-                  {isFull && <CharacterAdmission player={p} toast={toast} onApproved={() => {loadPendingPlayers();loadRoster();}} />}
-                  {p.requested_castles && p.requested_castles.length > 0 && (
-                    <div style={{ margin: '2px 0 12px' }}>
-                      <div className="page-sub" style={{ margin: '0 4px 6px' }}>درخواستِ خودِ بازیکن (به‌ترتیب اولویت):</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {p.requested_castles.map((rc, i) => (
-                          <button type="button" key={rc.name}
-                                  className="rbtn" disabled={rc.occupied || !rc.region}
-                                  style={{
-                                    width: 'auto', padding: '6px 10px', fontSize: 11.5, borderRadius: 999,
-                                    border: '1px solid rgba(160,195,255,0.18)',
-                                    color: rc.occupied ? 'var(--mid)' : 'var(--az2)',
-                                    opacity: rc.occupied ? 0.6 : 1,
-                                  }}
-                                  onClick={() => {
-                                    haptic();
-                                    setAssignRegion(prev => ({ ...prev, [p.tg_id]: rc.region }));
-                                    setAssignCastle(prev => ({ ...prev, [p.tg_id]: rc.name }));
-                                  }}>
-                            {(i + 1).toLocaleString('fa-IR')}. {castleLabel(rc.name)}{rc.occupied ? ' (اشغال‌شده)' : ''}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {isFull && <><label className="f">اقلیم (خاندان)</label>
-                  <select value={regionId} onChange={e => {
-                    setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
-                    setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
-                  }}>
-                    {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
-                  </select>
-                  <label className="f">قلعه</label>
-                  <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
-                    <option value="" disabled>انتخاب کن...</option>
-                    {castleOptions.map(c => <option key={c.n} value={c.n}>{castleLabel(c.n)}{c.port ? ' ⚓ بندر' : ''}</option>)}
-                  </select>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                    <button className="btn" style={{ flex: 1 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
-                      {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'تخصیص خاندان و قلعه'}
-                    </button>
-                    <button className="btn ghost" style={{ width: 'auto', padding: '0 14px', color: 'var(--danger)' }}
-                            disabled={deletePendingBusyId === p.tg_id} onClick={() => deletePendingPlayer(p.tg_id, p.name)}>
-                      {deletePendingBusyId === p.tg_id ? '...' : 'حذف درخواست'}
-                    </button>
-                  </div></>}
-                </div>
-              );
-            })}
-          </div>
-
-        </>
-      )}
-
-      {tab === 'onboarding' && (
-        <>
-          <div className="sect up u3">خاندان‌های موجود در بازی</div>
-          <div className="page-sub up u3" style={{ marginTop: -10 }}>
-            هر بازیکنِ خاندان‌دار — می‌توانی از خاندانش خارجش کنی یا به خاندان/قلعهٔ دیگری منتقلش کنی
-          </div>
-          <div className="card up u3" style={{ marginBottom: 12 }}>
-            <label className="f" style={{ marginTop: 0 }}>جست‌وجوی خاندان‌ها</label>
-            <input value={rosterQuery} onChange={e => setRosterQuery(e.target.value)}
-                   placeholder="نام پلیر، username، اقلیم یا قلعه..." autoComplete="off" />
-            {normalizedRosterQuery && (
-              <div className="page-sub" style={{ marginTop: 8 }}>
-                {visibleRoster.length.toLocaleString('fa-IR')} نتیجه از {(roster || []).length.toLocaleString('fa-IR')} بازیکن
-              </div>
-            )}
-          </div>
-          <div className="up u3">
-            {(!roster || roster.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کسی خاندانی ندارد</div>
-            )}
-            {roster && visibleRoster.length === 0 && normalizedRosterQuery && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>چیزی با این عبارت پیدا نشد</div>
-            )}
-            {roster && visibleRoster.slice(0, rosterLimit).map(p => {
-              const regionId = assignRegion[p.tg_id] || p.region || Object.keys(REGIONS_STATIC)[0];
-              const region = REGIONS_STATIC[regionId];
-              const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
-              return (
-                <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
-                  <div className="res">
-                    <div className="ic"><Shield s={16} /></div>
-                    <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
-                      {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
-                      {p.telegram_username
-                        ? <span className="telegram-username" dir="ltr">{p.telegram_username}</span>
-                        : <span>username ثبت نشده</span>}
-                    </small></div>
-                  </div>
-                  {p.castles && p.castles.length > 0 && (
-                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {p.castles.map(c => (
-                        <span key={c} className="rbtn" style={{
-                          width: 'auto', padding: '4px 8px', fontSize: 11, borderRadius: 999, display: 'flex',
-                          alignItems: 'center', gap: 5, border: '1px solid rgba(160,195,255,0.18)',
-                        }}>
-                          {castleLabel(c)} — پایگاهِ دوم
-                          <button type="button" aria-label={`پس‌گرفتن ${c}`}
-                                  disabled={removeCastleBusyKey === `${p.tg_id}:${c}`}
-                                  onClick={() => removeCastle(p.tg_id, c)}
-                                  style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
-                            <Close s={11} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="clan-actions">
-                    <button className="btn ghost clan-action clan-action--delete"
-                            disabled={unassignBusyId === p.tg_id} onClick={() => setRetireDialog({ player:p, action:"delete" })}>
-                      حذف بازیکن
-                    </button>
-                    <button className="btn ghost clan-action clan-action--transfer" disabled={p.is_dead} onClick={() => toggleReassign(p.tg_id)}>
-                      انتقال به خاندان دیگر
-                    </button>
-                    <button className="btn ghost clan-action clan-action--add" disabled={p.is_dead} onClick={() => toggleAddCastle(p.tg_id)}>
-                      افزودن قلعه
-                    </button>
-                    {!p.is_dead && <button className="btn ghost clan-action clan-action--swap" onClick={() => setSwapDraft({first_id:p.tg_id,first_castle:p.castle,second_id:'',second_castle:''})}>جابجایی قلعه‌ها</button>}
-                    {!p.is_dead && <button className="btn ghost clan-action clan-action--death" onClick={() => setRetireDialog({player:p,action:'death'})}>مرگ کاراکتر</button>}
-                  </div>
-                  {reassignOpenId === p.tg_id && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
-                      <label className="f" style={{ marginTop: 0 }}>اقلیم (خاندان) تازه</label>
-                      <select value={regionId} onChange={e => {
-                        setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
-                        setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
-                      }}>
-                        {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
-                      </select>
-                      <label className="f">قلعهٔ تازه</label>
-                      <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
-                        <option value="" disabled>انتخاب کن...</option>
-                        {castleOptions.map(c => <option key={c.n} value={c.n}>{castleLabel(c.n)}{c.port ? ' ⚓ بندر' : ''}</option>)}
-                      </select>
-                      <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
-                        {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'انتقال'}
-                      </button>
-                    </div>
-                  )}
-                  {addCastleOpenId === p.tg_id && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
-                      <div className="page-sub" style={{ margin: '0 0 8px' }}>
-                        قلعهٔ اضافه — پایگاهِ دومِ کاملِ این بازیکن؛ از هر اقلیمی می‌تونه باشه. اگه الان دستِ بازیکنِ
-                        دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، با ساختمان‌هایش منتقل می‌شود؛ فقط در حالت فتح، آمار فتح و پیروزی اضافه می‌شود.
-                      </div>
-                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker mapData={mapData} value={addCastleValue} onChange={setAddCastleValue} max={1} allowOccupied excludedCastles={[p.castle, ...(p.castles || [])].filter(Boolean)} />
-                      <button className="btn" style={{ marginTop: 14 }} disabled={addCastleBusyId === p.tg_id} onClick={() => addCastle(p.tg_id)}>
-                        {addCastleBusyId === p.tg_id ? 'در حال ثبت...' : 'افزودن'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {visibleRoster.length > rosterLimit && <button className="btn ghost" onClick={() => setRosterLimit(n => n + 25)}>نمایش ۲۵ خاندان بعدی</button>}
-          </div>
-        </>
-      )}
-
-      {tab === 'war' && (
-        <>
-          <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ">
-            {[
-              { key: 'campaigns', label: 'لشکرکشی‌ها' },
-              { key: 'ambushes', label: `کمین‌ها${ambushesList?.filter(a => a.status === 'pending_score').length ? ` (${ambushesList.filter(a => a.status === 'pending_score').length.toLocaleString('fa-IR')})` : ''}` },
-              { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
-            ].map(t => (
-              <button type="button" key={t.key} role="tab" aria-selected={warSubTab === t.key}
-                   className={`rbtn tab ${warSubTab === t.key ? 'on' : ''}`}
-                   onClick={() => { haptic(); setWarSubTab(t.key); }}>{t.label}</button>
-            ))}
-          </div>
-
-          {warSubTab === 'campaigns' && (
-          <div className="up u2">
-            <div className="card" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                  پنجرهٔ لشکرکشی: {warWindow ? (warWindow.open ? 'باز' : 'بسته') : '...'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 4 }}>
-                  وقتی بسته باشد هیچ بازیکنی نمی‌تواند فرمان گسیل تازه بدهد؛ لشکرهای در راه دست‌نخورده می‌مانند
-                </div>
-              </div>
-              {isOwner && <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
-                      disabled={!warWindow || warWindowBusy} onClick={toggleWarWindow}>
-                {warWindowBusy ? '...' : warWindow?.open ? 'بستن' : 'باز کردن'}
-              </button>}
-            </div>
-            {(!campaignsInfo || campaignsInfo.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
-            )}
-            <input aria-label="جست‌وجوی لشکرکشی" placeholder="نام لشکر، فرمانده، بازیکن یا محل…" value={armySearch} onChange={e=>setArmySearch(e.target.value)}/>
-            <AdminFormations toast={toast} canManage={isFull} query={armySearch} onChanged={()=>{loadCampaigns();loadBattles();}}/>
-            {campaignsInfo && campaignsInfo.filter(s=>!s.merge_group_id&&`${s.player} ${s.name} ${s.from} ${s.to}`.toLowerCase().includes(armySearch.toLowerCase())).map(s => (
-              <div className="card" key={s.id} style={{ marginBottom: 10 }}>
-                <div className="res">
-                  <div className="ic"><Shield s={16} /></div>
-                  <div className="n">
-                    {s.player} — {s.name}
-                    <small>
-                      {s.op_name} · {s.from} ← {s.to} · {s.gold_cost.toLocaleString('fa-IR')} طلا ·{' '}
-                      {s.men_committed.toLocaleString('fa-IR')} نفر · توان نیروها {(s.power == null ? 'ثبت نشده' : Number(s.power).toLocaleString('fa-IR'))}{s.power_calculated ? ' (محاسبه‌شده)' : ''} ·{' '}
-                      {s.food_per_day.toLocaleString('fa-IR')} غله/روز ·{' '}
-                      {s.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر
-                    </small>
-                  </div>
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
-                  توان ادوات: {Number(s.equipment_power || 0).toLocaleString('fa-IR')} · نیروها: {s.troops.length ? s.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
-                </div>
-                <div className="notice-guide" style={{marginBottom:10}}><strong>دفاع قلعهٔ مقصد · وضعیت فعلی</strong><span>{s.defense_infrastructure_source === 'field' ? 'درگیری در مسیر؛ دفاع قلعه کاربرد ندارد' : s.defense_infrastructure_current?.length ? s.defense_infrastructure_current.map(x => `${x.name} سطح ${Number(x.level).toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 11, color: 'var(--low)' }}>
-                    {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
-                  </div>
-                  {s.active && isFull && <AdminArmyRelocation army={s} toast={toast} onMoved={()=>{loadCampaigns();loadBattles();}}/>}
-                  {s.active && isFull && <button className="btn ghost" onClick={()=>destroyCampaign(s.id)}>انهدام کامل</button>}
-                  {s.active && isFull && (
-                    <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
-                            disabled={disbandBusyId === s.id} onClick={() => disbandCampaign(s.id)}>
-                      {disbandBusyId === s.id ? 'در حال انحلال...' : 'منحل کن'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          )}
-
-          {warSubTab === 'ambushes' && <div className="up u2">
-            <div className="page-sub" style={{ marginBottom: 12 }}>ابتدا امتیاز کمین با امتیاز رول پیش‌قراولِ صاحب لشکر مقایسه می‌شود. کمین فقط با امتیاز بیشتر موفق است؛ سپس ضریب، تلفات دشمن و امتیاز کمین، تلفات کمین‌گذار را تعیین می‌کند. ویرایش و حذف فقط برای ادمین کامل و اصلی است.</div>
-            {ambushesList === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
-            {ambushesList && ambushesList.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی ثبت نشده</div>}
-            {(ambushesList || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 10 }}>
-              <div className="res"><div className="ic"><Eye s={16} /></div><div className="n">{a.player}<small>{castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)} · {a.men_committed.toLocaleString('fa-IR')} نفر</small></div></div>
-              {isFull && ['pending_score', 'active'].includes(a.status) ? <LimitedText limitKind="scenario_words" value={ambushScenarios[a.id] ?? a.scenario} onChange={e => setAmbushScenarios(p => ({ ...p, [a.id]: e.target.value }))} style={{ margin: '10px 0' }} /> : <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>}
-              <div style={{ fontSize: 11.5, marginBottom: 8 }}>نیروها: {a.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ')}</div>
-              {isFull && ['pending_score', 'active'].includes(a.status) ? <div className="grid2">
-                <div><label className="f" style={{ marginTop: 0 }}>ضریب تلفات دشمن</label><input type="number" min="0" max="10" step="0.1" placeholder="۰ تا ۱۰" value={ambushScores[a.id] ?? a.coefficient ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
-                <div><label className="f" style={{ marginTop: 0 }}>امتیاز کمین</label><input type="number" min="0" max="100" placeholder="۰ تا ۱۰۰" value={ambushQualityScores[a.id] ?? a.ambush_score ?? ''} onChange={e => setAmbushQualityScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
-                <button className="btn" disabled={ambushBusyId === a.id} onClick={() => scoreAmbush(a.id)}>{a.status === 'active' ? 'ذخیرهٔ تغییرات' : 'ثبت و فعال‌سازی'}</button>
-                <button className="btn ghost" style={{ color: 'var(--danger)' }} disabled={ambushBusyId === a.id} onClick={() => deleteAmbush(a.id)}>حذف کمین</button>
-              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : a.status === 'thwarted' ? 'خنثی‌شده توسط پیش‌قراول' : a.status === 'admin_deleted' ? 'حذف‌شده توسط ادمین' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')} · امتیاز {Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}{a.scout_score != null ? ` · پیش‌قراول ${Number(a.scout_score).toLocaleString('fa-IR')}` : ''}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name || 'لشکر هدف'}` : ''}{a.ambusher_losses != null ? ` · ${a.ambusher_losses.toLocaleString('fa-IR')} تلفات کمین‌گذار` : ''}</span></div>}
-            </div>)}
-          </div>}
-
-          {warSubTab === 'battles' && (
-          <div className="up u2">
-            <div className="page-sub" style={{ marginBottom: 12 }}>هر درگیری یک پرونده دارد؛ رول دو طرف، نیروها و ثبت نتیجه همه همین‌جاست. حتی اگر هیچ‌کس رول نداده باشد می‌توانی نتیجه را ثبت کنی.</div>
-            {battles === null && <div className="loading">در حال بارگذاری نبردها...</div>}
-            {battles && battles.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>نبرد بازی نداریم</div>}
-            {battles && battles.map(b => {
-              return <AdminDossier key={b.campaign_id} kind="battle" title={b.name || 'پروندهٔ نبرد'} date={b.started_at_real || b.started_at} place={castleLabel(b.location)} people={[b.attacker_name, b.defender_name, ...(b.parties || []).map(p => p.player_name), ...(b.attacker_armies || []).map(a => a.player_name), ...(b.defender_armies || []).map(a => a.player_name)]}>
-                <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.multi_party ? 'نبرد چندطرفه' : `${b.attacker_name} در برابر ${b.defender_name}`} · {castleLabel(b.location)}</small></div></div>
-                <BattleExport battle={b} toast={toast} />
-                {b.multi_party && <div className="notice-guide" style={{ marginTop: 10 }}><strong>طرف‌های نبرد و پیمان‌ها</strong><span>{b.parties.map(p => `${p.player_name} — درگیر با: ${p.hostile_to.map(id => b.parties.find(x => x.tg_id === id)?.player_name || id).join('، ') || 'ندارد'}؛ پیمان صلح با: ${p.peace_with.map(id => b.parties.find(x => x.tg_id === id)?.player_name || id).join('، ') || 'ندارد'}`).join('\n')}</span></div>}
-
-                <div className="notice-guide" style={{ marginTop: 10 }}><strong>زمان نبرد و ورود نیروها</strong><span>شروع: {battleTime(b.started_at_real, b.started_at)}{(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).length ? `\n${(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).map(j => `${j.player_name} · ${b.multi_party ? 'طرف مستقل' : j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)} | ${arrivalDelay(b, j)}`).join('\n')}` : ''}</span></div>
-                <div className="notice-guide" style={{ marginTop: 10 }}><strong>رول‌های جنگ</strong><span>{b.rolls.length ? b.rolls.map(r => `${r.player}: ${r.text}`).join('\n') : 'هیچ‌کدام از طرفین هنوز رول نفرستاده‌اند؛ داوری همچنان باز است.'}</span></div>
-                <div className="sect" style={{ margin: '14px 0 7px' }}>نیروها و تلفات</div>
-                <div className="notice-guide" style={{ marginBottom: 10 }}><strong>زیرساخت‌های دفاعی قلعه · {b.defense_infrastructure_source === 'snapshot' ? 'ثبت‌شده در آغاز نبرد' : 'وضعیت فعلی'}</strong><span>{b.defense_infrastructure_source === 'field' ? 'این نبرد در مسیر است؛ زیرساخت قلعه در آن کاربرد ندارد' : b.defense_infrastructure?.length ? b.defense_infrastructure.map(x => `${x.name} سطح ${x.level.toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>
-                {b.defense_infrastructure_source === 'snapshot' && JSON.stringify(b.defense_infrastructure) !== JSON.stringify(b.defense_infrastructure_current) && <div className="notice-guide" style={{marginBottom:10}}><strong>وضعیت فعلی دفاع قلعه</strong><span>{b.defense_infrastructure_current?.length ? b.defense_infrastructure_current.map(x => `${x.name} سطح ${Number(x.level).toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>}
-                {(b.attacker_armies || [b.attacker_army]).map((army, ai) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--danger)' }}>{army.player_name || `مهاجم ${ai + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
-                  <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
-                  {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
-                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
-                  {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attackers?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackers: { ...(p[b.campaign_id]?.attackers || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackers?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
-                  {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.attackerEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackerEquipments: { ...(p[b.campaign_id]?.attackerEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackerEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
-                </div>)}
-                {(b.defender_armies || []).map((army, di) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--az2)' }}>{army.player_name || b.defender_name || `مدافع ${di + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
-                  <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
-                  {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
-                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
-                  {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
-                  {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
-                </div>)}
-                {b.op_type === 'naval_raid' && b.defender_tg_id && !b.location?.startsWith('مسیر ') && <details className="naval-loot-panel">
-                  <summary>غنیمت دریایی <span>{b.loot_applied ? 'ثبت شده' : 'انتقال منابع مدافع'}</span></summary>
-                  <p className="page-sub">برداشت از خزانهٔ مشترک {b.defender_name} و واریز به مهاجم؛ هر نبرد یک بار. این انتقال مستقل از ثبت تلفات انجام می‌شود.</p>
-                  {!b.loot_applied && <>
-                    <label className="f">دریافت‌کنندهٔ غنیمت</label>
-                    <select value={battleLoot[b.campaign_id]?.recipient || b.attacker_tg_id} onChange={e => setBattleLoot(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], recipient: Number(e.target.value)}}))}>
-                      {[{tg_id: b.attacker_tg_id, player_name: b.attacker_name}, ...(b.attacker_armies || [])].filter((a,i,rows) => rows.findIndex(x => x.tg_id === a.tg_id) === i).map(a => <option key={a.tg_id} value={a.tg_id}>{a.player_name}</option>)}
-                    </select>
-                    <div className="grid2">{Object.entries({gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غلات', wine: 'شراب', ...WEAPON_NAMES}).map(([key,name]) => <label className="f" key={key}>{name}<small className="page-sub"> · موجودی {Number(b.loot_resources?.[key] || 0).toLocaleString('fa-IR')}</small><input type="number" min="0" step="1" max={b.loot_resources?.[key] || 0} value={battleLoot[b.campaign_id]?.amounts?.[key] ?? ''} placeholder="۰" onChange={e => setBattleLoot(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], amounts: {...p[b.campaign_id]?.amounts, [key]: Math.max(0, Math.floor(Number(e.target.value) || 0))}}}))} /></label>)}</div>
-                    <button className="btn ghost" disabled={lootBusy === b.campaign_id} onClick={async () => {if (!window.confirm('منابع انتخاب‌شده از مدافع به مهاجم منتقل شود؟')) return; setLootBusy(b.campaign_id); try {await api.adminNavalLoot(b.campaign_id, battleLoot[b.campaign_id]?.recipient || b.attacker_tg_id, battleLoot[b.campaign_id]?.amounts || {}); toast('غنیمت منتقل شد'); loadBattles();} catch(e) {toast(e.message);} finally {setLootBusy(null);}}}>{lootBusy === b.campaign_id ? 'در حال انتقال…' : 'ثبت و انتقال غنیمت'}</button>
-                  </>}
-                </details>}
-                <label className="f">برنده‌ها</label>
-                <div className="page-sub" style={{ margin: '0 0 8px' }}>می‌توانی هر تعداد لرد را از هر دو سمت انتخاب کنی؛ پاداش هر برنده براساس نقش واقعی او در نبرد محاسبه می‌شود.</div>
-                <div className="grid2">{[
-                  ...(b.attacker_armies || []).map(a => [a.tg_id, a.player_name, 'attacker']),
-                  ...(b.defender_armies || []).map(a => [a.tg_id, a.player_name, 'defender']),
-                  [b.defender_tg_id, b.defender_name, 'defender'],
-                ].filter(x => x[0]).filter((x,i,a) => a.findIndex(y => y[0] === x[0]) === i).map(([id,name,side]) => {
-                  const selected = (roleplayWinners[b.campaign_id] || []).includes(id);
-                  return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{b.multi_party ? 'طرف مستقل' : side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
-                })}</div>
-                <details style={{ marginTop: 10 }}>
-                  <summary>مقصد عقب‌نشینی بازنده‌های مستقر در مبدأ</summary>
-                  <p className="page-sub">اگر مبدأ لشکر همان محل نبرد است، نام دقیق قلعهٔ مقصد را تعیین کن. بقیهٔ بازنده‌ها به مبدأ قبلی برمی‌گردند.</p>
-                  {[...(b.attacker_armies || []), ...(b.defender_armies || [])].filter((a,i,all) => a.tg_id && all.findIndex(x => x.tg_id === a.tg_id) === i && !(roleplayWinners[b.campaign_id] || []).includes(a.tg_id)).map(a => <label className="f" key={a.tg_id}>{a.player_name}<input value={retreatDestinations[b.campaign_id]?.[a.tg_id] || ''} placeholder="نام دقیق قلعهٔ مقصد" onChange={e => setRetreatDestinations(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], [a.tg_id]: e.target.value}}))} /></label>)}
-                </details>
-                <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
-                <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setBattleResultImages(p => ({ ...p, [b.campaign_id]: image })), toast)} />
-                <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
-                <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
-                <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
-                <button className="btn ghost" disabled={roleplayBusyId===b.campaign_id} onClick={()=>dismissBattle(b,true)}>بستن نبرد و استقرار همه در محل</button>
-              </AdminDossier>;
-            })}
-          </div>
-          )}
-
-
-        </>
-      )}
-
-      {tab === 'security_archive' && (
-          <div className="up u2">
-            <div className="page-sub" style={{ marginBottom: 10 }}>
-              رول‌های دفاعی و امنیتی نتیجه ندارند و همیشه در این آرشیو می‌مانند. با نام بازیکن یا بخشی از متن رول جست‌وجو کن.
-            </div>
-            <div className="card" style={{ marginBottom: 12 }}>
-              <label className="f" style={{ marginTop: 0 }}>بازیکن (اختیاری)</label>
-              <PlayerPicker value={securityPlayer} onChange={setSecurityPlayer} single placeholder="همهٔ بازیکن‌ها" />
-              <label className="f">نام بازیکن یا عبارت داخل رول</label>
-              <input value={securityQuery} onChange={e => setSecurityQuery(e.target.value)}
-                     onKeyDown={e => { if (e.key === 'Enter') loadSecurityRoleplays(); }}
-                     placeholder="مثلاً نگهبانان دروازه یا نام لرد..." />
-              <div style={{ display: 'flex', gap: 7, marginTop: 10 }}>
-                <button className="btn" disabled={securitySearching} onClick={loadSecurityRoleplays}>
-                  {securitySearching ? 'در حال جست‌وجو...' : 'جست‌وجو در آرشیو'}
-                </button>
-                <button className="btn ghost" style={{ width: 'auto' }} onClick={() => {
-                  setSecurityQuery(''); setSecurityPlayer([]); setSecuritySearching(true);
-                  api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(e => toast(e.message)).finally(() => setSecuritySearching(false));
-                }}>پاک‌کردن فیلتر</button>
-              </div>
-            </div>
-            {securityRoleplays === null && <div className="loading">در حال بارگذاری آرشیو...</div>}
-            {securityRoleplays && securityRoleplays.length === 0 && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>رول امنیتی‌ای با این مشخصات پیدا نشد</div>
-            )}
-            {securityRoleplays && securityRoleplays.map(r => (
-              <div className="card" key={r.id} style={{ marginBottom: 10 }}>
-                <div className="res"><div className="ic"><Shield s={16} /></div><div className="n">{r.player}<small>{castleLabel(r.castle)} · {new Date(r.created_at).toLocaleString('fa-IR')}</small></div></div>
-                <div style={{ marginTop: 10, whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.9, color: 'var(--mid)' }}>{r.text}</div>
-                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {roleplayScoreMax.toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id, r.category)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
-              </div>
-            ))}
-          </div>
-          )}
-
-      {tab === 'roleplays' && (
-          <>
-          <div className="page-sub up u3">
-            سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
-          </div>
-          <div className="card up u3 roleplay-cap-card"><div><b>سقف امتیاز رول‌ها</b><small>این سقف برای تمام دسته‌هاست و همهٔ ادمین‌ها می‌توانند آن را تنظیم کنند.</small></div><input type="number" min="1" value={roleplayScoreMax} onChange={e=>setRoleplayScoreMax(e.target.value)} /><button className="btn ghost" disabled={roleplayScoreSettingsBusy} onClick={saveRoleplayScoreMax}>ذخیره سقف</button></div>
-          <div className="tabs up u3 admin-roleplay-categories" role="tablist" style={{ marginBottom: 10 }}>
-            {[['all', 'همه'], ...Object.entries(ROLEPLAY_CATEGORIES).filter(([key]) => key !== 'security')].map(([key, label]) => {
-              const count = (roleplayPending || []).filter(r => key === 'all' || r.category === key).length;
-              return <button type="button" key={key} className={`rbtn tab ${roleplayCategoryTab === key ? 'on' : ''}`}
-                onClick={() => setRoleplayCategoryTab(key)}>{label} ({count.toLocaleString('fa-IR')})</button>;
-            })}
-          </div>
-          <div className="up u3">
-            {(!roleplayPending || roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رول بررسی‌نشده‌ای نیست</div>
-            )}
-            {roleplayPending && roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).map(r => (
-              <AdminDossier key={r.id} kind="roleplay" title={r.title || r.category_name || 'پروندهٔ رول'} date={r.created_at_real || r.created_at} place={castleLabel(r.war?.target_castle || r.castle)} people={[r.player, r.target_player_name, r.sibling?.player, r.war?.attacker_name, r.war?.defender_name]}>
-                <div className="res">
-                  <div className="ic"><Scroll s={16} /></div>
-                  <div className="n">
-                    {r.player}
-                    <small>{r.category_name} · {castleLabel(r.castle)}</small>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
-                <div className="roleplay-score-box"><label>{r.category === 'scout' ? 'امتیاز آمادگی پیش‌قراول' : 'امتیاز این رول'} <small>از {(r.category === 'scout' ? 100 : Number(roleplayScoreMax)).toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={r.category === 'scout' ? 100 : roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id, r.category)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
-                {r.category === 'scout' && <div className="page-sub" style={{ margin: '-4px 2px 10px' }}>این امتیاز به جدول امتیازات اضافه نمی‌شود و فقط هنگام برخورد با کمین مقایسه خواهد شد.</div>}
-                {r.category === 'sabotage' && <div className="notice-guide" style={{ marginBottom: 10 }}><strong>هدف خرابکاری: {r.target_player_name || 'نامشخص'}</strong><span>نتیجه و تغییرات هر دو طرف را از همین پرونده ثبت کن.</span></div>}
-                {['economy', 'sabotage'].includes(r.category) && [
-                  ['actor', r.actor_state, r.category === 'economy' ? 'وضعیت اقتصادی صاحب رول' : 'وضعیت فرستندهٔ خرابکاری'],
-                  ...(r.category === 'sabotage' ? [['target', r.target_state, 'وضعیت لرد هدف']] : []),
-                ].map(([scope, state, label]) => state && (
-                  <div key={`${r.id}-${scope}`} style={{ margin: '10px 0', padding: 11, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.02)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>{label} — {state.name}</div>
-                    <div className="page-sub" style={{ margin: '0 0 9px' }}>موجودی فعلی کنار هر منبع نوشته شده؛ فقط مقدار تغییر را وارد کن. مثبت اضافه و منفی کم می‌کند.</div>
-                    <div className="grid2">
-                      {PLAYER_RES.map(({ key, label: resourceLabel }) => (
-                        <div key={`${scope}-${key}`}>
-                          <label className="f" style={{ marginTop: 6 }}>{resourceLabel} · فعلی {(state.resources?.[key] || 0).toLocaleString('fa-IR')}</label>
-                          <input type="number" placeholder="تغییر؛ مثلاً ۱۰۰ یا ۵۰-"
-                            value={roleplayAdjustments[r.id]?.[`${scope}Resources`]?.[key] ?? ''}
-                            onChange={e => setRoleplayAdjustments(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), [`${scope}Resources`]: { ...(prev[r.id]?.[`${scope}Resources`] || {}), [key]: e.target.value } } }))} />
-                        </div>
-                      ))}
-                    </div>
-                    <label className="f">محبوبیت · فعلی {state.popularity.toLocaleString('fa-IR')} از ۱۰۰</label>
-                    <input type="number" min="-100" max="100" placeholder="تغییر محبوبیت؛ مثلاً ۵ یا ۳-"
-                      value={roleplayAdjustments[r.id]?.[`${scope}Popularity`] ?? ''}
-                      onChange={e => setRoleplayAdjustments(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), [`${scope}Popularity`]: e.target.value } }))} />
-                  </div>
-                ))}
-                {r.category === 'war' && (
-                  <div className="notice-guide" style={{ marginBottom: 10 }}>
-                    <strong>داوری این رول در پروندهٔ نبرد انجام می‌شود</strong>
-                    <span>برای جلوگیری از دو نتیجه و تلفات ناسازگار، نتیجهٔ جنگ از تب رول‌ها ثبت نمی‌شود.</span>
-                    <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => { setTab('war'); setWarSubTab('battles'); }}>رفتن به پرونده‌های نبرد</button>
-                  </div>
-                )}
-                {r.category === 'war' && (
-                  r.sibling ? (
-                    <div style={{ margin: '0 0 10px', padding: 10, borderRadius: 12, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(96,178,255,0.2)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--az2)', marginBottom: 4 }}>سناریوی طرف مقابل ({r.sibling.player})</div>
-                      <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--mid)' }}>{r.sibling.text}</div>
-                    </div>
-                  ) : (
-                    <div style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--low)' }}>طرف مقابل هنوز سناریویش را نفرستاده — نتیجه برای هر دو طرف فرستاده می‌شود</div>
-                  )
-                )}
-                {r.category === 'war' && r.war && (
-                  <div style={{ display: 'none' }} aria-hidden="true">
-                    <div style={{ margin: '10px 0', padding: 10, borderRadius: 12, border: '1px solid var(--line)' }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>نیروهای درگیر و ثبت تلفات</div>
-                      <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 8 }}>
-                        عددی که برای هر نیرو می‌زنی از همان لشکر کم می‌شود. عدد را خالی یا صفر بگذار یعنی آن نیرو تلفاتی نداشته.
-                      </div>
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--danger)', marginBottom: 6 }}>
-                        مهاجم — {r.war.attacker_name} · {(r.war.attacker_army?.men || 0).toLocaleString('fa-IR')} نفر
-                      </div>
-                      {(r.war.attacker_army?.troops || []).map(t => (
-                        <div className="troop" key={`a-${t.id}`}>
-                          <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} نفر حاضر</small></div>
-                          <input type="number" min="0" max={t.count} placeholder="تلفات"
-                            value={roleplayLosses[r.id]?.attacker?.[t.id] ?? ''}
-                            onChange={e => setRoleplayLosses(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), attacker: { ...(prev[r.id]?.attacker || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} />
-                        </div>
-                      ))}
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--az2)', margin: '10px 0 6px' }}>
-                        مدافع — {r.war.defender_name} · {(r.war.defender_armies || []).reduce((s, a) => s + (a.men || 0), 0).toLocaleString('fa-IR')} نفر
-                      </div>
-                      {Object.values((r.war.defender_armies || []).flatMap(a => a.troops || []).reduce((m, t) => {
-                        m[t.id] = m[t.id] ? { ...m[t.id], count: m[t.id].count + t.count } : { ...t }; return m;
-                      }, {})).map(t => (
-                        <div className="troop" key={`d-${t.id}`}>
-                          <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} نفر حاضر در دفاع</small></div>
-                          <input type="number" min="0" max={t.count} placeholder="تلفات"
-                            value={roleplayLosses[r.id]?.defender?.[t.id] ?? ''}
-                            onChange={e => setRoleplayLosses(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), defender: { ...(prev[r.id]?.defender || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} />
-                        </div>
-                      ))}
-                      {(!r.war.defender_armies || r.war.defender_armies.length === 0) && (
-                        <div style={{ fontSize: 11, color: 'var(--low)' }}>هیچ لشکر دفاعیِ رسیده‌ای در این قلعه ثبت نشده.</div>
-                      )}
-                    </div>
-                    <label className="f" style={{ marginTop: 0 }}>برندهٔ نبرد</label>
-                    <div className="grid2" role="radiogroup" aria-label="برندهٔ نبرد">
-                      <button type="button" role="radio" aria-checked={roleplayWinners[r.id] === r.war.attacker_tg_id}
-                              className={`rbtn pick ${roleplayWinners[r.id] === r.war.attacker_tg_id ? 'sel' : ''}`}
-                              onClick={() => setRoleplayWinners(prev => ({ ...prev, [r.id]: r.war.attacker_tg_id }))}>
-                        <div className="n">{r.war.attacker_name}</div>
-                        <div className="c">مهاجم — پیروزی در حمله</div>
-                      </button>
-                      <button type="button" role="radio" disabled={!r.war.defender_tg_id}
-                              aria-checked={roleplayWinners[r.id] === r.war.defender_tg_id}
-                              className={`rbtn pick ${roleplayWinners[r.id] === r.war.defender_tg_id ? 'sel' : ''}`}
-                              onClick={() => r.war.defender_tg_id && setRoleplayWinners(prev => ({ ...prev, [r.id]: r.war.defender_tg_id }))}>
-                        <div className="n">{r.war.defender_name}</div>
-                        <div className="c">مدافع — دفاع موفق از {castleLabel(r.war.target_castle)}</div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <div style={{ display: ['war', 'scout'].includes(r.category) ? 'none' : 'block' }}>
-                <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
-                <textarea value={roleplayResults[r.id] ?? ''}
-                          onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
-                          placeholder="نتیجهٔ این رول چه شد..." />
-                {r.category === 'sabotage' ? <div className="page-sub">نتیجهٔ خرابکاری محرمانه است و فقط برای فرستنده می‌رود؛ هدف و سایر بازیکنان اعلان دریافت نمی‌کنند.</div> : <>
-                <label className="f">این رول بین این لرد و چه لردهای دیگری بوده؟ (اختیاری)</label>
-                <PlayerPicker value={roleplayOtherLords[r.id] || []}
-                              onChange={(v) => setRoleplayOtherLords(prev => ({ ...prev, [r.id]: v }))} />
-                <label className="f">این نتیجه برای چه کسانی نمایش داده شود؟</label>
-                <div className="grid2" role="radiogroup" aria-label="نمایش نتیجه">
-                  <button type="button" role="radio" aria-checked={(roleplayVisibility[r.id] || 'participants') === 'participants'}
-                          className={`rbtn pick ${(roleplayVisibility[r.id] || 'participants') === 'participants' ? 'sel' : ''}`}
-                          onClick={() => setRoleplayVisibility(prev => ({ ...prev, [r.id]: 'participants' }))}>
-                    <div className="n">شرکت‌کننده‌ها</div>
-                    <div className="c">{r.category === 'war' ? 'هر دو طرف نبرد' : 'فقط همین بازیکن'}</div>
-                  </button>
-                  <button type="button" role="radio" aria-checked={roleplayVisibility[r.id] === 'all'}
-                          className={`rbtn pick ${roleplayVisibility[r.id] === 'all' ? 'sel' : ''}`}
-                          onClick={() => setRoleplayVisibility(prev => ({ ...prev, [r.id]: 'all' }))}>
-                    <div className="n">همهٔ بازیکنان</div>
-                    <div className="c">اعلامیهٔ عمومی</div>
-                  </button>
-                </div>
-                </>}
-                <button className="btn" style={{ marginTop: 14 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
-                  {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
-                </button>
-                </div>
-              </AdminDossier>
-            ))}
-          </div>
-          </>
-          )}
-      {tab === 'character_travel' && isFull && <AdminCharacterTravel toast={toast}/> }
-      {tab === 'profiles' && (
-        <>
-          <div className="sect up u2">مشخصات بازیکنان</div>
-          {isFull && <AdminCharacterTravel toast={toast} playersOnly onSelect={p=>setProfileTarget([p])}/>}
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>این ابزار برای اصلاح نام، بک‌استوری یا عکس نامناسب است و قلعه، منابع و امتیاز بازیکن را تغییر نمی‌دهد.</div>
-          <div className="card up u2">
-            <label className="f" style={{marginTop:0}}>بازیکن</label><PlayerPicker value={profileTarget} onChange={setProfileTarget} single placeholder="نام بازیکن یا قلعه را جست‌وجو کن..." />
-            {profileTarget.length > 0 && !profileDraft && <div className="loading">در حال دریافت مشخصات...</div>}
-            {profileDraft && <>
-              <label className="f">نام نمایشی</label><input maxLength="40" value={profileDraft.name || ''} onChange={e=>setProfileDraft(p=>({...p,name:e.target.value}))} />
-              <label className="f">بک‌استوری <small>۴۰ تا ۲۰۰۰ نویسه</small></label><textarea rows="7" maxLength="2000" value={profileDraft.backstory || ''} onChange={e=>setProfileDraft(p=>({...p,backstory:e.target.value}))} />
-              <label className="f">عکس پروفایل <small>اختیاری، حداکثر ۲٫۵ مگابایت</small></label>
-              {profileDraft.profile_image && <img src={profileDraft.profile_image} alt="پیش‌نمایش پروفایل" className="admin-profile-preview" />}
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readAdminImage(e.target.files?.[0], image=>setProfileDraft(p=>({...p,profile_image:image})), toast)} />
-              {profileDraft.profile_image && <button className="btn ghost" style={{marginTop:8}} onClick={()=>setProfileDraft(p=>({...p,profile_image:null}))}>حذف عکس</button>}
-              <label className="f">پرچم کاراکتر <small>حداکثر ۲۵۶ کیلوبایت</small></label>
-              {profileDraft.flag_image&&<img src={profileDraft.flag_image} alt="پرچم بازیکن" className="admin-profile-preview" style={{objectFit:'contain'}}/>}
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file?.size>256*1024){toast('حداکثر حجم پرچم ۲۵۶ کیلوبایت است');return;}readAdminImage(file,flag_image=>setProfileDraft(p=>({...p,flag_image})),toast);}}/>
-              {profileDraft.flag_image&&<button className="btn ghost" onClick={()=>setProfileDraft(p=>({...p,flag_image:null}))}>حذف پرچم</button>}
-              <button className="btn" style={{marginTop:14}} disabled={profileBusy} onClick={savePlayerProfile}>{profileBusy?'در حال ذخیره...':'ذخیره مشخصات بازیکن'}</button>
-            </>}
-          </div>
-        </>
-      )}
-
-      {tab === 'alliances' && (
-        <>
-          <div className="sect up u2">اتحادهای بازی</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            اعضای هر پیمان، دعوت‌های در انتظار و اعضای خارج‌شده؛ اخراج با غرامت یا انحلال کامل بدون غرامت
-          </div>
-          <div className="card up u2"><label className="f">جست‌وجوی پیمان</label><input value={allianceSearch} onChange={e=>setAllianceSearch(e.target.value)} placeholder="نام لرد/لیدی، آیدی عددی، @username یا نام پیمان" /><div className="page-sub">{filteredAlliances.length.toLocaleString('fa-IR')} پیمان</div></div>
-          <div className="up u2">
-            {(alliancesList && filteredAlliances.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>پیمانی مطابق جست‌وجو پیدا نشد</div>
-            )}
-            {filteredAlliances.map(a => (
-              <div className="card" key={a.id} style={{ marginBottom: 10 }}>
-                <div className="res">
-                  <div className="ic"><Scroll s={16} /></div>
-                  <div className="n">
-                    {a.name || `${a.from} ← ${a.to}`}
-                    <small>{a.type_name}{a.name ? ` · «${a.name}»` : ''} · {a.public ? 'عمومی' : 'خصوصی'}</small>
-                  </div>
-                </div>
-                {a.members?.map(m => <div className="res" key={m.tg_id} style={{ flexWrap: 'wrap', gap: 8 }}>
-                  <div className="n">{m.current_name || m.name}<small>{m.tg_id}{m.username ? ` · @${m.username}` : ''} · {m.creator ? 'سازنده · ' : ''}{{accepted: 'عضو', pending: 'منتظر پاسخ', left: 'خارج‌شده', dissolved: 'منحل‌شده', rejected: 'ردشده', cancelled: 'لغوشده'}[m.status] || m.status}</small><small>غرامت خروج/اخراج: {(m.penalty_gold || 0).toLocaleString('fa-IR')} سکه</small></div>
-                  {m.status === 'accepted' && !a.marriage_id && isFull && <button className="rbtn" style={{ color: 'var(--danger)' }} disabled={dissolveBusyId === a.id} onClick={() => expelAlliance(a, m)}>اخراج{m.creator ? ' و انحلال' : ''}</button>}
-                </div>)}
-                {a.marriage_id && <div className="page-sub">پیمان ازدواج؛ مدیریت فسخ از بخش خانواده</div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: 11, color: 'var(--low)' }}>
-                    {{ pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده' }[a.status] || a.status}
-                  </div>
-                  {a.status === 'accepted' && !a.marriage_id && isFull && (
-                    <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
-                            disabled={dissolveBusyId === a.id} onClick={() => dissolveAlliance(a.id)}>
-                      {dissolveBusyId === a.id ? 'در حال انحلال...' : 'منحل کن'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'character_profiles' && isFull && <AdminCharacterProfiles toast={toast}/>}
-      {tab.startsWith('institution_') && isFull && <AdminInstitutions institution={tab.slice(12)} toast={toast}/>}
-      {tab === 'time_management' && isFull && <AdminTimeManagement toast={toast}/>}
-      {tab === 'season_branding' && isFull && <AdminSeasonBranding/>}
-      {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
-      {tab === 'shared_ips' && isOwner && <AdminSharedIPs toast={toast}/>}
-
-      {tab === 'titles' && (
-        <>
-          <div className="sect up u2">تعیین بالادستی</div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>اقلیم</label>
-            <select value={overlordRegion} onChange={e => setOverlordRegion(e.target.value)}>
-              {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
-            </select>
-            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.overlords?.[overlordRegion]?.name || 'بدون دارنده'}</p>
-            <label className="f">لرد (باید اهل همین اقلیم باشد — معمولاً برندهٔ رای‌گیری)</label>
-            <PlayerPicker value={overlordTarget} onChange={setOverlordTarget} single />
-            <button className="btn" style={{ marginTop: 14 }} onClick={setOverlord}>ثبت بالادستی</button>
-            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام بالادستی پس گرفته شود؟')) return; try { await api.adminSetOverlord(overlordRegion, null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن بالادستی</button>
-          </div>
-
-          <div className="sect up u2">تعیین والی</div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>والی‌نشین</label>
-            <select value={wardenGroup} onChange={e => setWardenGroup(e.target.value)}>
-              {Object.entries(WARDEN_GROUPS).map(([gid, g]) => <option key={gid} value={gid}>{g.name}</option>)}
-            </select>
-            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.wardens?.[wardenGroup]?.name || 'بدون دارنده'}</p>
-            <label className="f">بازیکن فعال؛ بدون شرط مقام یا اقلیم قبلی</label>
-            <PlayerPicker value={wardenTarget} onChange={setWardenTarget} single />
-            <button className="btn" style={{ marginTop: 14 }} onClick={setWarden}>ثبت والی</button>
-            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام والی پس گرفته شود؟')) return; try { await api.adminSetWarden(wardenGroup, null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن والی</button>
-            <p className="page-sub">با ثبت والی، مقام حاکمیتی قبلی او آزاد می‌شود؛ جانشین را از بخش بالادستی تعیین کن.</p>
-          </div>
-
-          <div className="sect up u3">تعیین پادشاه/ملکه</div>
-          <div className="card up u3">
-            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.king?.name || 'بدون دارنده'}</p>
-            <label className="f" style={{ marginTop: 0 }}>بازیکن فعال؛ بدون شرط مقام قبلی</label>
-            <PlayerPicker value={kingTarget} onChange={setKingTarget} single />
-            <button className="btn" style={{ marginTop: 14 }} onClick={setKing}>ثبت پادشاه/ملکه</button>
-            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام پادشاه/ملکه پس گرفته شود؟')) return; try { await api.adminSetKing(null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن پادشاه/ملکه</button>
-            <p className="page-sub">با ثبت پادشاه/ملکه، جایگاه والی قبلی او آزاد می‌شود؛ جانشین را از بخش والی تعیین کن. امتیاز و اختیارات مقام جدید حفظ می‌شود.</p>
-          </div>
-
-          <div className="sect up u3">تعیین عنوان (لقب)</div>
-          <div className="card up u3">
-            <label className="f" style={{ marginTop: 0 }}>لرد</label>
-            <PlayerPicker value={epithetTarget} onChange={setEpithetTarget} single />
-            <label className="f">عنوان تازه</label>
-            <input value={epithetText} onChange={e => setEpithetText(e.target.value)} placeholder="مثلاً: شکنندهٔ زنجیرها" />
-            <button className="btn" style={{ marginTop: 14 }} onClick={setEpithet}>ثبت عنوان</button>
-          </div>
-        </>
-      )}
-
-      {tab === 'item_store' && isFull && <AdminItemStore />}
-      {tab === 'items' && isFull && (
-        <>
-          <div className="sect up u2">ساخت آیتم تازه</div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>نام آیتم</label>
-            <input value={itemName} onChange={e => setItemName(e.target.value)} maxLength={60} placeholder="مثلاً «شمشیر فولاد والریایی»" />
-            <label className="f">تصویر آیتم · اختیاری، حداکثر ۲۵۶ کیلوبایت</label>
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value=''; if(!file)return; if(file.size>256*1024){toast('حجم تصویر باید حداکثر ۲۵۶ کیلوبایت باشد');return;} if(!['image/png','image/jpeg','image/webp'].includes(file.type)){toast('تصویر PNG، JPG یا WebP انتخاب کن');return;} const reader=new FileReader();reader.onload=()=>setItemImage(reader.result);reader.onerror=()=>toast('تصویر خوانده نشد');reader.readAsDataURL(file); }} />
-            {itemImage && <div style={{ marginTop: 12 }}><ItemPicture item={{ image:itemImage, name:itemName, color:itemColor }} large /><button className="btn ghost" onClick={()=>setItemImage(null)}>حذف تصویر</button></div>}
-            <label className="f">نوع</label>
-            <select value={itemType} onChange={e => setItemType(e.target.value)}>
-              {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            <label className="f">رده و رنگ پیش‌فرض</label>
-            <select value={itemColor} onChange={e => setItemColor(e.target.value)}>
-              {Object.entries(ITEM_RARITY_COLORS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </select>
-            {itemType === 'economy' && <>
-              <label className="f">ساختمان با بازده بیشتر (اختیاری)</label>
-              <select value={itemBuilding} onChange={e => setItemBuilding(e.target.value)}>
-                <option value="">بدون اثر تولید</option>
-                {itemBuildings.filter(b => Object.values(b.produces_per_level || {}).some(v => v > 0)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-              {itemBuilding && <><label className="f">افزایش بازده (%)</label><input type="number" min="0.01" max="1000" step="0.01" value={itemYield} onChange={e => setItemYield(e.target.value)} />
-                <p className="page-sub">به تولید روزانهٔ همین ساختمان در همهٔ قلعه‌های بازیکن اضافه می‌شود. درصد چند آیتم با هم جمع می‌شود؛ ظرفیت انبار تغییر نمی‌کند.</p></>}
-            </>}
-            <label className="f">مدت</label>
-            <select value={itemDuration} onChange={e => setItemDuration(e.target.value)}>
-              {Object.entries(ITEM_DURATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-            {itemDuration === 'temporary' && (
-              <>
-                <label className="f">مدت (ساعت)</label>
-                <input type="number" min="1" value={itemDurationHours} onChange={e => setItemDurationHours(e.target.value)} />
-              </>
-            )}
-            <label className="f">توضیح (اختیاری)</label>
-            <textarea value={itemDescription} onChange={e => setItemDescription(e.target.value)} placeholder="این آیتم چه می‌کند..." />
-            <button className="btn" style={{ marginTop: 14 }} disabled={itemBusy} onClick={createItem}>
-              {itemBusy ? 'در حال ساخت...' : 'ساخت آیتم'}
-            </button>
-          </div>
-
-          <div className="sect up u3">آیتم‌های ساخته‌شده</div>
-          <div className="up u3">
-            {(!itemsList || itemsList.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز آیتمی نساخته‌ای</div>
-            )}
-            {itemsList && itemsList.map(it => (
-              <div className="card" key={it.id} style={{ marginBottom: 10 }}>
-                {it.image && <div style={{ marginBottom: 12 }}><ItemPicture item={it} large /></div>}
-                <div className="res">
-                  <div className="ic"><Warehouse s={16} /></div>
-                  <div className="n">
-                    {it.name}
-                    <small>
-                      {it.type_name} · {it.duration_name}{it.duration_hours ? ` (${it.duration_hours.toLocaleString('fa-IR')} ساعت)` : ''} ·{' '}
-                      {it.grant_count.toLocaleString('fa-IR')} بار داده‌شده
-                    </small>
-                  </div>
-                </div>
-                <div style={{ color: ITEM_RARITY_HEX[it.color] }}>{ITEM_RARITY_COLORS[it.color] || 'معمولی'}</div>
-                {it.building_id && <div className="page-sub">{it.building_name}: +{Number(it.yield_percent).toLocaleString('fa-IR')}٪ بازده</div>}
-                {it.description && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0' }}>{it.description}</div>}
-                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => openGrant(it.id)}>
-                    افزودن به یک لرد
-                  </button>
-                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => deleteItem(it.id)}>
-                    حذف آیتم
-                  </button>
-                </div>
-                {grantOpenId === it.id && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
-                    <label className="f" style={{ marginTop: 0 }}>لرد</label>
-                    <PlayerPicker value={grantTarget} onChange={setGrantTarget} single />
-                    <label className="f">میزان خاص‌بودن (رنگ)</label>
-                    <div className="grid2">
-                      {Object.entries(ITEM_RARITY_COLORS).map(([k, v]) => (
-                        <div key={k} className={`pick ${grantColor === k ? 'sel' : ''}`}
-                             style={{ borderColor: grantColor === k ? ITEM_RARITY_HEX[k] : undefined }}
-                             onClick={() => { haptic(); setGrantColor(k); }}>
-                          <div className="n" style={{ color: ITEM_RARITY_HEX[k] }}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <button className="btn" style={{ marginTop: 14 }} disabled={grantBusy} onClick={() => grantItem(it.id)}>
-                      {grantBusy ? 'در حال افزودن...' : 'افزودن به دارایی‌های این لرد'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {['control_center','population_growth','food_consumption','road_victory'].includes(tab) && isOwner && <AdminControlCenter roadVictoryOnly={tab === 'road_victory'} foodOnly={tab === 'food_consumption'} populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
-
-      {((tab === 'balance' && isOwner) || tab === 'player-buildings') && isFull && (
-        <>
-          {tab === 'balance' && <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
-            <button type="button" role="tab" aria-selected={buildingAdminMode === 'global'}
-                    className={`rbtn tab ${buildingAdminMode === 'global' ? 'on' : ''}`}
-                    onClick={() => setBuildingAdminMode('global')}>تنظیمات سراسری</button>
-            <button type="button" role="tab" aria-selected={buildingAdminMode === 'player'}
-                    className={`rbtn tab ${buildingAdminMode === 'player' ? 'on' : ''}`}
-                    onClick={() => setBuildingAdminMode('player')}>ساختمان‌های بازیکن</button>
-            <button type="button" role="tab" aria-selected={buildingAdminMode === 'military'}
-                    className={`rbtn tab ${buildingAdminMode === 'military' ? 'on' : ''}`}
-                    onClick={() => setBuildingAdminMode('military')}>نیروها و ادوات</button>
-          </div>}
-
-          {tab === 'balance' && isOwner && buildingAdminMode === 'global' && (
-            <>
-              <div className="sect up u2">هزینه و بازدهی همهٔ ساختمان‌ها</div>
-              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
-                تغییرات این بخش سراسری است و روی ساخت‌های بعدیِ همهٔ بازیکن‌ها اثر می‌گذارد. هزینهٔ پایه برای سطح ۱ است؛
-                درصد رشد تعیین می‌کند هزینهٔ هر سطح نسبت به سطح قبلی چقدر بیشتر شود. تولید و سقف هم به‌ازای هر سطح حساب می‌شوند.
-              </div>
-              <div className="notice-guide up u2" style={{ marginBottom: 12 }}>
-                <strong>هدف پیش‌فرض فصل ۳۰روزه</strong>
-                <span>سقف ساختمان‌های عادی ۸ و کارگاه ادوات ۳ است. بازیکن فعال با یک نوبت رسیدگی روزانه و خرج متعارف جنگ، حدود روز ۲۹ می‌تواند ساختمان‌های یک قلعه را کامل کند.</span>
-              </div>
-              {!balanceList && <div className="loading">در حال بارگذاری...</div>}
-              {balanceList && balanceList.map(b => {
-                const draft = balanceDrafts[b.id] || {};
-                const busy = balanceBusyId === b.id;
-                const typeName = b.type === 'economy' ? 'اقتصادی' : b.type === 'barracks' ? 'پادگان' : b.type === 'armory' ? 'کارگاه تسلیحات' : 'دفاعی';
-                const preview = level => Object.entries(draft.cost || {}).map(([k, raw]) => {
-                  const base = Math.max(0, parseInt(raw, 10) || 0);
-                  const step = Math.max(0, Number(draft.cost_step_percent) || 0) / 100;
-                  return `${RES_LABEL[k] || k}: ${Math.round(base * (1 + (level - 1) * step)).toLocaleString('fa-IR')}`;
-                }).join(' · ');
-                return (
-                  <div className="card up u2" key={b.id} style={{ marginBottom: 12 }}>
-                    <div className="res">
-                      <div className="n">
-                        {b.name}
-                        <small>{typeName}{b.overridden ? ' · تنظیم سفارشی فعال است' : ' · تنظیمات پیش‌فرض بازی'}</small>
-                      </div>
-                    </div>
-
-                    <div className="sect" style={{ margin: '14px 0 4px' }}>۱. هزینهٔ ساخت و ارتقا</div>
-                    <div className="page-sub" style={{ margin: '0 0 9px', lineHeight: 1.8 }}>
-                      هزینهٔ پایه همان هزینهٔ ساخت سطح ۱ است. ارتقاهای بعدی با درصد رشد زیر محاسبه می‌شوند.
-                    </div>
-                    <div className="grid2">
-                      {Object.keys(b.base_cost || {}).map(k => (
-                        <div key={k}>
-                          <label className="f" style={{ marginTop: 0 }}>{RES_LABEL[k] || k} برای سطح ۱ <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cost[k]})</small></label>
-                          <input type="number" min="0" value={draft.cost?.[k] ?? ''}
-                                 onChange={e => setBalanceDraft(b.id, 'cost', k, e.target.value)} />
-                        </div>
-                      ))}
-                      <div>
-                        <label className="f" style={{ marginTop: 0 }}>رشد هزینه در هر سطح <small style={{ color: 'var(--low)' }}>(درصد)</small></label>
-                        <input type="number" min="0" max="500" step="0.5" value={draft.cost_step_percent ?? ''}
-                               onChange={e => setBalanceDraft(b.id, 'cost_step_percent', null, e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="f" style={{ marginTop: 0 }}>زمان پایه ساخت سطح ۱ <small style={{ color: 'var(--low)' }}>(ساعت)</small></label>
-                        <input type="number" min="0.1" step="0.1" value={draft.hours ?? ''} onChange={e => setBalanceDraft(b.id, 'hours', null, e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="f" style={{ marginTop: 0 }}>حداکثر سطح این ساختمان</label>
-                        <input type="number" min="1" max="100" value={draft.max_level ?? ''} onChange={e => setBalanceDraft(b.id, 'max_level', null, e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="notice-guide" style={{ marginTop: 9 }}>
-                      <strong>پیش‌نمایش هزینه با عددهای فعلی</strong>
-                      <span>سطح ۱: {preview(1) || 'بدون هزینه'}<br />سطح ۲: {preview(2) || 'بدون هزینه'}<br />سطح آخر ({Number(draft.max_level || b.max_level).toLocaleString('fa-IR')}): {preview(Number(draft.max_level || b.max_level)) || 'بدون هزینه'}</span>
-                    </div>
-
-                    <div className="sect" style={{ margin: '16px 0 4px' }}>۲. بازدهی هر سطح</div>
-                    <div className="page-sub" style={{ margin: '0 0 9px', lineHeight: 1.8 }}>
-                      تولید روزانه و افزایش سقف ذخیره برای هر یک سطح ساختمان است؛ سطح ۵ پنج برابر عدد ثبت‌شده اثر دارد.
-                    </div>
-                    {(Object.keys(b.base_produces || {}).length > 0 || Object.keys(b.base_cap_bonus || {}).length > 0) ? (
-                      <div className="grid2">
-                        {Object.keys(b.base_produces || {}).map(k => (
-                          <div key={`produce-${k}`}>
-                            <label className="f" style={{ marginTop: 0 }}>تولید روزانهٔ {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_produces[k]})</small></label>
-                            <input type="number" min="0" value={draft.produces?.[k] ?? ''}
-                                   onChange={e => setBalanceDraft(b.id, 'produces', k, e.target.value)} />
-                          </div>
-                        ))}
-                        {Object.keys(b.base_cap_bonus || {}).map(k => (
-                          <div key={`cap-${k}`}>
-                            <label className="f" style={{ marginTop: 0 }}>افزایش سقف {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cap_bonus[k]})</small></label>
-                            <input type="number" min="0" value={draft.cap_bonus?.[k] ?? ''}
-                                   onChange={e => setBalanceDraft(b.id, 'cap_bonus', k, e.target.value)} />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="notice-guide">
-                        <strong>بازدهی منبع ندارد</strong>
-                        <span>این ساختمان تولید یا سقف انبار اضافه نمی‌کند و کارکردش نظامی، دفاعی یا بازکردن قابلیت است.</span>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-                      <button className="btn" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => saveBalance(b)}>
-                        {busy ? 'در حال ذخیره...' : 'ذخیرهٔ تنظیمات ساختمان'}
-                      </button>
-                      {b.overridden && (
-                        <button className="btn ghost" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => resetBalance(b)}>
-                          بازگشت کامل به پیش‌فرض
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          {tab === 'balance' && isOwner && buildingAdminMode === 'military' && (
-            <>
-              <div className="sect up u2">تعادل نیروها، کشتی‌ها و ادوات</div>
-              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
-                تمام اعداد این بخش سراسری‌اند و بلافاصله در محاسبات واقعی بک‌اند استفاده می‌شوند. درصد کندی برای هر یک عدد ادوات است.
-              </div>
-              {!gameplayBalance && <div className="loading">در حال بارگذاری...</div>}
-              {gameplayBalance && <>
-                <div className="card up u2" style={{ marginBottom: 12 }}>
-                  <div className="sect" style={{ marginTop: 0 }}>قواعد مشترک</div>
-                  <div className="grid2">
-                    {[
-                      ['camp_power_step_percent','افزایش قدرت به‌ازای هر سطح پادگان','٪'],
-                      ['level_hours_step_percent','افزایش زمان ساخت به‌ازای هر سطح','٪'],
-                      ['default_max_building_level','سقف سطح عمومی ساختمان‌ها','سطح'],
-                      ['food_cost_regular','غذای روزانه هر سرباز عادی','غذا'],
-                      ['food_cost_special','غذای روزانه نیروی ویژه و کشتی','غذا'],
-                      ['weapon_per_soldier','تسلیحات لازم برای هر سرباز عادی','عدد'],
-                      ['special_troop_cost','هزینه هر نیروی ویژه','طلا'],
-                      ['special_troop_power','قدرت هر نیروی ویژه','قدرت'],
-                      ['equipment_slowdown_cap_percent','حداکثر کندی مجموع ادوات','٪'],
-                      ['commander_power_bonus_percent','افزایش قدرت با حضور فرمانده','٪'],
-                      ['commander_speed_bonus_percent','افزایش سرعت با حضور فرمانده','٪'],
-                    ].map(([key,label,unit]) => <div key={key}>
-                      <label className="f" style={{ marginTop: 0 }}>{label} <small style={{ color: 'var(--low)' }}>({unit})</small></label>
-                      <input type="number" min="0" step="0.1" value={gameplayBalance.rules[key]} onChange={e => setGameplayRule(key, e.target.value)} />
-                    </div>)}
-                  </div>
-                </div>
-
-                <div className="sect up u2">سربازهای عادی</div>
-                {gameplayBalance.common_troops.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
-                  <div className="res"><div className="n">{row.name}<small>هزینه و قدرت هر یک سرباز</small></div></div>
-                  <div className="grid2">
-                    <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('common_troops', row.id, 'cost', e.target.value)} /></div>
-                    <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('common_troops', row.id, 'power', e.target.value)} /></div>
-                    <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('common_troops', row.id, 'food', e.target.value)} /></div>
-                  </div>
-                </div>)}
-
-                <div className="sect up u2">کشتی‌ها</div>
-                {gameplayBalance.naval_troops.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
-                  <div className="res"><div className="n">{row.name}<small>هزینه، قدرت و ظرفیت حمل هر کشتی</small></div></div>
-                  <div className="grid2">
-                    <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('naval_troops', row.id, 'cost', e.target.value)} /></div>
-                    <div><label className="f">هزینه چوب</label><input type="number" min="0" value={row.wood_cost ?? 0} onChange={e => setGameplayRow('naval_troops', row.id, 'wood_cost', e.target.value)} /></div>
-                    <div><label className="f">هزینه آهن</label><input type="number" min="0" value={row.iron_cost ?? 0} onChange={e => setGameplayRow('naval_troops', row.id, 'iron_cost', e.target.value)} /></div>
-                    <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('naval_troops', row.id, 'power', e.target.value)} /></div>
-                    <div><label className="f">ظرفیت حمل سرباز</label><input type="number" min="0" value={row.capacity} onChange={e => setGameplayRow('naval_troops', row.id, 'capacity', e.target.value)} /></div>
-                    <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('naval_troops', row.id, 'food', e.target.value)} /></div>
-                  </div>
-                </div>)}
-
-                <div className="sect up u2">ادوات محاصره</div>
-                {gameplayBalance.equipment.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
-                  <div className="res"><div className="n">{row.name}<small>همه مقادیر برای ساخت یک عدد است</small></div></div>
-                  <div className="grid2">
-                    <div><label className="f">سطح کارگاه موردنیاز</label><input type="number" min="1" value={row.level} onChange={e => setGameplayRow('equipment', row.id, 'level', e.target.value)} /></div>
-                    <div><label className="f">قدرت محاصره</label><input type="number" min="0" value={row.siege_power} onChange={e => setGameplayRow('equipment', row.id, 'siege_power', e.target.value)} /></div>
-                    <div><label className="f">کندی حرکت هر عدد (درصد)</label><input type="number" min="0" step="0.1" value={row.slowdown_percent} onChange={e => setGameplayRow('equipment', row.id, 'slowdown_percent', e.target.value)} /></div>
-                    {Object.entries(row.cost || {}).map(([key,value]) => <div key={key}><label className="f">هزینه {RES_LABEL[key] || key}</label><input type="number" min="0" value={value} onChange={e => setEquipmentCost(row.id, key, e.target.value)} /></div>)}
-                  </div>
-                </div>)}
-                <div style={{ display: 'flex', gap: 7, position: 'sticky', bottom: 8, zIndex: 3, padding: 8, background: 'var(--bg)' }}>
-                  <button className="btn" disabled={gameplayBalanceBusy} onClick={saveGameplayBalance}>{gameplayBalanceBusy ? 'در حال ذخیره...' : 'ذخیره همه تغییرات'}</button>
-                  <button className="btn ghost" disabled={gameplayBalanceBusy} onClick={resetGameplayBalance}>بازگشت به پیش‌فرض</button>
-                </div>
-              </>}
-            </>
-          )}
-
-          {(tab === 'player-buildings' || buildingAdminMode === 'player') && (
-            <>
-              <div className="sect up u2">مدیریت ساختمان‌های یک بازیکن</div>
-              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
-                این بخش فقط ساختمان‌های بازیکن انتخاب‌شده را تغییر می‌دهد. سطح صفر یعنی حذف ساختمان؛ سطح ۱ یعنی ساخت اولیه.
-                ثبت مستقیم سطح، هر ساخت یا ارتقای درحال‌انجامِ همان ساختمان را لغو می‌کند.
-              </div>
-              <div className="card up u2">
-                <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
-                <PlayerPicker value={playerBuildingTarget} onChange={setPlayerBuildingTarget} single placeholder="بازیکن را انتخاب کن..." />
-                {playerBuildingTarget.length > 0 && !playerBuildingData && <div className="loading">در حال گرفتن ساختمان‌ها...</div>}
-                {playerBuildingData && (
-                  <>
-                    <label className="f">قلعهٔ موردنظر</label>
-                    <select value={playerBuildingCastle} onChange={e => setPlayerBuildingCastle(e.target.value)}>
-                      {playerBuildingData.castles.map(castle => (
-                        <option key={castle.castle} value={castle.castle}>{castle.castle}{castle.home ? ' · قلعهٔ اصلی' : ''}</option>
-                      ))}
-                    </select>
-                    <div className="notice-guide">
-                      <strong>تغییر مستقیم سطح</strong>
-                      <span>منابع بازیکن کم یا زیاد نمی‌شود. این ابزار برای اصلاح وضعیت، جایزه، جریمه یا رفع خطای ادمینی است.</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {playerBuildingData && playerBuildingData.castles.find(c => c.castle === playerBuildingCastle)?.buildings.map(row => {
-                const key = `${playerBuildingCastle}::${row.id}`;
-                const busy = playerBuildingBusyId === row.id;
-                const typeName = row.type === 'economy' ? 'اقتصادی' : row.type === 'barracks' ? 'پادگان' : row.type === 'armory' ? 'کارگاه تسلیحات' : 'دفاعی';
-                return (
-                  <div className="card up u3" key={row.id} style={{ marginBottom: 9 }}>
-                    <div className="res">
-                      <div className="n">
-                        {row.name}
-                        <small>
-                          {typeName} · سطح فعلی {row.level.toLocaleString('fa-IR')}
-                          {row.upgrade_to ? ` · درحال ارتقا به سطح ${row.upgrade_to.toLocaleString('fa-IR')}` : ''}
-                          {row.requires_port ? ' · فقط قلعهٔ بندری' : ''}
-                        </small>
-                      </div>
-                    </div>
-                    <div className="grid2" style={{ marginTop: 10, alignItems: 'end' }}>
-                      <div>
-                        <label className="f" style={{ marginTop: 0 }}>سطح جدید (۰ تا {row.max_level || playerBuildingData.max_level})</label>
-                        <input type="number" min="0" max={row.max_level || playerBuildingData.max_level}
-                               value={playerBuildingDrafts[key] ?? String(row.level)}
-                               onChange={e => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: e.target.value }))} />
-                      </div>
-                      <button className="btn" disabled={busy} onClick={() => savePlayerBuilding(row)}>
-                        {busy ? 'در حال ثبت...' : 'ثبت سطح'}
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
-                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '0' }))}>حذف (سطح صفر)</button>
-                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
-                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '1' }))}>ساخت سطح ۱</button>
-                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
-                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: String(row.max_level || playerBuildingData.max_level) }))}>حداکثر</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </>
-      )}
-
-      {swapDraft && <div className="character-swap-panel card" role="dialog" aria-modal="true" aria-label="جابجایی قلعه‌ها">
-        <h2 className="page-title">جابجایی قلعه‌ها</h2><p>ساختمان‌ها با قلعه منتقل می‌شوند؛ منابع و آمار پیروزی تغییر نمی‌کنند.</p>
-        <label className="f">قلعهٔ بازیکن اول<select value={swapDraft.first_castle} onChange={e => setSwapDraft(v => ({...v,first_castle:e.target.value}))}>{(() => {const p=roster.find(p=>p.tg_id===swapDraft.first_id);return [p.castle,...(p.castles||[])].map(c=><option key={c}>{c}</option>);})()}</select></label>
-        <label className="f">بازیکن هدف<select value={swapDraft.second_id} onChange={e => setSwapDraft(v => ({...v,second_id:Number(e.target.value),second_castle:''}))}><option value="">انتخاب بازیکن…</option>{roster.filter(p=>!p.is_dead&&p.castle&&p.tg_id!==swapDraft.first_id).map(p=><option value={p.tg_id} key={p.tg_id}>{p.name}</option>)}</select></label>
-        <label className="f">قلعهٔ هدف<select value={swapDraft.second_castle} onChange={e => setSwapDraft(v => ({...v,second_castle:e.target.value}))}><option value="">انتخاب قلعه…</option>{(() => {const p=roster.find(p=>p.tg_id===swapDraft.second_id);return p ? [p.castle,...(p.castles||[])].map(c=><option key={c}>{c}</option>) : [];})()}</select></label>
-        <div className="grid2"><button className="btn ghost" disabled={swapBusy} onClick={()=>setSwapDraft(null)}>انصراف</button><button className="btn" disabled={swapBusy||!swapDraft.second_castle} onClick={async()=>{setSwapBusy(true);try{await api.adminSwapCastles(swapDraft);setSwapDraft(null);loadRoster();loadMapData();toast('مالکیت قلعه‌ها جابه‌جا شد');}catch(e){toast(e.message);}finally{setSwapBusy(false);}}}>تأیید جابجایی</button></div>
-      </div>}
-      {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
-      {tab === 'family' && isFull && <AdminFamily />}
-      {tab === 'analytics_reports' && isFull && <AdminAnalytics/>}
-      {tab === 'system_reports' && <><div className="card system-report-card">
-        <div><div className="system-report-name">لیست سیاه بازیکنان</div><div className="system-report-meta">فایل TXT · نام، آیدی عددی و دلیل ثبت</div></div>
-        <button type="button" className="btn ghost" disabled={reportBusy} onClick={downloadBlacklist}>{reportBusy ? 'در حال دریافت…' : 'دانلود فایل'}</button>
-      </div>
-      {isFull && [['admin-activity','فعالیت ادمین‌ها','اقدام، ادمین، زمان و تغییرات بازیکنان'],['market','معاملات بازار','خریدار، فروشنده، کالا، حجم و قیمت'],['caravans','کاروان‌های تجاری','فرستنده، گیرنده، آیدی‌ها، محموله، مسیر و وضعیت']].map(([kind,title,description])=><div className="card system-report-card" key={kind}><div><div className="system-report-name">{title}</div><div className="system-report-meta">TXT · {description} · داخل تلگرام، فایل در چت بات دریافت می‌شود</div></div><button className="btn ghost" disabled={reportBusy} onClick={()=>downloadSystemReport(kind)}>دانلود فایل</button></div>)}
-      </>}
-      {tab === 'submission_limits' && isFull && <div className="card">
-        <div className="sect" style={{marginTop:0}}>سهمیه و محدودیت متن</div><p className="page-sub">سهمیه‌ها در بازه‌های هفت‌روزهٔ تقویم بازی محاسبه می‌شوند. صفر، ارسال آن بخش را می‌بندد. تغییر سقف، مصرف قبلی را پاک نمی‌کند. سقف متن بر حسب کلمه است و برای متن‌های تازه و ویرایش‌ها اعمال می‌شود.</p>
-        {weeklyLimits && <form onSubmit={async e=>{e.preventDefault();setLimitsBusy(true);try{await api.saveSubmissionLimits({roleplays:Number(weeklyLimits.roleplays),projects:Number(weeklyLimits.projects),...Object.fromEntries(["roleplay_words","scenario_words","request_words"].map(key=>[key,Number(weeklyLimits[key]??1000)]))});window.dispatchEvent(new Event("text-limits-changed"));toast('سهمیه‌ها ذخیره شد');}catch(err){toast(err.message);}finally{setLimitsBusy(false);}}}>
-          <label className="f">سهمیهٔ مشترک رول خرابکاری، آزاد، اقتصادی و دیپلماسی<input type="number" min="0" max="1000" required value={weeklyLimits.roleplays} onChange={e=>setWeeklyLimits(p=>({...p,roleplays:e.target.value}))}/></label>
-          <label className="f">درخواست پروژه در هفته<input type="number" min="0" max="1000" required value={weeklyLimits.projects} onChange={e=>setWeeklyLimits(p=>({...p,projects:e.target.value}))}/></label>
-          {[['roleplay_words','سقف کلمات رول‌ها و رول شورش'],['scenario_words','سقف کلمات سناریو، جاسوسی، کمین و نتیجهٔ پیشنهادی نهاد'],['request_words','سقف کلمات سؤال جاسوسی و شرح درخواست نهاد و پروژه']].map(([key,label])=><label className="f" key={key}>{label}<input type="number" min="1" max="50000" required value={weeklyLimits[key]??1000} onChange={e=>setWeeklyLimits(p=>({...p,[key]:e.target.value}))}/></label>)}
-          <button className="btn" disabled={limitsBusy}>ذخیره تنظیمات</button></form>}
-      </div>}
-      {tab === 'market-floors' && isFull && <div className="card">
-        <h2 className="page-title">بازهٔ قیمت بازار بازیکنان</h2>
-        <p className="page-sub">قیمت هر واحد به سکه است. حداکثرِ خالی یعنی بدون سقف. آگهی‌های خارج از بازه تا لغو و ثبت مجدد قابل خرید نیستند.</p>
-        {marketFloors ? <form onSubmit={async e => { e.preventDefault(); setFloorsBusy(true); try { const values = Object.fromEntries(Object.entries(marketFloors).map(([k,v]) => [k, Number(v)])); setMarketFloors(await api.adminSaveMarketFloors(values, Object.fromEntries(TRADE_GOODS.map(k => [k, marketCeilings[k] === "" || marketCeilings[k] == null ? null : Number(marketCeilings[k])])))); toast('بازهٔ قیمت‌ها ذخیره شد'); } catch (err) { toast(err.message); } finally { setFloorsBusy(false); } }}>
-          {TRADE_GOODS.map(g => <div key={g}><h3>{TRADE_GOOD_NAMES[g]}</h3><div className="exchange-fields"><label className="f">حداقل<input type="number" inputMode="numeric" min="1" max="1000000000" step="1" required value={marketFloors[g]} onChange={e => setMarketFloors(v => ({ ...v, [g]: e.target.value }))} /></label><label className="f">حداکثر<input type="number" inputMode="numeric" min={Number(marketFloors[g]) || 1} max="1000000000" step="1" placeholder="بدون سقف" value={marketCeilings[g] ?? ""} onChange={e => setMarketCeilings(v => ({...v, [g]: e.target.value}))}/></label></div></div>)}
-          <button className="btn" disabled={floorsBusy}>{floorsBusy ? 'در حال ذخیره…' : 'ذخیرهٔ بازهٔ قیمت‌ها'}</button>
-        </form> : <p>در حال دریافت تنظیمات…</p>}
-      </div>}
-      {tab === 'market' && isFull && (
-        <>
-          <div className="sect up u2">بازار وستروس</div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>کالا</label>
-            <select value={marketResource} onChange={e => setMarketResource(e.target.value)}>
-              {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
-            </select>
-            <label className="f">موجودی نهایی بازار (پس از تأمین)</label>
-            <input type="number" min="0" value={marketQty} onChange={e => setMarketQty(e.target.value)} placeholder="مثلاً: ۳۰۰" />
-            <label className="f">قیمت پایه (سکه به‌ازای هر واحد)</label>
-            <input type="number" min="1" value={marketPrice} onChange={e => setMarketPrice(e.target.value)} placeholder="مثلاً: ۵" />
-            <button className="btn" style={{ marginTop: 14 }} onClick={setMarketListing}>ثبت/به‌روزرسانی در بازار</button><p className="page-sub">با ثابت ماندن قیمت پایه، افزایش موجودی قیمت روز را پایین می‌آورد. تغییر قیمت پایه، حجم مرجع تازه‌ای تعریف می‌کند.</p>
-          </div>
-          <div className="up u2">
-            {(!marketListings || marketListings.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کالایی در بازار وستروس نیست</div>
-            )}
-            {marketListings && marketListings.map(m => (
-              <div className="res" key={m.resource}>
-                <div className="n">{TRADE_GOOD_NAMES[m.resource] || m.resource}
-                  <small>{m.qty.toLocaleString('fa-IR')} واحد · {m.price.toLocaleString('fa-IR')} طلا · پایه {m.base_price.toLocaleString('fa-IR')}</small>
-                </div>
-                <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
-                        onClick={() => deleteMarketListing(m.resource)}>حذف</button>
-              </div>
-            ))}
-          </div>
-
-          <div className="sect up u3">افزودن به بازار سیاه</div>
-          <div className="card up u3">
-            <label className="f" style={{ marginTop: 0 }}>کالا</label>
-            <select value={blackResource} onChange={e => setBlackResource(e.target.value)}>
-              {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
-            </select>
-            <label className="f">حجم</label>
-            <input type="number" min="1" value={blackQty} onChange={e => setBlackQty(e.target.value)} placeholder="مثلاً: ۴۰" />
-            <label className="f">قیمت پایه (سکه به‌ازای هر واحد)</label>
-            <input type="number" min="1" value={blackPrice} onChange={e => setBlackPrice(e.target.value)} placeholder="مثلاً: ۵" />
-            <label className="f">مدت (ساعت)</label>
-            <input type="number" min="1" value={blackHours} onChange={e => setBlackHours(e.target.value)} />
-            <button className="btn" style={{ marginTop: 14 }} onClick={createBlackMarketListing}>افزودن به بازار سیاه</button>
-          </div>
-          <div className="up u3">
-            {(!blackListings || blackListings.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز جنسی در بازار سیاه نیست</div>
-            )}
-            {blackListings && blackListings.map(m => (
-              <div className="res" key={m.id}>
-                <div className="n">{TRADE_GOOD_NAMES[m.resource] || m.resource}
-                  <small>{m.qty.toLocaleString('fa-IR')} واحد · {m.price.toLocaleString('fa-IR')} طلا · {Math.floor(m.expires_in_minutes / 60).toLocaleString('fa-IR')} ساعت مانده</small>
-                </div>
-                <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
-                        onClick={() => deleteBlackMarketListing(m.id)}>حذف</button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'resources' && isFull && (
-        <>
-          <div className="sect up u2">تغییر جمعی منابع و محبوبیت</div>
-          <div className="card up u2">
-            <div className="notice-guide" style={{ marginTop: 0 }}>
-              <strong>اعمال روی همه یا یک اقلیم</strong>
-              <span>عدد مثبت اضافه می‌کند و عدد منفی کم می‌کند. منابع از سقف انبار رد نمی‌شوند و محبوبیت بین صفر تا صد می‌ماند.</span>
-            </div>
-            <div className="grid2">
-              <div>
-                <label className="f">چه چیزی تغییر کند؟</label>
-                <select value={bulkField} onChange={e => setBulkField(e.target.value)}>
-                  <option value="popularity">محبوبیت</option>
-                  {PLAYER_RES.map(row => <option key={row.key} value={row.key}>{row.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="f">محدودهٔ بازیکنان</label>
-                <select value={bulkRegion} onChange={e => setBulkRegion(e.target.value)}>
-                  <option value="all">همهٔ اقلیم‌ها</option>
-                  {Object.entries(REGIONS_STATIC).map(([rid, region]) => <option key={rid} value={rid}>{region.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <label className="f">مقدار افزایش یا کاهش</label>
-            <input type="number" value={bulkDelta} placeholder="مثلاً ۵۰۰ یا ۲۰۰-" onChange={e => setBulkDelta(e.target.value)} />
-            <button className="btn" disabled={bulkBusy} onClick={applyBulkAdjustment}>
-              {bulkBusy ? 'در حال اعمال...' : 'بررسی و اعمال تغییر جمعی'}
-            </button>
-            {bulkResult && <div className="page-sub" style={{ marginTop: 10, lineHeight: 1.9 }}>
-              {bulkResult.matched.toLocaleString('fa-IR')} بازیکن در محدوده بودند؛ موجودی {bulkResult.changed.toLocaleString('fa-IR')} نفر تغییر کرد.
-              {bulkResult.limited > 0 ? ` برای ${bulkResult.limited.toLocaleString('fa-IR')} نفر، سقف یا کف اجازهٔ اعمال کامل مقدار را نداد.` : ''}
-            </div>}
-          </div>
-
-          <div className="sect up u2">ویرایش منابع بازیکن</div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
-            <PlayerPicker value={resTarget} onChange={setResTarget} single />
-            {resTarget.length > 0 && !resValues && (
-              <div className="page-sub" style={{ margin: '10px 4px' }}>در حال بارگذاری منابع...</div>
-            )}
-            {resValues && (
-              <>
-                {isOwner && <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
-                  <div className="res" style={{ marginBottom: 8 }}>
-                    <div className="n">امتیاز بازیکن<small>امتیاز فعلی: {(resPoints ?? 0).toLocaleString('fa-IR')}</small></div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input type="number" value={pointDelta} placeholder="مثلاً ۱۰۰ یا ۵۰-"
-                           style={{ margin: 0, flex: 1 }} onChange={e => setPointDelta(e.target.value)} />
-                    <button className="btn" style={{ width: 'auto', padding: '10px 16px' }} disabled={pointBusy} onClick={adjustPoints}>
-                      {pointBusy ? '...' : 'اعمال'}
-                    </button>
-                  </div>
-                  <div className="page-sub" style={{ marginTop: 7 }}>عدد مثبت امتیاز اضافه می‌کند و عدد منفی از امتیاز کم می‌کند؛ امتیاز زیر صفر نمی‌رود.</div>
-                </div>}
-                <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
-                  <div className="res" style={{ marginBottom: 8 }}>
-                    <div className="n">محبوبیت بازیکن<small>محبوبیت فعلی: {(resPopularity ?? 50).toLocaleString('fa-IR')} از ۱۰۰</small></div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input type="number" value={popularityDelta} placeholder="مثلاً ۱۰ یا ۵-"
-                           style={{ margin: 0, flex: 1 }} onChange={e => setPopularityDelta(e.target.value)} />
-                    <button className="btn" style={{ width: 'auto', padding: '10px 16px' }} disabled={popularityBusy} onClick={adjustPopularity}>
-                      {popularityBusy ? '...' : 'اعمال'}
-                    </button>
-                  </div>
-                  <div className="page-sub" style={{ marginTop: 7 }}>تغییر محبوبیت: افزایش با مقدار مثبت، کاهش با مقدار منفی؛ محدودهٔ مجاز ۰ تا ۱۰۰.</div>
-                </div>
-                <div className="page-sub" style={{ margin: '4px 4px 12px', lineHeight: 1.9 }}>
-                  موجودی منابع و ظرفیت کل انبارهای این خاندان
-                </div>
-                {PLAYER_RES.map(({ key, label, Icon }) => {
-                  const value = Number(resValues[key] ?? 0);
-                  const cap = Number(resCaps?.[key] ?? 0);
-                  const overCap = cap > 0 && value > cap;
-                  return (
-                    <div className="troop" key={key} style={{ alignItems: 'center' }}>
-                      <div className="tn"><Icon s={14} /> {label}</div>
-                      <div style={{ width: 130, maxWidth: '48%' }}>
-                        <input type="number" min="0" value={value}
-                               aria-label={`${label}؛ سقف ${cap.toLocaleString('fa-IR')}`}
-                               style={{ margin: 0, borderColor: overCap ? 'var(--danger)' : undefined }}
-                               onChange={e => setResValues({ ...resValues, [key]: Math.max(0, +e.target.value || 0) })} />
-                        <div style={{ marginTop: 4, textAlign: 'center', fontSize: 9.5, color: overCap ? 'var(--danger)' : 'var(--low)' }}>
-                          {value.toLocaleString('fa-IR')} از {cap.toLocaleString('fa-IR')}
-                          {overCap ? ' · بیشتر از سقف' : ''}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <button className="btn" style={{ marginTop: 14 }} disabled={resBusy} onClick={saveResources}>
-                  {resBusy ? 'در حال ثبت...' : 'ثبت منابع تازه'}
-                </button>
-              </>
-            )}
-          </div>
-
-          {resTarget.length > 0 && (
-            <>
-              <div className="sect up u3">لشکرهای «{resTarget[0].name}»</div>
-              <div className="up u3">
-                {resCampaigns === null && <div className="page-sub" style={{ margin: '0 4px' }}>در حال بارگذاری...</div>}
-                {resCampaigns && resCampaigns.length === 0 && (
-                  <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>این بازیکن لشکری ندارد</div>
-                )}
-                {resTarget.length>0&&<AdminFormations key={resTarget[0].tg_id} leaderId={resTarget[0].tg_id} toast={toast} onChanged={()=>{api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns);loadCampaigns();loadBattles();}}/>}
-                {resCampaigns && resCampaigns.map(c => (
-                  <div className="card" key={c.id} style={{ marginBottom: 10 }}>
-                    <div className="res">
-                      <div className="ic"><Swords s={16} /></div>
-                      <div className="n">
-                        {c.name}
-                        <small>
-                          {c.op_name} · {castleLabel(c.from)} ← {castleLabel(c.to)} · توان {c.power.toLocaleString('fa-IR')} ·{' '}
-                          {c.men_committed.toLocaleString('fa-IR')} نفر
-                        </small>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
-                      نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
-                    </div>
-                    {c.active && <AdminArmyRelocation army={c} toast={toast} onMoved={() => { api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message)); loadCampaigns(); loadBattles(); }} />}
-                    {c.active && <div style={{ padding: 10, border: '1px solid var(--line)', borderRadius: 12, marginBottom: 9 }}>
-                      <div style={{ fontSize: 11.5, fontWeight: 800, marginBottom: 6 }}>ثبت تلفات مستقیم (بدون بازپرداخت)</div>
-                      {c.troops.map(t => <div className="troop" key={t.id}>
-                        <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div>
-                        <input type="number" min="0" max={t.count} placeholder="تلفات" value={campaignLosses[c.id]?.[t.id] || ''}
-                          onChange={e => setCampaignLosses(prev => ({ ...prev, [c.id]: { ...(prev[c.id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } }))} />
-                      </div>)}
-                      <button className="btn ghost" disabled={disbandBusyId === c.id} onClick={() => reduceCampaign(c)}>ثبت کاهش نیرو</button>
-                    </div>}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontSize: 11, color: 'var(--low)' }}>
-                        {c.active ? (c.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
-                      </div>
-                      {c.active && (<div style={{ display: 'flex', gap: 7 }}>
-                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
-                                disabled={disbandBusyId === c.id} onClick={() => disbandCampaign(c.id)}>
-                          {disbandBusyId === c.id ? 'در حال انحلال...' : 'منحل کن'}
-                        </button>
-                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
-                          disabled={disbandBusyId === c.id} onClick={() => destroyCampaign(c.id)}>انهدام کامل</button>
-                      </div>)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {tab === 'polls' && isFull && (
-        <>
-          <div className="sect up u2">رای‌گیری تازه</div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>سوال</label>
-            <textarea value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="مثلاً: والی جنوب چه کسی باشد؟" />
-            <label className="f">گزینه‌ها</label>
-            {pollOptions.map((opt, i) => (
-              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <input value={opt} onChange={e => setPollOptions(pollOptions.map((o, j) => j === i ? e.target.value : o))}
-                       placeholder={`گزینهٔ ${(i + 1).toLocaleString('fa-IR')}`} />
-                {pollOptions.length > 2 && (
-                  <button className="btn ghost" style={{ width: 44, padding: 0, flexShrink: 0 }}
-                          onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}><Close s={14} /></button>
-                )}
-              </div>
-            ))}
-            <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => setPollOptions([...pollOptions, ''])}>
-              <Plus s={14} /> افزودن گزینه
-            </button>
-            <label className="f">چه کسانی حق رای دارند</label>
-            <PlayerPicker value={pollEligible} onChange={setPollEligible} />
-            <button className="btn" style={{ marginTop: 14 }} onClick={createPoll}>ساخت رای‌گیری</button>
-          </div>
-
-          <div className="sect up u3">رای‌گیری‌های موجود</div>
-          <div className="up u3">
-            {(!polls || polls.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رای‌گیری‌ای ساخته نشده</div>
-            )}
-            {polls && polls.map(p => (
-              <div className="card poll" key={p.id}>
-                <div className="poll-q">
-                  {p.question}
-                  <span className={`poll-status ${p.status}`}>{p.status === 'open' ? 'باز' : 'بسته'}</span>
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginBottom: 8 }}>
-                  {p.total_votes.toLocaleString('fa-IR')} رای — {p.options.join(' · ')}
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {p.status === 'open' && (
-                    <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => closePoll(p.id)}>بستن رای‌گیری</button>
-                  )}
-                  <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1, color: 'var(--danger)' }} onClick={() => deletePoll(p.id)}>حذف رای‌گیری</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'rebellions' && (
-        <>
-          <div className="sect up u2">شورش‌های بازیکنان</div>
-          {!rebellionsList && <div className="loading">در حال بارگذاری...</div>}
-          {rebellionsList && rebellionsList.length === 0 && <div className="empty">هنوز شورشی ثبت نشده است.</div>}
-          {rebellionsList && rebellionsList.map(row => {
-            const d = rebellionDrafts[row.id] || {};
-            const active = ['awaiting_roleplay', 'roleplay_submitted', 'expired'].includes(row.status);
-            return (
-              <div className="card up u2" key={row.id} style={{ marginBottom: 10 }}>
-                <div style={{ fontWeight: 900 }}>🔥 {row.player_name} — {row.castle || 'بدون قلعه'}</div>
-                <div className="page-sub" style={{ marginTop: 5 }}>
-                  محبوبیت {row.popularity.toLocaleString('fa-IR')} · شانس {row.chance.toLocaleString('fa-IR')}٪ · تاس {row.roll.toLocaleString('fa-IR')} · وضعیت {row.status}
-                </div>
-                <div className="page-sub">مهلت: {new Date(row.deadline).toLocaleString('fa-IR')}</div>
-                {row.roleplay_text && (
-                  <div style={{ marginTop: 10, padding: 10, background: 'rgba(255,255,255,.05)', borderRadius: 10 }}>
-                    <b>رول بازیکن:</b><div style={{ whiteSpace: 'pre-wrap', marginTop: 5 }}>{row.roleplay_text}</div>
-                  </div>
-                )}
-                {row.result && <div style={{ marginTop: 8 }}>نتیجه: {row.result}</div>}
-                {active && (
-                  <>
-                    <label className="f">نتیجه شورش</label>
-                    <textarea rows={4} value={d.result || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, result: e.target.value } }))}
-                              placeholder="نتیجه داوری و اتفاقی که در قلمرو افتاد..." />
-                    <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setRebellionDrafts(p => ({ ...p, [row.id]: { ...(p[row.id] || {}), image_url: image } })), toast)} />
-                    <div className="grid2">
-                      <div><label className="f">تغییر محبوبیت (+ پاداش / − جریمه)</label><input type="number" value={d.popularity_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, popularity_delta: e.target.value } }))} /></div>
-                      <div><label className="f">تغییر سکهٔ خزانه</label><input type="number" value={d.gold_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, gold_delta: e.target.value } }))} /></div>
-                      <div><label className="f">تغییر غلهٔ انبار</label><input type="number" value={d.food_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, food_delta: e.target.value } }))} /></div>
-                      <div><label className="f">تغییر جمعیت قلمرو</label><input type="number" value={d.men_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, men_delta: e.target.value } }))} /></div>
-                    </div>
-                    <label className="f">وضعیت نهایی</label>
-                    <select value={d.outcome || 'resolved'} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, outcome: e.target.value } }))}>
-                      <option value="resolved">شورش پایان یافت</option>
-                      <option value="suppressed">شورش سرکوب شد</option>
-                      <option value="negotiated">با مذاکره پایان یافت</option>
-                      <option value="rebels_won">شورشیان پیروز شدند</option>
-                    </select>
-                    <button className="btn" style={{ marginTop: 12 }} disabled={rebellionBusyId === row.id} onClick={() => resolveRebellion(row)}>
-                      {rebellionBusyId === row.id ? 'در حال ثبت...' : 'ثبت نتیجه و اعلان همگانی'}
-                    </button>
-                  </>
-                )}
-              </div>
-            );
-          })}
-
-          {isFull && rebellionSettings && (
-            <>
-              <div className="sect up u2">تنظیمات سراسری شورش</div>
-              <div className="card up u2">
-                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                  <input type="checkbox" checked={rebellionSettings.enabled} onChange={e => setRebellionSettings(p => ({ ...p, enabled: e.target.checked }))} />
-                  سیستم شورش فعال باشد
-                </label>
-                <div className="grid2">
-                  <div><label className="f">حد امن محبوبیت</label><input type="number" value={rebellionSettings.safe_popularity} onChange={e => setRebellionNumber('safe_popularity', e.target.value)} /></div>
-                  <div><label className="f">شروع خطر زیاد</label><input type="number" value={rebellionSettings.high_risk_popularity} onChange={e => setRebellionNumber('high_risk_popularity', e.target.value)} /></div>
-                  <div><label className="f">شورش قطعی زیر</label><input type="number" value={rebellionSettings.guaranteed_popularity} onChange={e => setRebellionNumber('guaranteed_popularity', e.target.value)} /></div>
-                  <div><label className="f">مهلت رول (ساعت)</label><input type="number" value={rebellionSettings.roleplay_hours} onChange={e => setRebellionNumber('roleplay_hours', e.target.value)} /></div>
-                  <div><label className="f">دوره آرامش (ساعت)</label><input type="number" value={rebellionSettings.cooldown_hours} onChange={e => setRebellionNumber('cooldown_hours', e.target.value)} /></div>
-                  <div><label className="f">مصرف استاندارد غله برای هر ۱۰۰ نفر</label><input type="number" value={rebellionSettings.base_food_per_100_men} onChange={e => setRebellionNumber('base_food_per_100_men', e.target.value)} /></div>
-                  <div><label className="f">جریمه نبود غله</label><input type="number" value={rebellionSettings.starvation_popularity} onChange={e => setRebellionNumber('starvation_popularity', e.target.value)} /></div>
-                  <div><label className="f">شانس شروع بازه ۴۰–۵۰</label><input type="number" value={rebellionSettings.chance_low_start} onChange={e => setRebellionNumber('chance_low_start', e.target.value)} /></div>
-                  <div><label className="f">افزایش شانس هر پله</label><input type="number" value={rebellionSettings.chance_low_step} onChange={e => setRebellionNumber('chance_low_step', e.target.value)} /></div>
-                  <div><label className="f">شانس شروع بازه ۳۰–۴۰</label><input type="number" value={rebellionSettings.chance_high_start} onChange={e => setRebellionNumber('chance_high_start', e.target.value)} /></div>
-                  <div><label className="f">افزایش شانس شدید</label><input type="number" value={rebellionSettings.chance_high_step} onChange={e => setRebellionNumber('chance_high_step', e.target.value)} /></div>
-                  <div><label className="f">هزینه غذای ضیافت</label><input type="number" value={rebellionSettings.feast_food_cost} onChange={e => setRebellionNumber('feast_food_cost', e.target.value)} /></div>
-                  <div><label className="f">هزینه شراب ضیافت</label><input type="number" value={rebellionSettings.feast_wine_cost} onChange={e => setRebellionNumber('feast_wine_cost', e.target.value)} /></div>
-                  <div><label className="f">محبوبیت ضیافت</label><input type="number" value={rebellionSettings.feast_popularity_gain} onChange={e => setRebellionNumber('feast_popularity_gain', e.target.value)} /></div>
-                </div>
-
-                <label className="f">جیره استاندارد بازیکنان</label>
-                <select value={rebellionSettings.default_ration} onChange={e => setRebellionSettings(p => ({ ...p, default_ration: e.target.value }))}>
-                  {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => <option key={key} value={key}>{level.label}</option>)}
-                </select>
-                <div className="sect" style={{ marginTop: 16 }}>اثر نرخ مالیات</div>
-                <div className="page-sub" style={{ marginBottom: 10, lineHeight: 1.8 }}>
-                  آستانهٔ پایه برای محبوبیت ۵۰ محاسبه می‌شود. با هر پله تغییر محبوبیت، آستانهٔ مالیات سنگین هم به اندازهٔ تعیین‌شده جابه‌جا می‌شود؛ بالاتر از آستانه، به ازای هر پله مالیات جریمهٔ اضافه اعمال می‌شود.
-                </div>
-                <div className="grid2" style={{ marginBottom: 10 }}>
-                  <div><label className="f">آستانهٔ پایه مالیات سنگین</label><input type="number" value={rebellionSettings.tax_overage_start ?? 20} onChange={e => setRebellionNumber('tax_overage_start', e.target.value)} /></div>
-                  <div><label className="f">هر چند محبوبیت یک پله؟</label><input type="number" min="1" value={rebellionSettings.tax_popularity_step ?? 5} onChange={e => setRebellionNumber('tax_popularity_step', e.target.value)} /></div>
-                  <div><label className="f">تغییر آستانه در هر پله محبوبیت</label><input type="number" value={rebellionSettings.tax_limit_per_step ?? 1} onChange={e => setRebellionNumber('tax_limit_per_step', e.target.value)} /></div>
-                  <div><label className="f">هر چند درصد مالیات اضافه یک پله؟</label><input type="number" min="1" value={rebellionSettings.tax_overage_step ?? 5} onChange={e => setRebellionNumber('tax_overage_step', e.target.value)} /></div>
-                  <div><label className="f">جریمه محبوبیت هر پله اضافه</label><input type="number" value={rebellionSettings.tax_overage_popularity ?? -1} onChange={e => setRebellionNumber('tax_overage_popularity', e.target.value)} /></div>
-                </div>
-                {(rebellionSettings.tax_bands || []).map((band, index) => (
-                  <div className="grid2" key={index} style={{ marginBottom: 8 }}>
-                    <div><label className="f">تا نرخ مالیات</label><input type="number" value={band.max}
-                      onChange={e => setRebellionSettings(p => ({ ...p, tax_bands: p.tax_bands.map((b, i) => i === index ? { ...b, max: Number(e.target.value) } : b) }))} /></div>
-                    <div><label className="f">تغییر محبوبیت روزانه</label><input type="number" value={band.popularity}
-                      onChange={e => setRebellionSettings(p => ({ ...p, tax_bands: p.tax_bands.map((b, i) => i === index ? { ...b, popularity: Number(e.target.value) } : b) }))} /></div>
-                  </div>
-                ))}
-                <div className="sect" style={{ marginTop: 16 }}>سطح‌های سهم غله</div>
-                {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => (
-                  <div className="grid2" key={key} style={{ marginBottom: 8 }}>
-                    <div><label className="f">{level.label} — ضریب مصرف</label><input type="number" step="0.05" value={level.multiplier}
-                      onChange={e => setRebellionSettings(p => ({ ...p, ration_levels: { ...p.ration_levels, [key]: { ...level, multiplier: Number(e.target.value) } } }))} /></div>
-                    <div><label className="f">اثر محبوبیت</label><input type="number" value={level.popularity}
-                      onChange={e => setRebellionSettings(p => ({ ...p, ration_levels: { ...p.ration_levels, [key]: { ...level, popularity: Number(e.target.value) } } }))} /></div>
-                  </div>
-                ))}
-
-                <div className="sect" style={{ marginTop: 16 }}>اثر نتیجه جنگ</div>
-                <div className="grid2">
-                  {Object.entries(rebellionSettings.war_popularity || {}).map(([key, value]) => (
-                    <div key={key}><label className="f">{key}</label><input type="number" value={value}
-                      onChange={e => setRebellionSettings(p => ({ ...p, war_popularity: { ...p.war_popularity, [key]: Number(e.target.value) } }))} /></div>
-                  ))}
-                </div>
-                <button className="btn" style={{ marginTop: 16 }} disabled={rebellionSettingsBusy} onClick={saveRebellionSettings}>
-                  {rebellionSettingsBusy ? 'در حال ذخیره...' : 'ذخیره تنظیمات شورش'}
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {tab === 'events' && (
-        <>
-          <div className="sect up u2">اعلام رویداد به همهٔ بازیکنان</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            توضیح یک اتفاق در طول بازی؛ این متن با کلاغ برای همه فرستاده می‌شود و در اطلاعیه‌ها می‌ماند.
-          </div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>عنوان رویداد</label>
-            <input value={eventTitle} onChange={e => setEventTitle(e.target.value)} maxLength={80}
-                   placeholder="مثلاً: جشن پیروزی زمستان" />
-            <label className="f">توضیحات</label>
-            <textarea value={eventDescription} onChange={e => setEventDescription(e.target.value)} maxLength={1500}
-                      rows={5} placeholder="شرح رویداد، قوانین و زمان آن..." />
-            <label className="f">تصویر رویداد (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], setEventImage, toast)} />
-            {eventImage && <img src={eventImage} alt="" style={{ width: '100%', maxHeight: 190, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
-            <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
-              {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
-            </button>
-          </div>
-        </>
-      )}
-
-      {tab === 'music' && isFull && (
-        <>
-          <div className="sect up u2">موسیقی پس‌زمینهٔ بازی</div>
-          <div className="page-sub up u2" style={{ marginTop: -10, lineHeight: 1.9 }}>
-            فایل برای همهٔ بازیکن‌ها پخش می‌شود. مرورگر ممکن است بار اول تا لمس دکمهٔ نت اجازهٔ پخش خودکار ندهد؛ هر بازیکن هم می‌تواند موسیقی را برای خودش قطع کند.
-          </div>
-          {!musicSettings ? <div className="loading">در حال بارگذاری تنظیمات موسیقی...</div> : <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>فایل موسیقی</label>
-            <input type="file" accept="audio/*" onChange={e => chooseMusicFile(e.target.files?.[0])} />
-            <div className="page-sub" style={{ marginTop: 7 }}>MP3، OGG یا M4A تا حداکثر ۷ مگابایت. فایل داخل دیتابیس بازی نگه‌داری می‌شود.</div>
-            <label className="f">یا لینک مستقیم موسیقی</label>
-            <input dir="ltr" value={musicSettings.audio_url?.startsWith('data:') ? '' : (musicSettings.audio_url || '')}
-                   onChange={e => setMusicSettings(p => ({ ...p, audio_url: e.target.value }))} placeholder="https://.../music.mp3" />
-            {musicSettings.audio_url && <audio controls loop={musicSettings.loop} src={musicSettings.audio_url} style={{ width: '100%', marginTop: 12 }} />}
-            <label className="f">نام قطعه</label>
-            <input value={musicSettings.title || ''} maxLength={80} onChange={e => setMusicSettings(p => ({ ...p, title: e.target.value }))} placeholder="مثلاً: نغمهٔ والریا" />
-            <label className="f">حجم پیش‌فرض — {Number(musicSettings.volume || 0).toLocaleString('fa-IR')}٪</label>
-            <input type="range" min="0" max="100" value={musicSettings.volume ?? 35} onChange={e => setMusicSettings(p => ({ ...p, volume: Number(e.target.value) }))} />
-            <div className="grid2" style={{ marginTop: 12 }}>
-              <label className="check"><input type="checkbox" checked={!!musicSettings.enabled} onChange={e => setMusicSettings(p => ({ ...p, enabled: e.target.checked }))} /> فعال برای بازیکن‌ها</label>
-              <label className="check"><input type="checkbox" checked={!!musicSettings.loop} onChange={e => setMusicSettings(p => ({ ...p, loop: e.target.checked }))} /> تکرار پیوسته</label>
-              <label className="check"><input type="checkbox" checked={!!musicSettings.autoplay} onChange={e => setMusicSettings(p => ({ ...p, autoplay: e.target.checked }))} /> تلاش برای پخش خودکار</label>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-              <button className="btn" disabled={musicBusy} onClick={saveMusic}>{musicBusy ? 'در حال ذخیره...' : 'ذخیره و اعمال برای همه'}</button>
-              <button className="btn ghost" disabled={musicBusy} onClick={() => setMusicSettings(p => ({ ...p, enabled: false, audio_url: '' }))}>پاک‌کردن فایل؛ سپس ذخیره</button>
-            </div>
-          </div>}
-        </>
-      )}
-
-      {tab === 'medals' && (
-        <>
-          <div className="sect up u2">مدال‌ها و نتایج نبرد</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            مدال «راوی قلمرو» را دستی اعطا کن یا نتیجهٔ جنگ را برای محاسبهٔ مدال‌های رزمی ثبت کن.
-          </div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>اعطای دستی مدال «راوی قلمرو»</label>
-            <PlayerPicker value={medalTarget} onChange={setMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
-            <select value={medalTier} onChange={e => setMedalTier(e.target.value)} style={{ marginTop: 10 }}>
-              <option value="bronze">برنز — قصه‌گو</option>
-              <option value="silver">نقره — وقایع‌نگار</option>
-              <option value="gold">طلا — زبان تاریخ</option>
-            </select>
-            <input value={medalReason} onChange={e => setMedalReason(e.target.value)} maxLength={200}
-                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
-            <button className="btn" style={{ marginTop: 12 }} disabled={medalBusy} onClick={awardStoryteller}>
-              {medalBusy ? 'در حال ثبت...' : 'اعطای مدال'}
-            </button>
-          </div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>اعطای مدال ویژهٔ ادمین</label>
-            <PlayerPicker value={specialMedalTarget} onChange={setSpecialMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
-            <label className="f">انتخاب مدال</label>
-            <select value={specialMedalPreset} onChange={e => { setSpecialMedalPreset(e.target.value); setSpecialMedalIcon(''); }}>
-              {SPECIAL_MEDAL_PRESETS.map(m => <option key={m.key} value={m.key}>{m.icon} {m.name}</option>)}
-              <option value="custom">مدال با نام دلخواه</option>
-            </select>
-            {specialMedalPreset === 'custom' && (
-              <input value={specialMedalName} onChange={e => setSpecialMedalName(e.target.value)}
-                     maxLength={60} placeholder="نام دلخواه مدال" style={{ marginTop: 10 }} />
-            )}
-            <div className="grid2" style={{ marginTop: 10 }}>
-              <input value={specialMedalIcon} onChange={e => setSpecialMedalIcon(e.target.value)} maxLength={8}
-                     placeholder={SPECIAL_MEDAL_PRESETS.find(m => m.key === specialMedalPreset)?.icon || 'نشان، مثلاً 👑'} />
-              <select value={specialMedalTier} onChange={e => setSpecialMedalTier(e.target.value)}>
-                <option value="bronze">برنز</option>
-                <option value="silver">نقره</option>
-                <option value="gold">طلا</option>
-              </select>
-            </div>
-            <input value={specialMedalReason} onChange={e => setSpecialMedalReason(e.target.value)} maxLength={300}
-                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
-            <button className="btn" style={{ marginTop: 12 }} disabled={specialMedalBusy} onClick={awardSpecialMedal}>
-              {specialMedalBusy ? 'در حال ثبت...' : 'اعطای مدال ویژه'}
-            </button>
-          </div>
-        </>
-      )}
-
-      {tab === 'rumor_admin' && (
-        <>
-          <div className="sect up u2">مدیریت توییت‌ها</div>
-          <div className="page-sub up u2" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
-            توییت برای بازیکن‌ها ناشناسه، ولی ادمین برای رسیدگی به تخلف نویسندهٔ واقعی رو می‌بینه. حذف توییت، محبوبیتی که قبلاً کم شده رو برنمی‌گردونه.
-          </div>
-          <div className="admin-rumor-list up u3">
-            {adminRumors === null && <div className="loading">در حال گرفتن توییت‌ها...</div>}
-            {adminRumors && adminRumors.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>توییت‌ای وجود نداره</div>}
-            {adminRumors && adminRumors.map(row => (
-              <article className="admin-rumor-card card" key={row.id}>
-                <header>
-                  <div><b>نویسنده: {row.author_name}</b><small>شناسه: {row.author_tg_id}</small></div>
-                  <time>{new Date(row.created_at).toLocaleString('fa-IR')}</time>
-                </header>
-                <div className="admin-rumor-target">علیه: {row.target_name} · شناسه {row.target_tg_id}</div>
-                <p>{row.text}</p>
-                <footer>
-                  <span>👍 {row.likes.toLocaleString('fa-IR')} · 👎 {row.dislikes.toLocaleString('fa-IR')}</span>
-                  <button type="button" className="btn ghost" disabled={rumorDeleteBusy === row.id} onClick={() => deleteAdminRumor(row)}>
-                    {rumorDeleteBusy === row.id ? 'در حال حذف...' : 'حذف توییت'}
-                  </button>
-                </footer>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'bot_messages' && (
-        <>
-          <div className="sect up u2">ارسال پیام به بازیکن‌ها</div>
-          <div className="page-sub up u2" style={{ marginTop: -10 }}>
-            مشخص کن پیام در چت خصوصی بات، اطلاعیه‌های کلاغ، یا هر دو دیده شود.
-          </div>
-          <div className="card up u2">
-            <label className="f" style={{ marginTop: 0 }}>گیرندگان</label>
-            <select value={botAudience} onChange={e => { setBotAudience(e.target.value); setBotTargets([]); }}>
-              <option value="all">همهٔ بازیکنان</option>
-              <option value="selected">بازیکنان مشخص</option>
-            </select>
-            {botAudience === 'selected' && (
-              <div style={{ marginTop: 12 }}>
-                <PlayerPicker value={botTargets} onChange={setBotTargets} placeholder="نام لرد یا قلعه را جست‌وجو کن..." />
-              </div>
-            )}
-            <label className="f">مسیر ارسال</label>
-            <div className="grid2">
-              <button type="button" className={`rbtn pick ${botViaBot ? 'sel' : ''}`} onClick={() => setBotViaBot(v => !v)}>
-                <div className="n">بات تلگرام</div><div className="c">پیام خصوصی داخل بات</div>
-              </button>
-              <button type="button" className={`rbtn pick ${botViaRaven ? 'sel' : ''}`} onClick={() => setBotViaRaven(v => !v)}>
-                <div className="n">کلاغ</div><div className="c">داخل اطلاعیه‌های بازی</div>
-              </button>
-            </div>
-            <label className="f">متن پیام</label>
-            <textarea value={botMessage} onChange={e => setBotMessage(e.target.value)} maxLength={4000}
-                      rows={6} placeholder="پیامی که بات مستقیماً برای بازیکن می‌فرستد..." />
-            <label className="f">تصویر پیام (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], setBotMessageImage, toast)} />
-            {botMessageImage && <img src={botMessageImage} alt="" style={{ width: '100%', maxHeight: 190, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
-            <button className="btn" style={{ marginTop: 14 }} disabled={botMessageBusy} onClick={sendBotMessage}>
-              {botMessageBusy
-                ? 'در حال ارسال...'
-                : botAudience === 'all'
-                  ? 'ارسال پیام به همهٔ بازیکنان'
-                  : `ارسال پیام به ${botTargets.length.toLocaleString('fa-IR')} بازیکن`}
-            </button>
-          </div>
-        </>
-      )}
-
-      {tab === 'admins' && isOwner && (
-        <>
-          <div className="sect up u2">مدیریت ادمین‌ها</div>
-          <div className="card up u2">
-            <div className="admin-access-summary">
-              <div><b>ادمین اصلی</b><span>تمام دسترسی‌ها؛ می‌تواند ادمین اصلی دیگری تعریف کند و عملیات فصل انجام دهد.</span></div>
-              <div><b>ادمین کامل</b><span>همهٔ بخش‌های بازی را می‌بیند، ولی تب ادمین‌ها اصلاً برایش نمایش داده نمی‌شود.</span></div>
-              <div><b>ادمین رول و جنگ</b><span>فقط دو تب جنگ و رول‌ها؛ هیچ تب دیگری در پنل نمایش داده نمی‌شود.</span></div>
-              <div><b>ادمین اجرایی</b><span>فقط امور داوری و ارتباط: جنگ، رول، شورش، مدال، توییت، رویداد و پیام.</span></div>
-            </div>
-            <label className="f">افزودن ادمین یا تغییر سطح دسترسی</label>
-            <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
-            <label className="f">سطح دسترسی</label>
-            <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}>
-              <option value="war_roleplay">ادمین رول و جنگ — فقط دو تب جنگ و رول‌ها</option>
-              <option value="limited">ادمین اجرایی — عملیات روزمره و دسترسی محدود</option>
-              <option value="full">ادمین کامل — همهٔ بخش‌ها به‌جز مدیریت ادمین‌ها</option>
-              <option value="owner">ادمین اصلی — دقیقاً با تمام دسترسی‌های تو</option>
-            </select>
-            {newAdminRole === 'owner' && <div className="admin-access-warning">این سطح می‌تواند ادمین اضافه یا حذف کند، فصل را ریست کند و به تمام ابزارهای حساس دسترسی دارد.</div>}
-            <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>ثبت سطح دسترسی</button>
-          </div>
-          <div className="card up u2">
-            {(!admins || admins.length === 0) && (
-              <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>ادمینی نیست</div>
-            )}
-            {admins && admins.map(a => (
-              <div className="res" key={a.tg_id}>
-                <div className="ic"><Shield s={16} /></div>
-                <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : a.role === 'war_roleplay' ? 'ادمین رول و جنگ' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
-                {a.source === 'db' && !a.is_self && <div className="admin-row-actions">
-                  <button className="btn ghost" onClick={() => editAdminRole(a)}>تغییر سطح</button>
-                  {a.removable && <button className="btn ghost danger" onClick={() => removeAdmin(a.tg_id)}>حذف</button>}
-                </div>}
-              </div>
-            ))}
-          </div>
-
-          <div className="sect up u3">پاک‌سازی داده‌های قدیمی</div>
-          <div className="page-sub up u3" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
-            این ابزارها برای سبک‌کردن دیتابیس‌اند و حساب، منابع، نقشه و قلعه‌های بازیکن‌ها رو پاک نمی‌کنن. موارد فعال و پرونده‌های منتظر داوری هم محافظت می‌شن.
-          </div>
-          <div className="admin-cleanup-grid up u3">
-            {[
-              { key: 'messages', token: 'MESSAGES', label: 'پیام‌ها و اطلاعیه‌ها', note: 'تمام نامه‌های خصوصی و اطلاعیه‌های داخل کلاغ‌ها' },
-              { key: 'rumors', token: 'RUMORS', label: 'توییت‌ها', note: 'تمام توییت‌ها و واکنش‌های آن‌ها' },
-              { key: 'campaigns', token: 'CAMPAIGNS', label: 'لشکرکشی‌های بسته', note: 'فقط تاریخچه؛ لشکر فعال حذف نمی‌شه' },
-              { key: 'reports', token: 'REPORTS', label: 'گزارش‌های حل‌شده', note: 'جاسوسی و رول داوری‌شده؛ پروندهٔ باز محفوظ می‌مونه' },
-            ].map(item => (
-              <div className="card admin-cleanup-card" key={item.key}>
-                <header><b>{item.label}</b><span>{(cleanupPreview?.[item.key] || 0).toLocaleString('fa-IR')} مورد</span></header>
-                <p>{item.note}</p>
-                <label className="f">برای تایید بنویس: <code>{item.token}</code></label>
-                <input value={cleanupConfirm[item.key] || ''} onChange={e => setCleanupConfirm(prev => ({ ...prev, [item.key]: e.target.value }))}
-                       placeholder={item.token} dir="ltr" />
-                <button type="button" className="btn ghost" disabled={cleanupBusy === item.key || (cleanupConfirm[item.key] || '').trim() !== item.token}
-                        onClick={() => runCleanup(item.key, item.token, item.label)}>
-                  {cleanupBusy === item.key ? 'در حال پاک‌سازی...' : `پاک‌کردن ${item.label}`}
-                </button>
-              </div>
-            ))}
-          </div>
-          {cleanupPreview?.protected && (
-            <div className="admin-cleanup-protected up u3">
-              محافظت‌شده: {cleanupPreview.protected.active_campaigns.toLocaleString('fa-IR')} لشکر فعال · {cleanupPreview.protected.pending_spy.toLocaleString('fa-IR')} جاسوسی منتظر · {cleanupPreview.protected.pending_roleplays.toLocaleString('fa-IR')} رول منتظر
-            </div>
-          )}
-
-          {isOwner && (
-            <>
-              <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
-              <div className="card up u3">
-                <h2 className="page-title">توقف و ادامهٔ بازی</h2>
-                <p className="page-sub">توقف زمان، تولید، مصرف، پرداخت‌ها و اقدامات؛ بازیکنان همچنان می‌توانند صفحات را ببینند.</p>
-                <p>{gamePause ? (gamePause.paused ? 'وضعیت: متوقف' : 'وضعیت: در حال اجرا') : 'در حال دریافت وضعیت…'}</p>
-                {!gamePause?.paused && <label className="f">دلیل توقف<textarea maxLength={500} value={pauseReason} onChange={e => setPauseReason(e.target.value)} /></label>}
-                <button className="btn" disabled={!gamePause || pauseBusy} onClick={async () => {
-                  setPauseBusy(true);
-                  try { const result = await api.setGamePause(!gamePause.paused, pauseReason); setGamePause(prev => ({...prev, ...result})); syncGameClock(result); toast(result.paused ? 'بازی متوقف شد' : 'بازی ادامه یافت'); }
-                  catch (e) { toast(e.message); } finally { setPauseBusy(false); }
-                }}>{pauseBusy ? 'در حال ثبت…' : gamePause?.paused ? '▶ ادامهٔ بازی' : '⏸ توقف بازی'}</button>
-              </div>
-              <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فصل و شروع فصل تازه</div>
-                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
-                  منابع، ساختمان‌ها، نیروها، مدال‌ها، محبوبیت و تاریخچهٔ فصل پاک و از مقدار آغازین شروع می‌شوند.
-                  حساب، نام، عکس، بک‌استوری، خاندان، اقلیم و قلعهٔ اصلی هر بازیکن سر جای خود می‌ماند.
-                  قلعه‌های فتح‌شده آزاد می‌شوند و تنظیمات بالانس و پین‌های نقشه تغییر نمی‌کنند.
-                </div>
-                <label className="f">برای تایید بنویس: <code>NEWSEASON</code></label>
-                <input value={seasonResetConfirm} onChange={e => setSeasonResetConfirm(e.target.value)} placeholder="NEWSEASON" dir="ltr" />
-                <button className="btn ghost" disabled={seasonResetConfirm.trim() !== 'NEWSEASON' || seasonResetBusy} onClick={resetSeason}>
-                  {seasonResetBusy ? 'در حال ریست فصل...' : 'ریست فصل و شروع دوباره'}
-                </button>
-              </div>
-              <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فقط جدول امتیازات</div>
-                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
-                  امتیاز همه از همین لحظه صفر می‌شود؛ منابع، ساختمان‌ها، نیروها، مقام‌ها و مالکیت قلعه‌ها تغییر نمی‌کنند.
-                </div>
-                <label className="f">برای تایید بنویس: <code>SCOREBOARD</code></label>
-                <input value={scoreResetConfirm} onChange={e => setScoreResetConfirm(e.target.value)} placeholder="SCOREBOARD" dir="ltr" />
-                <button className="btn ghost" disabled={scoreResetConfirm.trim() !== 'SCOREBOARD' || scoreResetBusy} onClick={resetScoreboard}>
-                  {scoreResetBusy ? 'در حال ریست...' : 'ریست جدول امتیازات'}
-                </button>
-              </div>
-              <div className="card up u3" style={{ borderColor: 'var(--danger)' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>ری‌استارت کامل بازی</div>
-                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
-                  همهٔ بازیکن‌های غیرادمین حذف می‌شوند و باید از نو ثبت‌نام کنند؛ تاریخچهٔ لشکرکشی‌ها، جاسوسی‌ها،
-                  پیام‌ها، رول‌ها، شورش‌ها و تاس‌های شورش، توییت‌ها، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
-                  <br />
-                  دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه، آیتم‌ها و بازارهایی که خودت ساخته‌ای، و حساب/پیشرفت خودِ ادمین‌ها.
-                  <br />این کار بازگشت‌ناپذیر است.
-                </div>
-                {resetPreview && (
-                  <div style={{ fontSize: 12, color: 'var(--hi)', marginTop: 10, fontWeight: 700 }}>
-                    {resetPreview.non_admin_players.toLocaleString('fa-IR')} بازیکن حذف می‌شود · {resetPreview.admins_kept.toLocaleString('fa-IR')} ادمین می‌ماند
-                  </div>
-                )}
-                <label className="f">برای تایید، عبارت RESET را تایپ کن</label>
-                <input value={resetConfirmText} onChange={e => setResetConfirmText(e.target.value)} placeholder="RESET" style={{ direction: 'ltr', textAlign: 'center' }} />
-                <button className="btn" style={{ marginTop: 14, background: 'linear-gradient(160deg, #b3271b, #690000 60%, #4a0000)' }}
-                        disabled={resetConfirmText.trim() !== 'RESET' || resetBusy} onClick={resetGame}>
-                  {resetBusy ? 'در حال ری‌استارت...' : 'ری‌استارت کامل بازی'}
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
-    </>
-  );
-}
+import '../styles/admin-panel-repair.css';
+import LimitedText from '../components/LimitedText.jsx';
+import {AdminSocial} from './SocialWorld.jsx';
+import AdminAnalytics from '../components/AdminAnalytics.jsx';
+import CharacterAdmission from '../components/CharacterAdmission.jsx';
+import AdminFormations from '../components/AdminFormations.jsx';
+import { AdminItemStore, ItemPicture } from './ItemStore.jsx';
+import AdminCharacterTravel from '../components/AdminCharacterTravel.jsx';
+import AdminInstitutions from '../components/AdminInstitutions.jsx';
+import AdminTimeManagement from '../components/AdminTimeManagement.jsx';
+import AdminSeasonBranding from '../components/AdminSeasonBranding.jsx';
+import AdminCharacterProfiles from '../components/AdminCharacterProfiles.jsx';
+import AdminSharedIPs from '../components/AdminSharedIPs.jsx';
+import AdminMapManagement from '../components/AdminMapManagement.jsx';
+import { battleTime, arrivalDelay, armyArrival } from '../battleExport.js';
+import BattleExport from '../components/BattleExport.jsx';
+import RetireCharacterDialog from '../components/RetireCharacterDialog.jsx';
+import { gameNow } from '../gameClock.js';
+import { syncGameClock } from '../gameClock.js';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { api } from '../api.js';
+import { useGame } from '../store.jsx';
+import { haptic } from '../telegram.js';
+import { Shield, Eye, Scroll, Plus, Close, Coin, Wood, Rock, Pick, Wheat, Wine, People, Warehouse, Swords } from '../components/Icons.jsx';
+import PlayerPicker from '../components/PlayerPicker.jsx';
+import CastlePicker from '../components/CastlePicker.jsx';
+import AdminArmyRelocation from '../components/AdminArmyRelocation.jsx';
+import { MapFrame } from '../components/WesterosMap.jsx';
+import ZoomPanMap from '../components/ZoomPanMap.jsx';
+import AdminControlCenter from '../components/AdminControlCenter.jsx';
+import AdminEspionage from '../components/AdminEspionage.jsx';
+import AdminTickets from '../components/AdminTickets.jsx';
+import AdminRealmSystems from '../components/AdminRealmSystems.jsx';
+import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, BUILDINGS_STATIC, buildingProduces, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
+
+import Projects from './Projects.jsx';
+import AdminDossier from '../components/AdminDossier.jsx';
+import { AdminFamily } from './Family.jsx';
+
+const NEW_CASTLE = '__new__';
+
+function readAdminImage(file, setter, toast) {
+  if (!file) { setter(null); return; }
+  if (file.size > 2.5 * 1024 * 1024) { toast('حجم تصویر باید حداکثر ۲٫۵ مگابایت باشد'); return; }
+  const reader = new FileReader(); reader.onload = () => setter(reader.result); reader.readAsDataURL(file);
+}
+
+async function copyPlainText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(area);
+    return copied;
+  }
+}
+
+const CASTLE_REPORT_REGIONS = {
+  north: { icon: '❄️', name: 'شمال' },
+  iron:  { icon: '⚓️', name: 'جزایر آهنین' },
+  river: { icon: '🌊', name: 'ریورلندز' },
+  west:  { icon: '🦁', name: 'وسترلندز' },
+  reach: { icon: '🌹', name: 'ریچ' },
+  vale:  { icon: '🦅', name: 'درهٔ ویل' },
+  storm: { icon: '⚡️', name: 'استورملندز' },
+  dorne: { icon: '☀️', name: 'دورن' },
+  crown: { icon: '👑', name: 'کرون‌لندز' },
+};
+
+const SPECIAL_MEDAL_PRESETS = [
+  { key: 'season_champion', name: 'قهرمان فصل', icon: '🏆' },
+  { key: 'realm_savior', name: 'ناجی قلمرو', icon: '🪽' },
+  { key: 'immortal', name: 'نامیرا', icon: '♾️' },
+  { key: 'golden_quill', name: 'صاحب قلم زرین', icon: '✒️' },
+  { key: 'crown_enemy', name: 'دشمن تاج', icon: '🗡️' },
+];
+
+const MAP_KINDS = [
+  { key: 'castle', label: 'قلعه' },
+  { key: 'city',   label: 'شهر' },
+  { key: 'ruin',   label: 'مخروبه' },
+  { key: 'port',   label: 'بندر ⚓' },
+];
+
+// هر تب توضیح کوتاه و سطح دسترسی خودش را دارد تا ادمین تازه‌کار هم مسیر را گم نکند
+const TAB_GROUPS = [
+  {key:'institutions',label:'مدیریت نهادها',description:'مدیران، خزانه و قراردادهای نهادها',tabs:[{key:'institution_bank',label:'بانک آهنین',description:'مدیریت نهاد',fullOnly:true},{key:'institution_citadel',label:'سیتادل',description:'مدیریت نهاد',fullOnly:true},{key:'institution_golden-company',label:'گروه طلایی',description:'مدیریت نهاد',fullOnly:true},{key:'institution_alchemists',label:'صنف کیمیاگران',description:'مدیریت نهاد',fullOnly:true},{key:'institution_faceless',label:'بی‌چهره‌ها',description:'مدیریت نهاد',fullOnly:true},{key:'institution_faith',label:'ایمان هفت',description:'مدیریت نهاد',fullOnly:true},{key:'institution_watch',label:'نگهبانان شب',description:'مدیریت نهاد',fullOnly:true}]},
+
+  {
+    key: 'desk', label: 'پیشخوان',
+    description: 'وضعیت امروز و کارهای منتظر',
+    tabs: [
+      { key: 'overview',   label: 'راهنمای پنل', description: 'کارهای روزانه و مسیر پیشنهادی' },
+      { key: 'notifications', label: 'کارهای منتظر', description: 'اعلان‌ها، مهلت‌ها و پرونده‌های تازه' },
+      { key: 'tickets', label: 'تیکت‌ها', description: 'پاسخ‌گویی به درخواست‌های پشتیبانی', fullOnly: true },
+    ],
+  },
+  {
+    key: 'judgment', label: 'داوری و ارتباط',
+    description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
+    tabs: [
+      { key: 'war',         label: 'جنگ', description: 'لشکرکشی‌ها، کمین‌ها و نبردها' },
+      { key: 'espionage', label: 'جاسوسی', description: 'داوری استقرار، پاسخ به سؤال‌ها و کنترل شبکه‌ها', fullOnly: true },
+      { key: 'roleplays',   label: 'رول‌ها', description: 'بررسی و اعلام نتیجهٔ سناریوهای بازیکنان' },
+      { key: 'security_archive', label: 'آرشیو امنیتی', description: 'جست‌وجوی رول‌های دفاعی و امنیتی' },
+      { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
+      { key: 'medals',      label: 'مدال‌ها', description: 'اعطای مدال روایی و ویژه' },
+      { key: 'bot_messages', label: 'پیام بات', description: 'پیام مستقیم به همه یا چند بازیکن' },
+      { key: 'rumor_admin', label: 'مدیریت توییت‌ها', description: 'دیدن نویسنده و حذف توییت' },
+      { key: 'events',      label: 'رویداد همگانی', description: 'اعلام رویداد داخل صندوق بازی' },
+
+    ],
+  },
+  {
+    key: 'players', label: 'بازیکنان و جهان',
+    description: 'ثبت‌نام، قلمروها، منابع و نقشه',
+    tabs: [
+      { key:'profiles',label:'فهرست بازیکنان',description:'وضعیت، تصویر، پرچم، مرگ و بازگرداندن بازیکن' },
+      {key:'character_profiles',label:'ویرایش‌های کاراکتر',description:'درخواست تغییر نام، عکس، بک‌استوری و پرچم',fullOnly:true},
+      { key: 'registration', label: 'ورودی‌های ثبت‌نام', description: 'تأیید بازیکن تازه و ظرفیت اقلیم‌ها' },
+      { key: 'character_travel', label:'حضور و سفر کاراکترها',description:'مقرها، مهمانان، اسارت و سفر',fullOnly:true },
+      { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
+      { key: 'onboarding', label: 'واگذاری خاندان و قلعه', description: 'تخصیص یا تغییر خاندان و قلعهٔ آغازین', fullOnly: true },
+      { key: 'player-buildings', label: 'ساختمان‌های بازیکن', description: 'تغییر سطح ساختمان‌های قلعه‌های بازیکن', fullOnly: true },
+      { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
+    ],
+  },
+  {
+    key: 'politics', label: 'سیاست و محتوا',
+    description: 'پیمان‌ها، مقام‌ها و محتوای فصل',
+    tabs: [
+      { key: 'world_contracts', label: 'عهدنامه‌ها و داوری', description: 'پاداش‌های رزروشده، اختلاف‌ها و تنظیمات قرارداد', fullOnly: true },
+      { key: 'castle_life', label: 'تالارهای قلعه‌ها', description: 'بازبینی اعلامیه‌ها، رویدادها و ملاقات‌ها', fullOnly: true },
+      { key: 'world_news', label: 'تحریریهٔ روزنامه', description: 'بررسی خبرها، اصلاح و انتشار شماره‌ها', fullOnly: true },
+      { key: 'alliances', label: 'اتحادها', description: 'مرور و مدیریت پیمان‌های بازیکنان', fullOnly: true },
+      { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا', fullOnly: true },
+      { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
+      { key: 'realm_systems', label: 'شورای قلمرو و قراردادها', description: 'قواعد شورا، نتایج پیشنهادها و قراردادهای تأمین', fullOnly: true },
+    ],
+  },
+  {
+    key: 'economy', label: 'اقتصاد و تنظیمات',
+    description: 'ابزارهای حساس و سراسری بازی',
+    tabs: [
+      { key: 'projects', label: 'پروژه‌ها', description: 'بررسی طرح، زمان عرضه و اعلام شکست', fullOnly: true },
+      { key: 'market-floors', label: 'محدودهٔ قیمت بازیکنان', description: 'فقط کف و سقف مجاز آگهی‌های بازیکنان', fullOnly: true },
+      { key: 'market',  label: 'نرخ و موجودی بازارها', description: 'قیمت و موجودی بازار عمومی و بازار سیاه', fullOnly: true },
+      { key: 'items',   label: 'ساخت و اعطای آیتم', description: 'تعریف آیتم، تصویر و دادن آن به بازیکن', fullOnly: true },
+      { key: 'item_store', label: 'معاملات فروشگاه آیتم', description: 'آگهی، مزایده و تأیید نهایی خرید', fullOnly: true },
+      { key: 'balance', label: 'اعداد ساختمان و نیرو', description: 'هزینه، بازدهی، یگان، سلاح و ادوات', ownerOnly: true },
+      { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
+      { key: 'control_center', label: 'قوانین سراسری بازی', description: 'روشن‌کردن قابلیت‌ها و فرمول‌های عمومی', ownerOnly: true },
+    ],
+  },
+  {
+    key: 'system', label: 'مدیریت سامانه',
+    description: 'سطح دسترسی ادمین‌ها و ابزارهای فصل',
+    ownerOnly: true,
+    tabs: [
+      {key:'season_branding',label:'شماره و نام سیزن',description:'عنوان سیزن جاری در بازی و بات',fullOnly:true},
+      {key:'time_management',label:'زمان و تقویم',description:'ساعت‌ها، منطقهٔ نمایش و اصلاح مهلت‌ها',fullOnly:true},
+      {key:'map_management',label:'مدیریت نقشه',description:'جانمایی، مدل بناها، فصل و انتشار نقشه',fullOnly:true},
+      { key: 'road_victory', label: 'پیروزی خودکار در مسیر', description: 'ضریب نابودی خودکار لشکر ضعیف‌تر در مسیر', ownerOnly: true },
+      { key: 'food_consumption', label: 'مصرف غلات', description: 'تنظیم مصرف مردم و لشکرها', ownerOnly: true },
+      { key: 'population_growth', label: 'رشد جمعیت', description: 'اثر محبوبیت و تعداد قلعه‌ها بر رشد', ownerOnly: true },
+      { key: 'submission_limits', label: 'سهمیه و محدودیت متن', description: 'سقف ارسال و تعداد کلمات', fullOnly:true },
+      {key:'analytics_reports',label:'آمار سیزن و گزارش ساعتی',description:'سالنامهٔ فصل و تاریخچهٔ دارایی بازیکنان',fullOnly:true},
+      {key:'shared_ips',label:'آی‌پی‌های مشترک',description:'حساب‌هایی که از یک IP وارد وب‌اپ شده‌اند',ownerOnly:true},
+      { key: 'system_reports', label: 'گزارشات سامانه', description: 'دریافت فایل گزارش‌ها' },
+      { key: 'admins', label: 'ادمین‌ها و ریست', description: 'سطح‌ها، پاک‌سازی و شروع فصل', ownerOnly: true },
+    ],
+  },
+];
+const TABS = TAB_GROUPS.flatMap(g => g.tabs);
+const TAB_BY_KEY = Object.fromEntries(TABS.map(t => [t.key, t]));
+const JUDGMENT_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'judgment').tabs.map(tab => tab.key));
+const SYSTEM_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'system').tabs.map(tab => tab.key));
+
+const LIMITED_TAB_KEYS = new Set([...JUDGMENT_TAB_KEYS, 'registration', 'system_reports']);
+const ADMIN_GROUP_ORDER = ['desk','judgment','players','politics','economy','institutions','system'];
+const ADMIN_GROUP_MARKS = {desk:'✦',judgment:'⚔',players:'♟',politics:'♛',economy:'⚖',institutions:'V',system:'⌘'};
+
+const PLAYER_RES = [
+  { key: 'gold',  label: 'طلا',  Icon: Coin },
+  { key: 'wood',  label: 'چوب',  Icon: Wood },
+  { key: 'stone', label: 'سنگ',  Icon: Rock },
+  { key: 'iron',  label: 'آهن',  Icon: Pick },
+  { key: 'food',  label: 'غذا',  Icon: Wheat },
+  { key: 'wine',  label: 'شراب', Icon: Wine },
+  { key: 'men',   label: 'نیروی انسانی', Icon: People },
+  ...Object.entries(WEAPON_NAMES).map(([key, label]) => ({ key, label, Icon: Swords })),
+];
+const RES_LABEL = Object.fromEntries(PLAYER_RES.map(r => [r.key, r.label]));
+
+export default function Admin() {
+  const { me, setMe, toast } = useGame();
+  useEffect(() => { let active=true; api.me().then(value=>{if(active)setMe(value);}).catch(e=>toast(e.message)); return()=>{active=false;}; }, []);
+  const isOwner = me.is_owner || me.admin_role === 'owner';
+  const isFull = isOwner || me.admin_role === 'full';
+  const isAdjudicator = me.admin_role === 'war_roleplay';
+  const allowedTabKeys = isAdjudicator ? new Set(['war', 'roleplays']) : LIMITED_TAB_KEYS;
+  const canAccessTab = (item) => (!item.ownerOnly || isOwner) && (!item.fullOnly || isFull);
+  const availGroups = TAB_GROUPS
+    .filter(group => (!group.ownerOnly || isOwner) && (isFull || group.tabs.some(item => allowedTabKeys.has(item.key))))
+    .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || allowedTabKeys.has(item.key))) }))
+    .filter(group => group.tabs.length)
+    .sort((a,b)=>ADMIN_GROUP_ORDER.indexOf(a.key)-ADMIN_GROUP_ORDER.indexOf(b.key));
+  const [adminNavQuery,setAdminNavQuery]=useState('');
+  const adminNavNeedle=adminNavQuery.trim().toLocaleLowerCase('fa');
+  const adminNavResults=adminNavNeedle ? availGroups.flatMap(group=>group.tabs.filter(item=>(`${item.label} ${item.description} ${group.label}`).toLocaleLowerCase('fa').includes(adminNavNeedle)).map(item=>({...item,groupLabel:group.label,groupKey:group.key}))) : [];
+  const [tab, setTab] = useState(isAdjudicator ? 'war' : 'overview');
+  const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
+
+  useEffect(() => {
+    if (!isOwner && SYSTEM_TAB_KEYS.has(tab)) {
+      setTab(isAdjudicator ? 'war' : 'overview');
+      return;
+    }
+    if (!isFull && !allowedTabKeys.has(tab)) setTab('war');
+  }, [isOwner, isFull, isAdjudicator, tab]);
+
+  const [pendingPlayers, setPendingPlayers] = useState(null);
+  const [roster, setRoster] = useState(null);
+  const [assignRegion, setAssignRegion] = useState({}); // tg_id -> regionId
+  const [assignCastle, setAssignCastle] = useState({}); // tg_id -> castle name
+  const [assignBusyId, setAssignBusyId] = useState(null);
+  const [unassignBusyId, setUnassignBusyId] = useState(null);
+  const [deletePendingBusyId, setDeletePendingBusyId] = useState(null);
+  const [telegramSyncBusy, setTelegramSyncBusy] = useState(false);
+  const [castleReportBusy, setCastleReportBusy] = useState(false);
+  const [castleReport, setCastleReport] = useState('');
+  const [rosterQuery, setRosterQuery] = useState('');
+  const deferredRosterQuery = useDeferredValue(rosterQuery);
+  const [rosterLimit, setRosterLimit] = useState(25);
+  useEffect(() => { setRosterLimit(25); }, [deferredRosterQuery]);
+  const [registrationSettings, setRegistrationSettings] = useState(null);
+  const [registrationSettingsBusy, setRegistrationSettingsBusy] = useState(false);
+  const [reassignOpenId, setReassignOpenId] = useState(null);
+  const [addCastleMode, setAddCastleMode] = useState('normal');
+  const [swapDraft, setSwapDraft] = useState(null);
+  const [swapBusy, setSwapBusy] = useState(false);
+  const [retireDialog, setRetireDialog] = useState(null);
+  const [weeklyLimits, setWeeklyLimits] = useState(null);
+  const [limitsBusy, setLimitsBusy] = useState(false);
+  useEffect(()=>{if(tab==='submission_limits')api.submissionLimits().then(setWeeklyLimits).catch(e=>toast(e.message));},[tab]);
+  const downloadSystemReport = async kind => {
+    setReportBusy(true);
+    try { if(window.Telegram?.WebApp?.initData){await api.sendSystemReport(kind);toast('فایل گزارش در چت بات برایت فرستاده شد');return;} const result=await api.systemReport(kind); const url=URL.createObjectURL(new Blob(['\uFEFF'+result.text],{type:'text/plain;charset=utf-8'})); const a=document.createElement('a');a.href=url;a.download=result.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000); }
+    catch(e){toast(e.message);}finally{setReportBusy(false);}
+  };
+  const [reportBusy, setReportBusy] = useState(false);
+  const downloadBlacklist = async () => {
+    setReportBusy(true);
+    try {
+      if(window.Telegram?.WebApp?.initData){await api.sendSystemReport('blacklist');toast('فایل لیست سیاه در چت بات برایت فرستاده شد');return;}
+      const rows = await api.adminBlacklist();
+      const lines = ['لیست سیاه بازیکنان', 'تاریخ گزارش: ' + new Date().toLocaleString('fa-IR'), 'تعداد: ' + rows.length, ''];
+      rows.forEach((p, i) => lines.push(`${i + 1}. ${p.name || 'بدون نام'}`, `آیدی عددی تلگرام: ${p.tg_id}`, `دلیل: ${p.reason || 'ثبت نشده'}`, ''));
+      if (!rows.length) lines.push('لیست سیاه خالی است.');
+      const url = URL.createObjectURL(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/plain;charset=utf-8' }));
+      const link = document.createElement('a'); link.href = url; link.download = 'valyria-blacklist.txt';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { toast(e.message); } finally { setReportBusy(false); }
+  };
+  const [addCastleOpenId, setAddCastleOpenId] = useState(null);
+  const [addCastleValue, setAddCastleValue] = useState([]); // CastlePicker می‌خواد آرایه باشه — همیشه حداکثر یک‌دونه
+  const [addCastleBusyId, setAddCastleBusyId] = useState(null);
+  const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
+
+  const [armySearch,setArmySearch]=useState('');
+  const [warSubTab, setWarSubTab] = useState('campaigns');
+  const [campaignsInfo, setCampaignsInfo] = useState(null);
+  const [disbandBusyId, setDisbandBusyId] = useState(null);
+  const [campaignLosses, setCampaignLosses] = useState({});
+  const [ambushesList, setAmbushesList] = useState(null);
+  const [ambushScores, setAmbushScores] = useState({});
+  const [ambushQualityScores, setAmbushQualityScores] = useState({});
+  const [ambushScenarios, setAmbushScenarios] = useState({});
+  const [ambushBusyId, setAmbushBusyId] = useState(null);
+  const [warWindow, setWarWindow] = useState(null);
+  const [warWindowBusy, setWarWindowBusy] = useState(false);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventImage, setEventImage] = useState(null);
+  const [eventBusy, setEventBusy] = useState(false);
+  const [musicSettings, setMusicSettings] = useState(null);
+  const [musicBusy, setMusicBusy] = useState(false);
+  const [botMessage, setBotMessage] = useState('');
+  const [botMessageImage, setBotMessageImage] = useState(null);
+  const [botAudience, setBotAudience] = useState('all');
+  const [botTargets, setBotTargets] = useState([]);
+  const [botMessageBusy, setBotMessageBusy] = useState(false);
+  const [botViaBot, setBotViaBot] = useState(true);
+  const [botViaRaven, setBotViaRaven] = useState(false);
+  const [medalTarget, setMedalTarget] = useState([]);
+  const [medalTier, setMedalTier] = useState('bronze');
+  const [medalReason, setMedalReason] = useState('');
+  const [medalBusy, setMedalBusy] = useState(false);
+  const [specialMedalTarget, setSpecialMedalTarget] = useState([]);
+  const [specialMedalPreset, setSpecialMedalPreset] = useState('season_champion');
+  const [specialMedalName, setSpecialMedalName] = useState('');
+  const [specialMedalIcon, setSpecialMedalIcon] = useState('');
+  const [specialMedalTier, setSpecialMedalTier] = useState('gold');
+  const [specialMedalReason, setSpecialMedalReason] = useState('');
+  const [specialMedalBusy, setSpecialMedalBusy] = useState(false);
+  const [alliancesList, setAlliancesList] = useState(null);
+  const [allianceSearch, setAllianceSearch] = useState('');
+  const normalizePactSearch = value => String(value || '').toLowerCase().replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[@\s\u200c]/g,'');
+  const filteredAlliances = (alliancesList || []).filter(a => !allianceSearch.trim() || normalizePactSearch([a.name,a.from,a.to,...(a.members || []).flatMap(m=>[m.name,m.current_name,m.username,m.tg_id])].join(' ')).includes(normalizePactSearch(allianceSearch)));
+
+  const [dissolveBusyId, setDissolveBusyId] = useState(null);
+  const [overlordTarget, setOverlordTarget] = useState([]);
+  const [overlordRegion, setOverlordRegion] = useState('north');
+  const [officeHolders, setOfficeHolders] = useState(null);
+  useEffect(() => { if (tab === 'titles') api.titles().then(setOfficeHolders).catch(e => toast(e.message)); }, [tab]);
+  const [wardenTarget, setWardenTarget] = useState([]);
+  const [wardenGroup, setWardenGroup] = useState('south');
+  const [kingTarget, setKingTarget] = useState([]);
+  const [epithetTarget, setEpithetTarget] = useState([]);
+  const [epithetText, setEpithetText] = useState('');
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [pollEligible, setPollEligible] = useState([]);
+  const [polls, setPolls] = useState(null);
+  const [admins, setAdmins] = useState(null);
+  const [newAdminRole, setNewAdminRole] = useState('limited');
+  const [newAdminTarget, setNewAdminTarget] = useState([]);
+  const [resetPreview, setResetPreview] = useState(null);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
+  const [seasonResetConfirm, setSeasonResetConfirm] = useState('');
+  const [seasonResetBusy, setSeasonResetBusy] = useState(false);
+  const [scoreResetConfirm, setScoreResetConfirm] = useState('');
+  const [scoreResetBusy, setScoreResetBusy] = useState(false);
+
+  const [mapRegion, setMapRegion] = useState('north');
+  const [mapData, setMapData] = useState(null);
+  const [mapError, setMapError] = useState(false);
+  const [mapOptions, setMapOptions] = useState(null);
+  const [pendingPin, setPendingPin] = useState(null); // {x,y}
+  const [pickName, setPickName] = useState('');
+  const [castleQuery, setCastleQuery] = useState('');
+  const [castleResultsOpen, setCastleResultsOpen] = useState(false);
+  const [newCastleName, setNewCastleName] = useState('');
+  const [pinKind, setPinKind] = useState('castle');
+  const [pinTerrain, setPinTerrain] = useState('land');
+  const [editingCastle, setEditingCastle] = useState(null);
+  const [editKind, setEditKind] = useState('castle');
+  const [editTerrain, setEditTerrain] = useState('land');
+  const [editRegion, setEditRegion] = useState('north');
+
+  const [marketListings, setMarketListings] = useState(null);
+  const [marketFloors, setMarketFloors] = useState(null);
+  const [marketCeilings, setMarketCeilings] = useState({});
+  const [floorsBusy, setFloorsBusy] = useState(false);
+  const [gamePause, setGamePause] = useState(null);
+  const [pauseReason, setPauseReason] = useState('بررسی و رسیدگی به وضعیت بازی');
+  const [pauseBusy, setPauseBusy] = useState(false);
+  useEffect(() => {
+    const receive = e => setGamePause(prev => ({...prev, ...e.detail}));
+    window.addEventListener('game-status', receive);
+    api.gameStatus().then(setGamePause).catch(() => {});
+    return () => window.removeEventListener('game-status', receive);
+  }, []);
+  const [marketResource, setMarketResource] = useState(TRADE_GOODS[0]);
+  const [marketQty, setMarketQty] = useState('');
+  const [marketPrice, setMarketPrice] = useState('');
+  const [blackListings, setBlackListings] = useState(null);
+  const [blackResource, setBlackResource] = useState(TRADE_GOODS[0]);
+  const [blackQty, setBlackQty] = useState('');
+  const [blackPrice, setBlackPrice] = useState('');
+  const [blackHours, setBlackHours] = useState('6');
+
+  const [resTarget, setResTarget] = useState([]);
+  const [resValues, setResValues] = useState(null);
+  const [resCaps, setResCaps] = useState(null);
+  const [resPoints, setResPoints] = useState(null);
+  const [resPopularity, setResPopularity] = useState(null);
+  const [pointDelta, setPointDelta] = useState('');
+  const [pointBusy, setPointBusy] = useState(false);
+  const [popularityDelta, setPopularityDelta] = useState('');
+  const [popularityBusy, setPopularityBusy] = useState(false);
+  const [resBusy, setResBusy] = useState(false);
+  const [resCampaigns, setResCampaigns] = useState(null);
+  const [bulkField, setBulkField] = useState('gold');
+  const [bulkDelta, setBulkDelta] = useState('');
+  const [bulkRegion, setBulkRegion] = useState('all');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+
+
+  const [roleplayPending, setRoleplayPending] = useState(null);
+  const [roleplayCategoryTab, setRoleplayCategoryTab] = useState('all');
+  const [securityRoleplays, setSecurityRoleplays] = useState(null);
+  const [securityQuery, setSecurityQuery] = useState('');
+  const [securityPlayer, setSecurityPlayer] = useState([]);
+  const [securitySearching, setSecuritySearching] = useState(false);
+  const [battles, setBattles] = useState(null);
+  const [roleplayResults, setRoleplayResults] = useState({}); // roleplayId -> result text
+  const [retreatDestinations, setRetreatDestinations] = useState({});
+  const [battleResultImages, setBattleResultImages] = useState({});
+  const [battleLoot, setBattleLoot] = useState({});
+  const [lootBusy, setLootBusy] = useState(null);
+  const [roleplayVisibility, setRoleplayVisibility] = useState({}); // roleplayId -> 'participants' | 'all'
+  const [roleplayOtherLords, setRoleplayOtherLords] = useState({}); // roleplayId -> [{tg_id, name}]
+  const [roleplayWinners, setRoleplayWinners] = useState({}); // battleId -> winner tg_id[]
+  const [roleplayLosses, setRoleplayLosses] = useState({}); // roleplayId -> {attacker:{troopId:n}, defender:{troopId:n}}
+  const [roleplayAdjustments, setRoleplayAdjustments] = useState({}); // roleplayId -> actor/target resource and popularity deltas
+  const [roleplayBusyId, setRoleplayBusyId] = useState(null);
+  const [roleplayScores, setRoleplayScores] = useState({});
+  const [roleplayScoreBusyId, setRoleplayScoreBusyId] = useState(null);
+  const [roleplayScoreMax, setRoleplayScoreMax] = useState(100);
+  const [roleplayScoreSettingsBusy, setRoleplayScoreSettingsBusy] = useState(false);
+
+  const [profileTarget, setProfileTarget] = useState([]);
+  const [profileDraft, setProfileDraft] = useState(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [controlSettings, setControlSettings] = useState(null);
+  const [controlSettingsBusy, setControlSettingsBusy] = useState(false);
+
+  const [itemsList, setItemsList] = useState(null);
+  const [itemName, setItemName] = useState('');
+  const [itemType, setItemType] = useState(Object.keys(ITEM_TYPES)[0]);
+  const [itemDuration, setItemDuration] = useState(Object.keys(ITEM_DURATIONS)[0]);
+  const [itemDurationHours, setItemDurationHours] = useState('24');
+  const [itemDescription, setItemDescription] = useState('');
+  const [itemImage, setItemImage] = useState(null);
+  const [grantRequestId, setGrantRequestId] = useState(() => crypto.randomUUID());
+  const [itemColor, setItemColor] = useState('gray');
+  const [itemBuilding, setItemBuilding] = useState('');
+  const [itemYield, setItemYield] = useState('15');
+  const itemBuildings = Object.entries(BUILDINGS_STATIC).map(([id, b]) => ({ ...b, id, produces_per_level: buildingProduces(id) }));
+  const [itemBusy, setItemBusy] = useState(false);
+  const [grantOpenId, setGrantOpenId] = useState(null);
+  const [grantTarget, setGrantTarget] = useState([]);
+  const [grantColor, setGrantColor] = useState(Object.keys(ITEM_RARITY_COLORS)[0]);
+  const [grantBusy, setGrantBusy] = useState(false);
+
+  const [balanceList, setBalanceList] = useState(null);
+  const [balanceDrafts, setBalanceDrafts] = useState({});
+  const [balanceBusyId, setBalanceBusyId] = useState(null);
+  const [gameplayBalance, setGameplayBalance] = useState(null);
+  const [gameplayBalanceBusy, setGameplayBalanceBusy] = useState(false);
+  const [buildingAdminMode, setBuildingAdminMode] = useState('global');
+  const [playerBuildingTarget, setPlayerBuildingTarget] = useState([]);
+  const [playerBuildingData, setPlayerBuildingData] = useState(null);
+  const [playerBuildingCastle, setPlayerBuildingCastle] = useState('');
+  const [playerBuildingDrafts, setPlayerBuildingDrafts] = useState({});
+  const [playerBuildingBusyId, setPlayerBuildingBusyId] = useState(null);
+  const [rebellionSettings, setRebellionSettings] = useState(null);
+  const [rebellionsList, setRebellionsList] = useState(null);
+  const [rebellionSettingsBusy, setRebellionSettingsBusy] = useState(false);
+  const [rebellionDrafts, setRebellionDrafts] = useState({});
+  const [rebellionBusyId, setRebellionBusyId] = useState(null);
+  const [adminNotifications, setAdminNotifications] = useState(null);
+  const [notificationFilter, setNotificationFilter] = useState('unread');
+  const [adminRumors, setAdminRumors] = useState(null);
+  const [rumorDeleteBusy, setRumorDeleteBusy] = useState(null);
+  const [cleanupPreview, setCleanupPreview] = useState(null);
+  const [cleanupConfirm, setCleanupConfirm] = useState({});
+  const [cleanupBusy, setCleanupBusy] = useState(null);
+
+  const loadPendingPlayers = () => api.adminListPendingPlayers().then(setPendingPlayers).catch(e => toast(e.message));
+  const loadRoster = () => api.adminListRoster().then(setRoster).catch(e => toast(e.message));
+  const loadRegistrationSettings = () => api.adminRegistrationSettings().then(setRegistrationSettings).catch(e => toast(e.message));
+  const saveRegistrationSettings = async () => {
+    setRegistrationSettingsBusy(true);
+    try {
+      const capacities = Object.fromEntries((registrationSettings?.regions || []).map(r => [r.id, Number(r.capacity)]));
+      const saved = await api.adminSaveRegistrationSettings(capacities);
+      setRegistrationSettings(saved);
+      toast('ظرفیت اقلیم‌ها ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setRegistrationSettingsBusy(false);
+  };
+  const syncTelegramUsernames = async () => {
+    setTelegramSyncBusy(true);
+    try {
+      const result = await api.adminSyncTelegramUsernames();
+      await Promise.all([api.adminListPendingPlayers().then(setPendingPlayers), api.adminListRoster().then(setRoster)]);
+      haptic('medium');
+      toast(`${result.found.toLocaleString('fa-IR')} نام کاربری دریافت شد${result.unavailable ? ` · ${result.unavailable.toLocaleString('fa-IR')} حساب در دسترس بات نبود` : ''}`);
+    } catch (e) { toast(e.message); }
+    setTelegramSyncBusy(false);
+  };
+  const buildCastleReport = async () => {
+    setCastleReportBusy(true);
+    try {
+      // هر بار خروجی از API تازه ساخته می‌شود؛ به state قبلی پنل تکیه نمی‌کنیم.
+      const freshRoster = await api.adminListRoster();
+      setRoster(freshRoster);
+      const ownerByCastle = new Map();
+      freshRoster.forEach(player => {
+        if (player.castle) ownerByCastle.set(player.castle, player);
+        (player.castles || []).forEach(castle => ownerByCastle.set(castle, player));
+      });
+
+      const lines = [
+        '🔴 گرفته‌شده',
+        '⚪️ آزاد',
+        '⚓️ بندر یا قلعهٔ دریایی',
+        '',
+        '🏰 وضعیت قلعه‌های والریا',
+        '',
+      ];
+      const regions = Object.entries(REGIONS_STATIC);
+      regions.forEach(([regionId, region], regionIndex) => {
+        const meta = CASTLE_REPORT_REGIONS[regionId] || { icon: '🏰', name: region.name };
+        const castles = [
+          ...region.castles.map(name => ({ name, port: false })),
+          ...region.ports.map(name => ({ name, port: true })),
+        ];
+        const occupied = castles.filter(c => ownerByCastle.has(c.name)).length;
+        lines.push(`${meta.icon} ${meta.name} — ${occupied.toLocaleString('fa-IR')} گرفته‌شده، ${(castles.length - occupied).toLocaleString('fa-IR')} آزاد`);
+        lines.push('');
+        castles.forEach(castle => {
+          const owner = ownerByCastle.get(castle.name);
+          const port = castle.port ? ' ⚓️' : '';
+          if (!owner) {
+            lines.push(`⚪️ ${castle.name}${port} — آزاد`);
+            return;
+          }
+          const username = owner.telegram_username ? `@${owner.telegram_username.replace(/^@/, '')}` : 'بدون username';
+          lines.push(`🔴 ${castle.name}${port} — ${owner.name} | ${username}`);
+        });
+        if (regionIndex < regions.length - 1) lines.push('', '━━━━━━━━━━━━━━', '');
+      });
+
+      const report = lines.join('\n');
+      setCastleReport(report);
+      const copied = await copyPlainText(report);
+      haptic('medium');
+      toast(copied ? 'فهرست به‌روز قلعه‌ها برای تلگرام کپی شد' : 'فهرست ساخته شد؛ از کادر پایین دستی کپی کن');
+    } catch (e) { toast(e.message); }
+    setCastleReportBusy(false);
+  };
+  const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
+  const loadAmbushes = () => api.adminAmbushes().then(setAmbushesList).catch(e => toast(e.message));
+  const loadWarWindow = () => api.adminGetWarWindow().then(setWarWindow).catch(e => toast(e.message));
+  const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
+  const loadSecurityRoleplays = async () => {
+    setSecuritySearching(true);
+    try { setSecurityRoleplays(await api.adminSecurityRoleplays(securityQuery.trim(), securityPlayer[0]?.tg_id || null)); }
+    catch (e) { toast(e.message); setSecurityRoleplays([]); }
+    setSecuritySearching(false);
+  };
+  const loadBattles = () => api.adminBattles().then(setBattles).catch(e => toast(e.message));
+  const loadAlliances = () => api.adminListAlliances().then(setAlliancesList).catch(e => toast(e.message));
+  const loadPolls = () => api.polls().then(setPolls).catch(e => toast(e.message));
+  const loadAdmins = () => api.adminListAdmins().then(setAdmins).catch(e => toast(e.message));
+  const loadResetPreview = () => api.adminResetGamePreview().then(setResetPreview).catch(e => toast(e.message));
+  const loadMapData = () => { setMapError(false); api.map().then(setMapData).catch(e => { toast(e.message); setMapError(true); }); };
+  const loadMapOptions = () => api.adminMapOptions(mapRegion).then(setMapOptions).catch(e => toast(e.message));
+  const loadMarket = () => api.adminMarketList().then(setMarketListings).catch(e => toast(e.message));
+  const loadBlackMarket = () => api.adminBlackMarketList().then(setBlackListings).catch(e => toast(e.message));
+  const loadItems = () => api.adminListItems().then(setItemsList).catch(e => toast(e.message));
+  const loadBalance = () => api.adminGetBuildingBalance().then(list => {
+    setBalanceList(list);
+    setBalanceDrafts(Object.fromEntries(list.map(b => [b.id, {
+      cost: Object.fromEntries(Object.keys(b.base_cost || {}).map(k => [k, String(b.cost?.[k] ?? b.base_cost[k])])),
+      cost_step_percent: String(b.cost_step_percent ?? b.base_cost_step_percent ?? 15),
+      hours: String(b.hours ?? b.base_hours ?? 1),
+      max_level: String(b.max_level ?? b.base_max_level ?? 30),
+      produces: Object.fromEntries(Object.keys(b.base_produces || {}).map(k => [k, String(b.produces?.[k] ?? b.base_produces[k])])),
+      cap_bonus: Object.fromEntries(Object.keys(b.base_cap_bonus || {}).map(k => [k, String(b.cap_bonus?.[k] ?? b.base_cap_bonus[k])])),
+    }])));
+  }).catch(e => toast(e.message));
+  const loadGameplayBalance = () => api.adminGetGameplayBalance().then(setGameplayBalance).catch(e => toast(e.message));
+
+  const loadAdminNotifications = () => api.adminNotifications().then(setAdminNotifications).catch(e => toast(e.message));
+  const loadAdminRumors = () => api.adminRumors().then(setAdminRumors).catch(e => toast(e.message));
+  const loadCleanupPreview = () => api.adminCleanupPreview().then(setCleanupPreview).catch(e => toast(e.message));
+  const loadRebellions = () => api.adminRebellions().then(setRebellionsList).catch(e => toast(e.message));
+  const loadRebellionSettings = () => {
+    if (!isOwner) return;
+    api.adminRebellionSettings().then(setRebellionSettings).catch(e => toast(e.message));
+  };
+  const setRebellionNumber = (key, value) => setRebellionSettings(prev => ({ ...prev, [key]: Number(value) }));
+  const saveRebellionSettings = async () => {
+    setRebellionSettingsBusy(true);
+    try {
+      const saved = await api.adminSaveRebellionSettings(rebellionSettings);
+      setRebellionSettings(saved);
+      toast('تنظیمات شورش ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setRebellionSettingsBusy(false);
+  };
+  const resolveRebellion = async (row) => {
+    const draft = rebellionDrafts[row.id] || {};
+    if (!(draft.result || '').trim()) { toast('متن نتیجه شورش را بنویس'); return; }
+    setRebellionBusyId(row.id);
+    try {
+      await api.adminResolveRebellion(row.id, {
+        result: draft.result.trim(),
+        popularity_delta: Number(draft.popularity_delta || 0),
+        gold_delta: Number(draft.gold_delta || 0),
+        food_delta: Number(draft.food_delta || 0),
+        men_delta: Number(draft.men_delta || 0),
+        outcome: draft.outcome || 'resolved',
+        image_url: draft.image_url || null,
+      });
+      toast('نتیجه شورش ثبت و برای بازیکن ارسال شد');
+      loadRebellions();
+    } catch (e) { toast(e.message); }
+    setRebellionBusyId(null);
+  };
+
+  useEffect(() => { if (!isAdjudicator) loadAdminNotifications(); }, [isAdjudicator]);
+
+  useEffect(() => {
+    // Fetch only the active panel; unrelated heavy requests must not queue saves.
+    if (tab === 'notifications') loadAdminNotifications();
+    if (tab === 'rumor_admin') loadAdminRumors();
+    if (tab === 'war') {
+      loadWarWindow();
+      if (warSubTab === 'campaigns') loadCampaigns();
+      if (warSubTab === 'ambushes') loadAmbushes();
+      if (warSubTab === 'battles') loadBattles();
+    }
+    if (tab === 'roleplays') {
+      loadRoleplayPending();
+      api.adminRoleplayScoreSettings().then(r => setRoleplayScoreMax(r.max_score)).catch(e => toast(e.message));
+    }
+    if (tab === 'security_archive') loadSecurityRoleplays();
+    if (tab === 'rebellions') { loadRebellions(); if (isOwner) loadRebellionSettings(); }
+    if (tab === 'registration') { loadPendingPlayers(); if (isFull) { loadRegistrationSettings(); loadMapData(); } }
+    if (!isFull) return;
+    if (tab === 'onboarding') { loadRoster(); loadMapData(); }
+    if (tab === 'alliances') loadAlliances();
+    if (tab === 'map') loadMapData();
+    if (tab === 'polls') loadPolls();
+    if (tab === 'market') { loadMarket(); loadBlackMarket(); }
+    if (tab === 'items') loadItems();
+    if (tab === 'market-floors') api.adminMarketFloors().then(data => {setMarketFloors(data.prices); setMarketCeilings(data.ceilings || {});}).catch(e => toast(e.message));
+    if (tab === 'music') api.adminMusicSettings().then(setMusicSettings).catch(e => toast(e.message));
+    if (!isOwner) return;
+    if (tab === 'balance') { loadBalance(); loadGameplayBalance(); }
+    if (tab === 'admins') { loadAdmins(); loadCleanupPreview(); loadResetPreview(); }
+    if (['control_center', 'population_growth', 'food_consumption', 'road_victory'].includes(tab)) api.adminControlSettings().then(r => setControlSettings(r.settings)).catch(e => toast(e.message));
+  }, [tab, tab === 'war' ? warSubTab : null, isFull, isOwner]);
+
+  useEffect(() => {
+    if (!profileTarget.length) { setProfileDraft(null); return; }
+    setProfileDraft(null);
+    api.adminGetPlayerProfile(profileTarget[0].tg_id).then(setProfileDraft).catch(e => toast(e.message));
+  }, [profileTarget]);
+
+  useEffect(() => {
+    if (!isFull || tab !== 'map') return;
+    loadMapOptions();
+    resetCastlePicker();
+    setEditingCastle(null);
+  }, [mapRegion, tab]);
+
+  useEffect(() => {
+    if (!playerBuildingTarget.length) {
+      setPlayerBuildingData(null); setPlayerBuildingCastle(''); setPlayerBuildingDrafts({});
+      return;
+    }
+    setPlayerBuildingData(null);
+    api.adminPlayerBuildings(playerBuildingTarget[0].tg_id).then(data => {
+      setPlayerBuildingData(data);
+      const firstCastle = data.castles?.[0]?.castle || '';
+      setPlayerBuildingCastle(firstCastle);
+      setPlayerBuildingDrafts(Object.fromEntries(
+        (data.castles || []).flatMap(castle => castle.buildings.map(b => [`${castle.castle}::${b.id}`, String(b.level)]))
+      ));
+    }).catch(e => toast(e.message));
+  }, [playerBuildingTarget]);
+
+  useEffect(() => {
+    if (!resTarget.length) { setResValues(null); setResCaps(null); setResPoints(null); setResPopularity(null); setResCampaigns(null); return; }
+    setResValues(null); setResCaps(null); setResPoints(null); setResPopularity(null); setPointDelta(''); setPopularityDelta(''); setResCampaigns(null);
+    api.adminGetPlayerResources(resTarget[0].tg_id)
+      .then(r => {
+        setResValues(r.resources);
+        setResCaps(r.resource_caps || {});
+        setResPoints(r.points ?? 0);
+        setResPopularity(r.popularity ?? 50);
+      })
+      .catch(e => { toast(e.message); setResTarget([]); });
+    api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message));
+  }, [resTarget]);
+
+  const filteredCastleOptions = (mapOptions || []).filter(o =>
+    !castleQuery.trim() || o.name.includes(castleQuery.trim())
+  );
+
+  const pickCastle = (name) => {
+    haptic();
+    setPickName(name); setCastleQuery(name); setCastleResultsOpen(false);
+    const o = (mapOptions || []).find(o => o.name === name);
+    setPinKind(o?.kind || 'castle');
+    setPinTerrain(o?.terrain || 'land');
+  };
+  const pickNewCastle = () => {
+    haptic();
+    setPickName(NEW_CASTLE); setNewCastleName(castleQuery.trim()); setCastleResultsOpen(false);
+    setPinKind('castle'); setPinTerrain('land');
+  };
+
+  const resetCastlePicker = () => {
+    setPendingPin(null); setPickName(''); setCastleQuery(''); setCastleResultsOpen(false);
+    setNewCastleName(''); setPinKind('castle'); setPinTerrain('land');
+  };
+
+  const addMapCastle = async () => {
+    if (!pendingPin) return;
+    if (!pickName) { toast('یک قلعه/شهر را انتخاب کن'); return; }
+    const body = { region: mapRegion, x: pendingPin.x, y: pendingPin.y, kind: pinKind, terrain: pinTerrain };
+    if (pickName === NEW_CASTLE) {
+      if (!newCastleName.trim()) { toast('نام قلعه/شهر تازه را بنویس'); return; }
+      body.new_name = newCastleName.trim();
+    } else {
+      body.name = pickName;
+    }
+    try {
+      await api.adminAddMapCastle(body);
+      haptic('medium');
+      toast('قلعه/شهر به نقشه اضافه شد');
+      resetCastlePicker();
+      loadMapData(); loadMapOptions();
+    } catch (e) { toast(e.message); }
+  };
+
+  const deleteMapCastle = async (name) => {
+    try {
+      await api.adminDeleteMapCastle(name);
+      haptic('medium');
+      toast(`نشانهٔ «${name}» از نقشه حذف شد`);
+      loadMapData(); loadMapOptions();
+    } catch (e) { toast(e.message); }
+  };
+
+  const startEditMapCastle = (c) => {
+    haptic();
+    setEditingCastle(c.name); setEditKind(c.kind || 'castle'); setEditTerrain(c.terrain || 'land'); setEditRegion(mapRegion);
+  };
+  const cancelEditMapCastle = () => setEditingCastle(null);
+  const saveEditMapCastle = async () => {
+    try {
+      await api.adminEditMapCastle(editingCastle, { kind: editKind, terrain: editTerrain, region: editRegion });
+      haptic('medium');
+      toast(`نشانهٔ «${editingCastle}» به‌روزرسانی شد`);
+      setEditingCastle(null);
+      setMapRegion(editRegion); loadMapData(); loadMapOptions();
+    } catch (e) { toast(e.message); }
+  };
+
+  const setMarketListing = async () => {
+    const qty = parseInt(marketQty, 10), price = parseInt(marketPrice, 10);
+    if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(price) || price <= 0) {
+      toast('مقدار و قیمت را درست وارد کن'); return;
+    }
+    try {
+      await api.adminMarketSet({ resource: marketResource, qty, price });
+      haptic('medium');
+      toast(`بازار وستروس برای «${TRADE_GOOD_NAMES[marketResource]}» به‌روز شد`);
+      setMarketQty(''); setMarketPrice('');
+      loadMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const deleteMarketListing = async (resource) => {
+    try {
+      await api.adminMarketDelete(resource);
+      haptic('medium');
+      toast(`«${TRADE_GOOD_NAMES[resource]}» از بازار وستروس برداشته شد`);
+      loadMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const createBlackMarketListing = async () => {
+    const qty = parseInt(blackQty, 10), price = parseInt(blackPrice, 10), hours = parseInt(blackHours, 10);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price) || price <= 0 || !Number.isFinite(hours) || hours <= 0) {
+      toast('مقدار، قیمت و مدت را درست وارد کن'); return;
+    }
+    try {
+      await api.adminBlackMarketCreate({ resource: blackResource, qty, price, hours });
+      haptic('medium');
+      toast(`جنس تازه به بازار سیاه اضافه شد`);
+      setBlackQty(''); setBlackPrice(''); setBlackHours('6');
+      loadBlackMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const deleteBlackMarketListing = async (id) => {
+    try {
+      await api.adminBlackMarketDelete(id);
+      haptic('medium');
+      toast('از بازار سیاه برداشته شد');
+      loadBlackMarket();
+    } catch (e) { toast(e.message); }
+  };
+
+  const saveResources = async () => {
+    if (!resTarget.length || !resValues) return;
+    setResBusy(true);
+    try {
+      await api.adminSetPlayerResources(resTarget[0].tg_id, resValues);
+      haptic('medium');
+      toast(`منابع «${resTarget[0].name}» به‌روزرسانی شد`);
+    } catch (e) { toast(e.message); }
+    setResBusy(false);
+  };
+
+  const adjustPoints = async () => {
+    if (!resTarget.length) return;
+    const delta = Number(pointDelta);
+    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش امتیاز را وارد کن'); return; }
+    setPointBusy(true);
+    try {
+      const result = await api.adminAdjustPlayerPoints(resTarget[0].tg_id, delta);
+      setResPoints(result.points);
+      setPointDelta('');
+      haptic('medium');
+      toast(`امتیاز «${resTarget[0].name}» به ${result.points.toLocaleString('fa-IR')} رسید`);
+    } catch (e) { toast(e.message); }
+    setPointBusy(false);
+  };
+
+  const adjustPopularity = async () => {
+    if (!resTarget.length) return;
+    const delta = Number(popularityDelta);
+    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش محبوبیت را وارد کن'); return; }
+    setPopularityBusy(true);
+    try {
+      const result = await api.adminAdjustPlayerPopularity(resTarget[0].tg_id, delta);
+      setResPopularity(result.popularity); setPopularityDelta(''); haptic('medium');
+      toast(`محبوبیت «${resTarget[0].name}» به ${result.popularity.toLocaleString('fa-IR')} رسید`);
+    } catch (e) { toast(e.message); }
+    setPopularityBusy(false);
+  };
+
+  const applyBulkAdjustment = async () => {
+    const delta = Number(bulkDelta);
+    if (!Number.isInteger(delta) || delta === 0) { toast('مقدار افزایش یا کاهش را درست وارد کن'); return; }
+    const fieldName = bulkField === 'popularity' ? 'محبوبیت' : (RES_LABEL[bulkField] || bulkField);
+    const scopeName = bulkRegion === 'all' ? 'همهٔ بازیکنان' : `بازیکنان اقلیم ${REGIONS_STATIC[bulkRegion]?.name || bulkRegion}`;
+    if (!window.confirm(`${delta > 0 ? 'افزودن' : 'کم‌کردن'} ${Math.abs(delta).toLocaleString('fa-IR')} ${fieldName} برای ${scopeName} انجام شود؟`)) return;
+    setBulkBusy(true); setBulkResult(null);
+    try {
+      const result = await api.adminBulkAdjustPlayers(bulkField, delta, bulkRegion === 'all' ? null : bulkRegion);
+      setBulkResult(result); setBulkDelta(''); haptic('medium');
+      toast(`تغییر جمعی برای ${result.changed.toLocaleString('fa-IR')} بازیکن ثبت شد`);
+    } catch (e) { toast(e.message); }
+    setBulkBusy(false);
+  };
+
+  const toggleWarWindow = async () => {
+    if (!warWindow) return;
+    setWarWindowBusy(true);
+    try {
+      const res = await api.adminSetWarWindow(!warWindow.open);
+      haptic('medium');
+      toast(res.open ? 'پنجرهٔ لشکرکشی برای همه باز شد' : 'پنجرهٔ لشکرکشی برای همه بسته شد');
+      loadWarWindow();
+    } catch (e) { toast(e.message); }
+    setWarWindowBusy(false);
+  };
+
+  const sendEvent = async () => {
+    if (!eventTitle.trim() || !eventDescription.trim()) { toast('عنوان و توضیحِ رویداد را بنویس'); return; }
+    setEventBusy(true);
+    try {
+      await api.adminAnnounceEvent(eventTitle.trim(), eventDescription.trim(), eventImage);
+      haptic('medium');
+      toast('رویداد برای همهٔ بازیکنان با کلاغ فرستاده شد');
+      setEventTitle(''); setEventDescription(''); setEventImage(null);
+    } catch (e) { toast(e.message); }
+    setEventBusy(false);
+  };
+
+  const sendBotMessage = async () => {
+    const text = botMessage.trim();
+    if (!text) { toast('متن پیام را بنویس'); return; }
+    if (!botViaBot && !botViaRaven) { toast('بات، کلاغ یا هر دو را انتخاب کن'); return; }
+    if (botAudience === 'selected' && botTargets.length === 0) { toast('حداقل یک بازیکن را انتخاب کن'); return; }
+    setBotMessageBusy(true);
+    try {
+      const res = await api.adminSendBotMessage(
+        text,
+        botAudience === 'all',
+        botTargets.map(p => p.tg_id),
+        botViaBot,
+        botViaRaven,
+        botMessageImage,
+      );
+      haptic('medium');
+      toast(`پیام برای ${(res.sent_to ?? 0).toLocaleString('fa-IR')} بازیکن ارسال شد`);
+      setBotMessage(''); setBotMessageImage(null);
+      setBotTargets([]);
+    } catch (e) { toast(e.message); }
+    setBotMessageBusy(false);
+  };
+
+  const awardStoryteller = async () => {
+    if (!medalTarget.length) { toast('یک بازیکن انتخاب کن'); return; }
+    setMedalBusy(true);
+    try {
+      await api.adminAwardStoryteller(medalTarget[0].tg_id, medalTier, medalReason.trim());
+      haptic('medium'); toast('مدال راوی قلمرو اعطا شد');
+      setMedalTarget([]); setMedalReason('');
+    } catch (e) { toast(e.message); }
+    setMedalBusy(false);
+  };
+
+  const awardSpecialMedal = async () => {
+    if (!specialMedalTarget.length) { toast('بازیکن دریافت‌کننده را انتخاب کن'); return; }
+    const preset = SPECIAL_MEDAL_PRESETS.find(m => m.key === specialMedalPreset);
+    const medalName = specialMedalPreset === 'custom' ? specialMedalName.trim() : preset?.name;
+    const medalIcon = specialMedalIcon.trim() || preset?.icon || '🏅';
+    if (!medalName) { toast('نام مدال را بنویس'); return; }
+    setSpecialMedalBusy(true);
+    try {
+      await api.adminAwardSpecialMedal(specialMedalTarget[0].tg_id, {
+        name: medalName, icon: medalIcon, tier: specialMedalTier,
+        reason: specialMedalReason.trim(),
+      });
+      haptic('medium'); toast('مدال ویژهٔ ادمین اعطا شد');
+      setSpecialMedalTarget([]); setSpecialMedalName(''); setSpecialMedalIcon('');
+      setSpecialMedalReason('');
+    } catch (e) { toast(e.message); }
+    setSpecialMedalBusy(false);
+  };
+
+  const resetGame = async () => {
+    if (resetConfirmText.trim() !== 'RESET') { toast('عبارت RESET را دقیقاً همون‌جوری تایپ کن'); return; }
+    if (!window.confirm('مطمئنی؟ این کار بازگشت‌ناپذیره — همهٔ بازیکن‌های غیرادمین حذف می‌شن و تاریخچهٔ بازی پاک می‌شه.')) return;
+    setResetBusy(true);
+    try {
+      const res = await api.adminResetGame(resetConfirmText.trim());
+      haptic('medium');
+      toast(`بازی ری‌استارت شد — ${(res.players_deleted ?? 0).toLocaleString('fa-IR')} بازیکن حذف شد`);
+      setResetConfirmText('');
+      loadResetPreview();
+      // ری‌استارت این‌ها رو کامل خالی می‌کنه (لشکرکشی، جاسوسی، رول، اتحاد، رای‌گیری) —
+      // بدونِ رفرشِ همه‌شون، پنل ادمین تا رفرشِ دستیِ صفحه دادهٔ حذف‌شده نشون می‌ده
+      loadPendingPlayers(); loadRoster(); loadCampaigns(); loadMapData();
+      loadRoleplayPending(); loadAlliances(); loadPolls();
+    } catch (e) { toast(e.message); }
+    setResetBusy(false);
+  };
+
+  const disbandCampaign = async (id) => {
+    setDisbandBusyId(id);
+    try {
+      const res = await api.adminDisbandCampaign(id);
+      haptic('medium');
+      toast(res.battle_closed ? 'لشکر منحل شد و چون یک سمت خالی ماند، نبرد هم بسته شد' : res.battle_member_removed ? 'لشکر منحل و فقط همان عضو از نبرد خارج شد' : 'لشکر منحل شد و تمام هزینه‌هایش برگشت');
+      if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(() => {});
+      loadCampaigns(); loadBattles(); loadRoleplayPending();
+    } catch (e) { toast(e.message); }
+    setDisbandBusyId(null);
+  };
+
+  const expelAlliance = async (a, member) => {
+    const penalty = member.penalty_gold || a.members?.find(m => !m.creator && m.status === 'accepted')?.penalty_gold || 0;
+    if (!window.confirm(`اخراج ${member.name}؟ غرامت ${penalty.toLocaleString('fa-IR')} سکه بین سایر اعضا تقسیم می‌شود و موجودی ناکافی منفی می‌شود.${member.creator ? ' کل گروه منحل می‌شود.' : ''}`)) return;
+    setDissolveBusyId(a.id);
+    try { await api.adminExpelAlliance(member.alliance_id || a.id, member.tg_id); toast('اخراج و تسویهٔ غرامت انجام شد'); loadAlliances(); }
+    catch (e) { toast(e.message); }
+    setDissolveBusyId(null);
+  };
+
+  const dissolveAlliance = async (id) => {
+    if (!window.confirm("کل پیمان و دعوت‌های باز آن بدون غرامت منحل شوند؟ برای جریمهٔ بازیکن از اخراج استفاده کن.")) return;
+    setDissolveBusyId(id);
+    try {
+      await api.adminDissolveAlliance(id);
+      haptic('medium');
+      toast('کل پیمان منحل شد؛ اعلان اعضا ثبت شد');
+      loadAlliances();
+    } catch (e) { toast(e.message); }
+    setDissolveBusyId(null);
+  };
+
+  const respondRoleplay = async (roleplayId) => {
+    const result = (roleplayResults[roleplayId] || '').trim();
+    if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
+    const visibility = roleplayVisibility[roleplayId] || 'participants';
+    const otherLords = (roleplayOtherLords[roleplayId] || []).map(p => p.tg_id);
+    const roleplay = roleplayPending?.find(r => r.id === roleplayId);
+    if (roleplay?.category === 'war') {
+      setTab('war'); setWarSubTab('battles');
+      toast('نتیجه و تلفات جنگ فقط از پروندهٔ یکپارچهٔ نبرد ثبت می‌شود');
+      return;
+    }
+    const winnerTgId = roleplayWinners[roleplayId] || null;
+    if (roleplay?.category === 'war' && !winnerTgId) { toast('برندهٔ نبرد را مشخص کن'); return; }
+    setRoleplayBusyId(roleplayId);
+    try {
+      const losses = roleplayLosses[roleplayId] || {};
+      const res = await api.adminRespondRoleplay(roleplayId, result, visibility, otherLords, winnerTgId, losses.attacker || {}, losses.defender || {}, roleplayAdjustments[roleplayId] || {});
+      haptic('medium');
+      toast(visibility === 'all' ? `اعلامیه برای همهٔ بازیکنان (${(res.sent_to || 0).toLocaleString('fa-IR')} نفر) فرستاده شد` : 'نتیجهٔ رول برای بازیکن فرستاده شد');
+      setRoleplayResults(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayVisibility(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayOtherLords(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayWinners(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayLosses(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      setRoleplayAdjustments(prev => { const n = { ...prev }; delete n[roleplayId]; return n; });
+      loadRoleplayPending();
+    } catch (e) { toast(e.message); }
+    setRoleplayBusyId(null);
+  };
+
+  const chooseMusicFile = (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('audio/')) { toast('فقط فایل صوتی انتخاب کن'); return; }
+    if (file.size > 7 * 1024 * 1024) { toast('حجم موسیقی باید حداکثر ۷ مگابایت باشد'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setMusicSettings(p => ({ ...(p || {}), audio_url: String(reader.result || ''), title: p?.title || file.name.replace(/\.[^.]+$/, '') }));
+    reader.onerror = () => toast('خواندن فایل موسیقی ناموفق بود');
+    reader.readAsDataURL(file);
+  };
+
+  const saveMusic = async () => {
+    if (!musicSettings) return;
+    setMusicBusy(true);
+    try {
+      const saved = await api.adminSaveMusicSettings({
+        ...musicSettings, volume: Math.max(0, Math.min(100, Number(musicSettings.volume) || 0)),
+      });
+      setMusicSettings(saved); haptic('medium'); toast('تنظیمات موسیقی بازی ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setMusicBusy(false);
+  };
+
+  const scoreAmbush = async (id) => {
+    const coefficient = Number(ambushScores[id]);
+    const ambushScore = Number(ambushQualityScores[id]);
+    if (Number.isNaN(coefficient) || coefficient < 0 || coefficient > 10) { toast('ضریب باید بین صفر تا ۱۰ باشد'); return; }
+    if (Number.isNaN(ambushScore) || ambushScore < 0 || ambushScore > 100) { toast('امتیاز کمین باید بین صفر تا ۱۰۰ باشد'); return; }
+    setAmbushBusyId(id);
+    const row = ambushesList?.find(a => a.id === id);
+    const scenario = (ambushScenarios[id] ?? row?.scenario ?? '').trim();
+    if (scenario.length < 20) { toast('سناریوی کمین باید حداقل ۲۰ نویسه باشد'); return; }
+    try { await api.adminEditAmbush(id, scenario, coefficient, ambushScore); haptic('medium'); toast('کمین ذخیره و فعال شد'); loadAmbushes(); }
+    catch (e) { toast(e.message); }
+    setAmbushBusyId(null);
+  };
+
+  const deleteAmbush = async (id) => {
+    if (!window.confirm('این کمین حذف شود؟ اگر هنوز مصرف نشده باشد، نفرات، سکه و تسلیحاتش به سازنده برمی‌گردد.')) return;
+    setAmbushBusyId(id);
+    try { await api.adminDeleteAmbush(id); haptic('medium'); toast('کمین حذف و هزینه‌های قابل بازگشت مسترد شد'); loadAmbushes(); }
+    catch (e) { toast(e.message); }
+    setAmbushBusyId(null);
+  };
+
+  const reduceCampaign = async (campaign) => {
+    const troops = campaignLosses[campaign.id] || {};
+    if (!Object.values(troops).some(v => Number(v) > 0)) { toast('تلفات حداقل یک نیرو را وارد کن'); return; }
+    setDisbandBusyId(campaign.id);
+    try { await api.adminReduceCampaign(campaign.id, troops); toast('تلفات لشکر ثبت شد؛ چیزی به بازیکن برنگشت'); loadCampaigns(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
+    catch (e) { toast(e.message); }
+    setDisbandBusyId(null);
+  };
+
+  const destroyCampaign = async (id) => {
+    if (!window.confirm('این لشکر کامل منهدم شود؟ هیچ نفر، سکه، سلاح یا ادواتی برنمی‌گردد.')) return;
+    setDisbandBusyId(id);
+    try { const res = await api.adminDestroyCampaign(id); toast(res.battle_closed ? 'لشکر منهدم شد و چون یک سمت خالی ماند، نبرد هم بسته شد' : res.battle_member_removed ? 'لشکر منهدم و فقط همان عضو از نبرد خارج شد' : 'لشکر کاملاً منهدم شد'); loadCampaigns(); loadBattles(); loadRoleplayPending(); if (resTarget.length) api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns); }
+    catch (e) { toast(e.message); }
+    setDisbandBusyId(null);
+  };
+
+  const resetSeason = async () => {
+    if (seasonResetConfirm.trim() !== 'NEWSEASON') { toast('عبارت NEWSEASON را دقیق تایپ کن'); return; }
+    if (!window.confirm('فصل تازه شروع شود؟ پیشرفت همه صفر می‌شود، اما بازیکن‌ها و قلعه‌هایشان باقی می‌مانند.')) return;
+    setSeasonResetBusy(true);
+    try {
+      const res = await api.adminResetSeason(seasonResetConfirm.trim());
+      haptic('medium'); toast(`فصل تازه شروع شد؛ ${res.players_reset ?? 0} بازیکن ریست شد`);
+      setSeasonResetConfirm(''); loadRoster(); loadCampaigns(); loadMapData();
+    } catch (e) { toast(e.message); }
+    setSeasonResetBusy(false);
+  };
+
+  const resetScoreboard = async () => {
+    if (scoreResetConfirm.trim() !== 'SCOREBOARD') { toast('عبارت SCOREBOARD را دقیق تایپ کن'); return; }
+    if (!window.confirm('مبنای امتیاز همهٔ بازیکن‌ها از همین لحظه صفر شود؟')) return;
+    setScoreResetBusy(true);
+    try {
+      const res = await api.adminResetScoreboard(scoreResetConfirm.trim());
+      haptic('medium'); toast(`جدول امتیازات ${res.players_reset ?? 0} بازیکن صفر شد`);
+      setScoreResetConfirm(''); loadRoster();
+    } catch (e) { toast(e.message); }
+    setScoreResetBusy(false);
+  };
+
+  const resolveBattle = async (battle) => {
+    const id = battle.campaign_id;
+    const result = (roleplayResults[id] || '').trim();
+    const winners = roleplayWinners[id] || [];
+    if (result.length < 3) { toast('متن نتیجه خیلی کوتاه است'); return; }
+    if (!winners.length) { toast('حداقل یک برندهٔ نبرد را مشخص کن'); return; }
+    setRoleplayBusyId(id);
+    try {
+      const losses = roleplayLosses[id] || {};
+      await api.adminResolveBattle(id, result, roleplayVisibility[id] || 'participants', winners, losses.attacker || {}, losses.defender || {}, losses.attackerEquipment || {}, losses.defenderEquipment || {}, losses.attackers || {}, losses.attackerEquipments || {}, losses.defenders || {}, losses.defenderEquipments || {}, battleResultImages[id] || null, retreatDestinations[id] || {});
+      toast('نتیجهٔ نبرد ثبت و لشکرهای بازمانده آزاد شدند');
+      loadBattles(); loadRoleplayPending(); loadCampaigns();
+    } catch (e) { toast(e.message); }
+    setRoleplayBusyId(null);
+  };
+
+  const scoreRoleplay = async (roleplayId, category = '') => {
+    const maxScore = category === 'scout' ? 100 : roleplayScoreMax;
+    const score = Number(roleplayScores[roleplayId]);
+    if (!Number.isInteger(score) || score < 0 || score > maxScore) { toast(`امتیاز باید بین ۰ تا ${maxScore.toLocaleString('fa-IR')} باشد`); return; }
+    setRoleplayScoreBusyId(roleplayId);
+    try {
+      await api.adminScoreRoleplay(roleplayId, score);
+      haptic('medium'); toast(category === 'scout' ? 'امتیاز پیش‌قراول ثبت شد' : 'امتیاز رول ثبت و به امتیاز بازیکن اعمال شد');
+      loadRoleplayPending();
+      api.adminSecurityRoleplays(securityQuery, securityPlayer[0]?.tg_id).then(setSecurityRoleplays).catch(() => {});
+    } catch (e) { toast(e.message); }
+    setRoleplayScoreBusyId(null);
+  };
+
+  const saveRoleplayScoreMax = async () => {
+    const value = Number(roleplayScoreMax);
+    if (!Number.isInteger(value) || value < 1) { toast('سقف امتیاز باید عددی مثبت باشد'); return; }
+    setRoleplayScoreSettingsBusy(true);
+    try { const r = await api.adminSaveRoleplayScoreSettings(value); setRoleplayScoreMax(r.max_score); toast('سقف امتیاز رول ذخیره شد'); }
+    catch (e) { toast(e.message); }
+    setRoleplayScoreSettingsBusy(false);
+  };
+
+  const savePlayerProfile = async () => {
+    if (!profileTarget.length || !profileDraft) return;
+    if (!profileDraft.name?.trim() || profileDraft.backstory?.trim().length < 40) { toast('نام و بک‌استوری حداقل ۴۰ نویسه‌ای را کامل کن'); return; }
+    setProfileBusy(true);
+    try {
+      const saved = await api.adminEditPlayerProfile(profileTarget[0].tg_id, profileDraft);
+      setProfileDraft(saved); haptic('medium'); toast('مشخصات بازیکن ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setProfileBusy(false);
+  };
+
+  const saveControlSettings = async () => {
+    setControlSettingsBusy(true);
+    try { const r = await api.adminSaveControlSettings(controlSettings); setControlSettings(r.settings); toast('تمام قوانین و نرخ‌ها ذخیره شدند'); }
+    catch (e) { toast(e.message); }
+    setControlSettingsBusy(false);
+  };
+
+  const resetControlSettings = async () => {
+    if (!window.confirm('همهٔ نرخ‌ها و قوانین این صفحه به پیش‌فرض برگردند؟')) return;
+    setControlSettingsBusy(true);
+    try { const r = await api.adminResetControlSettings(); setControlSettings(r.settings); toast('تنظیمات پیش‌فرض بازی برگشت'); }
+    catch (e) { toast(e.message); }
+    setControlSettingsBusy(false);
+  };
+
+  const toggleBattleWinner = (battleId, tgId) => {
+    setRoleplayWinners(prev => {
+      const current = prev[battleId] || [];
+      const selected = current.includes(tgId);
+      if (selected) return { ...prev, [battleId]: current.filter(id => id !== tgId) };
+      return { ...prev, [battleId]: [...current, tgId] };
+    });
+  };
+
+  const dismissBattle = async (battle, stay=false) => {
+    if (!window.confirm(`نبرد «${battle.name}» بدون نتیجه بسته شود؟ ${stay?'تمام لشکرها در محل درگیری می‌مانند.':'قواعد بازگشت لشکرها اجرا می‌شود.'}`)) return;
+    setRoleplayBusyId(battle.campaign_id);
+    try {
+      await api.adminDismissBattle(battle.campaign_id,stay);
+      haptic('medium'); toast('نبرد منحل و لشکرهای درگیر آزاد شدند');
+      loadBattles(); loadRoleplayPending(); loadCampaigns();
+    } catch (e) { toast(e.message); }
+    setRoleplayBusyId(null);
+  };
+
+  const setOverlord = async () => {
+    if (!overlordTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    try {
+      await api.adminSetOverlord(overlordRegion, overlordTarget[0].tg_id); api.titles().then(setOfficeHolders);
+      haptic('medium');
+      toast('بالادستی تعیین شد');
+      setOverlordTarget([]);
+    } catch (e) { toast(e.message); }
+  };
+
+  const setWarden = async () => {
+    if (!wardenTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    try {
+      await api.adminSetWarden(wardenGroup, wardenTarget[0].tg_id); api.titles().then(setOfficeHolders);
+      haptic('medium');
+      toast('والی تعیین شد');
+      setWardenTarget([]);
+    } catch (e) { toast(e.message); }
+  };
+
+  const setKing = async () => {
+    if (!kingTarget.length) { toast('یک والی را انتخاب کن'); return; }
+    try {
+      await api.adminSetKing(kingTarget[0].tg_id); api.titles().then(setOfficeHolders);
+      haptic('medium');
+      toast('پادشاه/ملکه تعیین شد');
+      setKingTarget([]);
+    } catch (e) { toast(e.message); }
+  };
+
+  const setEpithet = async () => {
+    if (!epithetTarget.length || !epithetText.trim()) { toast('لرد و عنوان را مشخص کن'); return; }
+    try {
+      await api.adminSetEpithet(epithetTarget[0].tg_id, epithetText.trim());
+      haptic('medium');
+      toast('عنوان ثبت شد');
+      setEpithetTarget([]); setEpithetText('');
+    } catch (e) { toast(e.message); }
+  };
+
+  const createPoll = async () => {
+    const opts = pollOptions.map(o => o.trim()).filter(Boolean);
+    if (!pollQuestion.trim() || opts.length < 2 || !pollEligible.length) {
+      toast('سوال، حداقل دو گزینه، و حداقل یک واجد شرایط لازم است'); return;
+    }
+    try {
+      await api.adminCreatePoll(pollQuestion.trim(), opts, pollEligible.map(p => p.tg_id));
+      haptic('medium');
+      toast('رای‌گیری ساخته شد');
+      setPollQuestion(''); setPollOptions(['', '']); setPollEligible([]);
+      loadPolls();
+    } catch (e) { toast(e.message); }
+  };
+
+  const closePoll = async (id) => {
+    try { await api.adminClosePoll(id); haptic(); toast('رای‌گیری بسته شد'); loadPolls(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const deletePoll = async (id) => {
+    try { await api.adminDeletePoll(id); haptic(); toast('رای‌گیری حذف شد'); loadPolls(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const addAdmin = async () => {
+    if (!newAdminTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    if (newAdminRole === 'owner' && !window.confirm('این فرد دقیقاً تمام دسترسی‌های ادمین اصلی را می‌گیرد؛ از جمله مدیریت ادمین‌ها و ریست فصل. مطمئنی؟')) return;
+    try {
+      await api.adminAddAdmin(newAdminTarget[0].tg_id, newAdminRole);
+      haptic('medium');
+      toast(newAdminRole === 'owner' ? 'ادمین اصلی ثبت شد' : newAdminRole === 'full' ? 'ادمین کامل ثبت شد' : 'ادمین اجرایی ثبت شد');
+      setNewAdminTarget([]);
+      loadAdmins();
+    } catch (e) { toast(e.message); }
+  };
+
+  const removeAdmin = async (tgId) => {
+    if (!window.confirm('دسترسی ادمین این فرد حذف شود؟')) return;
+    try { await api.adminRemoveAdmin(tgId); haptic(); toast('ادمین حذف شد'); loadAdmins(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const editAdminRole = (admin) => {
+    setNewAdminTarget([{ tg_id: admin.tg_id, name: admin.name || String(admin.tg_id), castle: admin.castle }]);
+    setNewAdminRole(admin.role);
+    document.getElementById('admin-role-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const assignHouse = async (tgId) => {
+    const current = roster?.find(p => p.tg_id === tgId) || pendingPlayers?.find(p => p.tg_id === tgId);
+    const regionId = assignRegion[tgId] || current?.region || Object.keys(REGIONS_STATIC)[0];
+    const castle = assignCastle[tgId];
+    if (!castle) { toast('یک قلعه انتخاب کن'); return; }
+    setAssignBusyId(tgId);
+    try {
+      const res = await api.adminAssignHouse(tgId, regionId, castle);
+      haptic('medium');
+      toast(res.moved ? 'خاندان و قلعه جابه‌جا شد — کلاغی برایش رفت' : 'خاندان و قلعه تعیین شد — کلاغی برایش رفت');
+      setAssignCastle(prev => { const n = { ...prev }; delete n[tgId]; return n; });
+      setReassignOpenId(null);
+      loadPendingPlayers(); loadRoster(); loadMapData(); loadRegistrationSettings();
+    } catch (e) { toast(e.message); }
+    setAssignBusyId(null);
+  };
+
+  const unassignHouse = async (tgId) => {
+    setUnassignBusyId(tgId);
+    try {
+      await api.adminUnassignHouse(tgId);
+      haptic('medium');
+      toast('خاندان و قلعه از این بازیکن گرفته شد');
+      loadPendingPlayers(); loadRoster(); loadMapData(); loadRegistrationSettings();
+    } catch (e) { toast(e.message); }
+    setUnassignBusyId(null);
+  };
+
+  const addCastle = async (tgId) => {
+    const castle = addCastleValue[0];
+    if (!castle) { toast('یک قلعه انتخاب کن'); return; }
+    const holder = roster?.find(p => !p.is_dead && (p.castle === castle || p.castles?.includes(castle)));
+    if (holder && holder.tg_id !== tgId && !window.confirm(`قلعهٔ «${castle}» از «${holder.name}» گرفته شود؟ ساختمان‌ها منتقل می‌شوند و منابع مشترک باقی می‌مانند.${new Set([holder.castle, ...(holder.castles || [])].filter(Boolean)).size === 1 ? ' این آخرین قلعهٔ اوست؛ بازیکن کشته و تمام لشکرهایش حذف می‌شوند.' : ''}`)) return;
+    setAddCastleBusyId(tgId);
+    try {
+      const res = await api.adminAddCastle(tgId, castle, addCastleMode);
+      haptic('medium');
+      toast(res.captured_from ? `قلعه از «${res.captured_from}» گرفته شد و به این بازیکن اضافه شد` : 'قلعهٔ اضافه به این بازیکن داده شد');
+      setAddCastleValue([]);
+      setAddCastleOpenId(null);
+      // فتحِ قلعه ممکنه صاحبِ قبلی رو بی‌خاندان کنه (اگه تنها قلعه‌اش بوده) — پس باید
+      // لیستِ در-انتظار هم دوباره لود بشه، نه فقط roster
+      loadRoster(); loadPendingPlayers(); loadMapData();
+    } catch (e) { toast(e.message); }
+    setAddCastleBusyId(null);
+  };
+
+  const removeCastle = async (tgId, castle) => {
+    setRemoveCastleBusyKey(`${tgId}:${castle}`);
+    try {
+      await api.adminRemoveCastle(tgId, castle);
+      haptic('medium');
+      toast(`قلعهٔ «${castle}» از این بازیکن گرفته شد`);
+      loadRoster(); loadMapData();
+    } catch (e) { toast(e.message); }
+    setRemoveCastleBusyKey(null);
+  };
+
+  const deletePendingPlayer = async (tgId, name) => {
+    if (!window.confirm(`درخواستِ ثبت‌نامِ «${name}» کاملاً پاک بشه؟ این کار برگشت‌ناپذیره.`)) return;
+    setDeletePendingBusyId(tgId);
+    try {
+      await api.adminDeletePendingPlayer(tgId);
+      haptic('medium');
+      toast('درخواست ثبت‌نام حذف شد');
+      loadPendingPlayers();
+    } catch (e) { toast(e.message); }
+    setDeletePendingBusyId(null);
+  };
+
+  const toggleReassign = (tgId) => {
+    haptic();
+    setReassignOpenId(prev => prev === tgId ? null : tgId);
+    setAssignCastle(prev => ({ ...prev, [tgId]: '' }));
+  };
+
+  const toggleAddCastle = (tgId) => {
+    haptic();
+    setAddCastleMode('normal');
+    setAddCastleOpenId(prev => prev === tgId ? null : tgId);
+    setAddCastleValue([]);
+  };
+
+  const createItem = async () => {
+    if (!itemName.trim()) { toast('نام آیتم را بنویس'); return; }
+    if (itemDuration === 'temporary' && (!itemDurationHours || +itemDurationHours <= 0)) {
+      toast('برای آیتم موقتی، مدت (ساعت) را مشخص کن'); return;
+    }
+    setItemBusy(true);
+    try {
+      await api.adminCreateItem({
+        name: itemName.trim(), type: itemType, duration: itemDuration,
+        duration_hours: itemDuration === 'temporary' ? +itemDurationHours : null,
+        description: itemDescription.trim(), color: itemColor,
+        image: itemImage,
+        building_id: itemType === 'economy' && itemBuilding ? itemBuilding : null,
+        yield_percent: itemType === 'economy' && itemBuilding ? Number(itemYield) : 0,
+      });
+      haptic('medium');
+      toast('آیتم ساخته شد');
+      setItemName(''); setItemDescription(''); setItemDurationHours('24'); setItemImage(null);
+      loadItems();
+    } catch (e) { toast(e.message); }
+    setItemBusy(false);
+  };
+
+  const deleteItem = async (id) => {
+    try { await api.adminDeleteItem(id); haptic(); toast('آیتم حذف شد'); loadItems(); }
+    catch (e) { toast(e.message); }
+  };
+
+  const openGrant = (id) => {
+    haptic();
+    setGrantOpenId(prev => prev === id ? null : id);
+    setGrantRequestId(crypto.randomUUID());
+    setGrantTarget([]); setGrantColor(itemsList?.find(it => it.id === id)?.color || 'gray');
+  };
+
+  const grantItem = async (id) => {
+    if (!grantTarget.length) { toast('یک لرد را انتخاب کن'); return; }
+    setGrantBusy(true);
+    try {
+      await api.adminGrantItem(id, grantTarget[0].tg_id, grantColor, grantRequestId);
+      haptic('medium');
+      toast(`آیتم به «${grantTarget[0].name}» داده شد`);
+      setGrantOpenId(null); setGrantTarget([]);
+      loadItems();
+    } catch (e) { toast(e.message); }
+    setGrantBusy(false);
+  };
+
+  const setBalanceDraft = (bid, section, key, value) => {
+    setBalanceDrafts(prev => ({
+      ...prev,
+      [bid]: {
+        ...prev[bid],
+        [section]: key === null ? value : { ...(prev[bid]?.[section] || {}), [key]: value },
+      },
+    }));
+  };
+
+  const parseBalanceMap = (values, errorText) => {
+    const out = {};
+    for (const [key, value] of Object.entries(values || {})) {
+      const n = parseInt(value, 10);
+      if (isNaN(n) || n < 0) throw new Error(errorText);
+      out[key] = n;
+    }
+    return out;
+  };
+
+  const saveBalance = async (b) => {
+    const draft = balanceDrafts[b.id] || {};
+    let payload;
+    try {
+      const step = Number(draft.cost_step_percent);
+      if (!Number.isFinite(step) || step < 0 || step > 500) throw new Error('درصد رشد هزینه باید بین صفر تا ۵۰۰ باشد');
+      payload = {
+        building_id: b.id,
+        cost: parseBalanceMap(draft.cost, 'هزینه‌ها باید عدد صحیح و غیرمنفی باشند'),
+        cost_step_percent: step,
+        hours: Number(draft.hours),
+        max_level: parseInt(draft.max_level, 10),
+        produces: parseBalanceMap(draft.produces, 'مقدار تولید باید عدد صحیح و غیرمنفی باشد'),
+        cap_bonus: parseBalanceMap(draft.cap_bonus, 'افزایش سقف باید عدد صحیح و غیرمنفی باشد'),
+      };
+      if (!Number.isFinite(payload.hours) || payload.hours <= 0) throw new Error('زمان پایه باید بیشتر از صفر باشد');
+      if (!Number.isInteger(payload.max_level) || payload.max_level < 1 || payload.max_level > 100) throw new Error('سقف سطح باید بین ۱ تا ۱۰۰ باشد');
+    } catch (e) { toast(e.message); return; }
+    setBalanceBusyId(b.id);
+    try {
+      await api.adminSetBuildingBalance(payload);
+      applyRuntimeGamedata(await api.gamedata());
+      haptic('medium');
+      toast(`تنظیمات «${b.name}» ذخیره شد`);
+      loadBalance();
+    } catch (e) { toast(e.message); }
+    setBalanceBusyId(null);
+  };
+
+  const resetBalance = async (b) => {
+    setBalanceBusyId(b.id);
+    try {
+      await api.adminResetBuildingBalance(b.id);
+      applyRuntimeGamedata(await api.gamedata());
+      haptic();
+      toast(`«${b.name}» به مقدار پیش‌فرض برگشت`);
+      loadBalance();
+    } catch (e) { toast(e.message); }
+    setBalanceBusyId(null);
+  };
+
+  const setGameplayRule = (key, value) => setGameplayBalance(prev => ({ ...prev, rules: { ...prev.rules, [key]: value } }));
+  const setGameplayRow = (section, id, key, value) => setGameplayBalance(prev => ({
+    ...prev,
+    [section]: prev[section].map(row => row.id === id ? { ...row, [key]: value } : row),
+  }));
+  const setEquipmentCost = (id, key, value) => setGameplayBalance(prev => ({
+    ...prev,
+    equipment: prev.equipment.map(row => row.id === id ? { ...row, cost: { ...row.cost, [key]: value } } : row),
+  }));
+  const saveGameplayBalance = async () => {
+    setGameplayBalanceBusy(true);
+    try {
+      const saved = await api.adminSetGameplayBalance(gameplayBalance);
+      setGameplayBalance(saved);
+      applyRuntimeGamedata(await api.gamedata());
+      loadBalance();
+      haptic('medium'); toast('تعادل نیروها و ادوات ذخیره شد');
+    } catch (e) { toast(e.message); }
+    setGameplayBalanceBusy(false);
+  };
+  const resetGameplayBalance = async () => {
+    setGameplayBalanceBusy(true);
+    try {
+      const saved = await api.adminResetGameplayBalance();
+      setGameplayBalance(saved);
+      applyRuntimeGamedata(await api.gamedata());
+      loadBalance();
+      haptic(); toast('تعادل نیروها و ادوات به پیش‌فرض برگشت');
+    } catch (e) { toast(e.message); }
+    setGameplayBalanceBusy(false);
+  };
+
+  const savePlayerBuilding = async (row) => {
+    if (!playerBuildingTarget.length || !playerBuildingCastle) return;
+    const key = `${playerBuildingCastle}::${row.id}`;
+    const level = parseInt(playerBuildingDrafts[key], 10);
+    const maxLevel = row.max_level || playerBuildingData?.max_level || 30;
+    if (isNaN(level) || level < 0 || level > maxLevel) {
+      toast(`سطح باید بین صفر تا ${maxLevel.toLocaleString('fa-IR')} باشد`); return;
+    }
+    setPlayerBuildingBusyId(row.id);
+    try {
+      await api.adminSetPlayerBuilding(playerBuildingTarget[0].tg_id, row.id, playerBuildingCastle, level);
+      haptic('medium');
+      toast(level === 0 ? `«${row.name}» حذف شد` : `سطح «${row.name}» روی ${level.toLocaleString('fa-IR')} ثبت شد`);
+      const data = await api.adminPlayerBuildings(playerBuildingTarget[0].tg_id);
+      setPlayerBuildingData(data);
+      setPlayerBuildingDrafts(Object.fromEntries(
+        (data.castles || []).flatMap(castle => castle.buildings.map(b => [`${castle.castle}::${b.id}`, String(b.level)]))
+      ));
+    } catch (e) { toast(e.message); }
+    setPlayerBuildingBusyId(null);
+  };
+
+  const deleteAdminRumor = async (row) => {
+    if (!window.confirm(`توییتٔ «${row.text.slice(0, 60)}» حذف شود؟ محبوبیت کم‌شده برنمی‌گردد.`)) return;
+    setRumorDeleteBusy(row.id);
+    try {
+      await api.adminDeleteRumor(row.id);
+      setAdminRumors(prev => prev?.filter(x => x.id !== row.id));
+      toast('توییت حذف شد');
+    } catch (e) { toast(e.message); }
+    setRumorDeleteBusy(null);
+  };
+
+  const runCleanup = async (category, token, label) => {
+    if ((cleanupConfirm[category] || '').trim() !== token) {
+      toast(`برای پاک‌سازی باید دقیقاً ${token} را بنویسی`);
+      return;
+    }
+    if (!window.confirm(`تاریخچهٔ ${label} پاک شود؟ این کار برگشت‌ناپذیر است.`)) return;
+    setCleanupBusy(category);
+    try {
+      const result = await api.adminCleanup(category, token);
+      toast(`${result.deleted.toLocaleString('fa-IR')} مورد از ${label} پاک شد`);
+      setCleanupConfirm(prev => ({ ...prev, [category]: '' }));
+      loadCleanupPreview();
+      if (category === 'rumors') loadAdminRumors();
+    } catch (e) { toast(e.message); }
+    setCleanupBusy(null);
+  };
+
+  const markNotificationRead = async (id) => {
+    try {
+      await api.adminReadNotification(id);
+      setAdminNotifications(prev => prev?.map(x => x.id === id ? { ...x, read: true } : x));
+    } catch (e) { toast(e.message); }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await api.adminReadAllNotifications();
+      setAdminNotifications(prev => prev?.map(x => ({ ...x, read: true })));
+      toast('همهٔ اعلان‌ها خوانده شدند');
+    } catch (e) { toast(e.message); }
+  };
+
+  const openTab = (key) => {
+    const target = TAB_BY_KEY[key];
+    if (!isOwner && SYSTEM_TAB_KEYS.has(key)) {
+      toast('مدیریت سامانه فقط برای مالک سامانه در دسترس است');
+      return;
+    }
+    if (!isFull && !allowedTabKeys.has(key)) {
+      toast(isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند' : 'ادمین اجرایی فقط به بخش داوری و ارتباط دسترسی دارد');
+      return;
+    }
+    if (target?.ownerOnly && !isOwner) {
+      toast('مدیریت ادمین‌ها فقط برای ادمین اصلی باز است');
+      return;
+    }
+    if (target?.fullOnly && !isFull) {
+      toast('این بخش فقط برای ادمین اصلی یا ادمین کامل باز است');
+      return;
+    }
+    haptic();
+    setTab(key);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openGroup = (group) => {
+    const first = group.tabs[0];
+    if (first) openTab(first.key);
+  };
+
+  const tabBadge = (key) => {
+    if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
+    if (key === 'registration') return pendingPlayers?.length || 0;
+    if (key === 'war') return (battles?.length || 0) + (ambushesList?.filter(a => a.status === 'pending_score').length || 0);
+    if (key === 'roleplays') return roleplayPending?.length || 0;
+    if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
+    return 0;
+  };
+
+  const normalizedRosterQuery = deferredRosterQuery.trim().toLocaleLowerCase('fa-IR');
+  const visibleRoster = useMemo(() => !normalizedRosterQuery ? (roster || []) : (roster || []).filter(player => [
+    player.name, player.telegram_username, player.region_name, player.castle, ...(player.castles || []),
+  ].some(value => String(value || '').toLocaleLowerCase('fa-IR').includes(normalizedRosterQuery))), [roster, normalizedRosterQuery]);
+
+  if (!me.admin_role) {
+    return (
+      <>
+        <div className="page-title up">پنل ادمین</div>
+        <div className="card up u1" style={{ textAlign: 'center', color: 'var(--mid)' }}>دسترسی نداری</div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="page-title up">پنل ادمین</div>
+      <div className={`admin-game-strip ${gamePause?.paused ? 'is-paused' : ''}`} role="status">
+        <span>روز <b>{gamePause?.day ? gamePause.day.toLocaleString('fa-IR') : '—'}</b> بازی</span>
+        <span className="admin-game-state"><i aria-hidden="true" />{gamePause ? (gamePause.paused ? 'متوقف' : 'در حال اجرا') : 'در حال دریافت…'}</span>
+      </div>
+      <div className="admin-role-card up">
+        <div>
+          <strong>{isOwner ? 'ادمین اصلی' : isFull ? 'ادمین کامل' : isAdjudicator ? 'ادمین رول و جنگ' : 'ادمین اجرایی'}</strong>
+          <small>{isOwner
+            ? 'به تمام بخش‌ها، مدیریت ادمین‌ها و ابزارهای فصل دسترسی داری.'
+            : isFull
+              ? 'به همهٔ بخش‌های بازی دسترسی داری؛ تب مدیریت ادمین‌ها فقط برای ادمین اصلی است.'
+              : isAdjudicator ? 'فقط تب‌های جنگ و رول‌ها در دسترس هستند.' : 'فقط بخش داوری و ارتباط با بازیکنان برایت نمایش داده می‌شود.'}</small>
+        </div>
+        <span className={`admin-role-badge ${isFull ? 'full' : 'limited'}`}>{isOwner ? 'دسترسی مالک' : isFull ? 'دسترسی کامل' : isAdjudicator ? 'داوری رول و جنگ' : 'دسترسی اجرایی'}</span>
+      </div>
+
+      <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
+        <div className="admin-command-bar up u1">
+          <div><b>مرکز فرماندهی</b><small>{availGroups.reduce((sum,group)=>sum+group.tabs.length,0).toLocaleString('fa-IR')} ابزار در دسترس تو</small></div>
+          <label><span>جست‌وجوی ابزار</span><input value={adminNavQuery} onChange={event=>setAdminNavQuery(event.target.value)} placeholder="مثلاً لشکر، ثبت‌نام، بازار یا زمان"/></label>
+          {adminNavQuery&&<button type="button" className="rbtn" onClick={()=>setAdminNavQuery('')}>پاک‌کردن</button>}
+        </div>
+        {!isAdjudicator && <label className="admin-section-picker"><span>انتخاب بخش پنل</span><select aria-label="انتخاب بخش پنل" value={activeGroup?.key || ''} onChange={event=>{const group=availGroups.find(g=>g.key===event.target.value);if(group){openGroup(group);setAdminNavQuery('');}}}>{availGroups.map(group=><option value={group.key} key={group.key}>{group.label}</option>)}</select></label>}
+        {adminNavNeedle ? <section className="admin-search-results up u1">
+          <header><strong>نتیجهٔ جست‌وجو</strong><span>{adminNavResults.length.toLocaleString('fa-IR')} ابزار پیدا شد</span></header>
+          <div>{adminNavResults.map(item=>{const count=tabBadge(item.key);return <button type="button" className={`rbtn admin-search-result ${tab===item.key?'on':''}`} key={item.key} onClick={()=>{openTab(item.key);setAdminNavQuery('')}}><i>{ADMIN_GROUP_MARKS[item.groupKey]}</i><span><b>{item.label}</b><small>{item.groupLabel} · {item.description}</small></span>{count>0&&<em>{count.toLocaleString('fa-IR')}</em>}</button>})}</div>
+          {!adminNavResults.length&&<p>چیزی با این عبارت پیدا نشد؛ اسم کوتاه‌تری بنویس.</p>}
+        </section> : <>
+        {!isAdjudicator && <div className="admin-section-switcher up u1" role="tablist" aria-label="دسته‌های پنل">
+          {availGroups.map(group => {
+            const selected = activeGroup?.key === group.key;
+            const count = group.tabs.reduce((sum, item) => sum + tabBadge(item.key), 0);
+            return <button type="button" key={group.key} role="tab" aria-selected={selected}
+              className={`rbtn admin-section-button ${selected ? 'on' : ''}`} onClick={() => openGroup(group)}>
+              <i>{ADMIN_GROUP_MARKS[group.key]}</i><span>{group.label}</span><small>{group.description}</small>
+              {count > 0 && <b>{count.toLocaleString('fa-IR')}</b>}
+            </button>;
+          })}
+        </div>}
+        {activeGroup && (
+          <section className="admin-active-section up u1">
+            <div className="admin-active-section-heading">
+              <strong>{activeGroup.label}</strong><span>{activeGroup.description}</span>
+            </div>
+            <div className="tabs admin-tabs" role="tablist" aria-label={activeGroup.label}>
+              {activeGroup.tabs.map(item => {
+                const count = tabBadge(item.key);
+                return <button type="button" key={item.key} role="tab" aria-selected={tab === item.key}
+                  className={`rbtn tab admin-tab ${tab === item.key ? 'on' : ''}`} onClick={() => openTab(item.key)}>
+                  <span>{item.label}</span><small>{item.description}</small>
+                  {count > 0 && <b className="admin-tab-count">{count.toLocaleString('fa-IR')}</b>}
+                </button>;
+              })}
+            </div>
+          </section>
+        )}
+        </>}
+      </nav>
+
+      {tab !== 'overview' && TAB_BY_KEY[tab] && (
+        <div className="admin-current-guide up u2">
+          <strong>{TAB_BY_KEY[tab].label}</strong>
+          <span>{TAB_BY_KEY[tab].description}</span>
+          {isFull && <button type="button" className="rbtn" onClick={() => openTab('overview')}>راهنمای پنل</button>}
+        </div>
+      )}
+
+      {tab === 'world_contracts' && isFull && <AdminSocial section="contracts"/>}
+      {tab === 'castle_life' && isFull && <AdminSocial section="castles"/>}
+      {tab === 'world_news' && isFull && <AdminSocial section="news"/>}
+      {tab === 'espionage' && isFull && <AdminEspionage/>}
+      {tab === 'tickets' && isFull && <AdminTickets/>}
+      {tab === 'realm_systems' && isFull && <AdminRealmSystems/>}
+
+      {tab === 'notifications' && (
+        <>
+          <div className="sect up u2">صندوق اعلان‌های مدیریتی</div>
+          <div className="admin-notification-toolbar up u2">
+            <div className="tabs" role="tablist" aria-label="فیلتر اعلان‌ها">
+              <button type="button" className={`rbtn tab ${notificationFilter === 'unread' ? 'on' : ''}`}
+                      onClick={() => setNotificationFilter('unread')}>
+                خوانده‌نشده ({(adminNotifications?.filter(x => !x.read).length || 0).toLocaleString('fa-IR')})
+              </button>
+              <button type="button" className={`rbtn tab ${notificationFilter === 'all' ? 'on' : ''}`}
+                      onClick={() => setNotificationFilter('all')}>همه</button>
+            </div>
+            <button type="button" className="btn ghost" disabled={!adminNotifications?.some(x => !x.read)}
+                    onClick={markAllNotificationsRead}>همه را خواندم</button>
+          </div>
+          <div className="page-sub up u2" style={{ margin: '0 4px 12px', lineHeight: 1.9 }}>
+            تلگرام فقط هشدار کوتاه می‌فرسته؛ جزئیات، مهلت و کار پیشنهادی هر پرونده این‌جا می‌مونه.
+          </div>
+          <div className="admin-notification-list up u3">
+            {adminNotifications === null && <div className="loading">در حال گرفتن اعلان‌ها...</div>}
+            {adminNotifications && adminNotifications.filter(x => notificationFilter === 'all' || !x.read).length === 0 && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>
+                {notificationFilter === 'unread' ? 'اعلان خوانده‌نشده‌ای نداری' : 'هنوز اعلان مدیریتی ثبت نشده'}
+              </div>
+            )}
+            {adminNotifications && adminNotifications
+              .filter(x => notificationFilter === 'all' || !x.read)
+              .map(n => {
+                const deadline = n.deadline ? new Date(n.deadline) : null;
+                const remainingMinutes = deadline ? Math.floor((deadline.getTime() - gameNow()) / 60000) : null;
+                return (
+                  <article key={n.id} className={`admin-notification-card ${n.read ? 'read' : ''} priority-${n.priority || 'normal'}`}>
+                    <header>
+                      <div><strong>{n.title}</strong><small>{new Date(n.created_at).toLocaleString('fa-IR')}</small></div>
+                      <span>{({ urgent: 'فوری', high: 'مهم', normal: 'عادی' })[n.priority] || 'عادی'}</span>
+                    </header>
+                    <p>{n.detail}</p>
+                    {(n.player_name || n.castle) && (
+                      <div className="admin-notification-meta">
+                        {n.player_name && <span>بازیکن: {n.player_name}</span>}
+                        {n.castle && <span>قلعه: {castleLabel(n.castle)}</span>}
+                      </div>
+                    )}
+                    {deadline && (
+                      <div className={`admin-notification-deadline ${remainingMinutes !== null && remainingMinutes <= 120 ? 'near' : ''}`}>
+                        مهلت: {deadline.toLocaleString('fa-IR')}
+                        {remainingMinutes !== null && remainingMinutes > 0 ? ` · ${Math.ceil(remainingMinutes / 60).toLocaleString('fa-IR')} ساعت مانده` : ' · مهلت تمام شده'}
+                      </div>
+                    )}
+                    {n.action && <div className="admin-notification-action"><b>کاری که باید بکنی:</b> {n.action}</div>}
+                    {!n.read && <button type="button" className="btn ghost" onClick={() => markNotificationRead(n.id)}>دیدم؛ خوانده شد</button>}
+                  </article>
+                );
+              })}
+          </div>
+        </>
+      )}
+
+      {tab === 'overview' && (
+        <>
+          <div className="sect up u2">مسیر پیشنهادی امروز</div>
+          <div className="admin-help-card card up u2">
+            <p>عدد قرمز یعنی کاری منتظر رسیدگیه. اول اعلان‌ها رو ببین، بعد پرونده را در بخش مربوط باز کن و در پایان نتیجه یا پیام را ثبت کن.</p>
+            <div className="admin-workflow">
+              <button type="button" className="rbtn" onClick={() => openTab('notifications')}>
+                <b>۱. کارهای منتظر</b><span>اعلان تازه و مهلت نزدیک را از اینجا پیدا کن</span>
+              </button>
+              <button type="button" className="rbtn" onClick={() => openTab('war')}>
+                <b>۲. جنگ و جاسوسی</b><span>نبرد، لشکر، کمین و جاسوسی را بررسی کن</span>
+              </button>
+              <button type="button" className="rbtn" onClick={() => openTab('roleplays')}>
+                <b>۳. رول‌ها</b><span>سناریوهای منتظر را بخوان و نتیجه را ثبت کن</span>
+              </button>
+              <button type="button" className="rbtn" onClick={() => openTab('bot_messages')}>
+                <b>۴. ارتباط با بازیکن</b><span>پیام را در بات، کلاغ یا هر دو مسیر بفرست</span>
+              </button>
+              {isFull && <button type="button" className="rbtn" onClick={() => openTab('registration')}>
+                <b>ثبت‌نام‌های تازه</b><span>ظرفیت، درخواست و تخصیص قلعه را مدیریت کن</span>
+              </button>}
+              {isFull && <button type="button" className="rbtn" onClick={() => openTab('balance')}>
+                <b>تنظیمات بازی</b><span>قبل از فصل، قیمت‌ها و فرمول‌ها را بازبینی کن</span>
+              </button>}
+            </div>
+          </div>
+          <div className="admin-help-grid up u3">
+            <div className="card">
+              <strong>دسترسی فعلی تو</strong>
+              <p>{isOwner ? 'همهٔ بخش‌ها، مدیریت ادمین‌ها و عملیات فصل.' : isFull ? 'همهٔ امور بازی به‌جز مدیریت ادمین‌ها و عملیات مالک.' : 'فقط داوری جنگ، رول، شورش، مدال، توییت و ارتباط با بازیکن‌ها.'}</p>
+            </div>
+            <div className="card">
+              <strong>ثبت نتیجه</strong>
+              <p>قبل از تایید، طرفین، تلفات، برنده‌ها و دامنهٔ انتشار پیام را دوباره چک کن؛ نتیجه ممکنه منابع و آمار بازیکن را تغییر بده.</p>
+            </div>
+            <div className="card">
+              <strong>پیام بات یا رویداد؟</strong>
+              <p>«پیام بات» فقط به چت تلگرام می‌ره؛ «رویداد همگانی» داخل صندوق کلاغ‌های بازی هم ثبت می‌شه.</p>
+            </div>
+            <div className="card">
+              <strong>{isFull ? 'تغییرهای حساس' : 'اگر ابزار بیشتری لازم داری'}</strong>
+              <p>{isFull ? 'انتقال قلعه، ویرایش منابع، تعادل و پاک‌سازی روی کل بازی اثر می‌ذارن؛ توضیح هر فرم را قبل از ثبت بخون.' : 'تخصیص خاندان، منابع، نقشه و تنظیمات عمداً برای ادمین اجرایی نمایش داده نمی‌شن؛ از یک ادمین کامل کمک بگیر.'}</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === 'projects' && <Projects admin />}
+      {tab === 'onboarding' && (
+        <>
+          <div className="card up u2" style={{ marginBottom: 14 }}>
+            <div className="res" style={{ marginBottom: 8 }}>
+              <div className="ic"><Scroll s={16} /></div>
+              <div className="n">خروجی وضعیت قلعه‌ها<small>فهرست آمادهٔ تلگرام؛ همراه مالک، username، بندر و شمارندهٔ هر اقلیم</small></div>
+            </div>
+            <button type="button" className="btn" disabled={castleReportBusy} onClick={buildCastleReport}>
+              {castleReportBusy ? 'در حال ساخت فهرست تازه...' : 'ساخت و کپی فهرست به‌روز قلعه‌ها'}
+            </button>
+            {castleReport && (
+              <>
+                <textarea readOnly dir="rtl" value={castleReport} rows={10}
+                          style={{ marginTop: 10, fontSize: 11, lineHeight: 1.9, userSelect: 'text' }} />
+                <button type="button" className="btn ghost" style={{ marginTop: 8 }}
+                        onClick={async () => {
+                          const copied = await copyPlainText(castleReport);
+                          toast(copied ? 'فهرست دوباره کپی شد' : 'کپی خودکار ممکن نبود؛ متن کادر را انتخاب کن');
+                        }}>
+                  کپی دوباره
+                </button>
+              </>
+            )}
+          </div>
+
+        </>
+      )}
+
+      {tab === 'registration' && (
+        <>
+          {isFull && <><div className="sect up u1">ظرفیت ثبت‌نام اقلیم‌ها</div>
+          <div className="page-sub up u1" style={{ marginTop: -10 }}>
+            وقتی تعداد بازیکن‌های تخصیص‌داده‌شده به سقف برسد، تمام قلعه‌های آن اقلیم در فرم ثبت‌نام قفل می‌شوند.
+          </div>
+          <div className="card up u1" style={{ marginBottom: 14 }}>
+            <div className="registration-capacity-grid">
+              {(registrationSettings?.regions || []).map(region => (
+                <label key={region.id} className={`registration-capacity ${region.full ? 'full' : ''}`}>
+                  <span><strong>{region.name}</strong><small>{region.assigned.toLocaleString('fa-IR')} بازیکن تخصیص داده شده</small></span>
+                  <input type="number" min="0" max="250" value={region.capacity}
+                         disabled={!isFull}
+                         onChange={e => setRegistrationSettings(prev => ({ ...prev, regions: prev.regions.map(r => r.id === region.id ? { ...r, capacity: e.target.value } : r) }))} />
+                </label>
+              ))}
+            </div>
+            <button className="btn" style={{ marginTop: 12 }} disabled={!isFull || !registrationSettings || registrationSettingsBusy} onClick={saveRegistrationSettings}>
+              {registrationSettingsBusy ? 'در حال ذخیره...' : 'ذخیره ظرفیت اقلیم‌ها'}
+            </button>
+            {!isFull && <div className="page-sub" style={{ marginTop: 10 }}>تغییر ظرفیت فقط برای ادمین اصلی یا کامل باز است.</div>}
+          </div>
+
+          </>}
+          <div className="sect up u2">بازیکن‌های منتظر تخصیص خاندان</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            این‌ها فقط اسم‌نویسی کرده‌اند — اقلیم (خاندان) و قلعه‌شان را دستی مشخص کن تا وارد بازی شوند
+          </div>
+          {isFull && <button type="button" className="btn ghost up u2" disabled={telegramSyncBusy}
+                  style={{ width: 'auto', margin: '0 0 12px' }} onClick={syncTelegramUsernames}>
+            {telegramSyncBusy ? 'در حال دریافت از تلگرام...' : 'بازیابی username پلیرهای قبلی'}
+          </button>}
+          <div className="up u2">
+            {(!pendingPlayers || pendingPlayers.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>فعلاً کسی منتظر نیست</div>
+            )}
+            {pendingPlayers && pendingPlayers.map(p => {
+              const regionId = assignRegion[p.tg_id] || p.requested_region || Object.keys(REGIONS_STATIC)[0];
+              const region = REGIONS_STATIC[regionId];
+              const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
+              return (
+                <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
+                  <div className="res">
+                    <div className="ic"><Shield s={16} /></div>
+                    <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
+                      {p.title} · {p.gender === 'lady' ? 'لیدی' : 'لرد'} · تلگرام: {' '}
+                      {p.telegram_username
+                        ? <span className="telegram-username" dir="ltr">{p.telegram_username}</span>
+                        : <span>username ثبت نشده</span>}
+                    </small></div>
+                  </div>
+                  <div className="page-sub">نوع درخواست: {p.registration_mode === 'character' ? 'کاراکتر بدون قلعه' : 'فرمانروای قلعه'}</div>
+                  {isFull && <CharacterAdmission player={p} toast={toast} onApproved={() => {loadPendingPlayers();loadRoster();}} />}
+                  {p.requested_castles && p.requested_castles.length > 0 && (
+                    <div style={{ margin: '2px 0 12px' }}>
+                      <div className="page-sub" style={{ margin: '0 4px 6px' }}>درخواستِ خودِ بازیکن (به‌ترتیب اولویت):</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {p.requested_castles.map((rc, i) => (
+                          <button type="button" key={rc.name}
+                                  className="rbtn" disabled={rc.occupied || !rc.region}
+                                  style={{
+                                    width: 'auto', padding: '6px 10px', fontSize: 11.5, borderRadius: 999,
+                                    border: '1px solid rgba(160,195,255,0.18)',
+                                    color: rc.occupied ? 'var(--mid)' : 'var(--az2)',
+                                    opacity: rc.occupied ? 0.6 : 1,
+                                  }}
+                                  onClick={() => {
+                                    haptic();
+                                    setAssignRegion(prev => ({ ...prev, [p.tg_id]: rc.region }));
+                                    setAssignCastle(prev => ({ ...prev, [p.tg_id]: rc.name }));
+                                  }}>
+                            {(i + 1).toLocaleString('fa-IR')}. {castleLabel(rc.name)}{rc.occupied ? ' (اشغال‌شده)' : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {isFull && <><label className="f">اقلیم (خاندان)</label>
+                  <select value={regionId} onChange={e => {
+                    setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
+                    setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
+                  }}>
+                    {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+                  </select>
+                  <label className="f">قلعه</label>
+                  <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
+                    <option value="" disabled>انتخاب کن...</option>
+                    {castleOptions.map(c => <option key={c.n} value={c.n}>{castleLabel(c.n)}{c.port ? ' ⚓ بندر' : ''}</option>)}
+                  </select>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <button className="btn" style={{ flex: 1 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
+                      {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'تخصیص خاندان و قلعه'}
+                    </button>
+                    <button className="btn ghost" style={{ width: 'auto', padding: '0 14px', color: 'var(--danger)' }}
+                            disabled={deletePendingBusyId === p.tg_id} onClick={() => deletePendingPlayer(p.tg_id, p.name)}>
+                      {deletePendingBusyId === p.tg_id ? '...' : 'حذف درخواست'}
+                    </button>
+                  </div></>}
+                </div>
+              );
+            })}
+          </div>
+
+        </>
+      )}
+
+      {tab === 'onboarding' && (
+        <>
+          <div className="sect up u3">خاندان‌های موجود در بازی</div>
+          <div className="page-sub up u3" style={{ marginTop: -10 }}>
+            هر بازیکنِ خاندان‌دار — می‌توانی از خاندانش خارجش کنی یا به خاندان/قلعهٔ دیگری منتقلش کنی
+          </div>
+          <div className="card up u3" style={{ marginBottom: 12 }}>
+            <label className="f" style={{ marginTop: 0 }}>جست‌وجوی خاندان‌ها</label>
+            <input value={rosterQuery} onChange={e => setRosterQuery(e.target.value)}
+                   placeholder="نام پلیر، username، اقلیم یا قلعه..." autoComplete="off" />
+            {normalizedRosterQuery && (
+              <div className="page-sub" style={{ marginTop: 8 }}>
+                {visibleRoster.length.toLocaleString('fa-IR')} نتیجه از {(roster || []).length.toLocaleString('fa-IR')} بازیکن
+              </div>
+            )}
+          </div>
+          <div className="up u3">
+            {(!roster || roster.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کسی خاندانی ندارد</div>
+            )}
+            {roster && visibleRoster.length === 0 && normalizedRosterQuery && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>چیزی با این عبارت پیدا نشد</div>
+            )}
+            {roster && visibleRoster.slice(0, rosterLimit).map(p => {
+              const regionId = assignRegion[p.tg_id] || p.region || Object.keys(REGIONS_STATIC)[0];
+              const region = REGIONS_STATIC[regionId];
+              const castleOptions = [...region.castles.map(n => ({ n, port: false })), ...region.ports.map(n => ({ n, port: true }))];
+              return (
+                <div className="card" key={p.tg_id} style={{ marginBottom: 10 }}>
+                  <div className="res">
+                    <div className="ic"><Shield s={16} /></div>
+                    <div className="n">{p.name}{p.blacklisted && <span className="blacklist-tag">لیست سیاه</span>}{p.is_dead && <span className="title-tag">کشته شد</span>}<small>
+                      {p.region_name} · {castleLabel(p.castle)}{p.is_port ? ' ⚓' : ''} · تلگرام: {' '}
+                      {p.telegram_username
+                        ? <span className="telegram-username" dir="ltr">{p.telegram_username}</span>
+                        : <span>username ثبت نشده</span>}
+                    </small></div>
+                  </div>
+                  {p.castles && p.castles.length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {p.castles.map(c => (
+                        <span key={c} className="rbtn" style={{
+                          width: 'auto', padding: '4px 8px', fontSize: 11, borderRadius: 999, display: 'flex',
+                          alignItems: 'center', gap: 5, border: '1px solid rgba(160,195,255,0.18)',
+                        }}>
+                          {castleLabel(c)} — پایگاهِ دوم
+                          <button type="button" aria-label={`پس‌گرفتن ${c}`}
+                                  disabled={removeCastleBusyKey === `${p.tg_id}:${c}`}
+                                  onClick={() => removeCastle(p.tg_id, c)}
+                                  style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
+                            <Close s={11} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="clan-actions">
+                    <button className="btn ghost clan-action clan-action--delete"
+                            disabled={unassignBusyId === p.tg_id} onClick={() => setRetireDialog({ player:p, action:"delete" })}>
+                      حذف بازیکن
+                    </button>
+                    <button className="btn ghost clan-action clan-action--transfer" disabled={p.is_dead} onClick={() => toggleReassign(p.tg_id)}>
+                      انتقال به خاندان دیگر
+                    </button>
+                    <button className="btn ghost clan-action clan-action--add" disabled={p.is_dead} onClick={() => toggleAddCastle(p.tg_id)}>
+                      افزودن قلعه
+                    </button>
+                    {!p.is_dead && <button className="btn ghost clan-action clan-action--swap" onClick={() => setSwapDraft({first_id:p.tg_id,first_castle:p.castle,second_id:'',second_castle:''})}>جابجایی قلعه‌ها</button>}
+                    {!p.is_dead && <button className="btn ghost clan-action clan-action--death" onClick={() => setRetireDialog({player:p,action:'death'})}>مرگ کاراکتر</button>}
+                  </div>
+                  {reassignOpenId === p.tg_id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
+                      <label className="f" style={{ marginTop: 0 }}>اقلیم (خاندان) تازه</label>
+                      <select value={regionId} onChange={e => {
+                        setAssignRegion(prev => ({ ...prev, [p.tg_id]: e.target.value }));
+                        setAssignCastle(prev => ({ ...prev, [p.tg_id]: '' }));
+                      }}>
+                        {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+                      </select>
+                      <label className="f">قلعهٔ تازه</label>
+                      <select value={assignCastle[p.tg_id] || ''} onChange={e => setAssignCastle(prev => ({ ...prev, [p.tg_id]: e.target.value }))}>
+                        <option value="" disabled>انتخاب کن...</option>
+                        {castleOptions.map(c => <option key={c.n} value={c.n}>{castleLabel(c.n)}{c.port ? ' ⚓ بندر' : ''}</option>)}
+                      </select>
+                      <button className="btn" style={{ marginTop: 14 }} disabled={assignBusyId === p.tg_id} onClick={() => assignHouse(p.tg_id)}>
+                        {assignBusyId === p.tg_id ? 'در حال ثبت...' : 'انتقال'}
+                      </button>
+                    </div>
+                  )}
+                  {addCastleOpenId === p.tg_id && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
+                      <div className="page-sub" style={{ margin: '0 0 8px' }}>
+                        قلعهٔ اضافه — پایگاهِ دومِ کاملِ این بازیکن؛ از هر اقلیمی می‌تونه باشه. اگه الان دستِ بازیکنِ
+                        دیگری باشد (چه قلعهٔ اصلی‌اش چه اضافه‌اش)، با ساختمان‌هایش منتقل می‌شود؛ فقط در حالت فتح، آمار فتح و پیروزی اضافه می‌شود.
+                      </div>
+                      <label className="f">نوع واگذاری<select value={addCastleMode} onChange={e => setAddCastleMode(e.target.value)}><option value="normal">واگذاری عادی — بدون فتح و پیروزی</option><option value="conquest">فتح قلعه — یک فتح و یک پیروزی</option></select></label><CastlePicker mapData={mapData} value={addCastleValue} onChange={setAddCastleValue} max={1} allowOccupied excludedCastles={[p.castle, ...(p.castles || [])].filter(Boolean)} />
+                      <button className="btn" style={{ marginTop: 14 }} disabled={addCastleBusyId === p.tg_id} onClick={() => addCastle(p.tg_id)}>
+                        {addCastleBusyId === p.tg_id ? 'در حال ثبت...' : 'افزودن'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {visibleRoster.length > rosterLimit && <button className="btn ghost" onClick={() => setRosterLimit(n => n + 25)}>نمایش ۲۵ خاندان بعدی</button>}
+          </div>
+        </>
+      )}
+
+      {tab === 'war' && (
+        <>
+          <div className="tabs up u1" role="tablist" aria-label="بخش‌های جنگ">
+            {[
+              { key: 'campaigns', label: 'لشکرکشی‌ها' },
+              { key: 'ambushes', label: `کمین‌ها${ambushesList?.filter(a => a.status === 'pending_score').length ? ` (${ambushesList.filter(a => a.status === 'pending_score').length.toLocaleString('fa-IR')})` : ''}` },
+              { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
+            ].map(t => (
+              <button type="button" key={t.key} role="tab" aria-selected={warSubTab === t.key}
+                   className={`rbtn tab ${warSubTab === t.key ? 'on' : ''}`}
+                   onClick={() => { haptic(); setWarSubTab(t.key); }}>{t.label}</button>
+            ))}
+          </div>
+
+          {warSubTab === 'campaigns' && (
+          <div className="up u2">
+            <div className="card" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  پنجرهٔ لشکرکشی: {warWindow ? (warWindow.open ? 'باز' : 'بسته') : '...'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--mid)', marginTop: 4 }}>
+                  وقتی بسته باشد هیچ بازیکنی نمی‌تواند فرمان گسیل تازه بدهد؛ لشکرهای در راه دست‌نخورده می‌مانند
+                </div>
+              </div>
+              {isOwner && <button className="btn" style={{ width: 'auto', flexShrink: 0, padding: '10px 18px', fontSize: 12.5 }}
+                      disabled={!warWindow || warWindowBusy} onClick={toggleWarWindow}>
+                {warWindowBusy ? '...' : warWindow?.open ? 'بستن' : 'باز کردن'}
+              </button>}
+            </div>
+            {(!campaignsInfo || campaignsInfo.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز لشکرکشی‌ای ثبت نشده</div>
+            )}
+            <input aria-label="جست‌وجوی لشکرکشی" placeholder="نام لشکر، فرمانده، بازیکن یا محل…" value={armySearch} onChange={e=>setArmySearch(e.target.value)}/>
+            <AdminFormations toast={toast} canManage={isFull} query={armySearch} onChanged={()=>{loadCampaigns();loadBattles();}}/>
+            {campaignsInfo && campaignsInfo.filter(s=>!s.merge_group_id&&`${s.player} ${s.name} ${s.from} ${s.to}`.toLowerCase().includes(armySearch.toLowerCase())).map(s => s.data_issues?.length ? (<div className="card admin-data-warning" key={s.id}><strong>رکورد لشکر نیازمند بررسی است</strong><p>{s.player} · {s.name}</p><p>اطلاعات ثبت‌نشده یا نامعتبر: {s.data_issue_labels.join('، ')}</p><small>شناسهٔ پرونده: <b dir="ltr">{s.id}</b></small><p>این رکورد بدون تغییر نگه‌داری شده است؛ پیش از اجرای فرمان، اطلاعات آن باید بررسی شود.</p></div>) : (
+              <div className="card" key={s.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Shield s={16} /></div>
+                  <div className="n">
+                    {s.player} — {s.name}
+                    <small>
+                      {s.op_name} · {s.from} ← {s.to} · {s.gold_cost.toLocaleString('fa-IR')} طلا ·{' '}
+                      {s.men_committed.toLocaleString('fa-IR')} نفر · توان نیروها {(s.power == null ? 'ثبت نشده' : Number(s.power).toLocaleString('fa-IR'))}{s.power_calculated ? ' (محاسبه‌شده)' : ''} ·{' '}
+                      {s.food_per_day.toLocaleString('fa-IR')} غله/روز ·{' '}
+                      {s.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر
+                    </small>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+                  توان ادوات: {Number(s.equipment_power || 0).toLocaleString('fa-IR')} · نیروها: {s.troops.length ? s.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
+                </div>
+                <div className="notice-guide" style={{marginBottom:10}}><strong>دفاع قلعهٔ مقصد · وضعیت فعلی</strong><span>{s.defense_infrastructure_source === 'field' ? 'درگیری در مسیر؛ دفاع قلعه کاربرد ندارد' : s.defense_infrastructure_current?.length ? s.defense_infrastructure_current.map(x => `${x.name} سطح ${Number(x.level).toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--low)' }}>
+                    {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+                  </div>
+                  {s.active && isFull && <AdminArmyRelocation army={s} toast={toast} onMoved={()=>{loadCampaigns();loadBattles();}}/>}
+                  {s.active && isFull && <button className="btn ghost" onClick={()=>destroyCampaign(s.id)}>انهدام کامل</button>}
+                  {s.active && isFull && (
+                    <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                            disabled={disbandBusyId === s.id} onClick={() => disbandCampaign(s.id)}>
+                      {disbandBusyId === s.id ? 'در حال انحلال...' : 'منحل کن'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          )}
+
+          {warSubTab === 'ambushes' && <div className="up u2">
+            <div className="page-sub" style={{ marginBottom: 12 }}>ابتدا امتیاز کمین با امتیاز رول پیش‌قراولِ صاحب لشکر مقایسه می‌شود. کمین فقط با امتیاز بیشتر موفق است؛ سپس ضریب، تلفات دشمن و امتیاز کمین، تلفات کمین‌گذار را تعیین می‌کند. ویرایش و حذف فقط برای ادمین کامل و اصلی است.</div>
+            {ambushesList === null && <div className="loading">در حال بارگذاری کمین‌ها...</div>}
+            {ambushesList && ambushesList.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>کمینی ثبت نشده</div>}
+            {(ambushesList || []).map(a => <div className="card" key={a.id} style={{ marginBottom: 10 }}>
+              <div className="res"><div className="ic"><Eye s={16} /></div><div className="n">{a.player}<small>{castleLabel(a.origin_castle)} — {castleLabel(a.target_castle)} · {a.men_committed.toLocaleString('fa-IR')} نفر</small></div></div>
+              {isFull && ['pending_score', 'active'].includes(a.status) ? <LimitedText limitKind="scenario_words" value={ambushScenarios[a.id] ?? a.scenario} onChange={e => setAmbushScenarios(p => ({ ...p, [a.id]: e.target.value }))} style={{ margin: '10px 0' }} /> : <div style={{ fontSize: 12, color: 'var(--mid)', lineHeight: 1.9, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{a.scenario}</div>}
+              <div style={{ fontSize: 11.5, marginBottom: 8 }}>نیروها: {a.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ')}</div>
+              {isFull && ['pending_score', 'active'].includes(a.status) ? <div className="grid2">
+                <div><label className="f" style={{ marginTop: 0 }}>ضریب تلفات دشمن</label><input type="number" min="0" max="10" step="0.1" placeholder="۰ تا ۱۰" value={ambushScores[a.id] ?? a.coefficient ?? ''} onChange={e => setAmbushScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
+                <div><label className="f" style={{ marginTop: 0 }}>امتیاز کمین</label><input type="number" min="0" max="100" placeholder="۰ تا ۱۰۰" value={ambushQualityScores[a.id] ?? a.ambush_score ?? ''} onChange={e => setAmbushQualityScores(p => ({ ...p, [a.id]: e.target.value }))} /></div>
+                <button className="btn" disabled={ambushBusyId === a.id} onClick={() => scoreAmbush(a.id)}>{a.status === 'active' ? 'ذخیرهٔ تغییرات' : 'ثبت و فعال‌سازی'}</button>
+                <button className="btn ghost" style={{ color: 'var(--danger)' }} disabled={ambushBusyId === a.id} onClick={() => deleteAmbush(a.id)}>حذف کمین</button>
+              </div> : <div className="notice-guide"><strong>{a.status === 'active' ? 'کمین فعال' : a.status === 'thwarted' ? 'خنثی‌شده توسط پیش‌قراول' : a.status === 'admin_deleted' ? 'حذف‌شده توسط ادمین' : 'کمین مصرف‌شده'}</strong><span>ضریب {Number(a.coefficient || 0).toLocaleString('fa-IR')} · امتیاز {Number(a.ambush_score ?? 50).toLocaleString('fa-IR')}{a.scout_score != null ? ` · پیش‌قراول ${Number(a.scout_score).toLocaleString('fa-IR')}` : ''}{a.casualties != null ? ` · ${a.casualties.toLocaleString('fa-IR')} تلفات به ${a.victim_name || 'لشکر هدف'}` : ''}{a.ambusher_losses != null ? ` · ${a.ambusher_losses.toLocaleString('fa-IR')} تلفات کمین‌گذار` : ''}</span></div>}
+            </div>)}
+          </div>}
+
+          {warSubTab === 'battles' && (
+          <div className="up u2">
+            <div className="page-sub" style={{ marginBottom: 12 }}>هر درگیری یک پرونده دارد؛ رول دو طرف، نیروها و ثبت نتیجه همه همین‌جاست. حتی اگر هیچ‌کس رول نداده باشد می‌توانی نتیجه را ثبت کنی.</div>
+            {battles === null && <div className="loading">در حال بارگذاری نبردها...</div>}
+            {battles && battles.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>نبرد بازی نداریم</div>}
+            {battles && battles.map(b => {
+              return <AdminDossier key={b.campaign_id} kind="battle" title={b.name || 'پروندهٔ نبرد'} date={b.started_at_real || b.started_at} place={castleLabel(b.location)} people={[b.attacker_name, b.defender_name, ...(b.parties || []).map(p => p.player_name), ...(b.attacker_armies || []).map(a => a.player_name), ...(b.defender_armies || []).map(a => a.player_name)]}>
+                <div className="res"><div className="ic"><Swords s={16} /></div><div className="n">{b.name}<small>{b.multi_party ? 'نبرد چندطرفه' : `${b.attacker_name} در برابر ${b.defender_name}`} · {castleLabel(b.location)}</small></div></div>
+                <BattleExport battle={b} toast={toast} />
+                {b.multi_party && <div className="notice-guide" style={{ marginTop: 10 }}><strong>طرف‌های نبرد و پیمان‌ها</strong><span>{b.parties.map(p => `${p.player_name} — درگیر با: ${p.hostile_to.map(id => b.parties.find(x => x.tg_id === id)?.player_name || id).join('، ') || 'ندارد'}؛ پیمان صلح با: ${p.peace_with.map(id => b.parties.find(x => x.tg_id === id)?.player_name || id).join('، ') || 'ندارد'}`).join('\n')}</span></div>}
+
+                <div className="notice-guide" style={{ marginTop: 10 }}><strong>زمان نبرد و ورود نیروها</strong><span>شروع: {battleTime(b.started_at_real, b.started_at)}{(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).length ? `\n${(b.battle_joins?.length ? b.battle_joins : [...(b.attacker_joins || []), ...(b.defender_joins || [])]).map(j => `${j.player_name} · ${b.multi_party ? 'طرف مستقل' : j.side === 'defender' ? 'مدافع' : 'مهاجم'}: ${battleTime(j.joined_at_real, j.joined_at)} | ${arrivalDelay(b, j)}`).join('\n')}` : ''}</span></div>
+                <div className="notice-guide" style={{ marginTop: 10 }}><strong>رول‌های جنگ</strong><span>{b.rolls.length ? b.rolls.map(r => `${r.player}: ${r.text}`).join('\n') : 'هیچ‌کدام از طرفین هنوز رول نفرستاده‌اند؛ داوری همچنان باز است.'}</span></div>
+                <div className="sect" style={{ margin: '14px 0 7px' }}>نیروها و تلفات</div>
+                <div className="notice-guide" style={{ marginBottom: 10 }}><strong>زیرساخت‌های دفاعی قلعه · {b.defense_infrastructure_source === 'snapshot' ? 'ثبت‌شده در آغاز نبرد' : 'وضعیت فعلی'}</strong><span>{b.defense_infrastructure_source === 'field' ? 'این نبرد در مسیر است؛ زیرساخت قلعه در آن کاربرد ندارد' : b.defense_infrastructure?.length ? b.defense_infrastructure.map(x => `${x.name} سطح ${x.level.toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>
+                {b.defense_infrastructure_source === 'snapshot' && JSON.stringify(b.defense_infrastructure) !== JSON.stringify(b.defense_infrastructure_current) && <div className="notice-guide" style={{marginBottom:10}}><strong>وضعیت فعلی دفاع قلعه</strong><span>{b.defense_infrastructure_current?.length ? b.defense_infrastructure_current.map(x => `${x.name} سطح ${Number(x.level).toLocaleString('fa-IR')}`).join(' · ') : 'زیرساخت دفاعی ساخته‌شده ندارد'}</span></div>}
+                {(b.attacker_armies || [b.attacker_army]).map((army, ai) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--danger)' }}>{army.player_name || `مهاجم ${ai + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
+                  <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
+                  {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
+                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
+                  {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attackers?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackers: { ...(p[b.campaign_id]?.attackers || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackers?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
+                  {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.attackerEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackerEquipments: { ...(p[b.campaign_id]?.attackerEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackerEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
+                </div>)}
+                {(b.defender_armies || []).map((army, di) => <div key={army.campaign_id} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: 9, marginBottom: 9 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: b.multi_party ? 'var(--gold)' : 'var(--az2)' }}>{army.player_name || b.defender_name || `مدافع ${di + 1}`} · «{army.name || 'لشکر'}» · {Number(army.men || 0).toLocaleString('fa-IR')} نفر · توان نیروها: {army.power == null ? 'ثبت نشده' : Number(army.power).toLocaleString('fa-IR')}{army.power_calculated ? ' (محاسبه‌شده)' : ''} · توان ادوات: {Number(army.equipment_power || 0).toLocaleString('fa-IR')}</div>
+                  <div className="page-sub">زمان ورود: {armyArrival(b, army)}</div>
+                  {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
+                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
+                  {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
+                  {(army.equipment || []).map(e => <div className="troop" key={`${army.campaign_id}-e-${e.id}`}><div className="tn">{e.name}<small>{e.count.toLocaleString('fa-IR')} ادوات</small></div><input type="number" min="0" max={e.count} placeholder="منهدم" value={roleplayLosses[b.campaign_id]?.defenderEquipments?.[army.campaign_id]?.[e.id] ?? ''} onChange={ev => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenderEquipments: { ...(p[b.campaign_id]?.defenderEquipments || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenderEquipments?.[army.campaign_id] || {}), [e.id]: Math.max(0, Math.min(e.count, Number(ev.target.value) || 0)) } } } }))} /></div>)}
+                </div>)}
+                {b.op_type === 'naval_raid' && b.defender_tg_id && !b.location?.startsWith('مسیر ') && <details className="naval-loot-panel">
+                  <summary>غنیمت دریایی <span>{b.loot_applied ? 'ثبت شده' : 'انتقال منابع مدافع'}</span></summary>
+                  <p className="page-sub">برداشت از خزانهٔ مشترک {b.defender_name} و واریز به مهاجم؛ هر نبرد یک بار. این انتقال مستقل از ثبت تلفات انجام می‌شود.</p>
+                  {!b.loot_applied && <>
+                    <label className="f">دریافت‌کنندهٔ غنیمت</label>
+                    <select value={battleLoot[b.campaign_id]?.recipient || b.attacker_tg_id} onChange={e => setBattleLoot(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], recipient: Number(e.target.value)}}))}>
+                      {[{tg_id: b.attacker_tg_id, player_name: b.attacker_name}, ...(b.attacker_armies || [])].filter((a,i,rows) => rows.findIndex(x => x.tg_id === a.tg_id) === i).map(a => <option key={a.tg_id} value={a.tg_id}>{a.player_name}</option>)}
+                    </select>
+                    <div className="grid2">{Object.entries({gold: 'سکه', wood: 'چوب', stone: 'سنگ', iron: 'آهن', food: 'غلات', wine: 'شراب', ...WEAPON_NAMES}).map(([key,name]) => <label className="f" key={key}>{name}<small className="page-sub"> · موجودی {Number(b.loot_resources?.[key] || 0).toLocaleString('fa-IR')}</small><input type="number" min="0" step="1" max={b.loot_resources?.[key] || 0} value={battleLoot[b.campaign_id]?.amounts?.[key] ?? ''} placeholder="۰" onChange={e => setBattleLoot(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], amounts: {...p[b.campaign_id]?.amounts, [key]: Math.max(0, Math.floor(Number(e.target.value) || 0))}}}))} /></label>)}</div>
+                    <button className="btn ghost" disabled={lootBusy === b.campaign_id} onClick={async () => {if (!window.confirm('منابع انتخاب‌شده از مدافع به مهاجم منتقل شود؟')) return; setLootBusy(b.campaign_id); try {await api.adminNavalLoot(b.campaign_id, battleLoot[b.campaign_id]?.recipient || b.attacker_tg_id, battleLoot[b.campaign_id]?.amounts || {}); toast('غنیمت منتقل شد'); loadBattles();} catch(e) {toast(e.message);} finally {setLootBusy(null);}}}>{lootBusy === b.campaign_id ? 'در حال انتقال…' : 'ثبت و انتقال غنیمت'}</button>
+                  </>}
+                </details>}
+                <label className="f">برنده‌ها</label>
+                <div className="page-sub" style={{ margin: '0 0 8px' }}>می‌توانی هر تعداد لرد را از هر دو سمت انتخاب کنی؛ پاداش هر برنده براساس نقش واقعی او در نبرد محاسبه می‌شود.</div>
+                <div className="grid2">{[
+                  ...(b.attacker_armies || []).map(a => [a.tg_id, a.player_name, 'attacker']),
+                  ...(b.defender_armies || []).map(a => [a.tg_id, a.player_name, 'defender']),
+                  [b.defender_tg_id, b.defender_name, 'defender'],
+                ].filter(x => x[0]).filter((x,i,a) => a.findIndex(y => y[0] === x[0]) === i).map(([id,name,side]) => {
+                  const selected = (roleplayWinners[b.campaign_id] || []).includes(id);
+                  return <button type="button" key={id} role="checkbox" aria-checked={selected} className={`rbtn pick ${selected ? 'sel' : ''}`} onClick={() => toggleBattleWinner(b.campaign_id, id)}><div className="n">{selected ? '✓ ' : ''}{name}</div><div className="c">{b.multi_party ? 'طرف مستقل' : side === 'attacker' ? 'مهاجم' : 'مدافع'}</div></button>;
+                })}</div>
+                <details style={{ marginTop: 10 }}>
+                  <summary>مقصد عقب‌نشینی بازنده‌های مستقر در مبدأ</summary>
+                  <p className="page-sub">اگر مبدأ لشکر همان محل نبرد است، نام دقیق قلعهٔ مقصد را تعیین کن. بقیهٔ بازنده‌ها به مبدأ قبلی برمی‌گردند.</p>
+                  {[...(b.attacker_armies || []), ...(b.defender_armies || [])].filter((a,i,all) => a.tg_id && all.findIndex(x => x.tg_id === a.tg_id) === i && !(roleplayWinners[b.campaign_id] || []).includes(a.tg_id)).map(a => <label className="f" key={a.tg_id}>{a.player_name}<input value={retreatDestinations[b.campaign_id]?.[a.tg_id] || ''} placeholder="نام دقیق قلعهٔ مقصد" onChange={e => setRetreatDestinations(p => ({...p, [b.campaign_id]: {...p[b.campaign_id], [a.tg_id]: e.target.value}}))} /></label>)}
+                </details>
+                <label className="f">نتیجهٔ نبرد</label><textarea value={roleplayResults[b.campaign_id] || ''} onChange={e => setRoleplayResults(p => ({...p,[b.campaign_id]:e.target.value}))} placeholder="نتیجه و روایت نهایی جنگ..." />
+                <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setBattleResultImages(p => ({ ...p, [b.campaign_id]: image })), toast)} />
+                <div className="notice-guide" style={{ marginTop: 9 }}><strong>نتیجه عمومی است</strong><span>نام تمام برنده‌ها و بازنده‌ها، محل، تلفات و نیروهای باقی‌مانده برای همه در بات و کلاغ ارسال می‌شود.</span></div>
+                <button className="btn" style={{ marginTop: 12 }} disabled={roleplayBusyId === b.campaign_id} onClick={() => resolveBattle(b)}>{roleplayBusyId === b.campaign_id ? 'در حال ثبت...' : 'ثبت نتیجه و پایان نبرد'}</button>
+                <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)', borderColor: 'rgba(190,55,45,.45)' }} disabled={roleplayBusyId === b.campaign_id} onClick={() => dismissBattle(b)}>منحل‌کردن نبرد بدون نتیجه</button>
+                <button className="btn ghost" disabled={roleplayBusyId===b.campaign_id} onClick={()=>dismissBattle(b,true)}>بستن نبرد و استقرار همه در محل</button>
+              </AdminDossier>;
+            })}
+          </div>
+          )}
+
+
+        </>
+      )}
+
+      {tab === 'security_archive' && (
+          <div className="up u2">
+            <div className="page-sub" style={{ marginBottom: 10 }}>
+              رول‌های دفاعی و امنیتی نتیجه ندارند و همیشه در این آرشیو می‌مانند. با نام بازیکن یا بخشی از متن رول جست‌وجو کن.
+            </div>
+            <div className="card" style={{ marginBottom: 12 }}>
+              <label className="f" style={{ marginTop: 0 }}>بازیکن (اختیاری)</label>
+              <PlayerPicker value={securityPlayer} onChange={setSecurityPlayer} single placeholder="همهٔ بازیکن‌ها" />
+              <label className="f">نام بازیکن یا عبارت داخل رول</label>
+              <input value={securityQuery} onChange={e => setSecurityQuery(e.target.value)}
+                     onKeyDown={e => { if (e.key === 'Enter') loadSecurityRoleplays(); }}
+                     placeholder="مثلاً نگهبانان دروازه یا نام لرد..." />
+              <div style={{ display: 'flex', gap: 7, marginTop: 10 }}>
+                <button className="btn" disabled={securitySearching} onClick={loadSecurityRoleplays}>
+                  {securitySearching ? 'در حال جست‌وجو...' : 'جست‌وجو در آرشیو'}
+                </button>
+                <button className="btn ghost" style={{ width: 'auto' }} onClick={() => {
+                  setSecurityQuery(''); setSecurityPlayer([]); setSecuritySearching(true);
+                  api.adminSecurityRoleplays().then(setSecurityRoleplays).catch(e => toast(e.message)).finally(() => setSecuritySearching(false));
+                }}>پاک‌کردن فیلتر</button>
+              </div>
+            </div>
+            {securityRoleplays === null && <div className="loading">در حال بارگذاری آرشیو...</div>}
+            {securityRoleplays && securityRoleplays.length === 0 && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>رول امنیتی‌ای با این مشخصات پیدا نشد</div>
+            )}
+            {securityRoleplays && securityRoleplays.map(r => (
+              <div className="card" key={r.id} style={{ marginBottom: 10 }}>
+                <div className="res"><div className="ic"><Shield s={16} /></div><div className="n">{r.player}<small>{castleLabel(r.castle)} · {new Date(r.created_at).toLocaleString('fa-IR')}</small></div></div>
+                <div style={{ marginTop: 10, whiteSpace: 'pre-wrap', fontSize: 12.5, lineHeight: 1.9, color: 'var(--mid)' }}>{r.text}</div>
+                <div className="roleplay-score-box"><label>امتیاز این رول <small>از {roleplayScoreMax.toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id, r.category)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
+              </div>
+            ))}
+          </div>
+          )}
+
+      {tab === 'roleplays' && (
+          <>
+          <div className="page-sub up u3">
+            سناریوی هر بازیکن را بخوان و نتیجه‌اش را برایش بنویس؛ می‌توانی نتیجه را فقط برای شرکت‌کننده‌ها بفرستی یا به‌عنوان اعلامیهٔ عمومی برای همهٔ بازیکنان
+          </div>
+          <div className="card up u3 roleplay-cap-card"><div><b>سقف امتیاز رول‌ها</b><small>این سقف برای تمام دسته‌هاست و همهٔ ادمین‌ها می‌توانند آن را تنظیم کنند.</small></div><input type="number" min="1" value={roleplayScoreMax} onChange={e=>setRoleplayScoreMax(e.target.value)} /><button className="btn ghost" disabled={roleplayScoreSettingsBusy} onClick={saveRoleplayScoreMax}>ذخیره سقف</button></div>
+          <div className="tabs up u3 admin-roleplay-categories" role="tablist" style={{ marginBottom: 10 }}>
+            {[['all', 'همه'], ...Object.entries(ROLEPLAY_CATEGORIES).filter(([key]) => key !== 'security')].map(([key, label]) => {
+              const count = (roleplayPending || []).filter(r => key === 'all' || r.category === key).length;
+              return <button type="button" key={key} className={`rbtn tab ${roleplayCategoryTab === key ? 'on' : ''}`}
+                onClick={() => setRoleplayCategoryTab(key)}>{label} ({count.toLocaleString('fa-IR')})</button>;
+            })}
+          </div>
+          <div className="up u3">
+            {(!roleplayPending || roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رول بررسی‌نشده‌ای نیست</div>
+            )}
+            {roleplayPending && roleplayPending.filter(r => roleplayCategoryTab === 'all' || r.category === roleplayCategoryTab).map(r => (
+              <AdminDossier key={r.id} kind="roleplay" title={r.title || r.category_name || 'پروندهٔ رول'} date={r.created_at_real || r.created_at} place={castleLabel(r.war?.target_castle || r.castle)} people={[r.player, r.target_player_name, r.sibling?.player, r.war?.attacker_name, r.war?.defender_name]}>
+                <div className="res">
+                  <div className="ic"><Scroll s={16} /></div>
+                  <div className="n">
+                    {r.player}
+                    <small>{r.category_name} · {castleLabel(r.castle)}</small>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{r.text}</div>
+                <div className="roleplay-score-box"><label>{r.category === 'scout' ? 'امتیاز آمادگی پیش‌قراول' : 'امتیاز این رول'} <small>از {(r.category === 'scout' ? 100 : Number(roleplayScoreMax)).toLocaleString('fa-IR')}</small></label><input type="number" min="0" max={r.category === 'scout' ? 100 : roleplayScoreMax} value={roleplayScores[r.id] ?? r.admin_score ?? ''} onChange={e=>setRoleplayScores(p=>({...p,[r.id]:e.target.value}))} /><button className="btn ghost" disabled={roleplayScoreBusyId===r.id} onClick={()=>scoreRoleplay(r.id, r.category)}>{roleplayScoreBusyId===r.id?'در حال ثبت...':'ثبت امتیاز'}</button></div>
+                {r.category === 'scout' && <div className="page-sub" style={{ margin: '-4px 2px 10px' }}>این امتیاز به جدول امتیازات اضافه نمی‌شود و فقط هنگام برخورد با کمین مقایسه خواهد شد.</div>}
+                {r.category === 'sabotage' && <div className="notice-guide" style={{ marginBottom: 10 }}><strong>هدف خرابکاری: {r.target_player_name || 'نامشخص'}</strong><span>نتیجه و تغییرات هر دو طرف را از همین پرونده ثبت کن.</span></div>}
+                {['economy', 'sabotage'].includes(r.category) && [
+                  ['actor', r.actor_state, r.category === 'economy' ? 'وضعیت اقتصادی صاحب رول' : 'وضعیت فرستندهٔ خرابکاری'],
+                  ...(r.category === 'sabotage' ? [['target', r.target_state, 'وضعیت لرد هدف']] : []),
+                ].map(([scope, state, label]) => state && (
+                  <div key={`${r.id}-${scope}`} style={{ margin: '10px 0', padding: 11, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.02)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>{label} — {state.name}</div>
+                    <div className="page-sub" style={{ margin: '0 0 9px' }}>موجودی فعلی کنار هر منبع نوشته شده؛ فقط مقدار تغییر را وارد کن. مثبت اضافه و منفی کم می‌کند.</div>
+                    <div className="grid2">
+                      {PLAYER_RES.map(({ key, label: resourceLabel }) => (
+                        <div key={`${scope}-${key}`}>
+                          <label className="f" style={{ marginTop: 6 }}>{resourceLabel} · فعلی {(state.resources?.[key] || 0).toLocaleString('fa-IR')}</label>
+                          <input type="number" placeholder="تغییر؛ مثلاً ۱۰۰ یا ۵۰-"
+                            value={roleplayAdjustments[r.id]?.[`${scope}Resources`]?.[key] ?? ''}
+                            onChange={e => setRoleplayAdjustments(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), [`${scope}Resources`]: { ...(prev[r.id]?.[`${scope}Resources`] || {}), [key]: e.target.value } } }))} />
+                        </div>
+                      ))}
+                    </div>
+                    <label className="f">محبوبیت · فعلی {state.popularity.toLocaleString('fa-IR')} از ۱۰۰</label>
+                    <input type="number" min="-100" max="100" placeholder="تغییر محبوبیت؛ مثلاً ۵ یا ۳-"
+                      value={roleplayAdjustments[r.id]?.[`${scope}Popularity`] ?? ''}
+                      onChange={e => setRoleplayAdjustments(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), [`${scope}Popularity`]: e.target.value } }))} />
+                  </div>
+                ))}
+                {r.category === 'war' && (
+                  <div className="notice-guide" style={{ marginBottom: 10 }}>
+                    <strong>داوری این رول در پروندهٔ نبرد انجام می‌شود</strong>
+                    <span>برای جلوگیری از دو نتیجه و تلفات ناسازگار، نتیجهٔ جنگ از تب رول‌ها ثبت نمی‌شود.</span>
+                    <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => { setTab('war'); setWarSubTab('battles'); }}>رفتن به پرونده‌های نبرد</button>
+                  </div>
+                )}
+                {r.category === 'war' && (
+                  r.sibling ? (
+                    <div style={{ margin: '0 0 10px', padding: 10, borderRadius: 12, background: 'rgba(77,163,255,0.08)', border: '1px solid rgba(96,178,255,0.2)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--az2)', marginBottom: 4 }}>سناریوی طرف مقابل ({r.sibling.player})</div>
+                      <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--mid)' }}>{r.sibling.text}</div>
+                    </div>
+                  ) : (
+                    <div style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--low)' }}>طرف مقابل هنوز سناریویش را نفرستاده — نتیجه برای هر دو طرف فرستاده می‌شود</div>
+                  )
+                )}
+                {r.category === 'war' && r.war && (
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <div style={{ margin: '10px 0', padding: 10, borderRadius: 12, border: '1px solid var(--line)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>نیروهای درگیر و ثبت تلفات</div>
+                      <div style={{ fontSize: 11, color: 'var(--mid)', marginBottom: 8 }}>
+                        عددی که برای هر نیرو می‌زنی از همان لشکر کم می‌شود. عدد را خالی یا صفر بگذار یعنی آن نیرو تلفاتی نداشته.
+                      </div>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--danger)', marginBottom: 6 }}>
+                        مهاجم — {r.war.attacker_name} · {(r.war.attacker_army?.men || 0).toLocaleString('fa-IR')} نفر
+                      </div>
+                      {(r.war.attacker_army?.troops || []).map(t => (
+                        <div className="troop" key={`a-${t.id}`}>
+                          <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} نفر حاضر</small></div>
+                          <input type="number" min="0" max={t.count} placeholder="تلفات"
+                            value={roleplayLosses[r.id]?.attacker?.[t.id] ?? ''}
+                            onChange={e => setRoleplayLosses(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), attacker: { ...(prev[r.id]?.attacker || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} />
+                        </div>
+                      ))}
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--az2)', margin: '10px 0 6px' }}>
+                        مدافع — {r.war.defender_name} · {(r.war.defender_armies || []).reduce((s, a) => s + (a.men || 0), 0).toLocaleString('fa-IR')} نفر
+                      </div>
+                      {Object.values((r.war.defender_armies || []).flatMap(a => a.troops || []).reduce((m, t) => {
+                        m[t.id] = m[t.id] ? { ...m[t.id], count: m[t.id].count + t.count } : { ...t }; return m;
+                      }, {})).map(t => (
+                        <div className="troop" key={`d-${t.id}`}>
+                          <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} نفر حاضر در دفاع</small></div>
+                          <input type="number" min="0" max={t.count} placeholder="تلفات"
+                            value={roleplayLosses[r.id]?.defender?.[t.id] ?? ''}
+                            onChange={e => setRoleplayLosses(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), defender: { ...(prev[r.id]?.defender || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } }))} />
+                        </div>
+                      ))}
+                      {(!r.war.defender_armies || r.war.defender_armies.length === 0) && (
+                        <div style={{ fontSize: 11, color: 'var(--low)' }}>هیچ لشکر دفاعیِ رسیده‌ای در این قلعه ثبت نشده.</div>
+                      )}
+                    </div>
+                    <label className="f" style={{ marginTop: 0 }}>برندهٔ نبرد</label>
+                    <div className="grid2" role="radiogroup" aria-label="برندهٔ نبرد">
+                      <button type="button" role="radio" aria-checked={roleplayWinners[r.id] === r.war.attacker_tg_id}
+                              className={`rbtn pick ${roleplayWinners[r.id] === r.war.attacker_tg_id ? 'sel' : ''}`}
+                              onClick={() => setRoleplayWinners(prev => ({ ...prev, [r.id]: r.war.attacker_tg_id }))}>
+                        <div className="n">{r.war.attacker_name}</div>
+                        <div className="c">مهاجم — پیروزی در حمله</div>
+                      </button>
+                      <button type="button" role="radio" disabled={!r.war.defender_tg_id}
+                              aria-checked={roleplayWinners[r.id] === r.war.defender_tg_id}
+                              className={`rbtn pick ${roleplayWinners[r.id] === r.war.defender_tg_id ? 'sel' : ''}`}
+                              onClick={() => r.war.defender_tg_id && setRoleplayWinners(prev => ({ ...prev, [r.id]: r.war.defender_tg_id }))}>
+                        <div className="n">{r.war.defender_name}</div>
+                        <div className="c">مدافع — دفاع موفق از {castleLabel(r.war.target_castle)}</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: ['war', 'scout'].includes(r.category) ? 'none' : 'block' }}>
+                <label className="f" style={{ marginTop: 0 }}>نتیجه</label>
+                <textarea value={roleplayResults[r.id] ?? ''}
+                          onChange={e => setRoleplayResults(prev => ({ ...prev, [r.id]: e.target.value }))}
+                          placeholder="نتیجهٔ این رول چه شد..." />
+                {r.category === 'sabotage' ? <div className="page-sub">نتیجهٔ خرابکاری محرمانه است و فقط برای فرستنده می‌رود؛ هدف و سایر بازیکنان اعلان دریافت نمی‌کنند.</div> : <>
+                <label className="f">این رول بین این لرد و چه لردهای دیگری بوده؟ (اختیاری)</label>
+                <PlayerPicker value={roleplayOtherLords[r.id] || []}
+                              onChange={(v) => setRoleplayOtherLords(prev => ({ ...prev, [r.id]: v }))} />
+                <label className="f">این نتیجه برای چه کسانی نمایش داده شود؟</label>
+                <div className="grid2" role="radiogroup" aria-label="نمایش نتیجه">
+                  <button type="button" role="radio" aria-checked={(roleplayVisibility[r.id] || 'participants') === 'participants'}
+                          className={`rbtn pick ${(roleplayVisibility[r.id] || 'participants') === 'participants' ? 'sel' : ''}`}
+                          onClick={() => setRoleplayVisibility(prev => ({ ...prev, [r.id]: 'participants' }))}>
+                    <div className="n">شرکت‌کننده‌ها</div>
+                    <div className="c">{r.category === 'war' ? 'هر دو طرف نبرد' : 'فقط همین بازیکن'}</div>
+                  </button>
+                  <button type="button" role="radio" aria-checked={roleplayVisibility[r.id] === 'all'}
+                          className={`rbtn pick ${roleplayVisibility[r.id] === 'all' ? 'sel' : ''}`}
+                          onClick={() => setRoleplayVisibility(prev => ({ ...prev, [r.id]: 'all' }))}>
+                    <div className="n">همهٔ بازیکنان</div>
+                    <div className="c">اعلامیهٔ عمومی</div>
+                  </button>
+                </div>
+                </>}
+                <button className="btn" style={{ marginTop: 14 }} disabled={roleplayBusyId === r.id} onClick={() => respondRoleplay(r.id)}>
+                  {roleplayBusyId === r.id ? 'در حال ارسال...' : 'ارسال نتیجه'}
+                </button>
+                </div>
+              </AdminDossier>
+            ))}
+          </div>
+          </>
+          )}
+      {tab === 'character_travel' && isFull && <AdminCharacterTravel toast={toast}/> }
+      {tab === 'profiles' && (
+        <>
+          <div className="sect up u2">مشخصات بازیکنان</div>
+          {isFull && <AdminCharacterTravel toast={toast} playersOnly onSelect={p=>setProfileTarget([p])}/>}
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>این ابزار برای اصلاح نام، بک‌استوری یا عکس نامناسب است و قلعه، منابع و امتیاز بازیکن را تغییر نمی‌دهد.</div>
+          <div className="card up u2">
+            <label className="f" style={{marginTop:0}}>بازیکن</label><PlayerPicker value={profileTarget} onChange={setProfileTarget} single placeholder="نام بازیکن یا قلعه را جست‌وجو کن..." />
+            {profileTarget.length > 0 && !profileDraft && <div className="loading">در حال دریافت مشخصات...</div>}
+            {profileDraft && <>
+              <label className="f">نام نمایشی</label><input maxLength="40" value={profileDraft.name || ''} onChange={e=>setProfileDraft(p=>({...p,name:e.target.value}))} />
+              <label className="f">بک‌استوری <small>۴۰ تا ۲۰۰۰ نویسه</small></label><textarea rows="7" maxLength="2000" value={profileDraft.backstory || ''} onChange={e=>setProfileDraft(p=>({...p,backstory:e.target.value}))} />
+              <label className="f">عکس پروفایل <small>اختیاری، حداکثر ۲٫۵ مگابایت</small></label>
+              {profileDraft.profile_image && <img src={profileDraft.profile_image} alt="پیش‌نمایش پروفایل" className="admin-profile-preview" />}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readAdminImage(e.target.files?.[0], image=>setProfileDraft(p=>({...p,profile_image:image})), toast)} />
+              {profileDraft.profile_image && <button className="btn ghost" style={{marginTop:8}} onClick={()=>setProfileDraft(p=>({...p,profile_image:null}))}>حذف عکس</button>}
+              <label className="f">پرچم کاراکتر <small>حداکثر ۲۵۶ کیلوبایت</small></label>
+              {profileDraft.flag_image&&<img src={profileDraft.flag_image} alt="پرچم بازیکن" className="admin-profile-preview" style={{objectFit:'contain'}}/>}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>{const file=e.target.files?.[0];if(file?.size>256*1024){toast('حداکثر حجم پرچم ۲۵۶ کیلوبایت است');return;}readAdminImage(file,flag_image=>setProfileDraft(p=>({...p,flag_image})),toast);}}/>
+              {profileDraft.flag_image&&<button className="btn ghost" onClick={()=>setProfileDraft(p=>({...p,flag_image:null}))}>حذف پرچم</button>}
+              <button className="btn" style={{marginTop:14}} disabled={profileBusy} onClick={savePlayerProfile}>{profileBusy?'در حال ذخیره...':'ذخیره مشخصات بازیکن'}</button>
+            </>}
+          </div>
+        </>
+      )}
+
+      {tab === 'alliances' && (
+        <>
+          <div className="sect up u2">اتحادهای بازی</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            اعضای هر پیمان، دعوت‌های در انتظار و اعضای خارج‌شده؛ اخراج با غرامت یا انحلال کامل بدون غرامت
+          </div>
+          <div className="card up u2"><label className="f">جست‌وجوی پیمان</label><input value={allianceSearch} onChange={e=>setAllianceSearch(e.target.value)} placeholder="نام لرد/لیدی، آیدی عددی، @username یا نام پیمان" /><div className="page-sub">{filteredAlliances.length.toLocaleString('fa-IR')} پیمان</div></div>
+          <div className="up u2">
+            {(alliancesList && filteredAlliances.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>پیمانی مطابق جست‌وجو پیدا نشد</div>
+            )}
+            {filteredAlliances.map(a => (
+              <div className="card" key={a.id} style={{ marginBottom: 10 }}>
+                <div className="res">
+                  <div className="ic"><Scroll s={16} /></div>
+                  <div className="n">
+                    {a.name || `${a.from} ← ${a.to}`}
+                    <small>{a.type_name}{a.name ? ` · «${a.name}»` : ''} · {a.public ? 'عمومی' : 'خصوصی'}</small>
+                  </div>
+                </div>
+                {a.members?.map(m => <div className="res" key={m.tg_id} style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <div className="n">{m.current_name || m.name}<small>{m.tg_id}{m.username ? ` · @${m.username}` : ''} · {m.creator ? 'سازنده · ' : ''}{{accepted: 'عضو', pending: 'منتظر پاسخ', left: 'خارج‌شده', dissolved: 'منحل‌شده', rejected: 'ردشده', cancelled: 'لغوشده'}[m.status] || m.status}</small><small>غرامت خروج/اخراج: {(m.penalty_gold || 0).toLocaleString('fa-IR')} سکه</small></div>
+                  {m.status === 'accepted' && !a.marriage_id && isFull && <button className="rbtn" style={{ color: 'var(--danger)' }} disabled={dissolveBusyId === a.id} onClick={() => expelAlliance(a, m)}>اخراج{m.creator ? ' و انحلال' : ''}</button>}
+                </div>)}
+                {a.marriage_id && <div className="page-sub">پیمان ازدواج؛ مدیریت فسخ از بخش خانواده</div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 11, color: 'var(--low)' }}>
+                    {{ pending: 'در انتظار پاسخ', accepted: 'برقرار', rejected: 'رد شده', dissolved: 'منحل‌شده' }[a.status] || a.status}
+                  </div>
+                  {a.status === 'accepted' && !a.marriage_id && isFull && (
+                    <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                            disabled={dissolveBusyId === a.id} onClick={() => dissolveAlliance(a.id)}>
+                      {dissolveBusyId === a.id ? 'در حال انحلال...' : 'منحل کن'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'character_profiles' && isFull && <AdminCharacterProfiles toast={toast}/>}
+      {tab.startsWith('institution_') && isFull && <AdminInstitutions institution={tab.slice(12)} toast={toast}/>}
+      {tab === 'time_management' && isFull && <AdminTimeManagement toast={toast}/>}
+      {tab === 'season_branding' && isFull && <AdminSeasonBranding/>}
+      {tab === 'map_management' && isFull && <AdminMapManagement toast={toast}/>}
+      {tab === 'shared_ips' && isOwner && <AdminSharedIPs toast={toast}/>}
+
+      {tab === 'titles' && (
+        <>
+          <div className="sect up u2">تعیین بالادستی</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>اقلیم</label>
+            <select value={overlordRegion} onChange={e => setOverlordRegion(e.target.value)}>
+              {Object.entries(REGIONS_STATIC).map(([rid, r]) => <option key={rid} value={rid}>{r.name}</option>)}
+            </select>
+            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.overlords?.[overlordRegion]?.name || 'بدون دارنده'}</p>
+            <label className="f">لرد (باید اهل همین اقلیم باشد — معمولاً برندهٔ رای‌گیری)</label>
+            <PlayerPicker value={overlordTarget} onChange={setOverlordTarget} single />
+            <button className="btn" style={{ marginTop: 14 }} onClick={setOverlord}>ثبت بالادستی</button>
+            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام بالادستی پس گرفته شود؟')) return; try { await api.adminSetOverlord(overlordRegion, null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن بالادستی</button>
+          </div>
+
+          <div className="sect up u2">تعیین والی</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>والی‌نشین</label>
+            <select value={wardenGroup} onChange={e => setWardenGroup(e.target.value)}>
+              {Object.entries(WARDEN_GROUPS).map(([gid, g]) => <option key={gid} value={gid}>{g.name}</option>)}
+            </select>
+            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.wardens?.[wardenGroup]?.name || 'بدون دارنده'}</p>
+            <label className="f">بازیکن فعال؛ بدون شرط مقام یا اقلیم قبلی</label>
+            <PlayerPicker value={wardenTarget} onChange={setWardenTarget} single />
+            <button className="btn" style={{ marginTop: 14 }} onClick={setWarden}>ثبت والی</button>
+            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام والی پس گرفته شود؟')) return; try { await api.adminSetWarden(wardenGroup, null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن والی</button>
+            <p className="page-sub">با ثبت والی، مقام حاکمیتی قبلی او آزاد می‌شود؛ جانشین را از بخش بالادستی تعیین کن.</p>
+          </div>
+
+          <div className="sect up u3">تعیین پادشاه/ملکه</div>
+          <div className="card up u3">
+            <p className="page-sub">دارندهٔ فعلی: {officeHolders?.king?.name || 'بدون دارنده'}</p>
+            <label className="f" style={{ marginTop: 0 }}>بازیکن فعال؛ بدون شرط مقام قبلی</label>
+            <PlayerPicker value={kingTarget} onChange={setKingTarget} single />
+            <button className="btn" style={{ marginTop: 14 }} onClick={setKing}>ثبت پادشاه/ملکه</button>
+            <button className="btn ghost" style={{ marginTop: 8, color: 'var(--danger)' }} onClick={async () => { if (!window.confirm('مقام پادشاه/ملکه پس گرفته شود؟')) return; try { await api.adminSetKing(null); toast('مقام پس گرفته شد'); api.titles().then(setOfficeHolders); } catch (e) { toast(e.message); } }}>پس‌گرفتن پادشاه/ملکه</button>
+            <p className="page-sub">با ثبت پادشاه/ملکه، جایگاه والی قبلی او آزاد می‌شود؛ جانشین را از بخش والی تعیین کن. امتیاز و اختیارات مقام جدید حفظ می‌شود.</p>
+          </div>
+
+          <div className="sect up u3">تعیین عنوان (لقب)</div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>لرد</label>
+            <PlayerPicker value={epithetTarget} onChange={setEpithetTarget} single />
+            <label className="f">عنوان تازه</label>
+            <input value={epithetText} onChange={e => setEpithetText(e.target.value)} placeholder="مثلاً: شکنندهٔ زنجیرها" />
+            <button className="btn" style={{ marginTop: 14 }} onClick={setEpithet}>ثبت عنوان</button>
+          </div>
+        </>
+      )}
+
+      {tab === 'item_store' && isFull && <AdminItemStore />}
+      {tab === 'items' && isFull && (
+        <>
+          <div className="sect up u2">ساخت آیتم تازه</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>نام آیتم</label>
+            <input value={itemName} onChange={e => setItemName(e.target.value)} maxLength={60} placeholder="مثلاً «شمشیر فولاد والریایی»" />
+            <label className="f">تصویر آیتم · اختیاری، حداکثر ۲۵۶ کیلوبایت</label>
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0]; e.target.value=''; if(!file)return; if(file.size>256*1024){toast('حجم تصویر باید حداکثر ۲۵۶ کیلوبایت باشد');return;} if(!['image/png','image/jpeg','image/webp'].includes(file.type)){toast('تصویر PNG، JPG یا WebP انتخاب کن');return;} const reader=new FileReader();reader.onload=()=>setItemImage(reader.result);reader.onerror=()=>toast('تصویر خوانده نشد');reader.readAsDataURL(file); }} />
+            {itemImage && <div style={{ marginTop: 12 }}><ItemPicture item={{ image:itemImage, name:itemName, color:itemColor }} large /><button className="btn ghost" onClick={()=>setItemImage(null)}>حذف تصویر</button></div>}
+            <label className="f">نوع</label>
+            <select value={itemType} onChange={e => setItemType(e.target.value)}>
+              {Object.entries(ITEM_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <label className="f">رده و رنگ پیش‌فرض</label>
+            <select value={itemColor} onChange={e => setItemColor(e.target.value)}>
+              {Object.entries(ITEM_RARITY_COLORS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+            {itemType === 'economy' && <>
+              <label className="f">ساختمان با بازده بیشتر (اختیاری)</label>
+              <select value={itemBuilding} onChange={e => setItemBuilding(e.target.value)}>
+                <option value="">بدون اثر تولید</option>
+                {itemBuildings.filter(b => Object.values(b.produces_per_level || {}).some(v => v > 0)).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+              {itemBuilding && <><label className="f">افزایش بازده (%)</label><input type="number" min="0.01" max="1000" step="0.01" value={itemYield} onChange={e => setItemYield(e.target.value)} />
+                <p className="page-sub">به تولید روزانهٔ همین ساختمان در همهٔ قلعه‌های بازیکن اضافه می‌شود. درصد چند آیتم با هم جمع می‌شود؛ ظرفیت انبار تغییر نمی‌کند.</p></>}
+            </>}
+            <label className="f">مدت</label>
+            <select value={itemDuration} onChange={e => setItemDuration(e.target.value)}>
+              {Object.entries(ITEM_DURATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            {itemDuration === 'temporary' && (
+              <>
+                <label className="f">مدت (ساعت)</label>
+                <input type="number" min="1" value={itemDurationHours} onChange={e => setItemDurationHours(e.target.value)} />
+              </>
+            )}
+            <label className="f">توضیح (اختیاری)</label>
+            <textarea value={itemDescription} onChange={e => setItemDescription(e.target.value)} placeholder="این آیتم چه می‌کند..." />
+            <button className="btn" style={{ marginTop: 14 }} disabled={itemBusy} onClick={createItem}>
+              {itemBusy ? 'در حال ساخت...' : 'ساخت آیتم'}
+            </button>
+          </div>
+
+          <div className="sect up u3">آیتم‌های ساخته‌شده</div>
+          <div className="up u3">
+            {(!itemsList || itemsList.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز آیتمی نساخته‌ای</div>
+            )}
+            {itemsList && itemsList.map(it => (
+              <div className="card" key={it.id} style={{ marginBottom: 10 }}>
+                {it.image && <div style={{ marginBottom: 12 }}><ItemPicture item={it} large /></div>}
+                <div className="res">
+                  <div className="ic"><Warehouse s={16} /></div>
+                  <div className="n">
+                    {it.name}
+                    <small>
+                      {it.type_name} · {it.duration_name}{it.duration_hours ? ` (${it.duration_hours.toLocaleString('fa-IR')} ساعت)` : ''} ·{' '}
+                      {it.grant_count.toLocaleString('fa-IR')} بار داده‌شده
+                    </small>
+                  </div>
+                </div>
+                <div style={{ color: ITEM_RARITY_HEX[it.color] }}>{ITEM_RARITY_COLORS[it.color] || 'معمولی'}</div>
+                {it.building_id && <div className="page-sub">{it.building_name}: +{Number(it.yield_percent).toLocaleString('fa-IR')}٪ بازده</div>}
+                {it.description && <div style={{ fontSize: 12, color: 'var(--mid)', margin: '8px 0' }}>{it.description}</div>}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => openGrant(it.id)}>
+                    افزودن به یک لرد
+                  </button>
+                  <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }} onClick={() => deleteItem(it.id)}>
+                    حذف آیتم
+                  </button>
+                </div>
+                {grantOpenId === it.id && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(160,195,255,0.07)' }}>
+                    <label className="f" style={{ marginTop: 0 }}>لرد</label>
+                    <PlayerPicker value={grantTarget} onChange={setGrantTarget} single />
+                    <label className="f">میزان خاص‌بودن (رنگ)</label>
+                    <div className="grid2">
+                      {Object.entries(ITEM_RARITY_COLORS).map(([k, v]) => (
+                        <div key={k} className={`pick ${grantColor === k ? 'sel' : ''}`}
+                             style={{ borderColor: grantColor === k ? ITEM_RARITY_HEX[k] : undefined }}
+                             onClick={() => { haptic(); setGrantColor(k); }}>
+                          <div className="n" style={{ color: ITEM_RARITY_HEX[k] }}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <button className="btn" style={{ marginTop: 14 }} disabled={grantBusy} onClick={() => grantItem(it.id)}>
+                      {grantBusy ? 'در حال افزودن...' : 'افزودن به دارایی‌های این لرد'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {['control_center','population_growth','food_consumption','road_victory'].includes(tab) && isOwner && <AdminControlCenter roadVictoryOnly={tab === 'road_victory'} foodOnly={tab === 'food_consumption'} populationOnly={tab === 'population_growth'} data={controlSettings} onChange={setControlSettings} onSave={saveControlSettings} onReset={resetControlSettings} busy={controlSettingsBusy} />}
+
+      {((tab === 'balance' && isOwner) || tab === 'player-buildings') && isFull && (
+        <>
+          {tab === 'balance' && <div className="tabs up u1" role="tablist" aria-label="مدیریت ساختمان‌ها">
+            <button type="button" role="tab" aria-selected={buildingAdminMode === 'global'}
+                    className={`rbtn tab ${buildingAdminMode === 'global' ? 'on' : ''}`}
+                    onClick={() => setBuildingAdminMode('global')}>تنظیمات سراسری</button>
+            <button type="button" role="tab" aria-selected={buildingAdminMode === 'player'}
+                    className={`rbtn tab ${buildingAdminMode === 'player' ? 'on' : ''}`}
+                    onClick={() => setBuildingAdminMode('player')}>ساختمان‌های بازیکن</button>
+            <button type="button" role="tab" aria-selected={buildingAdminMode === 'military'}
+                    className={`rbtn tab ${buildingAdminMode === 'military' ? 'on' : ''}`}
+                    onClick={() => setBuildingAdminMode('military')}>نیروها و ادوات</button>
+          </div>}
+
+          {tab === 'balance' && isOwner && buildingAdminMode === 'global' && (
+            <>
+              <div className="sect up u2">هزینه و بازدهی همهٔ ساختمان‌ها</div>
+              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
+                تغییرات این بخش سراسری است و روی ساخت‌های بعدیِ همهٔ بازیکن‌ها اثر می‌گذارد. هزینهٔ پایه برای سطح ۱ است؛
+                درصد رشد تعیین می‌کند هزینهٔ هر سطح نسبت به سطح قبلی چقدر بیشتر شود. تولید و سقف هم به‌ازای هر سطح حساب می‌شوند.
+              </div>
+              <div className="notice-guide up u2" style={{ marginBottom: 12 }}>
+                <strong>هدف پیش‌فرض فصل ۳۰روزه</strong>
+                <span>سقف ساختمان‌های عادی ۸ و کارگاه ادوات ۳ است. بازیکن فعال با یک نوبت رسیدگی روزانه و خرج متعارف جنگ، حدود روز ۲۹ می‌تواند ساختمان‌های یک قلعه را کامل کند.</span>
+              </div>
+              {!balanceList && <div className="loading">در حال بارگذاری...</div>}
+              {balanceList && balanceList.map(b => {
+                const draft = balanceDrafts[b.id] || {};
+                const busy = balanceBusyId === b.id;
+                const typeName = b.type === 'economy' ? 'اقتصادی' : b.type === 'barracks' ? 'پادگان' : b.type === 'armory' ? 'کارگاه تسلیحات' : 'دفاعی';
+                const preview = level => Object.entries(draft.cost || {}).map(([k, raw]) => {
+                  const base = Math.max(0, parseInt(raw, 10) || 0);
+                  const step = Math.max(0, Number(draft.cost_step_percent) || 0) / 100;
+                  return `${RES_LABEL[k] || k}: ${Math.round(base * (1 + (level - 1) * step)).toLocaleString('fa-IR')}`;
+                }).join(' · ');
+                return (
+                  <div className="card up u2" key={b.id} style={{ marginBottom: 12 }}>
+                    <div className="res">
+                      <div className="n">
+                        {b.name}
+                        <small>{typeName}{b.overridden ? ' · تنظیم سفارشی فعال است' : ' · تنظیمات پیش‌فرض بازی'}</small>
+                      </div>
+                    </div>
+
+                    <div className="sect" style={{ margin: '14px 0 4px' }}>۱. هزینهٔ ساخت و ارتقا</div>
+                    <div className="page-sub" style={{ margin: '0 0 9px', lineHeight: 1.8 }}>
+                      هزینهٔ پایه همان هزینهٔ ساخت سطح ۱ است. ارتقاهای بعدی با درصد رشد زیر محاسبه می‌شوند.
+                    </div>
+                    <div className="grid2">
+                      {Object.keys(b.base_cost || {}).map(k => (
+                        <div key={k}>
+                          <label className="f" style={{ marginTop: 0 }}>{RES_LABEL[k] || k} برای سطح ۱ <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cost[k]})</small></label>
+                          <input type="number" min="0" value={draft.cost?.[k] ?? ''}
+                                 onChange={e => setBalanceDraft(b.id, 'cost', k, e.target.value)} />
+                        </div>
+                      ))}
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>رشد هزینه در هر سطح <small style={{ color: 'var(--low)' }}>(درصد)</small></label>
+                        <input type="number" min="0" max="500" step="0.5" value={draft.cost_step_percent ?? ''}
+                               onChange={e => setBalanceDraft(b.id, 'cost_step_percent', null, e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>زمان پایه ساخت سطح ۱ <small style={{ color: 'var(--low)' }}>(ساعت)</small></label>
+                        <input type="number" min="0.1" step="0.1" value={draft.hours ?? ''} onChange={e => setBalanceDraft(b.id, 'hours', null, e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>حداکثر سطح این ساختمان</label>
+                        <input type="number" min="1" max="100" value={draft.max_level ?? ''} onChange={e => setBalanceDraft(b.id, 'max_level', null, e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="notice-guide" style={{ marginTop: 9 }}>
+                      <strong>پیش‌نمایش هزینه با عددهای فعلی</strong>
+                      <span>سطح ۱: {preview(1) || 'بدون هزینه'}<br />سطح ۲: {preview(2) || 'بدون هزینه'}<br />سطح آخر ({Number(draft.max_level || b.max_level).toLocaleString('fa-IR')}): {preview(Number(draft.max_level || b.max_level)) || 'بدون هزینه'}</span>
+                    </div>
+
+                    <div className="sect" style={{ margin: '16px 0 4px' }}>۲. بازدهی هر سطح</div>
+                    <div className="page-sub" style={{ margin: '0 0 9px', lineHeight: 1.8 }}>
+                      تولید روزانه و افزایش سقف ذخیره برای هر یک سطح ساختمان است؛ سطح ۵ پنج برابر عدد ثبت‌شده اثر دارد.
+                    </div>
+                    {(Object.keys(b.base_produces || {}).length > 0 || Object.keys(b.base_cap_bonus || {}).length > 0) ? (
+                      <div className="grid2">
+                        {Object.keys(b.base_produces || {}).map(k => (
+                          <div key={`produce-${k}`}>
+                            <label className="f" style={{ marginTop: 0 }}>تولید روزانهٔ {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_produces[k]})</small></label>
+                            <input type="number" min="0" value={draft.produces?.[k] ?? ''}
+                                   onChange={e => setBalanceDraft(b.id, 'produces', k, e.target.value)} />
+                          </div>
+                        ))}
+                        {Object.keys(b.base_cap_bonus || {}).map(k => (
+                          <div key={`cap-${k}`}>
+                            <label className="f" style={{ marginTop: 0 }}>افزایش سقف {RES_LABEL[k] || k} <small style={{ color: 'var(--low)' }}>(پیش‌فرض {b.base_cap_bonus[k]})</small></label>
+                            <input type="number" min="0" value={draft.cap_bonus?.[k] ?? ''}
+                                   onChange={e => setBalanceDraft(b.id, 'cap_bonus', k, e.target.value)} />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="notice-guide">
+                        <strong>بازدهی منبع ندارد</strong>
+                        <span>این ساختمان تولید یا سقف انبار اضافه نمی‌کند و کارکردش نظامی، دفاعی یا بازکردن قابلیت است.</span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
+                      <button className="btn" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => saveBalance(b)}>
+                        {busy ? 'در حال ذخیره...' : 'ذخیرهٔ تنظیمات ساختمان'}
+                      </button>
+                      {b.overridden && (
+                        <button className="btn ghost" style={{ width: 'auto', padding: '8px 16px', fontSize: 11.5 }} disabled={busy} onClick={() => resetBalance(b)}>
+                          بازگشت کامل به پیش‌فرض
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {tab === 'balance' && isOwner && buildingAdminMode === 'military' && (
+            <>
+              <div className="sect up u2">تعادل نیروها، کشتی‌ها و ادوات</div>
+              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
+                تمام اعداد این بخش سراسری‌اند و بلافاصله در محاسبات واقعی بک‌اند استفاده می‌شوند. درصد کندی برای هر یک عدد ادوات است.
+              </div>
+              {!gameplayBalance && <div className="loading">در حال بارگذاری...</div>}
+              {gameplayBalance && <>
+                <div className="card up u2" style={{ marginBottom: 12 }}>
+                  <div className="sect" style={{ marginTop: 0 }}>قواعد مشترک</div>
+                  <div className="grid2">
+                    {[
+                      ['camp_power_step_percent','افزایش قدرت به‌ازای هر سطح پادگان','٪'],
+                      ['level_hours_step_percent','افزایش زمان ساخت به‌ازای هر سطح','٪'],
+                      ['default_max_building_level','سقف سطح عمومی ساختمان‌ها','سطح'],
+                      ['food_cost_regular','غذای روزانه هر سرباز عادی','غذا'],
+                      ['food_cost_special','غذای روزانه نیروی ویژه و کشتی','غذا'],
+                      ['weapon_per_soldier','تسلیحات لازم برای هر سرباز عادی','عدد'],
+                      ['special_troop_cost','هزینه هر نیروی ویژه','طلا'],
+                      ['special_troop_power','قدرت هر نیروی ویژه','قدرت'],
+                      ['equipment_slowdown_cap_percent','حداکثر کندی مجموع ادوات','٪'],
+                      ['commander_power_bonus_percent','افزایش قدرت با حضور فرمانده','٪'],
+                      ['commander_speed_bonus_percent','افزایش سرعت با حضور فرمانده','٪'],
+                    ].map(([key,label,unit]) => <div key={key}>
+                      <label className="f" style={{ marginTop: 0 }}>{label} <small style={{ color: 'var(--low)' }}>({unit})</small></label>
+                      <input type="number" min="0" step="0.1" value={gameplayBalance.rules[key]} onChange={e => setGameplayRule(key, e.target.value)} />
+                    </div>)}
+                  </div>
+                </div>
+
+                <div className="sect up u2">سربازهای عادی</div>
+                {gameplayBalance.common_troops.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
+                  <div className="res"><div className="n">{row.name}<small>هزینه و قدرت هر یک سرباز</small></div></div>
+                  <div className="grid2">
+                    <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('common_troops', row.id, 'cost', e.target.value)} /></div>
+                    <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('common_troops', row.id, 'power', e.target.value)} /></div>
+                    <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('common_troops', row.id, 'food', e.target.value)} /></div>
+                  </div>
+                </div>)}
+
+                <div className="sect up u2">کشتی‌ها</div>
+                {gameplayBalance.naval_troops.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
+                  <div className="res"><div className="n">{row.name}<small>هزینه، قدرت و ظرفیت حمل هر کشتی</small></div></div>
+                  <div className="grid2">
+                    <div><label className="f">هزینه طلا</label><input type="number" min="0" value={row.cost} onChange={e => setGameplayRow('naval_troops', row.id, 'cost', e.target.value)} /></div>
+                    <div><label className="f">هزینه چوب</label><input type="number" min="0" value={row.wood_cost ?? 0} onChange={e => setGameplayRow('naval_troops', row.id, 'wood_cost', e.target.value)} /></div>
+                    <div><label className="f">هزینه آهن</label><input type="number" min="0" value={row.iron_cost ?? 0} onChange={e => setGameplayRow('naval_troops', row.id, 'iron_cost', e.target.value)} /></div>
+                    <div><label className="f">قدرت پایه</label><input type="number" min="0" value={row.power} onChange={e => setGameplayRow('naval_troops', row.id, 'power', e.target.value)} /></div>
+                    <div><label className="f">ظرفیت حمل سرباز</label><input type="number" min="0" value={row.capacity} onChange={e => setGameplayRow('naval_troops', row.id, 'capacity', e.target.value)} /></div>
+                    <div><label className="f">مصرف غذای روزانه</label><input type="number" min="0" value={row.food} onChange={e => setGameplayRow('naval_troops', row.id, 'food', e.target.value)} /></div>
+                  </div>
+                </div>)}
+
+                <div className="sect up u2">ادوات محاصره</div>
+                {gameplayBalance.equipment.map(row => <div className="card up u2" key={row.id} style={{ marginBottom: 9 }}>
+                  <div className="res"><div className="n">{row.name}<small>همه مقادیر برای ساخت یک عدد است</small></div></div>
+                  <div className="grid2">
+                    <div><label className="f">سطح کارگاه موردنیاز</label><input type="number" min="1" value={row.level} onChange={e => setGameplayRow('equipment', row.id, 'level', e.target.value)} /></div>
+                    <div><label className="f">قدرت محاصره</label><input type="number" min="0" value={row.siege_power} onChange={e => setGameplayRow('equipment', row.id, 'siege_power', e.target.value)} /></div>
+                    <div><label className="f">کندی حرکت هر عدد (درصد)</label><input type="number" min="0" step="0.1" value={row.slowdown_percent} onChange={e => setGameplayRow('equipment', row.id, 'slowdown_percent', e.target.value)} /></div>
+                    {Object.entries(row.cost || {}).map(([key,value]) => <div key={key}><label className="f">هزینه {RES_LABEL[key] || key}</label><input type="number" min="0" value={value} onChange={e => setEquipmentCost(row.id, key, e.target.value)} /></div>)}
+                  </div>
+                </div>)}
+                <div style={{ display: 'flex', gap: 7, position: 'sticky', bottom: 8, zIndex: 3, padding: 8, background: 'var(--bg)' }}>
+                  <button className="btn" disabled={gameplayBalanceBusy} onClick={saveGameplayBalance}>{gameplayBalanceBusy ? 'در حال ذخیره...' : 'ذخیره همه تغییرات'}</button>
+                  <button className="btn ghost" disabled={gameplayBalanceBusy} onClick={resetGameplayBalance}>بازگشت به پیش‌فرض</button>
+                </div>
+              </>}
+            </>
+          )}
+
+          {(tab === 'player-buildings' || buildingAdminMode === 'player') && (
+            <>
+              <div className="sect up u2">مدیریت ساختمان‌های یک بازیکن</div>
+              <div className="page-sub up u2" style={{ marginTop: -4, lineHeight: 1.9 }}>
+                این بخش فقط ساختمان‌های بازیکن انتخاب‌شده را تغییر می‌دهد. سطح صفر یعنی حذف ساختمان؛ سطح ۱ یعنی ساخت اولیه.
+                ثبت مستقیم سطح، هر ساخت یا ارتقای درحال‌انجامِ همان ساختمان را لغو می‌کند.
+              </div>
+              <div className="card up u2">
+                <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
+                <PlayerPicker value={playerBuildingTarget} onChange={setPlayerBuildingTarget} single placeholder="بازیکن را انتخاب کن..." />
+                {playerBuildingTarget.length > 0 && !playerBuildingData && <div className="loading">در حال گرفتن ساختمان‌ها...</div>}
+                {playerBuildingData && (
+                  <>
+                    <label className="f">قلعهٔ موردنظر</label>
+                    <select value={playerBuildingCastle} onChange={e => setPlayerBuildingCastle(e.target.value)}>
+                      {playerBuildingData.castles.map(castle => (
+                        <option key={castle.castle} value={castle.castle}>{castle.castle}{castle.home ? ' · قلعهٔ اصلی' : ''}</option>
+                      ))}
+                    </select>
+                    <div className="notice-guide">
+                      <strong>تغییر مستقیم سطح</strong>
+                      <span>منابع بازیکن کم یا زیاد نمی‌شود. این ابزار برای اصلاح وضعیت، جایزه، جریمه یا رفع خطای ادمینی است.</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {playerBuildingData && playerBuildingData.castles.find(c => c.castle === playerBuildingCastle)?.buildings.map(row => {
+                const key = `${playerBuildingCastle}::${row.id}`;
+                const busy = playerBuildingBusyId === row.id;
+                const typeName = row.type === 'economy' ? 'اقتصادی' : row.type === 'barracks' ? 'پادگان' : row.type === 'armory' ? 'کارگاه تسلیحات' : 'دفاعی';
+                return (
+                  <div className="card up u3" key={row.id} style={{ marginBottom: 9 }}>
+                    <div className="res">
+                      <div className="n">
+                        {row.name}
+                        <small>
+                          {typeName} · سطح فعلی {row.level.toLocaleString('fa-IR')}
+                          {row.upgrade_to ? ` · درحال ارتقا به سطح ${row.upgrade_to.toLocaleString('fa-IR')}` : ''}
+                          {row.requires_port ? ' · فقط قلعهٔ بندری' : ''}
+                        </small>
+                      </div>
+                    </div>
+                    <div className="grid2" style={{ marginTop: 10, alignItems: 'end' }}>
+                      <div>
+                        <label className="f" style={{ marginTop: 0 }}>سطح جدید (۰ تا {row.max_level || playerBuildingData.max_level})</label>
+                        <input type="number" min="0" max={row.max_level || playerBuildingData.max_level}
+                               value={playerBuildingDrafts[key] ?? String(row.level)}
+                               onChange={e => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: e.target.value }))} />
+                      </div>
+                      <button className="btn" disabled={busy} onClick={() => savePlayerBuilding(row)}>
+                        {busy ? 'در حال ثبت...' : 'ثبت سطح'}
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '0' }))}>حذف (سطح صفر)</button>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: '1' }))}>ساخت سطح ۱</button>
+                      <button className="btn ghost" style={{ width: 'auto', padding: '7px 10px', fontSize: 10 }}
+                              onClick={() => setPlayerBuildingDrafts(prev => ({ ...prev, [key]: String(row.max_level || playerBuildingData.max_level) }))}>حداکثر</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </>
+      )}
+
+      {swapDraft && <div className="character-swap-panel card" role="dialog" aria-modal="true" aria-label="جابجایی قلعه‌ها">
+        <h2 className="page-title">جابجایی قلعه‌ها</h2><p>ساختمان‌ها با قلعه منتقل می‌شوند؛ منابع و آمار پیروزی تغییر نمی‌کنند.</p>
+        <label className="f">قلعهٔ بازیکن اول<select value={swapDraft.first_castle} onChange={e => setSwapDraft(v => ({...v,first_castle:e.target.value}))}>{(() => {const p=roster.find(p=>p.tg_id===swapDraft.first_id);return [p.castle,...(p.castles||[])].map(c=><option key={c}>{c}</option>);})()}</select></label>
+        <label className="f">بازیکن هدف<select value={swapDraft.second_id} onChange={e => setSwapDraft(v => ({...v,second_id:Number(e.target.value),second_castle:''}))}><option value="">انتخاب بازیکن…</option>{roster.filter(p=>!p.is_dead&&p.castle&&p.tg_id!==swapDraft.first_id).map(p=><option value={p.tg_id} key={p.tg_id}>{p.name}</option>)}</select></label>
+        <label className="f">قلعهٔ هدف<select value={swapDraft.second_castle} onChange={e => setSwapDraft(v => ({...v,second_castle:e.target.value}))}><option value="">انتخاب قلعه…</option>{(() => {const p=roster.find(p=>p.tg_id===swapDraft.second_id);return p ? [p.castle,...(p.castles||[])].map(c=><option key={c}>{c}</option>) : [];})()}</select></label>
+        <div className="grid2"><button className="btn ghost" disabled={swapBusy} onClick={()=>setSwapDraft(null)}>انصراف</button><button className="btn" disabled={swapBusy||!swapDraft.second_castle} onClick={async()=>{setSwapBusy(true);try{await api.adminSwapCastles(swapDraft);setSwapDraft(null);loadRoster();loadMapData();toast('مالکیت قلعه‌ها جابه‌جا شد');}catch(e){toast(e.message);}finally{setSwapBusy(false);}}}>تأیید جابجایی</button></div>
+      </div>}
+      {retireDialog && <RetireCharacterDialog key={retireDialog.player.tg_id + retireDialog.action} {...retireDialog} onClose={() => setRetireDialog(null)} onDone={() => { setRetireDialog(null); loadRoster(); loadPendingPlayers(); loadMapData(); }} />}
+      {tab === 'family' && isFull && <AdminFamily />}
+      {tab === 'analytics_reports' && isFull && <AdminAnalytics/>}
+      {tab === 'system_reports' && <><div className="card system-report-card">
+        <div><div className="system-report-name">لیست سیاه بازیکنان</div><div className="system-report-meta">فایل TXT · نام، آیدی عددی و دلیل ثبت</div></div>
+        <button type="button" className="btn ghost" disabled={reportBusy} onClick={downloadBlacklist}>{reportBusy ? 'در حال دریافت…' : 'دانلود فایل'}</button>
+      </div>
+      {isFull && [['admin-activity','فعالیت ادمین‌ها','اقدام، ادمین، زمان و تغییرات بازیکنان'],['market','معاملات بازار','خریدار، فروشنده، کالا، حجم و قیمت'],['caravans','کاروان‌های تجاری','فرستنده، گیرنده، آیدی‌ها، محموله، مسیر و وضعیت']].map(([kind,title,description])=><div className="card system-report-card" key={kind}><div><div className="system-report-name">{title}</div><div className="system-report-meta">TXT · {description} · داخل تلگرام، فایل در چت بات دریافت می‌شود</div></div><button className="btn ghost" disabled={reportBusy} onClick={()=>downloadSystemReport(kind)}>دانلود فایل</button></div>)}
+      </>}
+      {tab === 'submission_limits' && isFull && <div className="card">
+        <div className="sect" style={{marginTop:0}}>سهمیه و محدودیت متن</div><p className="page-sub">سهمیه‌ها در بازه‌های هفت‌روزهٔ تقویم بازی محاسبه می‌شوند. صفر، ارسال آن بخش را می‌بندد. تغییر سقف، مصرف قبلی را پاک نمی‌کند. سقف متن بر حسب کلمه است و برای متن‌های تازه و ویرایش‌ها اعمال می‌شود.</p>
+        {weeklyLimits && <form onSubmit={async e=>{e.preventDefault();setLimitsBusy(true);try{await api.saveSubmissionLimits({roleplays:Number(weeklyLimits.roleplays),projects:Number(weeklyLimits.projects),...Object.fromEntries(["roleplay_words","scenario_words","request_words"].map(key=>[key,Number(weeklyLimits[key]??1000)]))});window.dispatchEvent(new Event("text-limits-changed"));toast('سهمیه‌ها ذخیره شد');}catch(err){toast(err.message);}finally{setLimitsBusy(false);}}}>
+          <label className="f">سهمیهٔ مشترک رول خرابکاری، آزاد، اقتصادی و دیپلماسی<input type="number" min="0" max="1000" required value={weeklyLimits.roleplays} onChange={e=>setWeeklyLimits(p=>({...p,roleplays:e.target.value}))}/></label>
+          <label className="f">درخواست پروژه در هفته<input type="number" min="0" max="1000" required value={weeklyLimits.projects} onChange={e=>setWeeklyLimits(p=>({...p,projects:e.target.value}))}/></label>
+          {[['roleplay_words','سقف کلمات رول‌ها و رول شورش'],['scenario_words','سقف کلمات سناریو، جاسوسی، کمین و نتیجهٔ پیشنهادی نهاد'],['request_words','سقف کلمات سؤال جاسوسی و شرح درخواست نهاد و پروژه']].map(([key,label])=><label className="f" key={key}>{label}<input type="number" min="1" max="50000" required value={weeklyLimits[key]??1000} onChange={e=>setWeeklyLimits(p=>({...p,[key]:e.target.value}))}/></label>)}
+          <button className="btn" disabled={limitsBusy}>ذخیره تنظیمات</button></form>}
+      </div>}
+      {tab === 'market-floors' && isFull && <div className="card">
+        <h2 className="page-title">بازهٔ قیمت بازار بازیکنان</h2>
+        <p className="page-sub">قیمت هر واحد به سکه است. حداکثرِ خالی یعنی بدون سقف. آگهی‌های خارج از بازه تا لغو و ثبت مجدد قابل خرید نیستند.</p>
+        {marketFloors ? <form onSubmit={async e => { e.preventDefault(); setFloorsBusy(true); try { const values = Object.fromEntries(Object.entries(marketFloors).map(([k,v]) => [k, Number(v)])); setMarketFloors(await api.adminSaveMarketFloors(values, Object.fromEntries(TRADE_GOODS.map(k => [k, marketCeilings[k] === "" || marketCeilings[k] == null ? null : Number(marketCeilings[k])])))); toast('بازهٔ قیمت‌ها ذخیره شد'); } catch (err) { toast(err.message); } finally { setFloorsBusy(false); } }}>
+          {TRADE_GOODS.map(g => <div key={g}><h3>{TRADE_GOOD_NAMES[g]}</h3><div className="exchange-fields"><label className="f">حداقل<input type="number" inputMode="numeric" min="1" max="1000000000" step="1" required value={marketFloors[g]} onChange={e => setMarketFloors(v => ({ ...v, [g]: e.target.value }))} /></label><label className="f">حداکثر<input type="number" inputMode="numeric" min={Number(marketFloors[g]) || 1} max="1000000000" step="1" placeholder="بدون سقف" value={marketCeilings[g] ?? ""} onChange={e => setMarketCeilings(v => ({...v, [g]: e.target.value}))}/></label></div></div>)}
+          <button className="btn" disabled={floorsBusy}>{floorsBusy ? 'در حال ذخیره…' : 'ذخیرهٔ بازهٔ قیمت‌ها'}</button>
+        </form> : <p>در حال دریافت تنظیمات…</p>}
+      </div>}
+      {tab === 'market' && isFull && (
+        <>
+          <div className="sect up u2">بازار وستروس</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>کالا</label>
+            <select value={marketResource} onChange={e => setMarketResource(e.target.value)}>
+              {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
+            </select>
+            <label className="f">موجودی نهایی بازار (پس از تأمین)</label>
+            <input type="number" min="0" value={marketQty} onChange={e => setMarketQty(e.target.value)} placeholder="مثلاً: ۳۰۰" />
+            <label className="f">قیمت پایه (سکه به‌ازای هر واحد)</label>
+            <input type="number" min="1" value={marketPrice} onChange={e => setMarketPrice(e.target.value)} placeholder="مثلاً: ۵" />
+            <button className="btn" style={{ marginTop: 14 }} onClick={setMarketListing}>ثبت/به‌روزرسانی در بازار</button><p className="page-sub">با ثابت ماندن قیمت پایه، افزایش موجودی قیمت روز را پایین می‌آورد. تغییر قیمت پایه، حجم مرجع تازه‌ای تعریف می‌کند.</p>
+          </div>
+          <div className="up u2">
+            {(!marketListings || marketListings.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز کالایی در بازار وستروس نیست</div>
+            )}
+            {marketListings && marketListings.map(m => (
+              <div className="res" key={m.resource}>
+                <div className="n">{TRADE_GOOD_NAMES[m.resource] || m.resource}
+                  <small>{m.qty.toLocaleString('fa-IR')} واحد · {m.price.toLocaleString('fa-IR')} طلا · پایه {m.base_price.toLocaleString('fa-IR')}</small>
+                </div>
+                <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
+                        onClick={() => deleteMarketListing(m.resource)}>حذف</button>
+              </div>
+            ))}
+          </div>
+
+          <div className="sect up u3">افزودن به بازار سیاه</div>
+          <div className="card up u3">
+            <label className="f" style={{ marginTop: 0 }}>کالا</label>
+            <select value={blackResource} onChange={e => setBlackResource(e.target.value)}>
+              {TRADE_GOODS.map(g => <option key={g} value={g}>{TRADE_GOOD_NAMES[g]}</option>)}
+            </select>
+            <label className="f">حجم</label>
+            <input type="number" min="1" value={blackQty} onChange={e => setBlackQty(e.target.value)} placeholder="مثلاً: ۴۰" />
+            <label className="f">قیمت پایه (سکه به‌ازای هر واحد)</label>
+            <input type="number" min="1" value={blackPrice} onChange={e => setBlackPrice(e.target.value)} placeholder="مثلاً: ۵" />
+            <label className="f">مدت (ساعت)</label>
+            <input type="number" min="1" value={blackHours} onChange={e => setBlackHours(e.target.value)} />
+            <button className="btn" style={{ marginTop: 14 }} onClick={createBlackMarketListing}>افزودن به بازار سیاه</button>
+          </div>
+          <div className="up u3">
+            {(!blackListings || blackListings.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز جنسی در بازار سیاه نیست</div>
+            )}
+            {blackListings && blackListings.map(m => (
+              <div className="res" key={m.id}>
+                <div className="n">{TRADE_GOOD_NAMES[m.resource] || m.resource}
+                  <small>{m.qty.toLocaleString('fa-IR')} واحد · {m.price.toLocaleString('fa-IR')} طلا · {Math.floor(m.expires_in_minutes / 60).toLocaleString('fa-IR')} ساعت مانده</small>
+                </div>
+                <button className="btn ghost" style={{ width: 'auto', padding: '8px 12px', fontSize: 11.5 }}
+                        onClick={() => deleteBlackMarketListing(m.id)}>حذف</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'resources' && isFull && (
+        <>
+          <div className="sect up u2">تغییر جمعی منابع و محبوبیت</div>
+          <div className="card up u2">
+            <div className="notice-guide" style={{ marginTop: 0 }}>
+              <strong>اعمال روی همه یا یک اقلیم</strong>
+              <span>عدد مثبت اضافه می‌کند و عدد منفی کم می‌کند. منابع از سقف انبار رد نمی‌شوند و محبوبیت بین صفر تا صد می‌ماند.</span>
+            </div>
+            <div className="grid2">
+              <div>
+                <label className="f">چه چیزی تغییر کند؟</label>
+                <select value={bulkField} onChange={e => setBulkField(e.target.value)}>
+                  <option value="popularity">محبوبیت</option>
+                  {PLAYER_RES.map(row => <option key={row.key} value={row.key}>{row.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="f">محدودهٔ بازیکنان</label>
+                <select value={bulkRegion} onChange={e => setBulkRegion(e.target.value)}>
+                  <option value="all">همهٔ اقلیم‌ها</option>
+                  {Object.entries(REGIONS_STATIC).map(([rid, region]) => <option key={rid} value={rid}>{region.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <label className="f">مقدار افزایش یا کاهش</label>
+            <input type="number" value={bulkDelta} placeholder="مثلاً ۵۰۰ یا ۲۰۰-" onChange={e => setBulkDelta(e.target.value)} />
+            <button className="btn" disabled={bulkBusy} onClick={applyBulkAdjustment}>
+              {bulkBusy ? 'در حال اعمال...' : 'بررسی و اعمال تغییر جمعی'}
+            </button>
+            {bulkResult && <div className="page-sub" style={{ marginTop: 10, lineHeight: 1.9 }}>
+              {bulkResult.matched.toLocaleString('fa-IR')} بازیکن در محدوده بودند؛ موجودی {bulkResult.changed.toLocaleString('fa-IR')} نفر تغییر کرد.
+              {bulkResult.limited > 0 ? ` برای ${bulkResult.limited.toLocaleString('fa-IR')} نفر، سقف یا کف اجازهٔ اعمال کامل مقدار را نداد.` : ''}
+            </div>}
+          </div>
+
+          <div className="sect up u2">ویرایش منابع بازیکن</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>بازیکن</label>
+            <PlayerPicker value={resTarget} onChange={setResTarget} single />
+            {resTarget.length > 0 && !resValues && (
+              <div className="page-sub" style={{ margin: '10px 4px' }}>در حال بارگذاری منابع...</div>
+            )}
+            {resValues && (
+              <>
+                {isOwner && <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
+                  <div className="res" style={{ marginBottom: 8 }}>
+                    <div className="n">امتیاز بازیکن<small>امتیاز فعلی: {(resPoints ?? 0).toLocaleString('fa-IR')}</small></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="number" value={pointDelta} placeholder="مثلاً ۱۰۰ یا ۵۰-"
+                           style={{ margin: 0, flex: 1 }} onChange={e => setPointDelta(e.target.value)} />
+                    <button className="btn" style={{ width: 'auto', padding: '10px 16px' }} disabled={pointBusy} onClick={adjustPoints}>
+                      {pointBusy ? '...' : 'اعمال'}
+                    </button>
+                  </div>
+                  <div className="page-sub" style={{ marginTop: 7 }}>عدد مثبت امتیاز اضافه می‌کند و عدد منفی از امتیاز کم می‌کند؛ امتیاز زیر صفر نمی‌رود.</div>
+                </div>}
+                <div style={{ marginBottom: 14, padding: 12, borderRadius: 12, border: '1px solid var(--line)', background: 'rgba(255,255,255,.025)' }}>
+                  <div className="res" style={{ marginBottom: 8 }}>
+                    <div className="n">محبوبیت بازیکن<small>محبوبیت فعلی: {(resPopularity ?? 50).toLocaleString('fa-IR')} از ۱۰۰</small></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="number" value={popularityDelta} placeholder="مثلاً ۱۰ یا ۵-"
+                           style={{ margin: 0, flex: 1 }} onChange={e => setPopularityDelta(e.target.value)} />
+                    <button className="btn" style={{ width: 'auto', padding: '10px 16px' }} disabled={popularityBusy} onClick={adjustPopularity}>
+                      {popularityBusy ? '...' : 'اعمال'}
+                    </button>
+                  </div>
+                  <div className="page-sub" style={{ marginTop: 7 }}>تغییر محبوبیت: افزایش با مقدار مثبت، کاهش با مقدار منفی؛ محدودهٔ مجاز ۰ تا ۱۰۰.</div>
+                </div>
+                <div className="page-sub" style={{ margin: '4px 4px 12px', lineHeight: 1.9 }}>
+                  موجودی منابع و ظرفیت کل انبارهای این خاندان
+                </div>
+                {PLAYER_RES.map(({ key, label, Icon }) => {
+                  const value = Number(resValues[key] ?? 0);
+                  const cap = Number(resCaps?.[key] ?? 0);
+                  const overCap = cap > 0 && value > cap;
+                  return (
+                    <div className="troop" key={key} style={{ alignItems: 'center' }}>
+                      <div className="tn"><Icon s={14} /> {label}</div>
+                      <div style={{ width: 130, maxWidth: '48%' }}>
+                        <input type="number" min="0" value={value}
+                               aria-label={`${label}؛ سقف ${cap.toLocaleString('fa-IR')}`}
+                               style={{ margin: 0, borderColor: overCap ? 'var(--danger)' : undefined }}
+                               onChange={e => setResValues({ ...resValues, [key]: Math.max(0, +e.target.value || 0) })} />
+                        <div style={{ marginTop: 4, textAlign: 'center', fontSize: 9.5, color: overCap ? 'var(--danger)' : 'var(--low)' }}>
+                          {value.toLocaleString('fa-IR')} از {cap.toLocaleString('fa-IR')}
+                          {overCap ? ' · بیشتر از سقف' : ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button className="btn" style={{ marginTop: 14 }} disabled={resBusy} onClick={saveResources}>
+                  {resBusy ? 'در حال ثبت...' : 'ثبت منابع تازه'}
+                </button>
+              </>
+            )}
+          </div>
+
+          {resTarget.length > 0 && (
+            <>
+              <div className="sect up u3">لشکرهای «{resTarget[0].name}»</div>
+              <div className="up u3">
+                {resCampaigns === null && <div className="page-sub" style={{ margin: '0 4px' }}>در حال بارگذاری...</div>}
+                {resCampaigns && resCampaigns.length === 0 && (
+                  <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>این بازیکن لشکری ندارد</div>
+                )}
+                {resTarget.length>0&&<AdminFormations key={resTarget[0].tg_id} leaderId={resTarget[0].tg_id} toast={toast} onChanged={()=>{api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns);loadCampaigns();loadBattles();}}/>}
+                {resCampaigns && resCampaigns.map(c => (
+                  <div className="card" key={c.id} style={{ marginBottom: 10 }}>
+                    <div className="res">
+                      <div className="ic"><Swords s={16} /></div>
+                      <div className="n">
+                        {c.name}
+                        <small>
+                          {c.op_name} · {castleLabel(c.from)} ← {castleLabel(c.to)} · توان {c.power.toLocaleString('fa-IR')} ·{' '}
+                          {c.men_committed.toLocaleString('fa-IR')} نفر
+                        </small>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
+                      نیروها: {c.troops.length ? c.troops.map(t => `${t.name} × ${t.count.toLocaleString('fa-IR')}`).join(' · ') : '—'}
+                    </div>
+                    {c.active && <AdminArmyRelocation army={c} toast={toast} onMoved={() => { api.adminPlayerCampaigns(resTarget[0].tg_id).then(setResCampaigns).catch(e => toast(e.message)); loadCampaigns(); loadBattles(); }} />}
+                    {c.active && <div style={{ padding: 10, border: '1px solid var(--line)', borderRadius: 12, marginBottom: 9 }}>
+                      <div style={{ fontSize: 11.5, fontWeight: 800, marginBottom: 6 }}>ثبت تلفات مستقیم (بدون بازپرداخت)</div>
+                      {c.troops.map(t => <div className="troop" key={t.id}>
+                        <div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div>
+                        <input type="number" min="0" max={t.count} placeholder="تلفات" value={campaignLosses[c.id]?.[t.id] || ''}
+                          onChange={e => setCampaignLosses(prev => ({ ...prev, [c.id]: { ...(prev[c.id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } }))} />
+                      </div>)}
+                      <button className="btn ghost" disabled={disbandBusyId === c.id} onClick={() => reduceCampaign(c)}>ثبت کاهش نیرو</button>
+                    </div>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: 11, color: 'var(--low)' }}>
+                        {c.active ? (c.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+                      </div>
+                      {c.active && (<div style={{ display: 'flex', gap: 7 }}>
+                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11 }}
+                                disabled={disbandBusyId === c.id} onClick={() => disbandCampaign(c.id)}>
+                          {disbandBusyId === c.id ? 'در حال انحلال...' : 'منحل کن'}
+                        </button>
+                        <button className="btn ghost" style={{ width: 'auto', padding: '7px 12px', fontSize: 11, color: 'var(--danger)' }}
+                          disabled={disbandBusyId === c.id} onClick={() => destroyCampaign(c.id)}>انهدام کامل</button>
+                      </div>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {tab === 'polls' && isFull && (
+        <>
+          <div className="sect up u2">رای‌گیری تازه</div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>سوال</label>
+            <textarea value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} placeholder="مثلاً: والی جنوب چه کسی باشد؟" />
+            <label className="f">گزینه‌ها</label>
+            {pollOptions.map((opt, i) => (
+              <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <input value={opt} onChange={e => setPollOptions(pollOptions.map((o, j) => j === i ? e.target.value : o))}
+                       placeholder={`گزینهٔ ${(i + 1).toLocaleString('fa-IR')}`} />
+                {pollOptions.length > 2 && (
+                  <button className="btn ghost" style={{ width: 44, padding: 0, flexShrink: 0 }}
+                          onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}><Close s={14} /></button>
+                )}
+              </div>
+            ))}
+            <button className="btn ghost" style={{ padding: 10, fontSize: 12 }} onClick={() => setPollOptions([...pollOptions, ''])}>
+              <Plus s={14} /> افزودن گزینه
+            </button>
+            <label className="f">چه کسانی حق رای دارند</label>
+            <PlayerPicker value={pollEligible} onChange={setPollEligible} />
+            <button className="btn" style={{ marginTop: 14 }} onClick={createPoll}>ساخت رای‌گیری</button>
+          </div>
+
+          <div className="sect up u3">رای‌گیری‌های موجود</div>
+          <div className="up u3">
+            {(!polls || polls.length === 0) && (
+              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>رای‌گیری‌ای ساخته نشده</div>
+            )}
+            {polls && polls.map(p => (
+              <div className="card poll" key={p.id}>
+                <div className="poll-q">
+                  {p.question}
+                  <span className={`poll-status ${p.status}`}>{p.status === 'open' ? 'باز' : 'بسته'}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginBottom: 8 }}>
+                  {p.total_votes.toLocaleString('fa-IR')} رای — {p.options.join(' · ')}
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {p.status === 'open' && (
+                    <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1 }} onClick={() => closePoll(p.id)}>بستن رای‌گیری</button>
+                  )}
+                  <button className="btn ghost" style={{ padding: 10, fontSize: 12, flex: 1, color: 'var(--danger)' }} onClick={() => deletePoll(p.id)}>حذف رای‌گیری</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'rebellions' && (
+        <>
+          <div className="sect up u2">شورش‌های بازیکنان</div>
+          {!rebellionsList && <div className="loading">در حال بارگذاری...</div>}
+          {rebellionsList && rebellionsList.length === 0 && <div className="empty">هنوز شورشی ثبت نشده است.</div>}
+          {rebellionsList && rebellionsList.map(row => {
+            const d = rebellionDrafts[row.id] || {};
+            const active = ['awaiting_roleplay', 'roleplay_submitted', 'expired'].includes(row.status);
+            return (
+              <div className="card up u2" key={row.id} style={{ marginBottom: 10 }}>
+                <div style={{ fontWeight: 900 }}>🔥 {row.player_name} — {row.castle || 'بدون قلعه'}</div>
+                <div className="page-sub" style={{ marginTop: 5 }}>
+                  محبوبیت {row.popularity.toLocaleString('fa-IR')} · شانس {row.chance.toLocaleString('fa-IR')}٪ · تاس {row.roll.toLocaleString('fa-IR')} · وضعیت {row.status}
+                </div>
+                <div className="page-sub">مهلت: {new Date(row.deadline).toLocaleString('fa-IR')}</div>
+                {row.roleplay_text && (
+                  <div style={{ marginTop: 10, padding: 10, background: 'rgba(255,255,255,.05)', borderRadius: 10 }}>
+                    <b>رول بازیکن:</b><div style={{ whiteSpace: 'pre-wrap', marginTop: 5 }}>{row.roleplay_text}</div>
+                  </div>
+                )}
+                {row.result && <div style={{ marginTop: 8 }}>نتیجه: {row.result}</div>}
+                {active && (
+                  <>
+                    <label className="f">نتیجه شورش</label>
+                    <textarea rows={4} value={d.result || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, result: e.target.value } }))}
+                              placeholder="نتیجه داوری و اتفاقی که در قلمرو افتاد..." />
+                    <label className="f">تصویر نتیجه (اختیاری)</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], image => setRebellionDrafts(p => ({ ...p, [row.id]: { ...(p[row.id] || {}), image_url: image } })), toast)} />
+                    <div className="grid2">
+                      <div><label className="f">تغییر محبوبیت (+ پاداش / − جریمه)</label><input type="number" value={d.popularity_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, popularity_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر سکهٔ خزانه</label><input type="number" value={d.gold_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, gold_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر غلهٔ انبار</label><input type="number" value={d.food_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, food_delta: e.target.value } }))} /></div>
+                      <div><label className="f">تغییر جمعیت قلمرو</label><input type="number" value={d.men_delta || ''} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, men_delta: e.target.value } }))} /></div>
+                    </div>
+                    <label className="f">وضعیت نهایی</label>
+                    <select value={d.outcome || 'resolved'} onChange={e => setRebellionDrafts(p => ({ ...p, [row.id]: { ...d, outcome: e.target.value } }))}>
+                      <option value="resolved">شورش پایان یافت</option>
+                      <option value="suppressed">شورش سرکوب شد</option>
+                      <option value="negotiated">با مذاکره پایان یافت</option>
+                      <option value="rebels_won">شورشیان پیروز شدند</option>
+                    </select>
+                    <button className="btn" style={{ marginTop: 12 }} disabled={rebellionBusyId === row.id} onClick={() => resolveRebellion(row)}>
+                      {rebellionBusyId === row.id ? 'در حال ثبت...' : 'ثبت نتیجه و اعلان همگانی'}
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+          {isFull && rebellionSettings && (
+            <>
+              <div className="sect up u2">تنظیمات سراسری شورش</div>
+              <div className="card up u2">
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <input type="checkbox" checked={rebellionSettings.enabled} onChange={e => setRebellionSettings(p => ({ ...p, enabled: e.target.checked }))} />
+                  سیستم شورش فعال باشد
+                </label>
+                <div className="grid2">
+                  <div><label className="f">حد امن محبوبیت</label><input type="number" value={rebellionSettings.safe_popularity} onChange={e => setRebellionNumber('safe_popularity', e.target.value)} /></div>
+                  <div><label className="f">شروع خطر زیاد</label><input type="number" value={rebellionSettings.high_risk_popularity} onChange={e => setRebellionNumber('high_risk_popularity', e.target.value)} /></div>
+                  <div><label className="f">شورش قطعی زیر</label><input type="number" value={rebellionSettings.guaranteed_popularity} onChange={e => setRebellionNumber('guaranteed_popularity', e.target.value)} /></div>
+                  <div><label className="f">مهلت رول (ساعت)</label><input type="number" value={rebellionSettings.roleplay_hours} onChange={e => setRebellionNumber('roleplay_hours', e.target.value)} /></div>
+                  <div><label className="f">دوره آرامش (ساعت)</label><input type="number" value={rebellionSettings.cooldown_hours} onChange={e => setRebellionNumber('cooldown_hours', e.target.value)} /></div>
+                  <div><label className="f">مصرف استاندارد غله برای هر ۱۰۰ نفر</label><input type="number" value={rebellionSettings.base_food_per_100_men} onChange={e => setRebellionNumber('base_food_per_100_men', e.target.value)} /></div>
+                  <div><label className="f">جریمه نبود غله</label><input type="number" value={rebellionSettings.starvation_popularity} onChange={e => setRebellionNumber('starvation_popularity', e.target.value)} /></div>
+                  <div><label className="f">شانس شروع بازه ۴۰–۵۰</label><input type="number" value={rebellionSettings.chance_low_start} onChange={e => setRebellionNumber('chance_low_start', e.target.value)} /></div>
+                  <div><label className="f">افزایش شانس هر پله</label><input type="number" value={rebellionSettings.chance_low_step} onChange={e => setRebellionNumber('chance_low_step', e.target.value)} /></div>
+                  <div><label className="f">شانس شروع بازه ۳۰–۴۰</label><input type="number" value={rebellionSettings.chance_high_start} onChange={e => setRebellionNumber('chance_high_start', e.target.value)} /></div>
+                  <div><label className="f">افزایش شانس شدید</label><input type="number" value={rebellionSettings.chance_high_step} onChange={e => setRebellionNumber('chance_high_step', e.target.value)} /></div>
+                  <div><label className="f">هزینه غذای ضیافت</label><input type="number" value={rebellionSettings.feast_food_cost} onChange={e => setRebellionNumber('feast_food_cost', e.target.value)} /></div>
+                  <div><label className="f">هزینه شراب ضیافت</label><input type="number" value={rebellionSettings.feast_wine_cost} onChange={e => setRebellionNumber('feast_wine_cost', e.target.value)} /></div>
+                  <div><label className="f">محبوبیت ضیافت</label><input type="number" value={rebellionSettings.feast_popularity_gain} onChange={e => setRebellionNumber('feast_popularity_gain', e.target.value)} /></div>
+                </div>
+
+                <label className="f">جیره استاندارد بازیکنان</label>
+                <select value={rebellionSettings.default_ration} onChange={e => setRebellionSettings(p => ({ ...p, default_ration: e.target.value }))}>
+                  {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => <option key={key} value={key}>{level.label}</option>)}
+                </select>
+                <div className="sect" style={{ marginTop: 16 }}>اثر نرخ مالیات</div>
+                <div className="page-sub" style={{ marginBottom: 10, lineHeight: 1.8 }}>
+                  آستانهٔ پایه برای محبوبیت ۵۰ محاسبه می‌شود. با هر پله تغییر محبوبیت، آستانهٔ مالیات سنگین هم به اندازهٔ تعیین‌شده جابه‌جا می‌شود؛ بالاتر از آستانه، به ازای هر پله مالیات جریمهٔ اضافه اعمال می‌شود.
+                </div>
+                <div className="grid2" style={{ marginBottom: 10 }}>
+                  <div><label className="f">آستانهٔ پایه مالیات سنگین</label><input type="number" value={rebellionSettings.tax_overage_start ?? 20} onChange={e => setRebellionNumber('tax_overage_start', e.target.value)} /></div>
+                  <div><label className="f">هر چند محبوبیت یک پله؟</label><input type="number" min="1" value={rebellionSettings.tax_popularity_step ?? 5} onChange={e => setRebellionNumber('tax_popularity_step', e.target.value)} /></div>
+                  <div><label className="f">تغییر آستانه در هر پله محبوبیت</label><input type="number" value={rebellionSettings.tax_limit_per_step ?? 1} onChange={e => setRebellionNumber('tax_limit_per_step', e.target.value)} /></div>
+                  <div><label className="f">هر چند درصد مالیات اضافه یک پله؟</label><input type="number" min="1" value={rebellionSettings.tax_overage_step ?? 5} onChange={e => setRebellionNumber('tax_overage_step', e.target.value)} /></div>
+                  <div><label className="f">جریمه محبوبیت هر پله اضافه</label><input type="number" value={rebellionSettings.tax_overage_popularity ?? -1} onChange={e => setRebellionNumber('tax_overage_popularity', e.target.value)} /></div>
+                </div>
+                {(rebellionSettings.tax_bands || []).map((band, index) => (
+                  <div className="grid2" key={index} style={{ marginBottom: 8 }}>
+                    <div><label className="f">تا نرخ مالیات</label><input type="number" value={band.max}
+                      onChange={e => setRebellionSettings(p => ({ ...p, tax_bands: p.tax_bands.map((b, i) => i === index ? { ...b, max: Number(e.target.value) } : b) }))} /></div>
+                    <div><label className="f">تغییر محبوبیت روزانه</label><input type="number" value={band.popularity}
+                      onChange={e => setRebellionSettings(p => ({ ...p, tax_bands: p.tax_bands.map((b, i) => i === index ? { ...b, popularity: Number(e.target.value) } : b) }))} /></div>
+                  </div>
+                ))}
+                <div className="sect" style={{ marginTop: 16 }}>سطح‌های سهم غله</div>
+                {Object.entries(rebellionSettings.ration_levels || {}).map(([key, level]) => (
+                  <div className="grid2" key={key} style={{ marginBottom: 8 }}>
+                    <div><label className="f">{level.label} — ضریب مصرف</label><input type="number" step="0.05" value={level.multiplier}
+                      onChange={e => setRebellionSettings(p => ({ ...p, ration_levels: { ...p.ration_levels, [key]: { ...level, multiplier: Number(e.target.value) } } }))} /></div>
+                    <div><label className="f">اثر محبوبیت</label><input type="number" value={level.popularity}
+                      onChange={e => setRebellionSettings(p => ({ ...p, ration_levels: { ...p.ration_levels, [key]: { ...level, popularity: Number(e.target.value) } } }))} /></div>
+                  </div>
+                ))}
+
+                <div className="sect" style={{ marginTop: 16 }}>اثر نتیجه جنگ</div>
+                <div className="grid2">
+                  {Object.entries(rebellionSettings.war_popularity || {}).map(([key, value]) => (
+                    <div key={key}><label className="f">{key}</label><input type="number" value={value}
+                      onChange={e => setRebellionSettings(p => ({ ...p, war_popularity: { ...p.war_popularity, [key]: Number(e.target.value) } }))} /></div>
+                  ))}
+                </div>
+                <button className="btn" style={{ marginTop: 16 }} disabled={rebellionSettingsBusy} onClick={saveRebellionSettings}>
+                  {rebellionSettingsBusy ? 'در حال ذخیره...' : 'ذخیره تنظیمات شورش'}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {tab === 'events' && (
+        <>
+          <div className="sect up u2">اعلام رویداد به همهٔ بازیکنان</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            توضیح یک اتفاق در طول بازی؛ این متن با کلاغ برای همه فرستاده می‌شود و در اطلاعیه‌ها می‌ماند.
+          </div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>عنوان رویداد</label>
+            <input value={eventTitle} onChange={e => setEventTitle(e.target.value)} maxLength={80}
+                   placeholder="مثلاً: جشن پیروزی زمستان" />
+            <label className="f">توضیحات</label>
+            <textarea value={eventDescription} onChange={e => setEventDescription(e.target.value)} maxLength={1500}
+                      rows={5} placeholder="شرح رویداد، قوانین و زمان آن..." />
+            <label className="f">تصویر رویداد (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], setEventImage, toast)} />
+            {eventImage && <img src={eventImage} alt="" style={{ width: '100%', maxHeight: 190, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
+            <button className="btn" style={{ marginTop: 14 }} disabled={eventBusy} onClick={sendEvent}>
+              {eventBusy ? 'در حال ارسال...' : 'ارسال رویداد به همهٔ بازیکنان'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {tab === 'music' && isFull && (
+        <>
+          <div className="sect up u2">موسیقی پس‌زمینهٔ بازی</div>
+          <div className="page-sub up u2" style={{ marginTop: -10, lineHeight: 1.9 }}>
+            فایل برای همهٔ بازیکن‌ها پخش می‌شود. مرورگر ممکن است بار اول تا لمس دکمهٔ نت اجازهٔ پخش خودکار ندهد؛ هر بازیکن هم می‌تواند موسیقی را برای خودش قطع کند.
+          </div>
+          {!musicSettings ? <div className="loading">در حال بارگذاری تنظیمات موسیقی...</div> : <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>فایل موسیقی</label>
+            <input type="file" accept="audio/*" onChange={e => chooseMusicFile(e.target.files?.[0])} />
+            <div className="page-sub" style={{ marginTop: 7 }}>MP3، OGG یا M4A تا حداکثر ۷ مگابایت. فایل داخل دیتابیس بازی نگه‌داری می‌شود.</div>
+            <label className="f">یا لینک مستقیم موسیقی</label>
+            <input dir="ltr" value={musicSettings.audio_url?.startsWith('data:') ? '' : (musicSettings.audio_url || '')}
+                   onChange={e => setMusicSettings(p => ({ ...p, audio_url: e.target.value }))} placeholder="https://.../music.mp3" />
+            {musicSettings.audio_url && <audio controls loop={musicSettings.loop} src={musicSettings.audio_url} style={{ width: '100%', marginTop: 12 }} />}
+            <label className="f">نام قطعه</label>
+            <input value={musicSettings.title || ''} maxLength={80} onChange={e => setMusicSettings(p => ({ ...p, title: e.target.value }))} placeholder="مثلاً: نغمهٔ والریا" />
+            <label className="f">حجم پیش‌فرض — {Number(musicSettings.volume || 0).toLocaleString('fa-IR')}٪</label>
+            <input type="range" min="0" max="100" value={musicSettings.volume ?? 35} onChange={e => setMusicSettings(p => ({ ...p, volume: Number(e.target.value) }))} />
+            <div className="grid2" style={{ marginTop: 12 }}>
+              <label className="check"><input type="checkbox" checked={!!musicSettings.enabled} onChange={e => setMusicSettings(p => ({ ...p, enabled: e.target.checked }))} /> فعال برای بازیکن‌ها</label>
+              <label className="check"><input type="checkbox" checked={!!musicSettings.loop} onChange={e => setMusicSettings(p => ({ ...p, loop: e.target.checked }))} /> تکرار پیوسته</label>
+              <label className="check"><input type="checkbox" checked={!!musicSettings.autoplay} onChange={e => setMusicSettings(p => ({ ...p, autoplay: e.target.checked }))} /> تلاش برای پخش خودکار</label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn" disabled={musicBusy} onClick={saveMusic}>{musicBusy ? 'در حال ذخیره...' : 'ذخیره و اعمال برای همه'}</button>
+              <button className="btn ghost" disabled={musicBusy} onClick={() => setMusicSettings(p => ({ ...p, enabled: false, audio_url: '' }))}>پاک‌کردن فایل؛ سپس ذخیره</button>
+            </div>
+          </div>}
+        </>
+      )}
+
+      {tab === 'medals' && (
+        <>
+          <div className="sect up u2">مدال‌ها و نتایج نبرد</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            مدال «راوی قلمرو» را دستی اعطا کن یا نتیجهٔ جنگ را برای محاسبهٔ مدال‌های رزمی ثبت کن.
+          </div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>اعطای دستی مدال «راوی قلمرو»</label>
+            <PlayerPicker value={medalTarget} onChange={setMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
+            <select value={medalTier} onChange={e => setMedalTier(e.target.value)} style={{ marginTop: 10 }}>
+              <option value="bronze">برنز — قصه‌گو</option>
+              <option value="silver">نقره — وقایع‌نگار</option>
+              <option value="gold">طلا — زبان تاریخ</option>
+            </select>
+            <input value={medalReason} onChange={e => setMedalReason(e.target.value)} maxLength={200}
+                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
+            <button className="btn" style={{ marginTop: 12 }} disabled={medalBusy} onClick={awardStoryteller}>
+              {medalBusy ? 'در حال ثبت...' : 'اعطای مدال'}
+            </button>
+          </div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>اعطای مدال ویژهٔ ادمین</label>
+            <PlayerPicker value={specialMedalTarget} onChange={setSpecialMedalTarget} single placeholder="بازیکن را انتخاب کن..." />
+            <label className="f">انتخاب مدال</label>
+            <select value={specialMedalPreset} onChange={e => { setSpecialMedalPreset(e.target.value); setSpecialMedalIcon(''); }}>
+              {SPECIAL_MEDAL_PRESETS.map(m => <option key={m.key} value={m.key}>{m.icon} {m.name}</option>)}
+              <option value="custom">مدال با نام دلخواه</option>
+            </select>
+            {specialMedalPreset === 'custom' && (
+              <input value={specialMedalName} onChange={e => setSpecialMedalName(e.target.value)}
+                     maxLength={60} placeholder="نام دلخواه مدال" style={{ marginTop: 10 }} />
+            )}
+            <div className="grid2" style={{ marginTop: 10 }}>
+              <input value={specialMedalIcon} onChange={e => setSpecialMedalIcon(e.target.value)} maxLength={8}
+                     placeholder={SPECIAL_MEDAL_PRESETS.find(m => m.key === specialMedalPreset)?.icon || 'نشان، مثلاً 👑'} />
+              <select value={specialMedalTier} onChange={e => setSpecialMedalTier(e.target.value)}>
+                <option value="bronze">برنز</option>
+                <option value="silver">نقره</option>
+                <option value="gold">طلا</option>
+              </select>
+            </div>
+            <input value={specialMedalReason} onChange={e => setSpecialMedalReason(e.target.value)} maxLength={300}
+                   placeholder="دلیل اعطا (اختیاری)" style={{ marginTop: 10 }} />
+            <button className="btn" style={{ marginTop: 12 }} disabled={specialMedalBusy} onClick={awardSpecialMedal}>
+              {specialMedalBusy ? 'در حال ثبت...' : 'اعطای مدال ویژه'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {tab === 'rumor_admin' && (
+        <>
+          <div className="sect up u2">مدیریت توییت‌ها</div>
+          <div className="page-sub up u2" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
+            توییت برای بازیکن‌ها ناشناسه، ولی ادمین برای رسیدگی به تخلف نویسندهٔ واقعی رو می‌بینه. حذف توییت، محبوبیتی که قبلاً کم شده رو برنمی‌گردونه.
+          </div>
+          <div className="admin-rumor-list up u3">
+            {adminRumors === null && <div className="loading">در حال گرفتن توییت‌ها...</div>}
+            {adminRumors && adminRumors.length === 0 && <div className="card" style={{ textAlign: 'center', color: 'var(--mid)' }}>توییت‌ای وجود نداره</div>}
+            {adminRumors && adminRumors.map(row => (
+              <article className="admin-rumor-card card" key={row.id}>
+                <header>
+                  <div><b>نویسنده: {row.author_name}</b><small>شناسه: {row.author_tg_id}</small></div>
+                  <time>{new Date(row.created_at).toLocaleString('fa-IR')}</time>
+                </header>
+                <div className="admin-rumor-target">علیه: {row.target_name} · شناسه {row.target_tg_id}</div>
+                <p>{row.text}</p>
+                <footer>
+                  <span>👍 {row.likes.toLocaleString('fa-IR')} · 👎 {row.dislikes.toLocaleString('fa-IR')}</span>
+                  <button type="button" className="btn ghost" disabled={rumorDeleteBusy === row.id} onClick={() => deleteAdminRumor(row)}>
+                    {rumorDeleteBusy === row.id ? 'در حال حذف...' : 'حذف توییت'}
+                  </button>
+                </footer>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === 'bot_messages' && (
+        <>
+          <div className="sect up u2">ارسال پیام به بازیکن‌ها</div>
+          <div className="page-sub up u2" style={{ marginTop: -10 }}>
+            مشخص کن پیام در چت خصوصی بات، اطلاعیه‌های کلاغ، یا هر دو دیده شود.
+          </div>
+          <div className="card up u2">
+            <label className="f" style={{ marginTop: 0 }}>گیرندگان</label>
+            <select value={botAudience} onChange={e => { setBotAudience(e.target.value); setBotTargets([]); }}>
+              <option value="all">همهٔ بازیکنان</option>
+              <option value="selected">بازیکنان مشخص</option>
+            </select>
+            {botAudience === 'selected' && (
+              <div style={{ marginTop: 12 }}>
+                <PlayerPicker value={botTargets} onChange={setBotTargets} placeholder="نام لرد یا قلعه را جست‌وجو کن..." />
+              </div>
+            )}
+            <label className="f">مسیر ارسال</label>
+            <div className="grid2">
+              <button type="button" className={`rbtn pick ${botViaBot ? 'sel' : ''}`} onClick={() => setBotViaBot(v => !v)}>
+                <div className="n">بات تلگرام</div><div className="c">پیام خصوصی داخل بات</div>
+              </button>
+              <button type="button" className={`rbtn pick ${botViaRaven ? 'sel' : ''}`} onClick={() => setBotViaRaven(v => !v)}>
+                <div className="n">کلاغ</div><div className="c">داخل اطلاعیه‌های بازی</div>
+              </button>
+            </div>
+            <label className="f">متن پیام</label>
+            <textarea value={botMessage} onChange={e => setBotMessage(e.target.value)} maxLength={4000}
+                      rows={6} placeholder="پیامی که بات مستقیماً برای بازیکن می‌فرستد..." />
+            <label className="f">تصویر پیام (اختیاری، حداکثر ۲٫۵ مگابایت)</label>
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => readAdminImage(e.target.files?.[0], setBotMessageImage, toast)} />
+            {botMessageImage && <img src={botMessageImage} alt="" style={{ width: '100%', maxHeight: 190, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
+            <button className="btn" style={{ marginTop: 14 }} disabled={botMessageBusy} onClick={sendBotMessage}>
+              {botMessageBusy
+                ? 'در حال ارسال...'
+                : botAudience === 'all'
+                  ? 'ارسال پیام به همهٔ بازیکنان'
+                  : `ارسال پیام به ${botTargets.length.toLocaleString('fa-IR')} بازیکن`}
+            </button>
+          </div>
+        </>
+      )}
+
+      {tab === 'admins' && isOwner && (
+        <>
+          <div className="sect up u2">مدیریت ادمین‌ها</div>
+          <div className="card up u2">
+            <div className="admin-access-summary">
+              <div><b>ادمین اصلی</b><span>تمام دسترسی‌ها؛ می‌تواند ادمین اصلی دیگری تعریف کند و عملیات فصل انجام دهد.</span></div>
+              <div><b>ادمین کامل</b><span>همهٔ بخش‌های بازی را می‌بیند، ولی تب ادمین‌ها اصلاً برایش نمایش داده نمی‌شود.</span></div>
+              <div><b>ادمین رول و جنگ</b><span>فقط دو تب جنگ و رول‌ها؛ هیچ تب دیگری در پنل نمایش داده نمی‌شود.</span></div>
+              <div><b>ادمین اجرایی</b><span>فقط امور داوری و ارتباط: جنگ، رول، شورش، مدال، توییت، رویداد و پیام.</span></div>
+            </div>
+            <label className="f">افزودن ادمین یا تغییر سطح دسترسی</label>
+            <PlayerPicker value={newAdminTarget} onChange={setNewAdminTarget} single />
+            <label className="f">سطح دسترسی</label>
+            <select value={newAdminRole} onChange={e => setNewAdminRole(e.target.value)}>
+              <option value="war_roleplay">ادمین رول و جنگ — فقط دو تب جنگ و رول‌ها</option>
+              <option value="limited">ادمین اجرایی — عملیات روزمره و دسترسی محدود</option>
+              <option value="full">ادمین کامل — همهٔ بخش‌ها به‌جز مدیریت ادمین‌ها</option>
+              <option value="owner">ادمین اصلی — دقیقاً با تمام دسترسی‌های تو</option>
+            </select>
+            {newAdminRole === 'owner' && <div className="admin-access-warning">این سطح می‌تواند ادمین اضافه یا حذف کند، فصل را ریست کند و به تمام ابزارهای حساس دسترسی دارد.</div>}
+            <button className="btn" style={{ marginTop: 14 }} onClick={addAdmin}>ثبت سطح دسترسی</button>
+          </div>
+          <div className="card up u2">
+            {(!admins || admins.length === 0) && (
+              <div style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>ادمینی نیست</div>
+            )}
+            {admins && admins.map(a => (
+              <div className="res" key={a.tg_id}>
+                <div className="ic"><Shield s={16} /></div>
+                <div className="n">{a.name || a.tg_id}<small>{a.role === 'owner' ? 'ادمین اصلی' : a.role === 'full' ? 'ادمین کامل' : a.role === 'war_roleplay' ? 'ادمین رول و جنگ' : 'ادمین اجرایی'}{a.castle ? ` · ${castleLabel(a.castle)}` : ''}</small></div>
+                {a.source === 'db' && !a.is_self && <div className="admin-row-actions">
+                  <button className="btn ghost" onClick={() => editAdminRole(a)}>تغییر سطح</button>
+                  {a.removable && <button className="btn ghost danger" onClick={() => removeAdmin(a.tg_id)}>حذف</button>}
+                </div>}
+              </div>
+            ))}
+          </div>
+
+          <div className="sect up u3">پاک‌سازی داده‌های قدیمی</div>
+          <div className="page-sub up u3" style={{ margin: '-8px 4px 12px', lineHeight: 1.9 }}>
+            این ابزارها برای سبک‌کردن دیتابیس‌اند و حساب، منابع، نقشه و قلعه‌های بازیکن‌ها رو پاک نمی‌کنن. موارد فعال و پرونده‌های منتظر داوری هم محافظت می‌شن.
+          </div>
+          <div className="admin-cleanup-grid up u3">
+            {[
+              { key: 'messages', token: 'MESSAGES', label: 'پیام‌ها و اطلاعیه‌ها', note: 'تمام نامه‌های خصوصی و اطلاعیه‌های داخل کلاغ‌ها' },
+              { key: 'rumors', token: 'RUMORS', label: 'توییت‌ها', note: 'تمام توییت‌ها و واکنش‌های آن‌ها' },
+              { key: 'campaigns', token: 'CAMPAIGNS', label: 'لشکرکشی‌های بسته', note: 'فقط تاریخچه؛ لشکر فعال حذف نمی‌شه' },
+              { key: 'reports', token: 'REPORTS', label: 'گزارش‌های حل‌شده', note: 'جاسوسی و رول داوری‌شده؛ پروندهٔ باز محفوظ می‌مونه' },
+            ].map(item => (
+              <div className="card admin-cleanup-card" key={item.key}>
+                <header><b>{item.label}</b><span>{(cleanupPreview?.[item.key] || 0).toLocaleString('fa-IR')} مورد</span></header>
+                <p>{item.note}</p>
+                <label className="f">برای تایید بنویس: <code>{item.token}</code></label>
+                <input value={cleanupConfirm[item.key] || ''} onChange={e => setCleanupConfirm(prev => ({ ...prev, [item.key]: e.target.value }))}
+                       placeholder={item.token} dir="ltr" />
+                <button type="button" className="btn ghost" disabled={cleanupBusy === item.key || (cleanupConfirm[item.key] || '').trim() !== item.token}
+                        onClick={() => runCleanup(item.key, item.token, item.label)}>
+                  {cleanupBusy === item.key ? 'در حال پاک‌سازی...' : `پاک‌کردن ${item.label}`}
+                </button>
+              </div>
+            ))}
+          </div>
+          {cleanupPreview?.protected && (
+            <div className="admin-cleanup-protected up u3">
+              محافظت‌شده: {cleanupPreview.protected.active_campaigns.toLocaleString('fa-IR')} لشکر فعال · {cleanupPreview.protected.pending_spy.toLocaleString('fa-IR')} جاسوسی منتظر · {cleanupPreview.protected.pending_roleplays.toLocaleString('fa-IR')} رول منتظر
+            </div>
+          )}
+
+          {isOwner && (
+            <>
+              <div className="sect up u3" style={{ color: 'var(--danger)' }}>منطقهٔ خطر — فقط صاحب بازی</div>
+              <div className="card up u3">
+                <h2 className="page-title">توقف و ادامهٔ بازی</h2>
+                <p className="page-sub">توقف زمان، تولید، مصرف، پرداخت‌ها و اقدامات؛ بازیکنان همچنان می‌توانند صفحات را ببینند.</p>
+                <p>{gamePause ? (gamePause.paused ? 'وضعیت: متوقف' : 'وضعیت: در حال اجرا') : 'در حال دریافت وضعیت…'}</p>
+                {!gamePause?.paused && <label className="f">دلیل توقف<textarea maxLength={500} value={pauseReason} onChange={e => setPauseReason(e.target.value)} /></label>}
+                <button className="btn" disabled={!gamePause || pauseBusy} onClick={async () => {
+                  setPauseBusy(true);
+                  try { const result = await api.setGamePause(!gamePause.paused, pauseReason); setGamePause(prev => ({...prev, ...result})); syncGameClock(result); toast(result.paused ? 'بازی متوقف شد' : 'بازی ادامه یافت'); }
+                  catch (e) { toast(e.message); } finally { setPauseBusy(false); }
+                }}>{pauseBusy ? 'در حال ثبت…' : gamePause?.paused ? '▶ ادامهٔ بازی' : '⏸ توقف بازی'}</button>
+              </div>
+              <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فصل و شروع فصل تازه</div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
+                  منابع، ساختمان‌ها، نیروها، مدال‌ها، محبوبیت و تاریخچهٔ فصل پاک و از مقدار آغازین شروع می‌شوند.
+                  حساب، نام، عکس، بک‌استوری، خاندان، اقلیم و قلعهٔ اصلی هر بازیکن سر جای خود می‌ماند.
+                  قلعه‌های فتح‌شده آزاد می‌شوند و تنظیمات بالانس و پین‌های نقشه تغییر نمی‌کنند.
+                </div>
+                <label className="f">برای تایید بنویس: <code>NEWSEASON</code></label>
+                <input value={seasonResetConfirm} onChange={e => setSeasonResetConfirm(e.target.value)} placeholder="NEWSEASON" dir="ltr" />
+                <button className="btn ghost" disabled={seasonResetConfirm.trim() !== 'NEWSEASON' || seasonResetBusy} onClick={resetSeason}>
+                  {seasonResetBusy ? 'در حال ریست فصل...' : 'ریست فصل و شروع دوباره'}
+                </button>
+              </div>
+              <div className="card up u3" style={{ borderColor: '#9c6b20' }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>ریست فقط جدول امتیازات</div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
+                  امتیاز همه از همین لحظه صفر می‌شود؛ منابع، ساختمان‌ها، نیروها، مقام‌ها و مالکیت قلعه‌ها تغییر نمی‌کنند.
+                </div>
+                <label className="f">برای تایید بنویس: <code>SCOREBOARD</code></label>
+                <input value={scoreResetConfirm} onChange={e => setScoreResetConfirm(e.target.value)} placeholder="SCOREBOARD" dir="ltr" />
+                <button className="btn ghost" disabled={scoreResetConfirm.trim() !== 'SCOREBOARD' || scoreResetBusy} onClick={resetScoreboard}>
+                  {scoreResetBusy ? 'در حال ریست...' : 'ریست جدول امتیازات'}
+                </button>
+              </div>
+              <div className="card up u3" style={{ borderColor: 'var(--danger)' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger)' }}>ری‌استارت کامل بازی</div>
+                <div style={{ fontSize: 11.5, color: 'var(--mid)', marginTop: 8, lineHeight: 1.9 }}>
+                  همهٔ بازیکن‌های غیرادمین حذف می‌شوند و باید از نو ثبت‌نام کنند؛ تاریخچهٔ لشکرکشی‌ها، جاسوسی‌ها،
+                  پیام‌ها، رول‌ها، شورش‌ها و تاس‌های شورش، توییت‌ها، اتحادها، رای‌گیری‌ها و کاروان‌ها پاک می‌شود.
+                  <br />
+                  دست‌نخورده می‌ماند: قلعه‌های ثبت‌شده روی نقشه، آیتم‌ها و بازارهایی که خودت ساخته‌ای، و حساب/پیشرفت خودِ ادمین‌ها.
+                  <br />این کار بازگشت‌ناپذیر است.
+                </div>
+                {resetPreview && (
+                  <div style={{ fontSize: 12, color: 'var(--hi)', marginTop: 10, fontWeight: 700 }}>
+                    {resetPreview.non_admin_players.toLocaleString('fa-IR')} بازیکن حذف می‌شود · {resetPreview.admins_kept.toLocaleString('fa-IR')} ادمین می‌ماند
+                  </div>
+                )}
+                <label className="f">برای تایید، عبارت RESET را تایپ کن</label>
+                <input value={resetConfirmText} onChange={e => setResetConfirmText(e.target.value)} placeholder="RESET" style={{ direction: 'ltr', textAlign: 'center' }} />
+                <button className="btn" style={{ marginTop: 14, background: 'linear-gradient(160deg, #b3271b, #690000 60%, #4a0000)' }}
+                        disabled={resetConfirmText.trim() !== 'RESET' || resetBusy} onClick={resetGame}>
+                  {resetBusy ? 'در حال ری‌استارت...' : 'ری‌استارت کامل بازی'}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}

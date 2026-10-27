@@ -1,0 +1,40 @@
+{
+  "telegram": {
+    "backend/tests/test_panel_integrity.py": null,
+    "backend/routers/admin.py": [
+      "88443177d15d433728ea2b5cf4d5768e139d8f836debf131cb54eb4d38358917"
+    ],
+    "backend/routers/war.py": [
+      "68ec0486b92c713c0b3e04e12dfca7140c16cb76de21319449dbd30bd29878eb",
+      "a1a9e727846855d16e5f96414f975e9c9bb4f486df6403d5a20fdd0411220f3c"
+    ],
+    "frontend/src/pages/Admin.jsx": [
+      "541dab4c6fc94d2753fab7b7517d441cef2ad99fc948a2a803023d9e1db628cd",
+      "0507eee8218db7ad0c518f122a8e8904f85353f507bca730fd04a4b76d5f0698"
+    ],
+    "backend/campaign_integrity.py": null,
+    "backend/tests/test_unowned_arrival.py": [
+      "ae9234054068c9ce91119f92ffc92b8e77a194e8efeaf5889377e5e983f723f6"
+    ],
+    "frontend/src/styles/admin-panel-repair.css": null
+  },
+  "web": {
+    "backend/tests/test_panel_integrity.py": null,
+    "backend/routers/admin.py": [
+      "88443177d15d433728ea2b5cf4d5768e139d8f836debf131cb54eb4d38358917"
+    ],
+    "backend/routers/war.py": [
+      "181e49f7cdafb1ead5ea933093176aa623344ecf4fcf9bd1868c73583aabeddb",
+      "3faba18e71d44cdbaae61f1f439ca11e2c0ea59932f03b01b14c5977b56a8fc8"
+    ],
+    "frontend/src/pages/Admin.jsx": [
+      "d29a193791624211c3226828e9cbff1d045d7546e199af4f36196a2a0d33c0c6",
+      "e9561643ce4e6415b28dd0cb78add2d00da9e444b559f5ed89057214f089c06c"
+    ],
+    "backend/campaign_integrity.py": null,
+    "backend/tests/test_unowned_arrival.py": [
+      "ae9234054068c9ce91119f92ffc92b8e77a194e8efeaf5889377e5e983f723f6"
+    ],
+    "frontend/src/styles/admin-panel-repair.css": null
+  }
+}

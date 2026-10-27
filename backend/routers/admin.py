@@ -378,6 +378,11 @@ async def list_campaigns(user: dict = Depends(admin_user)):
     out = []
     cur = campaigns.find({"active": True, "merge_group_id":{"$in":[None, ""]}}).sort("created_at", -1)
     async for s in cur:
+        from campaign_integrity import display_issues, issue_view
+        issues = display_issues(s)
+        if issues:
+            out.append(issue_view(s, issues))
+            continue
         troops = [
             {"name": COMMON_TROOPS[tid]["name"] if tid in COMMON_TROOPS else tid, "count": n}
             for tid, n in s["troops"].items() if n and n > 0
