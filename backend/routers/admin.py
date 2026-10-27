@@ -1181,6 +1181,7 @@ def _sum_campaign_field(rows: list[dict], field: str) -> dict[str, int]:
     return total
 
 async def _apply_roleplay_player_adjustments(tg_id: int, resource_deltas: dict[str, int], popularity_delta: int) -> dict:
+    from realm_state import adjust_popularity
     player = await players.find_one({"tg_id": tg_id})
     if not player:
         raise HTTPException(404, "بازیکن مربوط به رول پیدا نشد")
@@ -1200,8 +1201,8 @@ async def _apply_roleplay_player_adjustments(tg_id: int, resource_deltas: dict[s
     if abs(pop_delta) > 100:
         raise HTTPException(400, "تغییر محبوبیت نمی‌تواند بیشتر از ۱۰۰ باشد")
     old_popularity = max(0, min(100, int(player.get("popularity", POPULARITY_START))))
-    popularity = max(0, min(100, old_popularity + pop_delta))
-    await players.update_one({"tg_id": tg_id}, {"$set": {"resources": resources, "popularity": popularity}})
+    await players.update_one({"tg_id": tg_id}, {"$set": {"resources": resources}})
+    popularity = await adjust_popularity(tg_id, pop_delta, "نتیجهٔ رول", source_kind="roleplay_result") if pop_delta else old_popularity
     return {"tg_id": tg_id, "resources": applied_resources, "popularity": popularity - old_popularity}
 
 def _validate_roleplay_adjustments(resource_deltas: dict[str, int], popularity_delta: int):
@@ -1454,16 +1455,18 @@ async def respond_roleplay(roleplay_id: str, body: RoleplayResultBody, user: dic
                 await bump_player_stat(tg_id, win_stat)
                 lord = await players.find_one({"tg_id": tg_id})
                 if lord:
-                    new_pop = max(0, min(100, int(lord.get("popularity", 50)) + winner_delta))
+                    from realm_state import adjust_popularity, adjust_influence
+                    await adjust_popularity(tg_id, winner_delta, "پیروزی در نبرد", source_kind="battle", source_id=str(r.get("campaign_id")))
+                    await adjust_influence(tg_id, 3, "پیروزی در نبرد", source_id=f"battle:{r.get('campaign_id')}:{tg_id}:win")
                     win_points = int(control_settings.get("scoring.victory" if side == "attacker" else "scoring.defense", 10))
-                    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}, "$inc": {"points": win_points}})
+                    await players.update_one({"tg_id": tg_id}, {"$inc": {"points": win_points}})
             for tg_id in loser_tg_ids:
                 side = "attacker" if tg_id in attacker_tg_ids else "defender"
                 loser_delta = int(war_pop["attack_loss"] if side == "attacker" else war_pop["defense_loss"])
                 lord = await players.find_one({"tg_id": tg_id})
                 if lord:
-                    new_pop = max(0, min(100, int(lord.get("popularity", 50)) + loser_delta))
-                    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_pop}})
+                    from realm_state import adjust_popularity
+                    await adjust_popularity(tg_id, loser_delta, "شکست در نبرد", source_kind="battle", source_id=str(r.get("campaign_id")))
 
         # با نهایی‌شدن جواب، تمام لشکرهای درگیر آزاد می‌شوند؛ بازمانده‌ها دوباره
         # قابل حرکت‌اند و لشکرهای نابودشده active=False مانده‌اند.
@@ -2420,6 +2423,7 @@ class AdjustPlayerPointsBody(BaseModel):
 
 class AdjustPlayerPopularityBody(BaseModel):
     delta: int
+    reason: str = "اصلاح مدیریت"
 
 class BulkAdjustPlayersBody(BaseModel):
     field: str
@@ -2490,8 +2494,8 @@ async def admin_adjust_player_popularity(tg_id: int, body: AdjustPlayerPopularit
     if not p:
         raise HTTPException(404, "بازیکن پیدا نشد")
     old_popularity = max(0, min(100, int(p.get("popularity", POPULARITY_START))))
-    new_popularity = max(0, min(100, old_popularity + int(body.delta)))
-    await players.update_one({"tg_id": tg_id}, {"$set": {"popularity": new_popularity}})
+    from realm_state import adjust_popularity
+    new_popularity = await adjust_popularity(tg_id, int(body.delta), body.reason or "اصلاح مدیریت", source_kind="admin", actor_id=user["id"])
     return {"ok": True, "old_popularity": old_popularity, "popularity": new_popularity, "applied_delta": new_popularity - old_popularity}
 
 class SetPlayerResourcesBody(BaseModel):
@@ -2546,8 +2550,8 @@ async def admin_bulk_adjust_players(body: BulkAdjustPlayersBody, user: dict = De
         update = production_fields(player)
         if field == "popularity":
             before = max(0, min(100, int(player.get("popularity", POPULARITY_START))))
-            after = max(0, min(100, before + delta))
-            update["popularity"] = after
+            from realm_state import adjust_popularity
+            after = await adjust_popularity(player["tg_id"], delta, "اصلاح گروهی مدیریت", source_kind="admin_bulk", actor_id=user["id"])
         else:
             resources = player.setdefault("resources", {})
             before = int(resources.get(field, 0))

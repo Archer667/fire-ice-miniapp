@@ -1,5 +1,5 @@
 """Persistent game time. Authentication and security logs keep using real UTC."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from db import game_settings
 
 _state = {}
@@ -10,7 +10,9 @@ def timing(key):
     return _state.get('timing', {}).get(key, TIMING_DEFAULTS[key])
 
 def real_now():
-    return datetime.utcnow()
+    # Stored game timestamps are intentionally naive UTC for compatibility with
+    # existing Mongo records; avoid the deprecated utcnow() API.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def now():
     current = _state.get('paused_at') or real_now()

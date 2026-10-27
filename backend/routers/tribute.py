@@ -8,6 +8,11 @@ from db import players, tributes, hierarchy
 from game import now, can_afford, pay, add_resources
 from ranks import my_tribute_role, HIERARCHY_ID
 from routers.ravens import send_system_message
+from family import commit
+from project_engine import member_for, receipt_key
+from realm_state import adjust_influence, adjust_reputation
+from routers.economy import _event_change
+from uuid import uuid4
 
 router = APIRouter(prefix="/api/tribute", tags=["tribute"])
 
@@ -110,20 +115,28 @@ async def pay_tribute(tribute_id: str, user: dict = Depends(get_user)):
     p = await players.find_one({"tg_id": user["id"]})
     if not can_afford(p["resources"], {"gold": t["amount"]}):
         raise HTTPException(400, "طلای کافی نداری")
-    pay(p["resources"], {"gold": t["amount"]})
-    await players.update_one({"tg_id": user["id"]}, {"$set": {"resources": p["resources"]}})
-
-    # خراجِ استاد سکه (از والی‌ها) می‌ره تو خزانهٔ رد کیپ، نه جیبِ شخصیِ خودش — بقیهٔ
-    # سطوح (والی از بالادست، بالادست از لرد) مستقیم به طلای شخصیِ خواهنده اضافه می‌شه
+    event = f"tribute:{tribute_id}:paid"
+    wallets = [{"member": member_for(p, 0), "cost": {"gold": t["amount"]}, "debit": True}]
+    changes = []
     if t["from_role"] == "coin":
-        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$inc": {"treasury_gold": t["amount"]}}, upsert=True)
+        field = "tribute_receipts." + receipt_key(event)
+        await hierarchy.update_one({"_id": HIERARCHY_ID}, {"$setOnInsert": {"treasury_gold": 0}}, upsert=True)
+        changes.append({
+            "collection": "hierarchy", "query": {"_id": HIERARCHY_ID, field: {"$ne": True}},
+            "update": {"$set": {field: True}, "$inc": {"treasury_gold": t["amount"]}},
+        })
     else:
         recipient = await players.find_one({"tg_id": t["from_id"]})
-        if recipient:
-            add_resources(recipient, {"gold": t["amount"]})
-            await players.update_one({"tg_id": t["from_id"]}, {"$set": {"resources": recipient["resources"]}})
-
-    await tributes.update_one({"_id": oid}, {"$set": {"status": "paid", "paid_at": now()}})
+        if not recipient:
+            raise HTTPException(409, "حساب دریافت‌کننده پیدا نشد")
+        wallets.append({"member": member_for(recipient, 0), "cost": {"gold": t["amount"]}})
+    changes += [
+        {"collection": "tributes", "query": {"_id": oid}, "update": {"$set": {"status": "paid", "paid_at": now()}}},
+        _event_change(event, "tribute", "پرداخت خراج", user["id"], [t["from_id"]], f"{t['amount']:,} سکه"),
+    ]
+    await commit({"_id": str(uuid4()), "kind": "tribute_payment", "complete": False, "wallets": wallets, "changes": changes})
+    await adjust_reputation(t["from_id"], user["id"], 2, "پرداخت به‌موقع خراج", source_id=event)
+    await adjust_influence(user["id"], 1, "پرداخت خراج", source_id=event)
     await send_system_message(
         t["from_id"], t["from_name"],
         f"{p['name']} خراجِ {t['amount']:,} سکه‌ای که خواسته بودی را پرداخت کرد."

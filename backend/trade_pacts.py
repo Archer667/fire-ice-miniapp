@@ -23,10 +23,12 @@ async def migrate_legacy_groups():
 
 
 async def trade_partners(user_id):
-    direct = await alliances.find({'status': 'accepted', 'type': {'$in': TRADE_TYPES},
-        '$or': [{'from_id': user_id}, {'to_id': user_id}]}).to_list(None)
+    direct = await alliances.find({'status': 'accepted', '$and': [
+        {'$or': [{'type': {'$in': TRADE_TYPES}}, {'clauses': 'trade_access'}]},
+        {'$or': [{'from_id': user_id}, {'to_id': user_id}]},
+    ]}).to_list(None)
     groups = {a['group_id'] for a in direct if a.get('group_id')}
-    rows = direct + (await alliances.find({'status': 'accepted', 'type': {'$in': TRADE_TYPES},
+    rows = direct + (await alliances.find({'status': 'accepted', '$or': [{'type': {'$in': TRADE_TYPES}}, {'clauses': 'trade_access'}],
                     'group_id': {'$in': list(groups)}}).to_list(None) if groups else [])
     partners = {}
     for a in rows:

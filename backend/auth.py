@@ -48,7 +48,7 @@ async def get_user(
         from character_access import status, personal_write
         character = await players.find_one({'tg_id': user['id']})
         state = status(character)
-        if state in ('pending', 'unregistered') and request.url.path != '/api/players/register':
+        if state in ('pending', 'unregistered') and request.url.path != '/api/players/register' and not request.url.path.startswith('/api/support'):
             raise HTTPException(403, 'ابتدا درخواست کاراکتر باید توسط ادمین تأیید شود')
         if state == 'landless' and not (personal_write(request.url.path)):
             raise HTTPException(403, 'این امکان به داشتن قلمرو نیاز دارد؛ سفر و امور شخصی همچنان در دسترس است')

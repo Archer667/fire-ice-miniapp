@@ -208,10 +208,11 @@ async def evaluate_player(player: dict, settings: dict, day_key: str):
     accrue_tax_effect(player, settings, now())
     tax_total = float(player.get("tax_effect_pending", 0))
     tax_delta = int(tax_total)
-    popularity = max(0, min(100, old_popularity + ration_delta + tax_delta))
+    from realm_state import adjust_popularity
+    popularity = await adjust_popularity(player["tg_id"], ration_delta + tax_delta,
+        f"رسیدگی روزانه: جیره {ration_delta:+}، مالیات {tax_delta:+}", source_kind="daily_settlement", source_id=day_key)
     await players.update_one({"tg_id": player["tg_id"]}, {
         "$set": {
-            "popularity": popularity,
             "rebellion_last_check": day_key,
             "tax_effect_at": player["tax_effect_at"],
             "tax_effect_pending": tax_total - tax_delta,
@@ -402,12 +403,13 @@ async def resolve(rebellion_id: str, body: ResolveBody, user: dict = Depends(adm
         raise HTTPException(404, "بازیکن پیدا نشد")
     if not body.result.strip():
         raise HTTPException(400, "نتیجه شورش را بنویس")
-    popularity = max(0, min(100, int(p.get("popularity", POPULARITY_START)) + body.popularity_delta))
+    from realm_state import adjust_popularity
+    popularity = await adjust_popularity(p["tg_id"], body.popularity_delta, "نتیجهٔ پروندهٔ شورش", source_kind="rebellion", source_id=rebellion_id, actor_id=user["id"])
     resources = p.get("resources", {})
     for key, delta in (("gold", body.gold_delta), ("food", body.food_delta), ("men", body.men_delta)):
         resources[key] = max(0, resources.get(key, 0) + delta)
     result_text = body.result.strip()
-    await players.update_one({"tg_id": p["tg_id"]}, {"$set": {"popularity": popularity, "resources": resources}})
+    await players.update_one({"tg_id": p["tg_id"]}, {"$set": {"resources": resources}})
     await rebellions.update_one({"_id": oid}, {"$set": {
         "resolved": True, "status": body.outcome, "result": result_text,
         "resolved_at": now(), "resolved_by": user["id"],

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from auth import get_user
 from db import players, alliances
 from game import now, apply_production, can_afford, pay, add_resources, production_fields
@@ -12,8 +12,23 @@ from config import FEAST_COST, FEAST_POPULARITY_GAIN, FEAST_COOLDOWN_HOURS, POPU
 from routers.ravens import send_system_message
 from player_labels import titled_name
 from control_settings import get as rule
+from realm_state import adjust_influence, adjust_popularity, adjust_reputation, record_event
 
 router = APIRouter(prefix="/api/diplomacy", tags=["diplomacy"])
+
+CLAUSE_LABELS = {
+    "non_aggression": "عدم تجاوز",
+    "trade_access": "دسترسی تجاری و عبور کاروان",
+    "open_borders": "عبور لشکر با اجازهٔ مسیر",
+    "mutual_defense": "دفاع متقابل",
+    "public_aid": "کمک آشکار در بحران",
+    "intelligence_sharing": "اشتراک اطلاعات",
+}
+DEFAULT_CLAUSES = {
+    "non_aggression": ["non_aggression"],
+    "trade": ["non_aggression", "trade_access"],
+    "full_alliance": ["non_aggression", "trade_access", "open_borders", "mutual_defense"],
+}
 
 class ProposeBody(BaseModel):
     to_tg_ids: list[int]
@@ -22,6 +37,8 @@ class ProposeBody(BaseModel):
     private: bool = False
     existing_alliance_id: str | None = None
     penalty_gold: int = 0   # فقط برای «پیمان عدم‌تجاوز» — غرامتی که خیانت‌کننده باید بپردازد
+    clauses: list[str] = Field(default_factory=list)
+    duration_days: int = 0
 
 @router.post("/propose")
 async def propose(body: ProposeBody, user: dict = Depends(get_user)):
@@ -35,13 +52,20 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         if source['status'] != 'accepted' or source.get('marriage_id'):
             raise HTTPException(409, 'فقط پیمان برقرار و مستقل از ازدواج قابل گسترش است')
         body = body.model_copy(update={'type': source['type'], 'name': source.get('name', ''),
-            'private': not source.get('public', True), 'penalty_gold': source.get('penalty_gold', 0)})
+            'private': not source.get('public', True), 'penalty_gold': source.get('penalty_gold', 0),
+            'clauses': source.get('clauses', DEFAULT_CLAUSES.get(source['type'], [])),
+            'duration_days': source.get('duration_days', 0)})
     if not 0 <= body.penalty_gold <= 1000000000:
         raise HTTPException(400, "غرامت باید بین صفر و یک میلیارد سکه باشد")
     if body.type not in ALLIANCE_TYPES:
         raise HTTPException(400, "نوع پیمان نامعتبر")
     if body.type == "non_aggression" and body.penalty_gold <= 0:
         raise HTTPException(400, "برای پیمان عدم‌تجاوز باید مقدار غرامت (طلا) را مشخص کنی")
+    if not 0 <= body.duration_days <= 365:
+        raise HTTPException(400, "مدت پیمان باید بین صفر تا ۳۶۵ روز بازی باشد")
+    clauses = list(dict.fromkeys(body.clauses or DEFAULT_CLAUSES.get(body.type, [])))
+    if not clauses or any(clause not in CLAUSE_LABELS for clause in clauses):
+        raise HTTPException(400, "بندهای پیمان معتبر نیستند")
     me = await players.find_one({"tg_id": user["id"]})
     if not me or not me.get('castle') or me.get('is_dead') or me.get('registration_reset'):
         raise HTTPException(403, "اول ثبت‌نام کن")
@@ -117,6 +141,8 @@ async def propose(body: ProposeBody, user: dict = Depends(get_user)):
         "from_gender": me.get("gender", "lord"),
         "to_id": t["tg_id"], "to_name": t["name"], "to_gender": t.get("gender", "lord"),
         "type": body.type, "wine_cost": unit_cost, "name": pact_name,
+        "clauses": clauses, "duration_days": body.duration_days,
+        "expires_at": now() + timedelta(days=body.duration_days) if body.duration_days else None,
         "penalty_gold": penalty_gold,
         "public": not body.private,
         "status": "pending", "created_at": now(),
@@ -165,6 +191,9 @@ async def mine(user: dict = Depends(get_user)):
             "other_name": a["to_name"] if mine_proposed else a["from_name"],
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
             "name": a.get("name", ""),
+            "clauses": a.get("clauses", DEFAULT_CLAUSES.get(a["type"], [])),
+            "clause_labels": [CLAUSE_LABELS[c] for c in a.get("clauses", DEFAULT_CLAUSES.get(a["type"], [])) if c in CLAUSE_LABELS],
+            "expires_at": a.get("expires_at").isoformat() if a.get("expires_at") else None,
             "public": a.get("public", True),
             "penalty_gold": a.get("penalty_gold", 0), "marriage_id": a.get("marriage_id"),
             "status": a["status"],
@@ -181,6 +210,8 @@ async def public_alliances(user: dict = Depends(get_user)):
             "id": str(a["_id"]), "from_name": a["from_name"], "to_name": a["to_name"],
             "type": a["type"], "type_name": ALLIANCE_TYPES[a["type"]]["name"],
             "name": a.get("name", ""), "created_at": a["created_at"].isoformat(),
+            "clause_labels": [CLAUSE_LABELS[c] for c in a.get("clauses", DEFAULT_CLAUSES.get(a["type"], [])) if c in CLAUSE_LABELS],
+            "expires_at": a.get("expires_at").isoformat() if a.get("expires_at") else None,
         })
     return out
 
@@ -223,6 +254,11 @@ async def respond(alliance_id: str, body: RespondBody, user: dict = Depends(get_
         await players.update_one({"tg_id": a["from_id"]}, {"$inc": {"alliance_count": 1, "stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"stats.alliances_accepted": 1}})
         await players.update_one({"tg_id": a["to_id"]}, {"$inc": {"alliance_count": 1}})
+        await adjust_reputation(a["from_id"], a["to_id"], 5, "پذیرش پیمان", source_id=str(a["_id"]))
+        await adjust_reputation(a["to_id"], a["from_id"], 5, "پذیرش پیمان", source_id=str(a["_id"]))
+        await adjust_influence(a["from_id"], 3, "پیمان موفق", source_id=f"pact:{a['_id']}:from")
+        await adjust_influence(a["to_id"], 2, "پذیرش پیمان", source_id=f"pact:{a['_id']}:to")
+        await record_event("pact", "پیمان تازه", actor_id=a["from_id"], target_ids=[a["to_id"]], detail=a.get("name") or ALLIANCE_TYPES[a["type"]]["name"], visibility="public" if a.get("public", True) else "participants", dedupe_key=f"pact:{a['_id']}:accepted")
         await send_system_message(a["from_id"], a["from_name"], f"{to_label} پیشنهاد پیمانت را پذیرفت.", kind="diplomacy")
         # پیمان‌های عمومی (غیرخصوصی) به همهٔ لردها اطلاع داده می‌شود — نه فقط دو طرفِ پیمان
         if a.get("public", True):
@@ -272,10 +308,17 @@ async def feast(user: dict = Depends(get_user)):
     if not can_afford(p["resources"], feast_cost):
         raise HTTPException(400, "شراب یا غذای کافی برای ضیافت نداری")
     pay(p["resources"], feast_cost)
-    popularity = min(POPULARITY_MAX, p.get("popularity", 0) + feast_gain)
-
     fields = production_fields(p)
-    fields.update({"popularity": popularity, "last_feast": now()})
+    fields.update({"last_feast": now()})
     await players.update_one({"tg_id": user["id"]}, {"$set": fields})
+    popularity = await adjust_popularity(user["id"], feast_gain, "برگزاری ضیافت", source_kind="feast", source_id=now().isoformat())
     return {"ok": True, "popularity": popularity}
 
+
+async def expire_timed_pacts():
+    from pact_exits import exit_pact
+    async for pact in alliances.find({"status": "accepted", "expires_at": {"$ne": None, "$lte": now()}}):
+        try:
+            await exit_pact(str(pact["_id"]), forced=True, actor="system")
+        except HTTPException:
+            continue

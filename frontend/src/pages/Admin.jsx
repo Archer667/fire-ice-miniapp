@@ -26,6 +26,8 @@ import AdminArmyRelocation from '../components/AdminArmyRelocation.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import AdminControlCenter from '../components/AdminControlCenter.jsx';
+import AdminTickets from '../components/AdminTickets.jsx';
+import AdminRealmSystems from '../components/AdminRealmSystems.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, BUILDINGS_STATIC, buildingProduces, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
 
 import Projects from './Projects.jsx';
@@ -95,6 +97,7 @@ const TAB_GROUPS = [
     tabs: [
       { key: 'overview',   label: 'راهنمای پنل', description: 'کارهای روزانه و مسیر پیشنهادی' },
       { key: 'notifications', label: 'کارهای منتظر', description: 'اعلان‌ها، مهلت‌ها و پرونده‌های تازه' },
+      { key: 'tickets', label: 'تیکت‌ها', description: 'پاسخ‌گویی به درخواست‌های پشتیبانی', fullOnly: true },
     ],
   },
   {
@@ -116,12 +119,12 @@ const TAB_GROUPS = [
     key: 'players', label: 'بازیکنان و جهان',
     description: 'ثبت‌نام، قلمروها، منابع و نقشه',
     tabs: [
-      { key:'profiles',label:'مشخصات بازیکنان',description:'کاراکترها، تصاویر، پرچم و وضعیت زندگی' },
-      {key:'character_profiles',label:'درخواست‌های کاراکتر',description:'تأیید نام، عکس، بک‌استوری و پرچم',fullOnly:true},
-      { key: 'registration', label: 'ثبت‌نام', description: 'درخواست‌های تازه و ظرفیت اقلیم‌ها' },
+      { key:'profiles',label:'فهرست بازیکنان',description:'وضعیت، تصویر، پرچم، مرگ و بازگرداندن بازیکن' },
+      {key:'character_profiles',label:'ویرایش‌های کاراکتر',description:'درخواست تغییر نام، عکس، بک‌استوری و پرچم',fullOnly:true},
+      { key: 'registration', label: 'ورودی‌های ثبت‌نام', description: 'تأیید بازیکن تازه و ظرفیت اقلیم‌ها' },
       { key: 'character_travel', label:'حضور و سفر کاراکترها',description:'مقرها، مهمانان، اسارت و سفر',fullOnly:true },
       { key: 'family', label: 'ازدواج و خانواده', description: 'تأیید پیوندها، هزینهٔ آموزش و نام فرزندان', fullOnly: true },
-      { key: 'onboarding', label: 'خاندان‌ها', description: 'تخصیص بازیکن، خاندان و قلعه', fullOnly: true },
+      { key: 'onboarding', label: 'واگذاری خاندان و قلعه', description: 'تخصیص یا تغییر خاندان و قلعهٔ آغازین', fullOnly: true },
       { key: 'player-buildings', label: 'ساختمان‌های بازیکن', description: 'تغییر سطح ساختمان‌های قلعه‌های بازیکن', fullOnly: true },
       { key: 'resources',  label: 'منابع و لشکرها', description: 'منابع، محبوبیت و کنترل لشکر', fullOnly: true },
     ],
@@ -136,6 +139,7 @@ const TAB_GROUPS = [
       { key: 'alliances', label: 'اتحادها', description: 'مرور و مدیریت پیمان‌های بازیکنان', fullOnly: true },
       { key: 'titles',    label: 'مقام‌ها', description: 'تعیین بالادست، والی و فرمانروا', fullOnly: true },
       { key: 'polls',     label: 'رأی‌گیری', description: 'ساخت و بستن رأی‌گیری', fullOnly: true },
+      { key: 'realm_systems', label: 'شورای قلمرو و قراردادها', description: 'قواعد شورا، نتایج پیشنهادها و قراردادهای تأمین', fullOnly: true },
     ],
   },
   {
@@ -143,13 +147,13 @@ const TAB_GROUPS = [
     description: 'ابزارهای حساس و سراسری بازی',
     tabs: [
       { key: 'projects', label: 'پروژه‌ها', description: 'بررسی طرح، زمان عرضه و اعلام شکست', fullOnly: true },
-      { key: 'market-floors', label: 'بازهٔ قیمت کالاها', description: 'حداقل و حداکثر قیمت بازار بازیکنان', fullOnly: true },
-      { key: 'market',  label: 'بازار', description: 'بازار عمومی و بازار سیاه', fullOnly: true },
-      { key: 'items',   label: 'آیتم‌ها', description: 'ساخت و اعطای آیتم', fullOnly: true },
-      { key: 'item_store', label: 'فروشگاه آیتم‌ها', description: 'آگهی‌ها، مزایده و تأیید خرید', fullOnly: true },
-      { key: 'balance', label: 'تعادل ساختمان و نیرو', description: 'هزینه، بازدهی، نیروها و ادوات', ownerOnly: true },
+      { key: 'market-floors', label: 'محدودهٔ قیمت بازیکنان', description: 'فقط کف و سقف مجاز آگهی‌های بازیکنان', fullOnly: true },
+      { key: 'market',  label: 'نرخ و موجودی بازارها', description: 'قیمت و موجودی بازار عمومی و بازار سیاه', fullOnly: true },
+      { key: 'items',   label: 'ساخت و اعطای آیتم', description: 'تعریف آیتم، تصویر و دادن آن به بازیکن', fullOnly: true },
+      { key: 'item_store', label: 'معاملات فروشگاه آیتم', description: 'آگهی، مزایده و تأیید نهایی خرید', fullOnly: true },
+      { key: 'balance', label: 'اعداد ساختمان و نیرو', description: 'هزینه، بازدهی، یگان، سلاح و ادوات', ownerOnly: true },
       { key: 'music', label: 'موسیقی بازی', description: 'فایل و تنظیمات موسیقی پس‌زمینه', fullOnly: true },
-      { key: 'control_center', label: 'قوانین و نرخ‌ها', description: 'مرکز کنترل تمام فرمول‌ها و قابلیت‌ها', ownerOnly: true },
+      { key: 'control_center', label: 'قوانین سراسری بازی', description: 'روشن‌کردن قابلیت‌ها و فرمول‌های عمومی', ownerOnly: true },
     ],
   },
   {
@@ -176,6 +180,8 @@ const JUDGMENT_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'judgme
 const SYSTEM_TAB_KEYS = new Set(TAB_GROUPS.find(group => group.key === 'system').tabs.map(tab => tab.key));
 
 const LIMITED_TAB_KEYS = new Set([...JUDGMENT_TAB_KEYS, 'registration', 'system_reports']);
+const ADMIN_GROUP_ORDER = ['desk','judgment','players','politics','economy','institutions','system'];
+const ADMIN_GROUP_MARKS = {desk:'✦',judgment:'⚔',players:'♟',politics:'♛',economy:'⚖',institutions:'V',system:'⌘'};
 
 const PLAYER_RES = [
   { key: 'gold',  label: 'طلا',  Icon: Coin },
@@ -199,7 +205,11 @@ export default function Admin() {
   const availGroups = TAB_GROUPS
     .filter(group => (!group.ownerOnly || isOwner) && (isFull || group.tabs.some(item => allowedTabKeys.has(item.key))))
     .map(group => ({ ...group, tabs: group.tabs.filter(item => canAccessTab(item) && (isFull || allowedTabKeys.has(item.key))) }))
-    .filter(group => group.tabs.length);
+    .filter(group => group.tabs.length)
+    .sort((a,b)=>ADMIN_GROUP_ORDER.indexOf(a.key)-ADMIN_GROUP_ORDER.indexOf(b.key));
+  const [adminNavQuery,setAdminNavQuery]=useState('');
+  const adminNavNeedle=adminNavQuery.trim().toLocaleLowerCase('fa');
+  const adminNavResults=adminNavNeedle ? availGroups.flatMap(group=>group.tabs.filter(item=>(`${item.label} ${item.description} ${group.label}`).toLocaleLowerCase('fa').includes(adminNavNeedle)).map(item=>({...item,groupLabel:group.label,groupKey:group.key}))) : [];
   const [tab, setTab] = useState(isAdjudicator ? 'war' : 'overview');
   const activeGroup = availGroups.find(group => group.tabs.some(item => item.key === tab)) || availGroups[0];
 
@@ -1642,13 +1652,23 @@ export default function Admin() {
       </div>
 
       <nav className="admin-nav" aria-label="بخش‌های پنل ادمین">
+        <div className="admin-command-bar up u1">
+          <div><b>مرکز فرماندهی</b><small>{availGroups.reduce((sum,group)=>sum+group.tabs.length,0).toLocaleString('fa-IR')} ابزار در دسترس تو</small></div>
+          <label><span>جست‌وجوی ابزار</span><input value={adminNavQuery} onChange={event=>setAdminNavQuery(event.target.value)} placeholder="مثلاً لشکر، ثبت‌نام، بازار یا زمان"/></label>
+          {adminNavQuery&&<button type="button" className="rbtn" onClick={()=>setAdminNavQuery('')}>پاک‌کردن</button>}
+        </div>
+        {adminNavNeedle ? <section className="admin-search-results up u1">
+          <header><strong>نتیجهٔ جست‌وجو</strong><span>{adminNavResults.length.toLocaleString('fa-IR')} ابزار پیدا شد</span></header>
+          <div>{adminNavResults.map(item=>{const count=tabBadge(item.key);return <button type="button" className={`rbtn admin-search-result ${tab===item.key?'on':''}`} key={item.key} onClick={()=>{openTab(item.key);setAdminNavQuery('')}}><i>{ADMIN_GROUP_MARKS[item.groupKey]}</i><span><b>{item.label}</b><small>{item.groupLabel} · {item.description}</small></span>{count>0&&<em>{count.toLocaleString('fa-IR')}</em>}</button>})}</div>
+          {!adminNavResults.length&&<p>چیزی با این عبارت پیدا نشد؛ اسم کوتاه‌تری بنویس.</p>}
+        </section> : <>
         {!isAdjudicator && <div className="admin-section-switcher up u1" role="tablist" aria-label="دسته‌های پنل">
           {availGroups.map(group => {
             const selected = activeGroup?.key === group.key;
             const count = group.tabs.reduce((sum, item) => sum + tabBadge(item.key), 0);
             return <button type="button" key={group.key} role="tab" aria-selected={selected}
               className={`rbtn admin-section-button ${selected ? 'on' : ''}`} onClick={() => openGroup(group)}>
-              <span>{group.label}</span><small>{group.description}</small>
+              <i>{ADMIN_GROUP_MARKS[group.key]}</i><span>{group.label}</span><small>{group.description}</small>
               {count > 0 && <b>{count.toLocaleString('fa-IR')}</b>}
             </button>;
           })}
@@ -1670,6 +1690,7 @@ export default function Admin() {
             </div>
           </section>
         )}
+        </>}
       </nav>
 
       {tab !== 'overview' && TAB_BY_KEY[tab] && (
@@ -1683,6 +1704,8 @@ export default function Admin() {
       {tab === 'world_contracts' && isFull && <AdminSocial section="contracts"/>}
       {tab === 'castle_life' && isFull && <AdminSocial section="castles"/>}
       {tab === 'world_news' && isFull && <AdminSocial section="news"/>}
+      {tab === 'tickets' && isFull && <AdminTickets/>}
+      {tab === 'realm_systems' && isFull && <AdminRealmSystems/>}
 
       {tab === 'notifications' && (
         <>

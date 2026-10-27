@@ -2,10 +2,11 @@ import { Component, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { Coin, Wood, Rock, Pick, Wheat, Wine, Send } from '../components/Icons.jsx';
+import { Coin, Wood, Rock, Pick, Wheat, Wine, Send, Scroll } from '../components/Icons.jsx';
 import { CARAVAN_GOODS, TRADE_GOOD_NAMES, castleLabel } from '../gamedata.js';
 
 import Projects from './Projects.jsx';
+import EconomyNetwork from '../components/EconomyNetwork.jsx';
 import '../trade.css';
 
 const RES_ICON = { gold: Coin, wood: Wood, stone: Rock, iron: Pick, food: Wheat, wine: Wine };
@@ -13,6 +14,7 @@ const RES_ICON = { gold: Coin, wood: Wood, stone: Rock, iron: Pick, food: Wheat,
 const TABS = [
   { key: 'market', label: 'بازارها', detail: 'خرید و فروش کالا', icon: Coin },
   { key: 'caravan', label: 'کاروان', detail: 'تجارت با هم‌پیمان', icon: Send },
+  { key: 'network', label: 'شبکهٔ تجارت', detail: 'سفارش و قرارداد تأمین', icon: Scroll },
   { key: 'projects', label: 'پروژه‌ها', detail: 'سرمایه‌گذاری و بازده', icon: Pick },
 ];
 const fa = value => Number(value || 0).toLocaleString('fa-IR');
@@ -213,6 +215,7 @@ function TradeContent() {
       {tab === 'market' && (marketSection === 'official' ? market : marketSection === 'players' ? playerMarket : black) === null && <div className="exchange-empty" role="status">در حال دریافت کالاها…</div>}
 
       {tab === 'projects' && <Projects />}
+      {tab === 'network' && <EconomyNetwork />}
       {tab === 'caravan' && (
         <>
           <div className="sect up u2">فرستادن کاروان</div>
