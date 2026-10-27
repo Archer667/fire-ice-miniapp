@@ -5,6 +5,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Wine, Heart, Crown, Scroll, Coin } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
+import RealmCouncil from '../components/RealmCouncil.jsx';
 import { REGIONS_STATIC, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
 
 const STATUS_FA = {
@@ -14,8 +15,14 @@ const STATUS_FA = {
 const TABS = [
   { key: 'main',      label: 'دیپلماسی' },
   { key: 'alliances', label: 'اتحادها' },
+  { key: 'council',   label: 'شورای قلمرو' },
   { key: 'polls',     label: 'رای‌گیری' },
 ];
+const PACT_CLAUSES = {
+  non_aggression:'عدم تجاوز', trade_access:'دسترسی تجاری', open_borders:'عبور لشکر با اجازه',
+  mutual_defense:'دفاع متقابل', public_aid:'کمک آشکار در بحران', intelligence_sharing:'اشتراک اطلاعات',
+};
+const DEFAULT_PACT_CLAUSES = {non_aggression:['non_aggression'],trade:['non_aggression','trade_access'],full_alliance:['non_aggression','trade_access','open_borders','mutual_defense']};
 const ALLIANCE_SEEN_KEY = 'valeria_public_alliances_seen';
 const loadSeenAllianceIds = () => { try { return new Set(JSON.parse(localStorage.getItem(ALLIANCE_SEEN_KEY)) || []); } catch { return new Set(); } };
 const TRIBUTE_STATUS_FA = { pending: 'در انتظار پرداخت', paid: 'پرداخت‌شده', expired: 'منقضی (پرداخت نشد)' };
@@ -36,6 +43,8 @@ export default function Diplomacy() {
   const [pactName, setPactName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [penaltyGold, setPenaltyGold] = useState(500);
+  const [clauses, setClauses] = useState(DEFAULT_PACT_CLAUSES.non_aggression);
+  const [durationDays, setDurationDays] = useState(0);
   const [busy, setBusy] = useState(false);
   const [respondBusyId, setRespondBusyId] = useState(null);
   const [invitePact, setInvitePact] = useState(null);
@@ -127,7 +136,7 @@ export default function Diplomacy() {
     if (type === 'non_aggression' && (!penaltyGold || penaltyGold <= 0)) { toast('مقدار غرامتِ خیانت را مشخص کن'); return; }
     setBusy(true);
     try {
-      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate, penaltyGold);
+      const res = await api.diplomacyPropose(targets.map(t => t.tg_id), type, pactName.trim(), isPrivate, penaltyGold, clauses, durationDays);
       haptic('medium');
       setMe({ ...me, resources: { ...me.resources, wine: me.resources.wine - unitCost * (res.sent_to || targets.length) } });
       toast(`پیشنهاد پیمان با کلاغ به ${res.sent_to || targets.length} لرد ارسال شد`);
@@ -285,11 +294,16 @@ export default function Diplomacy() {
         <label className="f">لرد(ها)ی طرف مقابل</label>
         <PlayerPicker value={targets} onChange={setTargets} />
         <label className="f">نوع پیمان</label>
-        <select value={type} onChange={e => setType(e.target.value)}>
+        <select value={type} onChange={e => {setType(e.target.value);setClauses(DEFAULT_PACT_CLAUSES[e.target.value]||['non_aggression']);}}>
           {Object.entries(ALLIANCE_TYPES).map(([id, t]) => (
             <option key={id} value={id}>{t.name} — {t.wine_cost.toLocaleString('fa-IR')} شراب هرکدام</option>
           ))}
         </select>
+        <label className="f">بندهای پیمان</label>
+        <div className="pact-clauses">{Object.entries(PACT_CLAUSES).map(([key,label])=><label key={key}><input type="checkbox" checked={clauses.includes(key)} onChange={e=>setClauses(current=>e.target.checked?[...new Set([...current,key])]:current.filter(item=>item!==key))}/><span>{label}</span></label>)}</div>
+        <label className="f">مدت پیمان (روز بازی)</label>
+        <input type="number" min="0" max="365" value={durationDays} onChange={e=>setDurationDays(Math.max(0,Math.min(365,Number(e.target.value)||0)))}/>
+        <div className="page-sub" style={{margin:'4px 4px 0'}}>عدد صفر یعنی پیمان تا زمان خروج یا انحلال ادامه دارد.</div>
         {(
           <>
             <label className="f">غرامت خروج یا اخراج (سکه)</label>
@@ -338,6 +352,8 @@ export default function Diplomacy() {
                 {a.marriage_id ? ' · وابسته به ازدواج؛ فسخ از صفحهٔ خانواده با غرامت' : ''}
                 {a.penalty_gold ? ` · غرامت خیانت: ${a.penalty_gold.toLocaleString('fa-IR')} سکه` : ''}
               </small>
+              {!!a.clause_labels?.length&&<small>بندها: {a.clause_labels.join(' · ')}</small>}
+              {a.expires_at&&<small>پایان پیمان: {new Date(a.expires_at).toLocaleString('fa-IR')}</small>}
               {a.can_invite && !alliances.some(b => b.can_invite && b.group_id && b.group_id === a.group_id && alliances.indexOf(b) < alliances.indexOf(a)) && (
                 <button type="button" className="rbtn" style={{ marginTop: 8 }} disabled={inviteBusy} onClick={() => { setInvitePact(a); setInviteTargets([]); }}>دعوت عضو جدید</button>
               )}
@@ -535,6 +551,8 @@ export default function Diplomacy() {
           ))}
         </div>
       )}
+
+      {tab === 'council' && <RealmCouncil />}
 
       {tab === 'polls' && (
         <div className="up u2">

@@ -1563,6 +1563,12 @@ const M = {
 /* ---------- API عمومی ---------- */
 // در حالت MOCK نتیجه با Promise.resolve بسته‌بندی می‌شود تا امضای async با حالت واقعی یکی بماند
 export const api = {
+  supportMeta: () => req('/api/support/meta'),
+  supportMine: () => req('/api/support/mine'),
+  supportCreate: body => req('/api/support', {method:'POST', body:JSON.stringify(body)}),
+  supportReply: (id,text) => req(`/api/support/${id}/reply`, {method:'POST', body:JSON.stringify({text})}),
+  adminTickets: filters => req('/api/support/admin/list?'+new URLSearchParams(filters)),
+  adminTicketAction: (id,body) => req(`/api/support/admin/${id}`, {method:'POST', body:JSON.stringify(body)}),
   itemStore: (scope = 'market', offset = 0) => req(`/api/item-store?scope=${scope}&offset=${offset}`),
   storeCreate: body => req('/api/item-store', { method: 'POST', body: JSON.stringify(body) }),
   storeOffer: (id, body) => req(`/api/item-store/${id}/offer`, { method: 'POST', body: JSON.stringify(body) }),
@@ -1819,8 +1825,8 @@ export const api = {
   diplomacyMine: () => MOCK ? Promise.resolve(M.diplomacyMine()) : req('/api/diplomacy/mine'),
   diplomacyInvite: (id, toTgIds) => req(`/api/diplomacy/${id}/invite`, { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds }) }),
   diplomacyPublic: () => MOCK ? Promise.resolve(M.diplomacyPublic()) : req('/api/diplomacy/public'),
-  diplomacyPropose: (toTgIds, type, name, isPrivate, penaltyGold) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate, penaltyGold))
-    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate, penalty_gold: penaltyGold || 0 }) }),
+  diplomacyPropose: (toTgIds, type, name, isPrivate, penaltyGold, clauses = [], durationDays = 0) => MOCK ? Promise.resolve(M.diplomacyPropose(toTgIds, type, name, isPrivate, penaltyGold))
+    : req('/api/diplomacy/propose', { method: 'POST', body: JSON.stringify({ to_tg_ids: toTgIds, type, name, private: !!isPrivate, penalty_gold: penaltyGold || 0, clauses, duration_days: durationDays || 0 }) }),
   diplomacyRespond: (id, accept) => MOCK ? Promise.resolve(M.diplomacyRespond(id, accept))
     : req(`/api/diplomacy/${id}/respond`, { method: 'POST', body: JSON.stringify({ accept }) }),
   diplomacyLeave: (id) => MOCK ? Promise.resolve(M.diplomacyLeave(id))
@@ -1833,6 +1839,27 @@ export const api = {
   regionLeaderboard: () => MOCK ? Promise.resolve(M.regionLeaderboard()) : req('/api/leaderboard/regions'),
   polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
   vote:  (id, option) => MOCK ? Promise.resolve(M.vote(id, option)) : req(`/api/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ option }) }),
+  realmOverview: () => req('/api/realm/overview'),
+  realmEvents: () => req('/api/realm/events'),
+  realmProposals: () => req('/api/realm/proposals'),
+  realmCreateProposal: body => req('/api/realm/proposals', {method:'POST', body:JSON.stringify(body)}),
+  realmSupportProposal: id => req(`/api/realm/proposals/${id}/support`, {method:'POST'}),
+  realmVoteProposal: (id, option) => req(`/api/realm/proposals/${id}/vote`, {method:'POST', body:JSON.stringify({option})}),
+  adminRealmRules: () => req('/api/realm/admin/rules'),
+  adminRealmProposals: () => req('/api/realm/admin/proposals'),
+  adminSaveRealmRules: body => req('/api/realm/admin/rules', {method:'PUT', body:JSON.stringify(body)}),
+  adminFinishRealmProposal: (id, body) => req(`/api/realm/admin/proposals/${id}/finish`, {method:'POST', body:JSON.stringify(body)}),
+  economyOrders: () => req('/api/economy/orders'),
+  economyCreateOrder: body => req('/api/economy/orders', {method:'POST', body:JSON.stringify(body)}),
+  economyFillOrder: (id, qty) => req(`/api/economy/orders/${id}/fill`, {method:'POST', body:JSON.stringify({qty})}),
+  economyCancelOrder: id => req(`/api/economy/orders/${id}`, {method:'DELETE'}),
+  economyContracts: () => req('/api/economy/contracts'),
+  economyCreateContract: body => req('/api/economy/contracts', {method:'POST', body:JSON.stringify(body)}),
+  economyRespondContract: (id, accept) => req(`/api/economy/contracts/${id}/respond`, {method:'POST', body:JSON.stringify({accept})}),
+  economyDeliverContract: id => req(`/api/economy/contracts/${id}/deliver`, {method:'POST'}),
+  economyCancelContract: id => req(`/api/economy/contracts/${id}`, {method:'DELETE'}),
+  adminEconomyContracts: () => req('/api/economy/admin/contracts'),
+  adminCloseEconomyContract: (id, reason) => req(`/api/economy/admin/contracts/${id}/close`, {method:'POST', body:JSON.stringify({reason})}),
   searchPlayers: (q, opts = {}) => MOCK ? Promise.resolve(M.searchPlayers(q)) : req('/api/players/search?q=' + encodeURIComponent(q), opts),
 
   /* ---------- شورش و محبوبیت ---------- */

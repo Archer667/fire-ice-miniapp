@@ -15,7 +15,7 @@ from game_data import REGIONS, COMMON_TROOPS, BUILDINGS, MAX_BUILDING_LEVEL, WAR
 from db import (
     players as players_col, map_castles, admin_roles, game_settings,
     campaigns, ambushes, caravans, spy_missions, messages, alliances, roleplays, tributes,
-    rebellion_checks, rebellions, admin_notifications, rumor_views,
+    rebellion_checks, rebellions, admin_notifications, rumor_views, support_tickets,
 )
 from routers import (
     players, war, map as map_router, ravens, leaderboard, admin, espionage,
@@ -88,45 +88,21 @@ async def pause_admin_access(request: Request) -> bool:
 
 @app.middleware("http")
 async def serialize_game_state(request: Request, call_next):
-    # Legacy economy handlers use read/modify/write. Serialize with project wallets
-    # in this single-Uvicorn-worker deployment, including production-on-read routes.
     path = request.scope['path']
-    if request.method in ('GET','HEAD') and re.fullmatch(r'/api/(?:battle-report|analytics)-files/[A-Za-z0-9_-]{43}', path):
-        return await call_next(request)
-    # Selector search is read-only; authentication remains in the route dependency.
-    if request.method == 'GET' and path == '/api/players/search':
+    # Reads never wait behind a long settlement. Replayable recovery is handled by
+    # startup and the background watcher; writes stay serialized for legacy flows.
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
         return await call_next(request)
     if path.startswith('/api/') and not path.startswith('/api/web-auth/') and path not in ('/api/health', '/api/telegram/webhook', '/api/gamedata', '/api/season-branding'):
         async with game_state_lock:
             await game_clock.load()
-            from item_store import recover as recover_item_store
-            await recover_item_store()
-            from item_effects import recover_item_effects
-            await recover_item_effects()
-            from food_settlement import recover_pending_food
-            await recover_pending_food()
-            from army_groups import recover_moves
-            await recover_moves()
-            from battle_passage import recover as recover_passage
-            await recover_passage()
-            from character_records import recover_swaps
-            await recover_swaps()
-            from road_victory import recover as recover_road_victories
-            await recover_road_victories()
-            from pact_exits import recover_exits
-            await recover_exits()
-            from institution_bank import recover as recover_bank
-            await recover_bank()
-            import institution_finance
-            await institution_finance.recover()
-            await social_world.recover()
             if not game_clock.paused() and path.startswith('/api/war'):
                 from institution_mercenaries import tick as tick_mercenaries
                 await tick_mercenaries()
             if path.startswith('/api/war') or path == '/api/admin/battles':
                 from routers.war import reconcile_battle_locks
                 await reconcile_battle_locks()
-            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith(('/api/item-store','/api/notifications')) and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
+            if game_clock.paused() and request.method not in ('GET', 'HEAD', 'OPTIONS') and not path.startswith(('/api/item-store','/api/notifications','/api/support')) and path not in ('/api/admin/game-pause', '/api/players/register', '/api/players/register/') and not await pause_admin_access(request):
                 return JSONResponse(status_code=423, content={'detail': '⏸ بازی متوقف است؛ این اقدام پس از ادامهٔ بازی در دسترس خواهد بود.'})
             from system_reports import begin_admin, finish_admin
             ticket = await begin_admin(request)
@@ -145,6 +121,8 @@ app.include_router(family_router.router)
 app.include_router(reports_router)
 app.include_router(projects_router.router)
 app.include_router(pause_router.router)
+import support
+app.include_router(support.router)
 import institution_bank
 app.include_router(institution_bank.router)
 import institution_citadel
@@ -176,6 +154,9 @@ app.include_router(buildings_router.router)
 app.include_router(titles_router.router)
 app.include_router(diplomacy_router.router)
 app.include_router(polls_router.router)
+from routers import realm as realm_router, economy as economy_router
+app.include_router(realm_router.router)
+app.include_router(economy_router.router)
 app.include_router(trade_router.router)
 app.include_router(market_router.router)
 app.include_router(roleplay_router.router)
@@ -200,6 +181,8 @@ async def _arrival_watcher():
                 await recover_pending_food()
                 from character_records import recover_swaps
                 await recover_swaps()
+                from family import recover as recover_family
+                await recover_family()
                 from character_records import deliver_announcements
                 from family import tick as tick_family, flush_notices as flush_family_notices
                 await deliver_announcements()
@@ -223,6 +206,10 @@ async def _arrival_watcher():
                     await institution_bank.tick()
                     await institution_finance.recover()
                     await institution_mercenaries.tick()
+                    from routers.economy import settle_overdue_contracts
+                    from routers.diplomacy import expire_timed_pacts
+                    await settle_overdue_contracts()
+                    await expire_timed_pacts()
                     await notify_arrivals()
                     await notify_caravan_arrivals()
                     await notify_building_completions()
@@ -281,27 +268,34 @@ async def _ensure_indexes():
     from web_ip_audit import ensure_indexes as ensure_web_ip_indexes
     await ensure_web_ip_indexes()
     from db import db
-    await db.item_store_listings.create_index([('status', 1), ('ends_at', 1)])
-    await db.item_store_listings.create_index([('seller_id', 1), ('created_at', -1)])
-    await db.item_store_listings.create_index('highest.person.tg_id')
-    await db.item_store_operations.create_index([('complete', 1), ('real_at', 1)])
-    from db import db
-    await db.item_grants.create_index('effect_pending')
-    await db.item_grants.create_index([('tg_id', 1), ('granted_at', -1)])
-    await campaigns.create_index([('item_ids', 1), ('active', 1)])
-    await db.food_settlements.create_index("status")
+    first_indexes = [
+        (db.item_store_listings, [('status', 1), ('ends_at', 1)]),
+        (db.item_store_listings, [('seller_id', 1), ('created_at', -1)]),
+        (db.item_store_listings, 'highest.person.tg_id'),
+        (db.item_store_operations, [('complete', 1), ('real_at', 1)]),
+        (db.item_grants, 'effect_pending'),
+        (db.item_grants, [('tg_id', 1), ('granted_at', -1)]),
+        (campaigns, [('item_ids', 1), ('active', 1)]),
+        (db.food_settlements, 'status'),
+        (db.family_marriages, [('parent_keys', 1), ('status', 1)]),
+        (db.family_children, [('patron_key', 1), ('status', 1)]),
+        (db.character_locations, [('place', 1)]),
+        (db.character_locations, [('tg_id', 1)]),
+        (db.character_trips, [('status', 1), ('arrival_at', 1)]),
+        (db.character_trips, [('character', 1), ('created_at', -1)]),
+        (db.character_captures, [('status', 1)]),
+        (db.family_operations, 'complete'), (db.family_successions, 'complete'), (db.family_notices, 'complete'),
+    ]
+    for collection, keys in first_indexes:
+        try:
+            await collection.create_index(keys)
+        except Exception:
+            logger.exception("index creation failed for %s %s", collection.name, keys)
     from login_audit import ensure_indexes as ensure_login_indexes
-    await ensure_login_indexes()
-    from db import db
-    await db.family_marriages.create_index([('parent_keys', 1), ('status', 1)])
-    await db.family_children.create_index([('patron_key', 1), ('status', 1)])
-    await db.character_locations.create_index([('place', 1)])
-    await db.character_locations.create_index([('tg_id', 1)])
-    await db.character_trips.create_index([('status', 1), ('arrival_at', 1)])
-    await db.character_trips.create_index([('character', 1), ('created_at', -1)])
-    await db.character_captures.create_index([('status', 1)])
-    for collection in (db.family_operations, db.family_successions, db.family_notices):
-        await collection.create_index('complete')
+    try:
+        await ensure_login_indexes()
+    except Exception:
+        logger.exception("login audit indexes failed")
     """ایندکس‌های یکتا برای جلوگیری از رکورد دوتایی زیر بار همزمان (race condition) —
     مثلاً دو ثبت‌نام هم‌زمان با یک قلعه، یا دو بار افزودن یک اسم به نقشه توسط ادمین"""
     try:
@@ -351,6 +345,8 @@ async def _ensure_indexes():
         await alliances.create_index("status")
         await admin_notifications.create_index("dedupe_key", unique=True)
         await admin_notifications.create_index([("created_at", -1)])
+        await support_tickets.create_index([("tg_id", 1), ("updated_at", -1)])
+        await support_tickets.create_index([("status", 1), ("category", 1), ("updated_at", -1)])
         await roleplays.create_index("resolved")
         await roleplays.create_index("tg_id")
         await roleplays.create_index([("category", 1), ("created_at", -1)])
@@ -507,7 +503,31 @@ async def start_background_watchers():
     await institution_finance.ensure_indexes()
     await institution_services.ensure_indexes()
     await institution_mercenaries.ensure_indexes()
+    import realm_state
+    from routers import realm, economy
+    await realm_state.ensure_indexes()
+    await realm.ensure_indexes()
+    await economy.ensure_indexes()
+    await realm_state.migrate_players()
     await institution_bank.recover()
+    from family import recover as recover_family
+    await recover_family()
+    from item_store import recover as recover_item_store
+    from item_effects import recover_item_effects
+    from army_groups import recover_moves
+    from battle_passage import recover as recover_passage
+    from character_records import recover_swaps
+    from road_victory import recover as recover_road_victories
+    from pact_exits import recover_exits
+    await recover_item_store()
+    await recover_item_effects()
+    await recover_moves()
+    await recover_passage()
+    await recover_swaps()
+    await recover_road_victories()
+    await recover_exits()
+    await institution_finance.recover()
+    await social_world.recover()
     from ranks import migrate_exclusive_titles
     await migrate_exclusive_titles()
     from trade_pacts import migrate_legacy_groups

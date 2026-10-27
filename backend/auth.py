@@ -46,10 +46,10 @@ async def get_user(
         from character_access import status, personal_write
         character = await players.find_one({'tg_id': user['id']})
         state = status(character)
-        account_notification = request.url.path == '/api/notifications' or request.url.path.startswith('/api/notifications/')
+        account_notification = request.url.path == '/api/notifications' or request.url.path.startswith('/api/notifications/') or request.url.path.startswith('/api/support')
         if state in ('pending', 'unregistered') and request.url.path != '/api/players/register' and not account_notification:
             raise HTTPException(403, 'ابتدا درخواست کاراکتر باید توسط ادمین تأیید شود')
-        if state == 'landless' and not (personal_write(request.url.path) or request.url.path == '/api/notifications' or request.url.path.startswith('/api/notifications/')):
+        if state == 'landless' and not (personal_write(request.url.path) or request.url.path == '/api/notifications' or request.url.path.startswith('/api/notifications/') or request.url.path.startswith('/api/support')):
             raise HTTPException(403, 'این امکان به داشتن قلمرو نیاز دارد؛ سفر و امور شخصی همچنان در دسترس است')
     if request:
         user['_admin_request'] = (request.scope.get('method', 'GET'), request.url.path)

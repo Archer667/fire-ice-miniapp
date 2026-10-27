@@ -8,6 +8,7 @@ from game import now, apply_production, can_afford, pay, production_fields
 from config import RUMOR_GOLD_COST, RUMOR_POPULARITY_DAMAGE, RUMOR_COOLDOWN_HOURS, POPULARITY_START
 from routers.ravens import send_system_message
 from control_settings import get as rule, feature_enabled
+from realm_state import adjust_popularity, record_event
 
 router = APIRouter(prefix="/api/rumors", tags=["rumors"])
 
@@ -54,23 +55,24 @@ async def send_rumor(body: RumorBody, user: dict = Depends(get_user)):
     pay(me["resources"], {"gold": tweet_cost})
     await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(me)})
 
-    damage = int(rule("tweets.popularity_damage", RUMOR_POPULARITY_DAMAGE))
-    new_popularity = max(0, target.get("popularity", POPULARITY_START) - damage)
-    await players.update_one({"tg_id": target["tg_id"]}, {"$set": {"popularity": new_popularity}})
-
+    identity = ObjectId()
     doc = {
+        "_id": identity,
         "author_tg_id": user["id"], "author_name": me["name"],
         "target_tg_id": target["tg_id"], "target_name": target["name"],
         "text": text[:text_max], "created_at": now(), "reactions": {},
     }
-    res = await rumors.insert_one(doc)
+    await rumors.insert_one(doc)
+    damage = int(rule("tweets.popularity_damage", RUMOR_POPULARITY_DAMAGE))
+    await adjust_popularity(target["tg_id"], -damage, "کارزار عمومی علیه خاندان", source_kind="rumor", source_id=str(identity), actor_id=user["id"])
+    await record_event("rumor", "کارزار عمومی", actor_id=user["id"], target_ids=[target["tg_id"]], detail=text[:240], visibility="public", dedupe_key=f"rumor:{identity}:published")
 
     await send_system_message(
         target["tg_id"], target["name"],
         "توییت‌ای علیه‌ات در وستروس پیچیده و محبوبیتت کمی افت کرد — از تب «توییت‌ها» ببینش.",
         kind="tweet",
     )
-    return {"ok": True, "id": str(res.inserted_id)}
+    return {"ok": True, "id": str(identity)}
 
 def _rumor_brief(r: dict, user_id: int) -> dict:
     reactions = r.get("reactions", {})
@@ -137,10 +139,8 @@ async def react_rumor(rumor_id: str, body: ReactBody, user: dict = Depends(get_u
     else:
         await rumors.update_one({"_id": oid}, {"$set": {key: body.reaction}})
     if popularity_delta:
-        target = await players.find_one({"tg_id": r["target_tg_id"]}, {"popularity": 1})
-        if target:
-            value = max(0, min(100, int(target.get("popularity", POPULARITY_START)) + popularity_delta))
-            await players.update_one({"tg_id": r["target_tg_id"]}, {"$set": {"popularity": value}})
+        await adjust_popularity(r["target_tg_id"], popularity_delta, "واکنش مردم به کارزار عمومی", source_kind="rumor_reaction",
+                                source_id=f"{rumor_id}:{user['id']}:{previous}>{body.reaction}:{now().isoformat()}", actor_id=user["id"])
 
     r = await rumors.find_one({"_id": oid})
     return _rumor_brief(r, user["id"])

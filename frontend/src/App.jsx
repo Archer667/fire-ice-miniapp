@@ -1,9 +1,7 @@
 import {canOpenPage} from './characterAccess.js';
-import Contracts, {CastleLife, Newspaper} from './pages/SocialWorld.jsx';
 import Notifications from './pages/Notifications.jsx';
 import CharacterProfile from './pages/CharacterProfile.jsx';
-import Institutions from './pages/Institutions.jsx';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useGame } from './store.jsx';
 import { initTelegram } from './telegram.js';
 import { api } from './api.js';
@@ -11,19 +9,15 @@ import Onboarding from './pages/Onboarding.jsx';
 import Pending from './pages/Pending.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Buildings from './pages/Buildings.jsx';
-import War from './pages/War.jsx';
 import Leaderboard from './pages/Leaderboard.jsx';
 import Ravens from './pages/Ravens.jsx';
-import Diplomacy from './pages/Diplomacy.jsx';
-import Admin from './pages/Admin.jsx';
 import Espionage from './pages/Espionage.jsx';
-import Trade from './pages/Trade.jsx';
 import Roleplay from './pages/Roleplay.jsx';
 import Assets from './pages/Assets.jsx';
 import ItemStore from './pages/ItemStore.jsx';
 import Family from './pages/Family.jsx';
 import CharacterTravel from './pages/CharacterTravel.jsx';
-import PlayerGuide from './pages/PlayerGuide.jsx';
+import Support from './pages/Support.jsx';
 import Header from './components/Header.jsx';
 import SideMenu from './components/SideMenu.jsx';
 import NavBar from './components/NavBar.jsx';
@@ -31,9 +25,19 @@ import Toast from './components/Toast.jsx';
 import BackgroundMusic from './components/BackgroundMusic.jsx';
 import { syncGameClock } from './gameClock.js';
 
+const War = lazy(() => import('./pages/War.jsx'));
+const Diplomacy = lazy(() => import('./pages/Diplomacy.jsx'));
+const Admin = lazy(() => import('./pages/Admin.jsx'));
+const Trade = lazy(() => import('./pages/Trade.jsx'));
+const Institutions = lazy(() => import('./pages/Institutions.jsx'));
+const PlayerGuide = lazy(() => import('./pages/PlayerGuide.jsx'));
+const Contracts = lazy(() => import('./pages/SocialWorld.jsx'));
+const CastleLife = lazy(() => import('./pages/SocialWorld.jsx').then(module => ({default: module.CastleLife})));
+const Newspaper = lazy(() => import('./pages/SocialWorld.jsx').then(module => ({default: module.Newspaper})));
+
 // ترتیب باید با NAV_ITEMS + EXTRA_PAGES در NavBar.jsx یکی باشد — هر صفحهٔ
 // جدید همین‌جا و آنجا اضافه شود
-const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Notifications, Contracts, CastleLife, Newspaper, PlayerGuide];
+const PAGES = [Dashboard, Buildings, War, Leaderboard, Ravens, Diplomacy, Admin, Espionage, Trade, Roleplay, Assets, Family, CharacterProfile, Institutions, CharacterTravel, ItemStore, Notifications, Contracts, CastleLife, Newspaper, PlayerGuide, Support];
 const RAVENS_INDEX = 16;
 const ADMIN_INDEX = 6;
 
@@ -92,7 +96,7 @@ export default function App() {
         <>
           <Header onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
           <div className="view" key={tab}>
-            {me.pending && !me.admin_role && ![ADMIN_INDEX,16].includes(tab) ? <Pending goTo={setTab} /> : <Page goTo={setTab} />}
+            {me.pending && !me.admin_role && ![ADMIN_INDEX,16].includes(tab) ? <Pending goTo={setTab} /> : <Suspense fallback={<div className="loading">در حال آماده‌کردن صفحه…</div>}><Page goTo={setTab} /></Suspense>}
           </div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />

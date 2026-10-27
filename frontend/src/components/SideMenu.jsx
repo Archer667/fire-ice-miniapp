@@ -6,7 +6,7 @@ import { useGame } from '../store.jsx';
 import { castleLabel } from '../gamedata.js';
 
 export default function SideMenu({ open, tab, onChange, onClose }) {
-  const { me, toast } = useGame();
+  const { me } = useGame();
   const pages = [...NAV_ITEMS, ...EXTRA_PAGES]
     .filter(p => (!p.adminOnly || me?.admin_role) && canOpenPage(me, p.index));
   const groups = [
@@ -53,7 +53,7 @@ export default function SideMenu({ open, tab, onChange, onClose }) {
         <div className="sidemenu-list sidemenu-help">
           <span className="sidemenu-help-title">همراهی در مسیر</span>
           <button type="button" className="rbtn sidemenu-item" onClick={() => { haptic(); onChange(20); onClose(); }}>راهنمای بازی</button>
-          <button type="button" className="rbtn sidemenu-item" onClick={() => { toast('پشتیبانی — به‌زودی'); onClose(); }}>پشتیبانی</button>
+          <button type="button" className="rbtn sidemenu-item" onClick={() => { haptic(); onChange(21); onClose(); }}>پشتیبانی</button>
         </div>
         </div>
       </div>

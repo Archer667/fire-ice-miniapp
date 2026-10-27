@@ -545,7 +545,29 @@ async def create_ambush(body: AmbushBody, user: dict = Depends(get_user)):
     )
     return {"ok": True, "id": str(res.inserted_id), "status": "pending_score"}
 
-async def ensure_recruitment_allowed(player, origin_castle):
+async def ensure_recruitment_allowed(player, origin_castle=None):
+    # Old internal callers checked every owned castle. New recruitment calls pass
+    # the exact origin so one besieged holding does not block recruitment elsewhere.
+    if origin_castle is None:
+        origins = owned_castles(player)
+        if not origins:
+            raise HTTPException(400, "قلعهٔ مبدأ را مشخص کن")
+        location = {"$in": origins}
+        open_battle = await campaigns.find_one({
+            "battle_open": True, "combat_resolved_at": {"$exists": False},
+            "battle_cancelled_at": {"$exists": False},
+            "$or": [{"battle_location": location},
+                    {"battle_location": {"$in": [None, ""]}, "target_castle": location}],
+        })
+        arrived = await campaigns.find_one({
+            "active": True, "tg_id": {"$ne": player["tg_id"]},
+            "op_type": {"$in": list(ATTACK_OP_TYPES)}, "target_castle": location,
+            "arrival_at": {"$lte": now()}, "combat_resolved_at": {"$exists": False},
+            "battle_cancelled_at": {"$exists": False},
+        })
+        if open_battle or arrived:
+            raise HTTPException(403, "یکی از قلعه‌ها درگیر نبرد یا محاصره است")
+        return
     open_battle = await campaigns.find_one({
         "battle_open": True, "combat_resolved_at": {"$exists": False},
         "battle_cancelled_at": {"$exists": False},

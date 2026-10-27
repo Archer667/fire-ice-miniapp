@@ -15,6 +15,7 @@ hierarchy  = db.hierarchy
 polls      = db.polls
 admin_roles = db.admin_roles
 admin_notifications = db.admin_notifications
+support_tickets = db.support_tickets
 caravans   = db.caravans
 market_listings = db.market_listings
 black_market_listings = db.black_market_listings

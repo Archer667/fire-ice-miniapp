@@ -1,4 +1,5 @@
 from system_reports import market_start, market_done
+from uuid import uuid4
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, StrictInt, Field
@@ -9,6 +10,9 @@ from game import now, can_afford, pay, add_resources, apply_production, producti
 from game_data import TRADE_GOOD_NAMES
 from control_settings import feature_enabled
 from market_rules import price_floors, price_ceilings, price_limits
+from family import commit
+from project_engine import member_for
+from routers.economy import _event_change, _stat_change
 
 def _market_write_guard():
     if not feature_enabled("market"):
@@ -64,21 +68,24 @@ async def buy(body: BuyBody, user: dict = Depends(get_user)):
     if not can_afford(p["resources"], {"gold": cost}):
         raise HTTPException(400, "طلای کافی نداری")
 
-    # به‌روزرسانیِ اتمیک و مشروط به موجودیِ واقعی — وگرنه دو خریدِ هم‌زمان می‌تونن
-    # هردو رویِ همون خواندنِ قدیمیِ qty رد بشن و بازار رو منفی/بیش‌ازموجودی بفروشن
     audit_id = await market_start(p, 'westeros', body.resource, body.qty, price)
     reference = max(1, listing.get("reference_qty", listing["qty"]))
     bumped = stock_price({**listing, "reference_qty": reference}, listing["qty"] - body.qty)
-    result = await market_listings.update_one(
-        {"_id": listing["_id"], "qty": {"$gte": body.qty}},
-        {"$set": {"price": bumped, "prev_price": price, "reference_qty": reference}, "$inc": {"qty": -body.qty}},
-    )
-    if result.matched_count == 0:
-        raise HTTPException(409, "موجودیِ بازار همین الان تغییر کرد — دوباره امتحان کن")
-
-    pay(p["resources"], {"gold": cost})
-    add_resources(p, {body.resource: body.qty})
-    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    event = f"market:westeros:{audit_id}"
+    await commit({
+        "_id": str(uuid4()), "kind": "market_westeros_buy", "complete": False,
+        "wallets": [
+            {"member": member_for(p, 0), "cost": {"gold": cost}, "debit": True},
+            {"member": member_for(p, 0), "cost": {body.resource: body.qty}},
+        ],
+        "changes": [
+            {"collection": "market_listings", "query": {"_id": listing["_id"]}, "update": {"$set": {
+                "qty": listing["qty"] - body.qty, "price": bumped, "prev_price": price, "reference_qty": reference,
+            }}},
+            _stat_change(user["id"], event, {"market_bought_value": cost}),
+            _event_change(event, "market_purchase", "خرید از بازار وستروس", user["id"], [], f"{body.qty:,} {TRADE_GOOD_NAMES.get(body.resource, body.resource)}", {"cost": cost}),
+        ],
+    })
     await market_done(audit_id)
     return {"ok": True, "resource": body.resource, "qty": body.qty, "cost": cost}
 
@@ -121,20 +128,18 @@ async def create_player_listing(body: PlayerListingBody, user: dict = Depends(ge
     p = apply_production(p)
     if int(p.get("resources", {}).get(body.resource, 0)) < body.qty:
         raise HTTPException(400, "از این کالا به‌اندازهٔ کافی نداری")
-    # تولید و تکمیل ساختمان‌ها را همراه همان کسر موجودی ذخیره می‌کنیم؛ در نسخهٔ قبلی
-    # last_tick جلو می‌رفت ولی تولید تازه و ساختمان تکمیل‌شده در این مسیر گم می‌شد.
-    p["resources"][body.resource] -= body.qty
-    result = await players.update_one(
-        {"tg_id": user["id"]},
-        {"$set": production_fields(p)},
-    )
-    if not result.matched_count:
-        raise HTTPException(409, "موجودی‌ات همین الان تغییر کرد؛ دوباره امتحان کن")
-    res = await player_market_listings.insert_one({
+    identity = ObjectId()
+    doc = {
+        "_id": identity,
         "seller_tg_id": user["id"], "seller_name": p["name"], "resource": body.resource,
-        "qty": body.qty, "price": body.price, "created_at": now(),
+        "seller_character": p.get("created_at"), "qty": body.qty, "price": body.price, "created_at": now(),
+    }
+    await commit({
+        "_id": str(uuid4()), "kind": "player_market_listing", "complete": False,
+        "wallets": [{"member": member_for(p, 0), "cost": {body.resource: body.qty}, "debit": True}],
+        "changes": [{"collection": "player_market_listings", "query": {"_id": identity}, "update": {"$setOnInsert": doc}, "upsert": True}],
     })
-    return {"ok": True, "id": str(res.inserted_id), "price": body.price}
+    return {"ok": True, "id": str(identity), "price": body.price}
 
 class PlayerMarketBuyBody(BaseModel):
     listing_id: str
@@ -164,21 +169,27 @@ async def buy_player_listing(body: PlayerMarketBuyBody, user: dict = Depends(get
     if not p:
         raise HTTPException(403, "اول ثبت‌نام کن")
     p = apply_production(p)
-    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    seller = await players.find_one({"tg_id": listing["seller_tg_id"]})
+    if not seller or seller.get("is_dead") or seller.get("registration_reset"):
+        raise HTTPException(409, "حساب فروشنده دیگر فعال نیست؛ آگهی باید توسط مدیریت بسته شود")
+    if listing.get("seller_character") is not None and seller.get("created_at") != listing.get("seller_character"):
+        raise HTTPException(409, "شخصیت فروشندهٔ این آگهی تغییر کرده است؛ آگهی باید توسط مدیریت بسته شود")
     audit_id = await market_start(p, 'players', listing['resource'], body.qty, listing.get('price',1), listing)
-    buyer = await players.update_one(
-        {"tg_id": user["id"], "resources.gold": {"$gte": cost}}, {"$inc": {"resources.gold": -cost}},
-    )
-    if not buyer.matched_count:
-        raise HTTPException(400, "سکهٔ کافی نداری")
-    reserved = await player_market_listings.update_one(
-        {"_id": oid, "qty": {"$gte": body.qty}}, {"$inc": {"qty": -body.qty}},
-    )
-    if not reserved.matched_count:
-        await players.update_one({"tg_id": user["id"]}, {"$inc": {"resources.gold": cost}})
-        raise HTTPException(409, "این کالا همین الان فروخته شد")
-    await players.update_one({"tg_id": user["id"]}, {"$inc": {f"resources.{listing['resource']}": body.qty}})
-    await players.update_one({"tg_id": listing["seller_tg_id"]}, {"$inc": {"resources.gold": cost}})
+    event = f"market:players:{audit_id}"
+    await commit({
+        "_id": str(uuid4()), "kind": "player_market_buy", "complete": False,
+        "wallets": [
+            {"member": member_for(p, 0), "cost": {"gold": cost}, "debit": True},
+            {"member": member_for(p, 0), "cost": {listing["resource"]: body.qty}},
+            {"member": member_for(seller, 0), "cost": {"gold": cost}},
+        ],
+        "changes": [
+            {"collection": "player_market_listings", "query": {"_id": oid}, "update": {"$set": {"qty": listing["qty"] - body.qty}}},
+            _stat_change(user["id"], event + ":buyer", {"market_bought_value": cost}),
+            _stat_change(listing["seller_tg_id"], event + ":seller", {"market_sold_value": cost}),
+            _event_change(event, "market_trade", "معامله در بازار بازیکنان", user["id"], [listing["seller_tg_id"]], f"{body.qty:,} {TRADE_GOOD_NAMES.get(listing['resource'], listing['resource'])}", {"cost": cost}),
+        ],
+    })
     await market_done(audit_id)
     return {"ok": True, "qty": body.qty, "cost": cost, "resource": listing["resource"]}
 
@@ -191,11 +202,18 @@ async def cancel_player_listing(listing_id: str, user: dict = Depends(get_user))
     listing = await player_market_listings.find_one({"_id": oid, "seller_tg_id": user["id"]})
     if not listing:
         raise HTTPException(404, "آگهی خودت پیدا نشد")
-    result = await player_market_listings.delete_one({"_id": oid, "seller_tg_id": user["id"]})
-    if not result.deleted_count:
-        raise HTTPException(409, "آگهی همین الان تغییر کرد")
-    if listing.get("qty", 0) > 0:
-        await players.update_one({"tg_id": user["id"]}, {"$inc": {f"resources.{listing['resource']}": listing["qty"]}})
+    seller = await players.find_one({"tg_id": user["id"]})
+    if not seller:
+        raise HTTPException(404, "حساب فروشنده پیدا نشد")
+    seller_member = {
+        "tg_id": user["id"], "name": listing.get("seller_name", seller.get("name", "بازیکن")),
+        "character_created_at": listing.get("seller_character", seller.get("created_at")), "shares": 0,
+    }
+    await commit({
+        "_id": str(uuid4()), "kind": "player_market_cancel", "complete": False,
+        "wallets": ([{"member": seller_member, "cost": {listing["resource"]: listing["qty"]}}] if listing.get("qty", 0) else []),
+        "changes": [{"collection": "player_market_listings", "query": {"_id": oid}, "update": {"$set": {"qty": 0, "cancelled_at": now()}}}],
+    })
     return {"ok": True, "refunded": listing.get("qty", 0)}
 
 @router.get("/black")
@@ -235,18 +253,19 @@ async def buy_black_market(body: BlackBuyBody, user: dict = Depends(get_user)):
         raise HTTPException(400, "طلای کافی نداری")
 
     audit_id = await market_start(p, 'black', m['resource'], body.qty, m['price'])
-    # همون اتمیک‌سازیِ بازارِ وستروس، اینجا هم — تا دو خریدِ هم‌زمان بیشتر از
-    # موجودیِ واقعیِ کالای محدود برنداره
-    result = await black_market_listings.update_one(
-        {"_id": oid, "qty": {"$gte": body.qty}, "expires_at": {"$gt": now()}},
-        {"$inc": {"qty": -body.qty}},
-    )
-    if result.matched_count == 0:
-        raise HTTPException(409, "این کالای بازار سیاه همین الان تمام شد — دوباره امتحان کن")
-
-    pay(p["resources"], {"gold": cost})
-    add_resources(p, {m["resource"]: body.qty})
-    await players.update_one({"tg_id": user["id"]}, {"$set": production_fields(p)})
+    event = f"market:black:{audit_id}"
+    await commit({
+        "_id": str(uuid4()), "kind": "black_market_buy", "complete": False,
+        "wallets": [
+            {"member": member_for(p, 0), "cost": {"gold": cost}, "debit": True},
+            {"member": member_for(p, 0), "cost": {m["resource"]: body.qty}},
+        ],
+        "changes": [
+            {"collection": "black_market_listings", "query": {"_id": oid}, "update": {"$set": {"qty": m["qty"] - body.qty}}},
+            _stat_change(user["id"], event, {"market_bought_value": cost}),
+            _event_change(event, "black_market_purchase", "خرید از بازار سیاه", user["id"], [], f"{body.qty:,} {TRADE_GOOD_NAMES.get(m['resource'], m['resource'])}", {"cost": cost}),
+        ],
+    })
     await market_done(audit_id)
     return {"ok": True, "resource": m["resource"], "qty": body.qty, "cost": cost}
 

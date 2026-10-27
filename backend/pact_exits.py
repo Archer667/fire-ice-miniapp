@@ -66,6 +66,12 @@ async def exit_pact(alliance_id, departing=None, forced=False, actor=None):
     text+=f'\nغرامت کل: {penalty:,} سکه.'
     notices=[{'event':event+':'+str(uid),'recipients':[uid],'text':text+(f'\nسهم تو از غرامت: {shares[uid]:,} سکه.' if uid in shares else '')} for uid in ids]
     await commit({'_id':event,'kind':'pact_exit','complete':False,'wallets':wallets,'changes':changes,'notices':notices})
+    if departing is not None:
+        from realm_state import adjust_reputation, record_event
+        for uid in beneficiaries:
+            await adjust_reputation(uid, departing, -12, 'خروج از پیمان', source_id=event)
+        await record_event('pact_exit', 'پایان عضویت در پیمان', actor_id=departing, target_ids=beneficiaries,
+                           detail=a.get('name') or a.get('type', 'پیمان'), visibility='public' if a.get('public', True) else 'participants', dedupe_key='pact-exit:'+event)
     from family import flush_notices
     await flush_notices()
     return {'ok':True,'penalty_paid':penalty,'dissolved':dissolve,'compensation':shares}
