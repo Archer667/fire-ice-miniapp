@@ -16,7 +16,9 @@
     "backend/tests/test_unowned_arrival.py": [
       "ae9234054068c9ce91119f92ffc92b8e77a194e8efeaf5889377e5e983f723f6"
     ],
-    "frontend/src/styles/admin-panel-repair.css": null
+    "frontend/src/styles/admin-panel-repair.css": [
+      "a498c287eb2e508a6ecea15abfe726ec11afe79400b392071e7129619f40fd28"
+    ]
   },
   "web": {
     "backend/tests/test_panel_integrity.py": null,
@@ -35,6 +37,8 @@
     "backend/tests/test_unowned_arrival.py": [
       "ae9234054068c9ce91119f92ffc92b8e77a194e8efeaf5889377e5e983f723f6"
     ],
-    "frontend/src/styles/admin-panel-repair.css": null
+    "frontend/src/styles/admin-panel-repair.css": [
+      "a498c287eb2e508a6ecea15abfe726ec11afe79400b392071e7129619f40fd28"
+    ]
   }
 }
