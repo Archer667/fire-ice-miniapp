@@ -1452,6 +1452,12 @@ async def notify_arrivals():
         c = await campaigns.find_one({"_id": c["_id"]})
         if not c or not c.get("active") or c.get("arrival_notified"):
             continue
+        from campaign_integrity import movement_issues
+        issues = movement_issues(c)
+        if issues:
+            import logging
+            logging.getLogger(__name__).warning('Arrival deferred for incomplete campaign %s; fields=%s', c['_id'], ','.join(issues))
+            continue
         if c.get('returning_from_battle') and not c.get('engagement_locked'):
             destination_edge = c.get('return_destination_edge')
             update = {'returning_from_battle': '', 'return_destination_edge': '', 'combat_resolved_at': '', 'battle_cancelled_at': ''}
