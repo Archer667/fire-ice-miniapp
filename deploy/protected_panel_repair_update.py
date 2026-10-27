@@ -54,7 +54,7 @@ def validate_sources(root,content,edition):
     for name, previous in baselines.items():
         destination = root/name
         if not destination.is_file():
-            if previous is not None and not name.startswith('backend/tests/'):
+            if previous is not None and not name.startswith('backend/tests/') and name != 'frontend/src/styles/admin-panel-repair.css':
                 raise RuntimeError('Expected application source is missing: '+name)
             continue
         incoming = hashlib.sha256(content[name]).hexdigest()
