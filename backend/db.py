@@ -1,6 +1,8 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import MONGODB_URI, DB_NAME
+from runtime_safety import assert_database_test_isolation
 
+assert_database_test_isolation(MONGODB_URI, DB_NAME, AsyncIOMotorClient)
 client = AsyncIOMotorClient(MONGODB_URI)
 db = client[DB_NAME]
 

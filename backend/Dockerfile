@@ -1,7 +1,8 @@
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    VALYRIA_RUNTIME=production
 
 WORKDIR /app
 
@@ -9,6 +10,8 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+RUN test ! -d /app/tests
 
 EXPOSE 8080
 
