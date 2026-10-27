@@ -1,0 +1,70 @@
+import {useEffect,useState} from 'react';
+import {api} from '../api.js';
+import {useGame} from '../store.jsx';
+import LimitedText from './LimitedText.jsx';
+import PlayerPicker from './PlayerPicker.jsx';
+import {castleLabel} from '../gamedata.js';
+import {SpyStatus,SpyEmpty,useSpyCommand,fa,spyDate,spyLabels} from './EspionageShared.jsx';
+
+export default function AdminEspionage(){
+  const {toast}=useGame(); const command=useSpyCommand();
+  const [tab,setTab]=useState('networks'),[result,setResult]=useState({rows:[],total:0}),[settings,setSettings]=useState(null),[legacy,setLegacy]=useState([]);
+  const [query,setQuery]=useState(''),[status,setStatus]=useState(''),[offset,setOffset]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function load(){try{
+    if(tab==='settings')setSettings(await api.spy('/admin/settings'));
+    else if(tab==='legacy')setLegacy(await api.spy('/admin/legacy'));
+    else setResult(await api.spy(`/admin/${tab}?q=${encodeURIComponent(query)}&status=${status}&offset=${offset}`));
+    setError('');
+  }catch(e){setError(e.message);}}
+  useEffect(()=>{load();},[tab,query,status,offset]);
+  async function run(path,data={}){setBusy(true);try{const r=await command(path,data);toast(r.roll!=null?`تاس ${fa(r.roll)} از ۱۰۰ · ${r.success===false?'نفوذ ناموفق':spyLabels[r.status]||'ثبت شد'}`:'ثبت شد');await load();return true;}catch(e){toast(e.message);return false;}finally{setBusy(false);}}
+  return <div className="spy-page"><div className="spy-head"><div className="spy-mark">◉</div><div><div className="page-title">پرونده‌های جاسوسی</div><div className="page-sub">استقرار، ارتباط و داوری شبکه‌های پنهان</div></div></div>
+    <nav className="spy-tabs" aria-label="مدیریت جاسوسی">{[['networks','شبکه‌ها'],['questions','سؤال‌ها'],['settings','قواعد و سهمیه‌ها'],['legacy','پرونده‌های پیشین']].map(([k,t])=><button key={k} className={tab===k?'on':''} onClick={()=>{setTab(k);setStatus('');setOffset(0);}}>{t}</button>)}</nav>
+    {error&&<div className="spy-note" role="alert">{error}<button className="btn ghost" onClick={load}>تلاش دوباره</button></div>}
+    {['networks','questions'].includes(tab)&&<><div className="spy-search"><input aria-label="جست‌وجوی پرونده" placeholder="نام بازیکن یا قلعه…" value={query} onChange={e=>{setQuery(e.target.value);setOffset(0);}}/><select aria-label="وضعیت پرونده" value={status} onChange={e=>{setStatus(e.target.value);setOffset(0);}}><option value="">تمام وضعیت‌ها</option>{(tab==='networks'?['pending','active','risk_review','suspended','closed','captured','failed']:['pending','returned','delivered','delivery_failed','rejected','cancelled']).map(k=><option key={k} value={k}>{spyLabels[k]}</option>)}</select></div><div className="spy-meta">{fa(result.total)} پرونده</div>
+      {!result.rows.length&&<SpyEmpty>پرونده‌ای با این مشخصات پیدا نشد.</SpyEmpty>}
+      {result.rows.map(row=>tab==='networks'?<Network key={row.id} row={row} busy={busy} run={run}/>:<Question key={row.id} row={row} busy={busy} run={run}/>)}
+      <div className="spy-actions"><button className="btn ghost" disabled={offset===0} onClick={()=>setOffset(Math.max(0,offset-50))}>قبلی</button><button className="btn ghost" disabled={offset+50>=result.total} onClick={()=>setOffset(offset+50)}>بعدی</button></div>
+    </>}
+    {tab==='settings'&&settings&&<><Settings value={settings} busy={busy} run={run}/><PlayerLimits busy={busy} run={run}/></>}
+    {tab==='legacy'&&<><div className="spy-note">پروندهٔ بررسی‌نشده را می‌توان بدون هزینهٔ تازه به درخواست استقرار تبدیل کرد. پس از تبدیل، رول در همین بخش امتیاز می‌گیرد.</div>{!legacy.length&&<SpyEmpty>پروندهٔ پیشینی وجود ندارد.</SpyEmpty>}{legacy.map(r=><details key={r.id} className="card spy-dossier"><summary><div><b>{r.player_name} · {castleLabel(r.target)}</b><small>{r.migrated?'تبدیل‌شده':r.resolved?'مختومه':'بررسی‌نشده'}</small></div></summary><div className="spy-content"><p className="spy-prose">{r.scenario}</p>{!r.resolved&&!r.migrated&&<button className="btn" disabled={busy} onClick={()=>run(`/admin/legacy/${r.id}/convert`)}>تبدیل به استقرار</button>}</div></details>)}</>}
+  </div>;
+}
+
+function Network({row:n,busy,run}){
+  const [score,setScore]=useState(n.score??50),[reason,setReason]=useState(''),[action,setAction]=useState('suspend'),[delta,setDelta]=useState(1),[disclose,setDisclose]=useState(false),[audit,setAudit]=useState(null),[auditError,setAuditError]=useState('');
+  const open=['pending','active','risk_review','suspended'].includes(n.stored_status);
+  return <details className="card spy-dossier"><summary><div><b>{n.player_name} · {castleLabel(n.target)}</b><small>{spyDate(n.created_at)} · {n.arrived?'رسیده':'در مسیر'}</small></div><SpyStatus status={n.status}/></summary><div className="spy-content">
+    <div className="spy-meta"><span>مبدأ: {castleLabel(n.origin)}</span><span>مالک هدف: {n.target_name||'—'}</span><span>امتیاز: {n.score==null?'—':fa(n.score)}</span><span>تاس نفوذ: {n.deployment_roll==null?'—':fa(n.deployment_roll)}</span><span>سهمیه: {fa(n.quota?.used)} / {fa(n.quota?.limit)}</span><span>رسیدن: {spyDate(n.arrival_at)}</span></div>
+    {n.blocked_reason&&<div className="spy-note">{n.blocked_reason}</div>}{n.status==='risk_review'&&<div className="spy-note">ارتباط این شبکه قطع شده است. برای ادامهٔ کار «فعال‌سازی» و برای پایان آن «دستگیری» یا «بستن شبکه» را ثبت کنید.</div>}
+    <p className="spy-prose">{n.scenario}</p>
+    {n.stored_status==='pending'&&!n.blocked&&<><label className="f">امتیاز رول استقرار، از ۰ تا ۱۰۰</label><input type="number" min="0" max="100" value={score} onChange={e=>setScore(e.target.value)}/><div className="spy-actions"><button className="btn" disabled={busy||!n.arrived||score===''||Number(score)<0||Number(score)>100} onClick={()=>{if(confirm('داوری ثبت و تاس نفوذ انداخته شود؟'))run(`/admin/networks/${n.id}/score`,{score:Number(score)});}}>{n.arrived?'ثبت داوری و تاس نفوذ':'منتظر رسیدن به مقصد'}</button></div></>}
+    {open&&<><label className="f">اقدام مدیریتی</label><select value={action} onChange={e=>setAction(e.target.value)}>{[['suspend','تعلیق'],['resume','فعال‌سازی و تأیید مالک فعلی هدف'],['capture','دستگیری'],['close','بستن شبکه'],['rescore','تغییر امتیاز سؤال‌های آینده'],['quota_delta','افزایش یا کاهش سهمیهٔ همین هفته'],['quota_reset','بازگرداندن سهمیهٔ کامل همین هفته']].map(([k,t])=><option key={k} value={k}>{t}</option>)}</select>
+      {action==='rescore'&&<><label className="f">امتیاز تازه</label><input type="number" min="0" max="100" value={score} onChange={e=>setScore(e.target.value)}/></>}
+      {action==='quota_delta'&&<><label className="f">تغییر سهمیه؛ عدد منفی برای کاهش</label><input type="number" min="-1000" max="1000" value={delta} onChange={e=>setDelta(e.target.value)}/></>}
+      {action==='capture'&&<label className="f"><input type="checkbox" checked={disclose} onChange={e=>setDisclose(e.target.checked)}/> نام سفارش‌دهنده به مالک هدف اعلام شود</label>}
+      <label className="f">دلیل ثبت اقدام</label><textarea maxLength="1000" value={reason} onChange={e=>setReason(e.target.value)} placeholder="دلیل تصمیم برای سوابق پرونده…"/><div className="spy-actions"><button className="btn ghost" disabled={busy||reason.trim().length<3} onClick={()=>{if(confirm('اقدام انتخاب‌شده ثبت شود؟'))run(`/admin/networks/${n.id}`,{action,reason,score:Number(score),delta:Number(delta),disclose_sender:disclose});}}>ثبت اقدام</button></div>
+    </>}
+    <div className="spy-actions"><button className="btn ghost" onClick={()=>api.spy(`/admin/networks/${n.id}/audit`).then(v=>{setAudit(v);setAuditError('');}).catch(e=>setAuditError(e.message))}>سوابق تصمیم‌ها</button></div>{auditError&&<div className="spy-note">{auditError}</div>}{audit&&audit.map(a=><div className="spy-note" key={a.id}><b>{({deploy:'ثبت استقرار',score:'داوری نفوذ',ask:'ثبت سؤال',answer:'داوری پاسخ',manage:'مدیریت شبکه',recall:'جمع‌کردن شبکه',convert:'تبدیل پرونده'})[a.action]||'ویرایش پرونده'}</b> · {spyDate(a.real_at)} · شناسهٔ ادمین/بازیکن {fa(a.actor_id)}<div>{a.reason}</div>{a.result.roll!=null&&<div>تاس: {fa(a.result.roll)} · امتیاز: {fa(a.result.score)}</div>}</div>)}
+  </div></details>;
+}
+
+function Question({row:q,busy,run}){
+  const [text,setText]=useState(q.answer||''),[reason,setReason]=useState(''),[chance,setChance]=useState('');
+  return <details className="card spy-dossier"><summary><div><b>{q.player_name} · {castleLabel(q.target)}</b><small>{spyDate(q.created_at)}</small></div><SpyStatus status={q.status}/></summary><div className="spy-content"><div className="spy-meta"><span>امتیاز رول استقرار: {fa(q.deployment_score)}</span><span>تاس نفوذ: {q.deployment_roll==null?'—':fa(q.deployment_roll)}</span><span>شانس این پاسخ: {q.delivery_chance==null?'—':fa(q.delivery_chance)}</span><span>تاس پیام: {q.roll==null?'—':fa(q.roll)}</span>{q.forced&&<span>ارسال استثنایی</span>}</div><details><summary>رول جاسوسی و سابقهٔ استقرار</summary><p className="spy-prose">{q.deployment_scenario}</p><div className="spy-meta">امتیاز شبکه هنگام ثبت سؤال: {fa(q.score)}</div></details><label className="f">سؤال بازیکن</label><p className="spy-prose">{q.text}</p>{q.review_note&&<div className="spy-note">{q.review_note}</div>}{q.answer&&<div className="spy-note spy-prose">{q.status==='delivery_failed'&&<b>این پاسخ به بازیکن نمایش داده نشده است.<br/></b>}{q.answer}</div>}
+    {['pending','returned','delivery_failed'].includes(q.status)&&<><label className="f">پاسخ پرونده</label><LimitedText limitKind="scenario_words" value={text} onChange={e=>setText(e.target.value)} placeholder="پاسخ به سؤال بازیکن…"/><label className="f">شانس رساندن این پاسخ، از ۰ تا ۱۰۰</label>{q.status!=='delivery_failed'&&<input type="number" min="0" max="100" value={chance} onChange={e=>setChance(e.target.value)} placeholder="شانس همین پاسخ را وارد کنید"/>}<label className="f">دلیل رد، اصلاح یا ارسال استثنایی</label><textarea maxLength="1000" value={reason} onChange={e=>setReason(e.target.value)}/><div className="spy-actions">
+      {q.status==='delivery_failed'?<button className="btn ghost" disabled={busy||reason.trim().length<3||!text.trim()} onClick={()=>{if(confirm('پاسخ بدون تاس تازه به صورت استثنایی ارسال شود؟'))run(`/admin/questions/${q.id}`,{action:'force_deliver',text,reason});}}>ارسال استثنایی با ثبت دلیل</button>:<><button className="btn" disabled={busy||!text.trim()||chance===''||Number(chance)<0||Number(chance)>100} onClick={()=>{if(confirm('پاسخ ثبت و تاس رساندن پیام انداخته شود؟'))run(`/admin/questions/${q.id}`,{action:'answer',text,chance:Number(chance)});}}>ثبت پاسخ و تاس پیام</button><button className="btn ghost" disabled={busy||reason.trim().length<3} onClick={()=>run(`/admin/questions/${q.id}`,{action:'return',reason})}>برگشت برای اصلاح</button><button className="btn ghost" disabled={busy||reason.trim().length<3} onClick={()=>run(`/admin/questions/${q.id}`,{action:'reject',reason})}>رد و بازگرداندن سهمیه</button></>}
+    </div></>}
+  </div></details>;
+}
+function Settings({value,busy,run}){
+  const [form,setForm]=useState(value),[reason,setReason]=useState('');
+  return <div className="card"><div className="sect">قواعد عمومی</div><div className="spy-note">سهمیهٔ هر شبکه در بازه‌های هفت‌روزهٔ تقویم بازی تازه می‌شود. توقف بازی زمان این بازه را هم متوقف می‌کند. امتیاز رول استقرار کنار هر سؤال نمایش داده می‌شود؛ شانس رسیدن هر پاسخ را ادمین هنگام پاسخ‌گویی جدا وارد می‌کند.</div><label className="f"><input type="checkbox" checked={form.enabled} onChange={e=>setForm({...form,enabled:e.target.checked})}/> ثبت استقرار و سؤال فعال باشد</label><div className="spy-form-grid">{[['gold_cost','طلای استقرار'],['weekly_questions','سؤال هر شبکه در هفته'],['max_networks','حداکثر شبکه‌های باز هر بازیکن']].map(([key,label])=><label key={key} className="f">{label}<input type="number" min="0" value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}</div><label className="f">دلیل تغییر</label><textarea maxLength="1000" value={reason} onChange={e=>setReason(e.target.value)}/><button className="btn" disabled={busy||reason.trim().length<3} onClick={()=>run('/admin/settings',{enabled:form.enabled,gold_cost:Number(form.gold_cost),weekly_questions:Number(form.weekly_questions),max_networks:Number(form.max_networks),reason})}>ذخیرهٔ قواعد</button></div>;
+}
+function PlayerLimits({busy,run}){
+  const [players,setPlayers]=useState([]),[current,setCurrent]=useState(null),[error,setError]=useState(''),[reason,setReason]=useState('');
+  const uid=players[0]?.tg_id;
+  useEffect(()=>{setCurrent(null);setError('');if(uid)api.spy(`/admin/players/${uid}/limits`).then(setCurrent).catch(e=>setError(e.message));},[uid]);
+  function field(key,val){setCurrent({...current,overrides:{...current.overrides,[key]:val}});}
+  return <div className="card"><div className="sect">سهمیه و دسترسی اختصاصی بازیکن</div><PlayerPicker value={players} onChange={setPlayers} single/>{error&&<div className="spy-note">{error}</div>}{current&&<><div className="spy-note">فیلد خالی از قواعد عمومی پیروی می‌کند. این تنظیم فقط برای کاراکتر فعلی ثبت می‌شود.</div><div className="spy-form-grid">{[['weekly_questions','سؤال هر شبکه'],['max_networks','حداکثر شبکه‌ها']].map(([key,label])=><label className="f" key={key}>{label}<input type="number" min="0" placeholder={String(current.effective[key])} value={current.overrides[key]??''} onChange={e=>field(key,e.target.value===''?null:Number(e.target.value))}/></label>)}</div><label className="f">وضعیت</label><select value={current.overrides.enabled==null?'inherit':String(current.overrides.enabled)} onChange={e=>field('enabled',e.target.value==='inherit'?null:e.target.value==='true')}><option value="inherit">طبق قاعدهٔ عمومی</option><option value="true">فعال</option><option value="false">غیرفعال</option></select><label className="f">دلیل تغییر</label><textarea maxLength="1000" value={reason} onChange={e=>setReason(e.target.value)}/><button className="btn" disabled={busy||reason.trim().length<3} onClick={()=>run(`/admin/players/${uid}/limits`,{...current.overrides,reason})}>ذخیرهٔ تنظیمات بازیکن</button></>}</div>;
+}

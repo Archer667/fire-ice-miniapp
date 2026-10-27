@@ -187,6 +187,9 @@ async def _arrival_watcher():
                 from family import tick as tick_family, flush_notices as flush_family_notices
                 await deliver_announcements()
                 await flush_family_notices()
+                from espionage_networks import recover_for as recover_spies, flush_notifications as flush_spies
+                await recover_spies()
+                await flush_spies()
                 # Repair persisted membership even while gameplay is paused.
                 from routers.war import repair_open_battle_rosters
                 from army_groups import recover_moves
@@ -496,6 +499,8 @@ async def start_background_watchers():
     from food_settlement import recover_pending_food
     await recover_pending_food()
     await _ensure_indexes()
+    from espionage_networks import ensure_indexes as ensure_spies
+    await ensure_spies()
     await institution_bank.ensure_indexes()
     await social_world.ensure_indexes()
     await season_analytics.ensure_indexes()

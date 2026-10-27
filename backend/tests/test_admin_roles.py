@@ -26,6 +26,8 @@ class AdminRoleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_http_uses_actual_request_scope_for_restricted_admin(self):
         import httpx, main, game_clock
+        self.enterContext(patch('web_auth.identity', AsyncMock(return_value={'id':3,'first_name':'Judge'})))
+        self.enterContext(patch.object(main,'web_identity', AsyncMock(return_value={'id':3,'first_name':'Judge'})))
         for target in ('item_effects.recover_item_effects', 'food_settlement.recover_pending_food',
                        'army_groups.recover_moves', 'battle_passage.recover', 'character_records.recover_swaps',
                        'road_victory.recover', 'pact_exits.recover_exits', 'institution_bank.recover',

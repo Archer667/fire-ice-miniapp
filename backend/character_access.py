@@ -1,5 +1,5 @@
 """Shared gameplay state; ownership and character presence are independent."""
-PERSONAL_WRITES = ('/api/character-travel', '/api/character/profile', '/api/family', '/api/ravens', '/api/institutions', '/api/roleplay', '/api/item-store', '/api/contracts', '/api/castle-life', '/api/newspaper')
+PERSONAL_WRITES = ('/api/espionage', '/api/character-travel', '/api/character/profile', '/api/family', '/api/ravens', '/api/institutions', '/api/roleplay', '/api/item-store', '/api/contracts', '/api/castle-life', '/api/newspaper')
 def status(p):
     if not p: return 'unregistered'
     if p.get('is_dead'): return 'dead'

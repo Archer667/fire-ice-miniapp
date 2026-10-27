@@ -27,6 +27,7 @@ import AdminArmyRelocation from '../components/AdminArmyRelocation.jsx';
 import { MapFrame } from '../components/WesterosMap.jsx';
 import ZoomPanMap from '../components/ZoomPanMap.jsx';
 import AdminControlCenter from '../components/AdminControlCenter.jsx';
+import AdminEspionage from '../components/AdminEspionage.jsx';
 import AdminTickets from '../components/AdminTickets.jsx';
 import AdminRealmSystems from '../components/AdminRealmSystems.jsx';
 import { WARDEN_GROUPS, REGIONS_STATIC, TRADE_GOODS, TRADE_GOOD_NAMES, ROLEPLAY_CATEGORIES, ITEM_TYPES, ITEM_DURATIONS, ITEM_RARITY_COLORS, ITEM_RARITY_HEX, BUILDINGS_STATIC, buildingProduces, WEAPON_NAMES, MAP_TERRAINS, castleLabel, applyRuntimeGamedata } from '../gamedata.js';
@@ -105,7 +106,8 @@ const TAB_GROUPS = [
     key: 'judgment', label: 'داوری و ارتباط',
     description: 'صف‌هایی که بازیکن منتظر تصمیم یا پیام ادمین است',
     tabs: [
-      { key: 'war',         label: 'جنگ', description: 'لشکرکشی‌ها، کمین‌ها، نبردها و جاسوسی' },
+      { key: 'war',         label: 'جنگ', description: 'لشکرکشی‌ها، کمین‌ها و نبردها' },
+      { key: 'espionage', label: 'جاسوسی', description: 'داوری استقرار، پاسخ به سؤال‌ها و کنترل شبکه‌ها', fullOnly: true },
       { key: 'roleplays',   label: 'رول‌ها', description: 'بررسی و اعلام نتیجهٔ سناریوهای بازیکنان' },
       { key: 'security_archive', label: 'آرشیو امنیتی', description: 'جست‌وجوی رول‌های دفاعی و امنیتی' },
       { key: 'rebellions',  label: 'شورش‌ها', description: 'بررسی رول و ثبت نتیجهٔ شورش' },
@@ -273,7 +275,7 @@ export default function Admin() {
   const [removeCastleBusyKey, setRemoveCastleBusyKey] = useState(null); // `${tgId}:${castle}`
 
   const [armySearch,setArmySearch]=useState('');
-  const [warSubTab, setWarSubTab] = useState('campaigns'); // campaigns | ambushes | battles | espionage
+  const [warSubTab, setWarSubTab] = useState('campaigns');
   const [campaignsInfo, setCampaignsInfo] = useState(null);
   const [disbandBusyId, setDisbandBusyId] = useState(null);
   const [campaignLosses, setCampaignLosses] = useState({});
@@ -314,8 +316,6 @@ export default function Admin() {
   const filteredAlliances = (alliancesList || []).filter(a => !allianceSearch.trim() || normalizePactSearch([a.name,a.from,a.to,...(a.members || []).flatMap(m=>[m.name,m.current_name,m.username,m.tg_id])].join(' ')).includes(normalizePactSearch(allianceSearch)));
 
   const [dissolveBusyId, setDissolveBusyId] = useState(null);
-  const [spyResolved, setSpyResolved] = useState(null);
-  const [spyResultsView, setSpyResultsView] = useState('pending'); // 'pending' | 'resolved'
   const [overlordTarget, setOverlordTarget] = useState([]);
   const [overlordRegion, setOverlordRegion] = useState('north');
   const [officeHolders, setOfficeHolders] = useState(null);
@@ -395,9 +395,6 @@ export default function Admin() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
 
-  const [spyPending, setSpyPending] = useState(null);
-  const [spyScores, setSpyScores] = useState({}); // missionId -> score string
-  const [spyBusyId, setSpyBusyId] = useState(null);
 
   const [roleplayPending, setRoleplayPending] = useState(null);
   const [roleplayCategoryTab, setRoleplayCategoryTab] = useState('all');
@@ -547,8 +544,6 @@ export default function Admin() {
   const loadCampaigns = () => api.adminCampaigns().then(setCampaignsInfo).catch(e => toast(e.message));
   const loadAmbushes = () => api.adminAmbushes().then(setAmbushesList).catch(e => toast(e.message));
   const loadWarWindow = () => api.adminGetWarWindow().then(setWarWindow).catch(e => toast(e.message));
-  const loadSpyPending = () => api.adminSpyPending().then(setSpyPending).catch(e => toast(e.message));
-  const loadSpyResolved = () => api.adminSpyResolved().then(setSpyResolved).catch(e => toast(e.message));
   const loadRoleplayPending = () => api.adminRoleplayPending().then(setRoleplayPending).catch(e => toast(e.message));
   const loadSecurityRoleplays = async () => {
     setSecuritySearching(true);
@@ -628,7 +623,6 @@ export default function Admin() {
       if (warSubTab === 'campaigns') loadCampaigns();
       if (warSubTab === 'ambushes') loadAmbushes();
       if (warSubTab === 'battles') loadBattles();
-      if (warSubTab === 'espionage') { loadSpyPending(); loadSpyResolved(); }
     }
     if (tab === 'roleplays') {
       loadRoleplayPending();
@@ -950,7 +944,7 @@ export default function Admin() {
       // ری‌استارت این‌ها رو کامل خالی می‌کنه (لشکرکشی، جاسوسی، رول، اتحاد، رای‌گیری) —
       // بدونِ رفرشِ همه‌شون، پنل ادمین تا رفرشِ دستیِ صفحه دادهٔ حذف‌شده نشون می‌ده
       loadPendingPlayers(); loadRoster(); loadCampaigns(); loadMapData();
-      loadSpyPending(); loadSpyResolved(); loadRoleplayPending(); loadAlliances(); loadPolls();
+      loadRoleplayPending(); loadAlliances(); loadPolls();
     } catch (e) { toast(e.message); }
     setResetBusy(false);
   };
@@ -965,24 +959,6 @@ export default function Admin() {
       loadCampaigns(); loadBattles(); loadRoleplayPending();
     } catch (e) { toast(e.message); }
     setDisbandBusyId(null);
-  };
-
-  const scoreSpy = async (missionId) => {
-    const raw = spyScores[missionId];
-    const score = Number(raw);
-    if (raw === undefined || raw === '' || Number.isNaN(score) || score < 0 || score > 100) {
-      toast('امتیاز جاسوسی باید عددی بین ۰ تا ۱۰۰ باشد'); return;
-    }
-    setSpyBusyId(missionId);
-    try {
-      const res = await api.adminScoreSpy(missionId, score);
-      haptic('medium');
-      toast(res.success ? 'نتیجه ثبت شد — جاسوسی موفق بود' : 'نتیجه ثبت شد — جاسوس دستگیر شد');
-      setSpyScores(prev => { const n = { ...prev }; delete n[missionId]; return n; });
-      loadSpyPending();
-      loadSpyResolved();
-    } catch (e) { toast(e.message); }
-    setSpyBusyId(null);
   };
 
   const expelAlliance = async (a, member) => {
@@ -1614,7 +1590,7 @@ export default function Admin() {
   const tabBadge = (key) => {
     if (key === 'notifications') return adminNotifications?.filter(x => !x.read).length || 0;
     if (key === 'registration') return pendingPlayers?.length || 0;
-    if (key === 'war') return (spyPending?.length || 0) + (battles?.length || 0) + (ambushesList?.filter(a => a.status === 'pending_score').length || 0);
+    if (key === 'war') return (battles?.length || 0) + (ambushesList?.filter(a => a.status === 'pending_score').length || 0);
     if (key === 'roleplays') return roleplayPending?.length || 0;
     if (key === 'rebellions') return rebellionsList?.filter(x => !['resolved', 'suppressed', 'player_won', 'rebels_won'].includes(x.status)).length || 0;
     return 0;
@@ -1706,6 +1682,7 @@ export default function Admin() {
       {tab === 'world_contracts' && isFull && <AdminSocial section="contracts"/>}
       {tab === 'castle_life' && isFull && <AdminSocial section="castles"/>}
       {tab === 'world_news' && isFull && <AdminSocial section="news"/>}
+      {tab === 'espionage' && isFull && <AdminEspionage/>}
       {tab === 'tickets' && isFull && <AdminTickets/>}
       {tab === 'realm_systems' && isFull && <AdminRealmSystems/>}
 
@@ -2065,7 +2042,6 @@ export default function Admin() {
               { key: 'campaigns', label: 'لشکرکشی‌ها' },
               { key: 'ambushes', label: `کمین‌ها${ambushesList?.filter(a => a.status === 'pending_score').length ? ` (${ambushesList.filter(a => a.status === 'pending_score').length.toLocaleString('fa-IR')})` : ''}` },
               { key: 'battles', label: `نبردها${battles?.length ? ` (${battles.length.toLocaleString('fa-IR')})` : ''}` },
-              { key: 'espionage', label: 'جاسوسی' },
             ].map(t => (
               <button type="button" key={t.key} role="tab" aria-selected={warSubTab === t.key}
                    className={`rbtn tab ${warSubTab === t.key ? 'on' : ''}`}
@@ -2217,75 +2193,6 @@ export default function Admin() {
           </div>
           )}
 
-          {warSubTab === 'espionage' && (
-          <>
-          <div className="grid2 up u2" role="radiogroup" aria-label="نمای جاسوسی">
-            <button type="button" role="radio" aria-checked={spyResultsView === 'pending'}
-                    className={`rbtn pick ${spyResultsView === 'pending' ? 'sel' : ''}`}
-                    onClick={() => { haptic(); setSpyResultsView('pending'); }}>
-              <div className="n">در انتظار بررسی</div>
-            </button>
-            <button type="button" role="radio" aria-checked={spyResultsView === 'resolved'}
-                    className={`rbtn pick ${spyResultsView === 'resolved' ? 'sel' : ''}`}
-                    onClick={() => { haptic(); setSpyResultsView('resolved'); }}>
-              <div className="n">بررسی‌شده‌ها</div>
-            </button>
-          </div>
-
-          {spyResultsView === 'pending' && (
-          <>
-          <div className="page-sub up u3">
-            نقشهٔ هر بازیکن را بخوان و بر اساس هوشمندی و منطقی‌بودنش امتیاز جاسوسی (۰ تا ۱۰۰) بده — همان امتیاز مستقیماً شانس موفقیتش می‌شود
-          </div>
-          <div className="up u3">
-            {(!spyPending || spyPending.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>سناریوی بررسی‌نشده‌ای نیست</div>
-            )}
-            {spyPending && spyPending.map(m => (
-              <div className="card" key={m.id} style={{ marginBottom: 10 }}>
-                <div className="res">
-                  <div className="ic"><Eye s={16} /></div>
-                  <div className="n">
-                    {m.player}
-                    <small>{m.origin} ← {m.target} · {m.arrived ? 'رسیده به مقصد' : 'در راه'}</small>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{m.scenario}</div>
-                <div className="buy-row">
-                  <input type="number" min="0" max="100" placeholder="۰-۱۰۰"
-                         value={spyScores[m.id] ?? ''}
-                         onChange={e => setSpyScores(prev => ({ ...prev, [m.id]: e.target.value }))} />
-                  <button className="btn" disabled={spyBusyId === m.id} onClick={() => scoreSpy(m.id)}>
-                    {spyBusyId === m.id ? 'در حال ثبت...' : 'ثبت امتیاز و اعلام نتیجه'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          </>
-          )}
-
-          {spyResultsView === 'resolved' && (
-          <div className="up u3">
-            {(!spyResolved || spyResolved.length === 0) && (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--mid)', fontSize: 12.5 }}>هنوز جاسوسی‌ای بررسی نشده</div>
-            )}
-            {spyResolved && spyResolved.map(m => (
-              <div className="card" key={m.id} style={{ marginBottom: 10 }}>
-                <div className="res">
-                  <div className="ic"><Eye s={16} /></div>
-                  <div className="n">
-                    {m.player}
-                    <small>{m.target} · امتیاز {m.admin_score.toLocaleString('fa-IR')} · {m.success ? 'موفق' : 'دستگیر شد'}</small>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.8, margin: '10px 0', color: 'var(--mid)' }}>{m.scenario}</div>
-              </div>
-            ))}
-          </div>
-          )}
-          </>
-          )}
 
         </>
       )}
@@ -2989,7 +2896,7 @@ export default function Admin() {
         {weeklyLimits && <form onSubmit={async e=>{e.preventDefault();setLimitsBusy(true);try{await api.saveSubmissionLimits({roleplays:Number(weeklyLimits.roleplays),projects:Number(weeklyLimits.projects),...Object.fromEntries(["roleplay_words","scenario_words","request_words"].map(key=>[key,Number(weeklyLimits[key]??1000)]))});window.dispatchEvent(new Event("text-limits-changed"));toast('سهمیه‌ها ذخیره شد');}catch(err){toast(err.message);}finally{setLimitsBusy(false);}}}>
           <label className="f">سهمیهٔ مشترک رول خرابکاری، آزاد، اقتصادی و دیپلماسی<input type="number" min="0" max="1000" required value={weeklyLimits.roleplays} onChange={e=>setWeeklyLimits(p=>({...p,roleplays:e.target.value}))}/></label>
           <label className="f">درخواست پروژه در هفته<input type="number" min="0" max="1000" required value={weeklyLimits.projects} onChange={e=>setWeeklyLimits(p=>({...p,projects:e.target.value}))}/></label>
-          {[['roleplay_words','سقف کلمات رول‌ها و رول شورش'],['scenario_words','سقف کلمات سناریو، جاسوسی، کمین و نتیجهٔ پیشنهادی نهاد'],['request_words','سقف کلمات شرح درخواست نهاد و پروژه']].map(([key,label])=><label className="f" key={key}>{label}<input type="number" min="1" max="50000" required value={weeklyLimits[key]??1000} onChange={e=>setWeeklyLimits(p=>({...p,[key]:e.target.value}))}/></label>)}
+          {[['roleplay_words','سقف کلمات رول‌ها و رول شورش'],['scenario_words','سقف کلمات سناریو، جاسوسی، کمین و نتیجهٔ پیشنهادی نهاد'],['request_words','سقف کلمات سؤال جاسوسی و شرح درخواست نهاد و پروژه']].map(([key,label])=><label className="f" key={key}>{label}<input type="number" min="1" max="50000" required value={weeklyLimits[key]??1000} onChange={e=>setWeeklyLimits(p=>({...p,[key]:e.target.value}))}/></label>)}
           <button className="btn" disabled={limitsBusy}>ذخیره تنظیمات</button></form>}
       </div>}
       {tab === 'market-floors' && isFull && <div className="card">

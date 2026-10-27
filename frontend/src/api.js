@@ -1916,6 +1916,8 @@ export const api = {
   adminDestroyCampaign: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/destroy`, { method: 'POST' }),
   adminReduceCampaign: (id, troops) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/reduce`, { method: 'POST', body: JSON.stringify({ troops }) }),
 
+  spy: (path, body) => req('/api/espionage' + path, body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) }),
+
   /* ---------- جاسوسی ---------- */
   sendSpy: (targetCastle, scenario) => MOCK ? Promise.resolve(M.sendSpy(targetCastle, scenario))
     : req('/api/espionage/send', { method: 'POST', body: JSON.stringify({ target_castle: targetCastle, scenario }) }),

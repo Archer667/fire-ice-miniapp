@@ -2,14 +2,12 @@ import os,unittest
 from datetime import datetime,timedelta
 from contextlib import ExitStack
 from unittest.mock import patch,AsyncMock
-from motor.motor_asyncio import AsyncIOMotorClient
+from mongomock_motor import AsyncMongoMockClient
 from fastapi import HTTPException
 import system_reports as q
 class SeasonQuotaTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
-  uri=os.environ['MONGODB_URI'];assert 'quota-test-mongo' in uri
-  self.client=AsyncIOMotorClient(uri);self.db=self.client.quota_test
-  await self.client.drop_database('quota_test')
+  self.client=AsyncMongoMockClient();self.db=self.client.quota_test
   self.start=datetime(2026,9,4,20,31,35);self.at=self.start
   await self.db.game_settings.insert_one({'_id':'season_clock','started_at':self.start})
   self.stack=ExitStack()

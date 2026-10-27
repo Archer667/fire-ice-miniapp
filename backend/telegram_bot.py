@@ -1,5 +1,6 @@
 """Web compatibility adapter; no external Telegram calls."""
 WEBHOOK_SECRET = ''
+PERSISTS_NOTICES = True
 async def push(chat_id,text,reply_markup=None,parse_mode=None):
     from web_notifications import persist_notice
     await persist_notice(chat_id,text,parse_mode=parse_mode)
