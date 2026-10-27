@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, StrictInt, Field
 from auth import get_user, get_admin, get_full_admin, get_owner, get_admin_role
 from db import (
+    db,
     campaigns, ambushes, players, admin_roles, map_castles, market_listings, black_market_listings,
     spy_missions, roleplays, items, item_grants, alliances, game_settings,
     caravans, messages, rumors, hierarchy, polls, rebellions, rebellion_checks, admin_notifications,
@@ -194,7 +195,8 @@ async def owner_user(user: dict = Depends(get_user)):
     return await get_owner(user)
 
 def _admin_notification_scope(role: str) -> dict:
-    return {"$and": [{"hidden_from_panel": {"$ne": True}}, {"$or": [
+    return {"$and": [{"hidden_from_panel": {"$ne": True}},
+        ({} if role in ("owner", "full") else {"kind": {"$ne": "espionage"}}), {"$or": [
         {"audience_roles": None}, {"audience_roles": {"$exists": False}}, {"audience_roles": role},
     ]}]}
 
@@ -283,7 +285,8 @@ async def cleanup_preview(user: dict = Depends(owner_user)):
         ),
         "protected": {
             "active_campaigns": await campaigns.count_documents({"active": True}),
-            "pending_spy": await spy_missions.count_documents({"resolved": {"$ne": True}}),
+            "pending_spy": (await spy_missions.count_documents({"resolved": {"$ne": True}})
+                  + await db.espionage_networks.count_documents({"status": {"$in": ["pending", "active", "suspended", "risk_review"]}})),
             "pending_roleplays": await roleplays.count_documents({"resolved": {"$ne": True}}),
         },
     }
@@ -402,108 +405,21 @@ async def list_campaigns(user: dict = Depends(admin_user)):
     return out
 
 @router.get("/espionage")
-async def list_spy_pending(user: dict = Depends(admin_user)):
-    """سناریوهای جاسوسی که بازیکنان فرستاده‌اند و هنوز امتیازدهی نشده‌اند"""
-    out = []
-    cur = spy_missions.find({"resolved": False}).sort("created_at", -1).limit(50)
-    async for m in cur:
-        out.append({
-            "id": str(m["_id"]), "player": m["player_name"], "tg_id": m["tg_id"],
-            "origin": m["origin_castle"], "target": m["target_castle"],
-            "scenario": m["scenario"], "arrived": now() >= m["arrival_at"],
-            "created_at": m["created_at"].isoformat(),
-        })
-    return out
+async def list_spy_pending(user: dict = Depends(full_admin_user)):
+    from espionage_networks import legacy_missions
+    return [row for row in await legacy_missions(user) if not row['resolved']]
 
 @router.get("/espionage/resolved")
-async def list_spy_resolved(user: dict = Depends(admin_user)):
-    """سناریوهای جاسوسی‌ای که قبلاً امتیازدهی شده‌اند — برای مرور نتیجه‌ای که ادمین
-    خودش قبلاً داده، چون بعد از امتیازدهی از لیست «در انتظار» ناپدید می‌شوند"""
-    out = []
-    cur = spy_missions.find({"resolved": True}).sort("resolved_at", -1).limit(50)
-    async for m in cur:
-        out.append({
-            "id": str(m["_id"]), "player": m["player_name"], "tg_id": m["tg_id"],
-            "target": m["target_castle"], "scenario": m["scenario"],
-            "admin_score": m.get("admin_score"), "success": m.get("success"),
-            "resolved_at": m["resolved_at"].isoformat() if m.get("resolved_at") else None,
-        })
-    return out
+async def list_spy_resolved(user: dict = Depends(full_admin_user)):
+    from espionage_networks import legacy_missions
+    return [row for row in await legacy_missions(user) if row['resolved']]
 
 class SpyScoreBody(BaseModel):
     score: int
 
 @router.post("/espionage/{mission_id}/score")
-async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(admin_user)):
-    """ادمین سناریو را می‌خواند و امتیاز جاسوسی (۰ تا ۱۰۰) می‌دهد — همان امتیاز
-    مستقیماً شانس موفقیت است؛ نتیجه فوراً برای بازیکن کلاغ می‌شود"""
-    if not (0 <= body.score <= 100):
-        raise HTTPException(400, "امتیاز باید بین ۰ تا ۱۰۰ باشد")
-    try:
-        oid = ObjectId(mission_id)
-    except Exception:
-        raise HTTPException(400, "شناسهٔ ماموریت نامعتبر است")
-    m = await spy_missions.find_one({"_id": oid})
-    if not m:
-        raise HTTPException(404, "این ماموریت پیدا نشد")
-    if m.get("resolved"):
-        raise HTTPException(400, "این ماموریت قبلاً امتیازدهی شده")
-
-    success = random.random() * 100 < body.score
-    spy_player = await players.find_one({"tg_id": m["tg_id"]})
-    target = await players.find_one({"tg_id": m["target_tg_id"]})
-
-    report = None
-    if success and target:
-        # فقط ساختمان‌های همون قلعه‌ای که جاسوس واقعاً بهش نفوذ کرده — نه کلِ
-        # امپراتوریِ هدف؛ منابع (که سراسری/مشترکه، نه قلعه‌ای) استثناست
-        levels = dict(building_levels_for(target, m["target_castle"]))
-        military = [{"name": BUILDINGS[bid]["name"], "level": lvl}
-                    for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") in ("barracks", "armory")]
-        defense = [{"name": BUILDINGS[bid]["name"], "level": lvl}
-                   for bid, lvl in levels.items() if BUILDINGS.get(bid, {}).get("type") == "defense"]
-        camps = []
-        async for c in campaigns.find({
-            "tg_id": target["tg_id"], "active": True,
-            "$or": [{"origin_castle": m["target_castle"]}, {"target_castle": m["target_castle"]}],
-        }):
-            camps.append({
-                "op_type": c["op_type"], "op_name": OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
-                "origin": c["origin_castle"], "target": c["target_castle"],
-                "men_committed": c["men_committed"],
-                "arrived": now() >= c.get("arrival_at", now()),
-            })
-        report = {"resources": target["resources"], "military": military, "defense": defense, "campaigns": camps}
-
-    await spy_missions.update_one({"_id": m["_id"]}, {"$set": {
-        "admin_score": body.score, "success": success, "report": report,
-        "resolved": True, "resolved_at": now(),
-    }})
-
-    if spy_player:
-        if success:
-            await bump_player_stat(spy_player["tg_id"], "successful_spies")
-            add_resources(spy_player, {"men": m["men_sent"]})
-            await players.update_one({"tg_id": spy_player["tg_id"]}, {"$set": {"resources": spy_player["resources"]}})
-            await send_system_message(
-                spy_player["tg_id"], spy_player["name"],
-                f"جاسوس‌های تو با موفقیت به {m['target_castle']} نفوذ کردند و گزارش کاملی به دست آوردند — نتیجه در بخش جاسوسی منتظر توست.",
-                kind="espionage",
-            )
-        else:
-            await send_system_message(
-                spy_player["tg_id"], spy_player["name"],
-                f"جاسوسی تو در {m['target_castle']} شناسایی و دستگیر شد — نفرات اعزامی برنگشتند.",
-                kind="espionage",
-            )
-    if not success and target:
-        await send_system_message(
-            target["tg_id"], target["name"],
-            f"جاسوسی از سوی {m['player_name']} در تلاش برای نفوذ به {m['target_castle']} شناسایی و دستگیر شد.",
-            kind="espionage",
-        )
-
-    return {"ok": True, "success": success}
+async def score_spy(mission_id: str, body: SpyScoreBody, user: dict = Depends(full_admin_user)):
+    raise HTTPException(410, 'پرونده را از بخش جاسوسی به شبکه تبدیل و سپس داوری کنید')
 
 @router.get("/roleplay")
 async def list_roleplay_pending(user: dict = Depends(admin_user)):

@@ -42,7 +42,9 @@ async def notify_admins(
     audience_roles: tuple[str, ...] | None = None,
 ):
     """اعلان ماندگار پنل را می‌سازد و خلاصه را برای سطح‌های مجاز تلگرام می‌کند."""
-    if audience_roles is None and kind in ('battle', 'war', 'roleplay', 'ambush', 'espionage'):
+    if kind == 'espionage':
+        audience_roles = ('owner', 'full')
+    if audience_roles is None and kind in ('battle', 'war', 'roleplay', 'ambush'):
         audience_roles = ('owner', 'full', 'limited', 'war_roleplay')
     route = notification_route(kind)
     title = await normalize_player_names(title)

@@ -28,7 +28,6 @@ const SIMPLE_SECTIONS = [
   { key: 'war', title: 'جنگ و داوری', help: 'قواعد تشکیل نیرو، مهلت رول، نگهداری گزارش و لغو لشکر.', fields: [
     ['minimum_army_men','حداقل نفرات لشکر','نفر'], ['minimum_ambush_men','حداقل نفرات کمین','نفر'],
     ['report_visible_hours','مدت نمایش گزارش','ساعت'], ['cancel_penalty_percent','جریمه لغو','درصد'], ['cancel_grace_minutes','مهلت لغو بدون جریمه','دقیقه'],
-    ['spy_gold_cost','هزینه جاسوسی','سکه'], ['spy_men_cost','نفرات جاسوسی','نفر'],
   ]},
   { key: 'movement', title: 'حرکت لشکر', help: 'درصد ۱۰۰ یعنی سرعت و زمان استاندارد فعلی.', fields: [
     ['base_speed_percent','سرعت پایه','درصد'], ['route_time_percent','ضریب زمان تمام مسیرها','درصد'], ['equipment_slowdown_cap_percent','سقف کندی ادوات','درصد'],

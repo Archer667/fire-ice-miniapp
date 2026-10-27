@@ -17,7 +17,7 @@ export async function req(path, opts = {}) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'tma ' + getInitData(),
-      ...(import.meta.env.DEV ? { 'X-Dev-User': '1:لرد آزمایشی' } : {}),
+      ...(import.meta.env.DEV ? { 'X-Dev-User': '1:Dev' } : {}),
       ...opts.headers,
     },
   });
@@ -1911,6 +1911,8 @@ export const api = {
   adminDisbandCampaign: (id) => MOCK ? Promise.resolve(M.adminDisbandCampaign(id)) : req(`/api/admin/campaigns/${id}/disband`, { method: 'POST' }),
   adminDestroyCampaign: (id) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/destroy`, { method: 'POST' }),
   adminReduceCampaign: (id, troops) => MOCK ? Promise.resolve({ ok: true }) : req(`/api/admin/campaigns/${id}/reduce`, { method: 'POST', body: JSON.stringify({ troops }) }),
+
+  spy: (path, body) => req('/api/espionage' + path, body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) }),
 
   /* ---------- جاسوسی ---------- */
   sendSpy: (targetCastle, scenario) => MOCK ? Promise.resolve(M.sendSpy(targetCastle, scenario))

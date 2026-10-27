@@ -39,6 +39,7 @@ FEEDS={
     'campaigns':['tg_id','player_name','op_type','name','created_at','men_committed','combat_resolved_at','medal_outcome_battle_id','winner_tg_ids','loser_tg_ids','engagement_campaign_id','battle_is_root','medal_outcome_recorded'],
     'market_history':['buyer_id','buyer_name','seller_id','seller_name','qty','resource','total','status','game_at'],
     'caravans':['tg_id','player_name','target_tg_id','target_name','created_at','resources','arrival_notified','delivery_failed'],
+    'espionage_networks':['tg_id','player_name','created_at','deployment_score','deployment_roll','legacy_mission'],
     'spy_missions':['tg_id','player_name','created_at','success','resolved'],
     'projects':['owner_id','owner_name','created_at','status'],
 }
@@ -234,6 +235,9 @@ async def season_data(season):
             if r.get('seller_id') not in ids:
                 add_metric(table,r.get('seller_id'),r.get('seller_name'),'market_sell_gold',r.get('total',0))
         elif source=='caravans':add_metric(table,uid,name,'caravans')
+        elif source=='espionage_networks':
+            if not r.get('legacy_mission'):add_metric(table,uid,name,'spy_missions')
+            if r.get('deployment_score') is not None and r.get('deployment_roll') is not None and r['deployment_roll']<=r['deployment_score']:add_metric(table,uid,name,'successful_spies')
         elif source=='spy_missions':
             add_metric(table,uid,name,'spy_missions')
             if r.get('resolved') and r.get('success'):add_metric(table,uid,name,'successful_spies')

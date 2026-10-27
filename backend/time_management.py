@@ -35,6 +35,7 @@ SOURCES = {
     'rebellions': ('شورش', {'status': {'$in': ['awaiting_roleplay', 'roleplay_submitted', 'expired']}}, {'deadline': 'game'}),
     'campaigns': ('لشکرکشی', {'active': True}, {'arrival_at': 'game'}),
     'caravans': ('کاروان', {'active': True, 'arrival_notified': {'$ne': True}}, {'arrival_at': 'game'}),
+    'espionage_networks': ('استقرار جاسوسی', {'status': 'pending'}, {'arrival_at': 'game'}),
     'spy_missions': ('جاسوسی', {'resolved':{'$ne':True}}, {'arrival_at': 'game'}),
     'projects': ('پروژه', {'status': {'$in': ['scheduled', 'funding', 'active']}}, {'publish_at': 'real', 'funding_deadline': 'game', 'next_payout_at': 'game'}),
     'family_marriages': ('مهلت ازدواج', {'status': {'$in':['proposed','accepted']}}, {'expires_at':'game'}),
