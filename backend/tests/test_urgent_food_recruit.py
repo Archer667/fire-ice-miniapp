@@ -17,9 +17,23 @@ class Rules(unittest.TestCase):
 
 class Storage(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        import asyncio
-        db.client._io_loop = asyncio.get_running_loop()
-        await db.client.drop_database(db.name)
+        try:
+            from mongomock_motor import AsyncMongoMockClient
+        except ImportError:
+            raise unittest.SkipTest('Install requirements-dev.txt for isolated memory tests')
+        memory = AsyncMongoMockClient()['valyria_food_recruit_test']
+        self.enterContext(patch(__name__ + '.db', memory))
+        for module, name, collection in [
+            (food, 'db', memory), (food, 'players', memory.players),
+            (food, 'campaigns', memory.campaigns), (food, 'ambushes', memory.ambushes),
+            (war, 'campaigns', memory.campaigns),
+        ]:
+            self.enterContext(patch.object(module, name, collection))
+        self.enterContext(patch('game_clock.paused', return_value=False))
+        self.enterContext(patch('routers.rebellions.get_settings', AsyncMock(return_value={
+            'ration_levels': {'normal': {'multiplier': 1}}, 'default_ration': 'normal',
+            'base_food_per_100_men': 20,
+        })))
     async def test_recruitment_only_at_origin(self):
         await db.campaigns.insert_one({'tg_id':1,'active':True,'battle_open':True,'battle_location':'A'})
         await war.ensure_recruitment_allowed({'tg_id':1}, 'B')

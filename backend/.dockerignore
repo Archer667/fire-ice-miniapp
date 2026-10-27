@@ -1,0 +1,10 @@
+tests
+**/__pycache__
+**/*.pyc
+.env
+.env.*
+.git
+.venv
+venv
+requirements-dev.txt
+run_safe_tests.py
