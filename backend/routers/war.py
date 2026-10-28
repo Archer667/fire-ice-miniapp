@@ -484,7 +484,7 @@ async def my_ambushes(user: dict = Depends(get_user)):
     async for a in ambushes.find({"tg_id": user["id"]}).sort("created_at", -1).limit(30):
         out.append({
             "id": str(a["_id"]), "origin_castle": a["origin_castle"], "target_castle": a["target_castle"],
-            "men_committed": a.get("soldiers_committed", a["men_committed"]), "status": a["status"], "coefficient": a.get("coefficient"),
+            "men_committed": a.get("soldiers_committed", a.get("men_committed", 0)), "status": a["status"], "coefficient": a.get("coefficient"),
             "ambush_score": a.get("ambush_score"), "casualties": a.get("casualties"),
             "ambusher_losses": a.get("ambusher_losses"), "refund": a.get("refund"), "victim_name": a.get("victim_name"),
         })
@@ -960,6 +960,9 @@ async def legions(user: dict = Depends(get_user)):
     cur = campaigns.find({"tg_id": user["id"], "active": True}).sort("created_at", -1).limit(50)
     out = []
     async for c in cur:
+        from campaign_integrity import display_issues
+        if display_issues(c):
+            continue
         is_mine = c["tg_id"] == user["id"]
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
@@ -1001,6 +1004,9 @@ async def mine(user: dict = Depends(get_user)):
     cur = campaigns.find({"op_type": {"$ne": "defense"}, "destroyed_by_death": {"$ne": True}}).sort("created_at", -1).limit(100)
     out = []
     async for c in cur:
+        from campaign_integrity import display_issues
+        if display_issues(c):
+            continue
         arrival_at = c.get("arrival_at")
         arrived = (now() >= arrival_at) if arrival_at else True
         if arrived and arrival_at and now() - arrival_at > timedelta(hours=report_visible_hours()):

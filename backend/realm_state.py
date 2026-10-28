@@ -111,32 +111,36 @@ async def adjust_popularity(
 
 
 async def adjust_influence(tg_id: int, delta: int, reason: str, *, source_id: str | None = None):
-    """Influence is spendable; a negative change can never make it negative."""
-    # Older characters predate the influence system. Initialise them lazily as
-    # well as during startup so a deployment/restart race cannot block a vote.
-    await players.update_one(
-        {"tg_id": tg_id, "political_influence": {"$exists": False}},
-        {"$set": {"political_influence": INFLUENCE_START}},
-    )
-    query = {"tg_id": tg_id}
-    if delta < 0:
-        query["political_influence"] = {"$gte": -delta}
-    result = await players.find_one_and_update(
-        query,
-        {"$inc": {"political_influence": delta}},
-        return_document=ReturnDocument.AFTER,
-    )
-    if not result:
-        return None
-    await record_event(
-        "influence",
-        "تغییر نفوذ سیاسی",
-        target_ids=[tg_id],
-        detail=reason,
-        data={"delta": delta, "balance": int(result.get("political_influence", 0))},
-        dedupe_key=(f"influence:{source_id}:{tg_id}" if source_id else None),
-    )
-    return int(result.get("political_influence", 0))
+    from hashlib import sha256
+    from realm_controls import rules, reward_for
+    cfg = await rules()
+    delta = reward_for(source_id or '', delta, cfg)
+    for _ in range(8):
+        player = await players.find_one({'tg_id': tg_id})
+        if not player:
+            return None
+        character = str(player.get('created_at', 'legacy'))
+        key = sha256((character + ':' + (source_id or str(uuid4()))).encode()).hexdigest()
+        field = 'influence_receipts.' + key
+        receipt = player.get('influence_receipts', {}).get(key)
+        if receipt:
+            await record_event('influence', 'تغییر نفوذ سیاسی', target_ids=[tg_id], detail=receipt['reason'],
+                               data=receipt, dedupe_key='influence:' + key + ':' + str(tg_id))
+            return receipt['balance']
+        before = int(player.get('political_influence', cfg['influence_start']))
+        after = before + delta if delta <= 0 else before + min(delta, max(0, cfg['influence_cap'] - before))
+        if after < 0:
+            return None
+        receipt = {'before': before, 'balance': after, 'delta': after-before, 'reason': reason[:500],
+                   'source_id': source_id, 'at': datetime.now(timezone.utc), 'character': character}
+        query = {'_id': player['_id'], field: {'$exists': False},
+                 'political_influence': player.get('political_influence', {'$exists': False})}
+        result = await players.update_one(query, {'$set': {'political_influence': after, field: receipt}})
+        if result.matched_count:
+            await record_event('influence', 'تغییر نفوذ سیاسی', target_ids=[tg_id], detail=reason,
+                               data=receipt, dedupe_key='influence:' + key + ':' + str(tg_id))
+            return after
+    raise RuntimeError('influence update contention')
 
 
 async def adjust_reputation(actor_id: int, target_id: int, delta: int, reason: str, *, source_id: str | None = None):
@@ -191,6 +195,8 @@ async def prosperity(player: dict) -> dict:
 
 
 async def overview_for(player: dict) -> dict:
+    from realm_controls import rules
+    cfg = await rules()
     popularity = clamp(player.get("popularity", POPULARITY_START))
     pop_events = []
     async for row in POPULARITY_EVENTS.find({"tg_id": player["tg_id"]}).sort("game_at", -1).limit(12):
@@ -206,13 +212,15 @@ async def overview_for(player: dict) -> dict:
             "population_growth_percent": round((.5 + popularity / 100) * 100),
         },
         "popularity_history": pop_events,
-        "influence": int(player.get("political_influence", INFLUENCE_START)),
+        "influence": int(player.get("political_influence", cfg["influence_start"])),
         "prosperity": await prosperity(player),
     }
 
 
 async def migrate_players():
-    await players.update_many({"political_influence": {"$exists": False}}, {"$set": {"political_influence": INFLUENCE_START}})
+    from realm_controls import rules
+    initial = (await rules())["influence_start"]
+    await players.update_many({"political_influence": {"$exists": False}}, {"$set": {"political_influence": initial}})
 
 
 async def ensure_indexes():

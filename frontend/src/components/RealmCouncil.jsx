@@ -26,6 +26,7 @@ export default function RealmCouncil(){
   const vote=async(id,option)=>{setBusy('vote:'+id);try{await api.realmVoteProposal(id,option);toast('رأیت ثبت شد');await load();}catch(e){toast(e.message);}finally{setBusy('');}};
   if(!overview||!proposals||!events)return <div className="card realm-loading">در حال دریافت وضعیت قلمرو…</div>;
   return <section className="realm-council">
+    <div className="card"><p>اینجا پیشنهادهای قلمرو مطرح می‌شوند، خاندان‌ها حمایت و رأی‌شان را ثبت می‌کنند و نتیجه با داوری نهایی بسته می‌شود. تصویب شورا خودکار مالیات یا دارایی کسی را تغییر نمی‌دهد.</p><p>نفوذ برای ثبت پیشنهاد و حمایت خرج می‌شود. رأی اول، تجارت موفق، تحویل قرارداد، پرداخت خراج و پیمان پذیرفته‌شده می‌توانند نفوذ بدهند؛ مقدار پاداش‌ها با قواعد فصل تعیین می‌شود.</p>{!overview.rules.council_enabled&&<p>ثبت پیشنهاد، حمایت و رأی تازه فعلاً متوقف است.</p>}</div>
     <div className="realm-metrics">
       <article><small>محبوبیت مردم</small><strong>{fa(overview.popularity)}</strong><span>{overview.popularity_band.label}</span></article>
       <article><small>نفوذ سیاسی</small><strong>{fa(overview.influence)}</strong><span>قابل خرج در شورا</span></article>
@@ -37,10 +38,10 @@ export default function RealmCouncil(){
         <div className="sect">پیشنهادهای شورا</div>
         {!proposals.length&&<div className="card realm-empty">هنوز پیشنهادی در شورا ثبت نشده است.</div>}
         {proposals.map(p=><article className={`card realm-proposal ${p.status}`} key={p.id}>
-          <header><div><b>{p.title}</b><small>{p.author_name} · {p.scope==='region'?'اقلیمی':'سراسری'}</small></div><span>{p.status==='open'?'در حال رأی‌گیری':p.status==='enacted'?'تصویب‌شده':'پایان‌یافته'}</span></header>
+          <header><div><b>{p.title}</b><small>{p.author_name} · {p.scope==='region'?'اقلیمی':'سراسری'}</small></div><span>{p.status==='open'?(p.voting_open?'در حال رأی‌گیری':'منتظر نتیجه'):p.status==='enacted'?'تصویب‌شده':'پایان‌یافته'}</span></header>
           <p>{p.description}</p>
-          <div className="realm-support"><span>{fa(p.supporters)} حامی · {fa(p.total_votes)} رأی</span>{p.status==='open'&&!p.supported&&<button className="btn ghost" disabled={!!busy} onClick={()=>support(p.id)}>حمایت با {fa(overview.rules.support_cost)} نفوذ</button>}</div>
-          <div className="realm-ballot">{p.options.map((option,index)=>{const total=Math.max(1,p.total_votes);const pct=Math.round((p.tally[index]||0)*100/total);return <button type="button" key={index} disabled={p.status!=='open'||!!busy} className={p.my_vote===index?'chosen':''} onClick={()=>vote(p.id,index)}><i style={{width:pct+'%'}}/><span>{option}</span><em>{fa(p.tally[index])} · {fa(pct)}٪</em></button>;})}</div>
+          <div className="realm-support"><span>{fa(p.supporters)} حامی · {fa(p.total_votes)} رأی</span>{p.voting_open&&overview.rules.council_enabled&&!p.supported&&<button className="btn ghost" disabled={!!busy} onClick={()=>support(p.id)}>حمایت با {fa(overview.rules.support_cost)} نفوذ</button>}</div>
+          <div className="realm-ballot">{p.options.map((option,index)=>{const total=Math.max(1,p.total_votes);const pct=Math.round((p.tally[index]||0)*100/total);return <button type="button" key={index} disabled={!p.voting_open||!overview.rules.council_enabled||!!busy} className={p.my_vote===index?'chosen':''} onClick={()=>vote(p.id,index)}><i style={{width:pct+'%'}}/><span>{option}</span><em>{fa(p.tally[index])} · {fa(pct)}٪</em></button>;})}</div>
           {p.outcome&&<div className="realm-outcome">نتیجه: {p.outcome}</div>}
         </article>)}
       </div>
@@ -51,8 +52,8 @@ export default function RealmCouncil(){
           <label className="f">محدوده</label><select value={draft.scope} onChange={e=>setDraft({...draft,scope:e.target.value})}><option value="realm">تمام قلمرو</option><option value="region">اقلیم خودم</option></select>
           <label className="f">گزینه‌ها</label>{draft.options.map((option,index)=><div className="realm-option-edit" key={index}><input maxLength={80} value={option} onChange={e=>changeOption(index,e.target.value)}/>{draft.options.length>2&&<button type="button" onClick={()=>setDraft(d=>({...d,options:d.options.filter((_,i)=>i!==index)}))}>×</button>}</div>)}
           {draft.options.length<5&&<button type="button" className="btn ghost" onClick={()=>setDraft(d=>({...d,options:[...d.options,'']}))}>افزودن گزینه</button>}
-          <p className="page-sub">ثبت پیشنهاد {fa(overview.rules.proposal_cost)} نفوذ مصرف می‌کند. رأی اول هر پرونده یک نفوذ برمی‌گرداند.</p>
-          <button className="btn" disabled={!!busy} onClick={create}>{busy==='create'?'در حال ثبت…':'ثبت در شورا'}</button>
+          <p className="page-sub">ثبت پیشنهاد {fa(overview.rules.proposal_cost)} نفوذ مصرف می‌کند. رأی اول هر پرونده {fa(overview.rules.reward_vote)} نفوذ می‌دهد.</p>
+          <button className="btn" disabled={!!busy||!overview.rules.council_enabled} onClick={create}>{busy==='create'?'در حال ثبت…':'ثبت در شورا'}</button>
         </details>
         <div className="card realm-ledger"><h3>رویدادهای اثرگذار</h3>{events.slice(0,12).map(e=><div key={e.id}><span>{eventLabels[e.kind]||'قلمرو'}</span><p><b>{e.title}</b>{e.detail&&<small>{e.detail}</small>}</p></div>)}</div>
         {!!overview.relations.length&&<div className="card realm-relations"><h3>اعتبار میان خاندان‌ها</h3>{overview.relations.slice(0,8).map(r=><div key={r.tg_id}><span>{r.name}</span><b className={r.score<0?'negative':''}>{r.score>0?'+':''}{fa(r.score)}</b></div>)}</div>}
