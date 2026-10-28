@@ -115,6 +115,9 @@ async def get_map(user: dict = Depends(get_user)):
     # این Query را پر می‌کردند و ممکن بود یک حرکت واقعی اصلاً به فرانت نرسد.
     cur = campaigns.find({"active": True, "arrival_at": {"$gt": now()}}).sort("arrival_at", 1).limit(100)
     async for s in cur:
+        from campaign_integrity import movement_issues
+        if movement_issues(s):
+            continue
         mine = s["tg_id"] == user["id"]
         departed_at = s.get("moved_at") or s.get("created_at")
         if departed_at:

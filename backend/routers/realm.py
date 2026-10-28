@@ -12,19 +12,7 @@ from realm_state import EVENTS, REPUTATION, adjust_influence, overview_for, reco
 router = APIRouter(prefix="/api/realm", tags=["realm"])
 proposals = db.council_proposals
 
-DEFAULT_RULES = {
-    "proposal_cost": 10,
-    "support_cost": 2,
-    "voting_hours": 48,
-    "quorum_percent": 30,
-    "market_fee_percent": 2,
-    "cross_region_tariff_percent": 3,
-}
-
-
-async def rules():
-    row = await db.game_settings.find_one({"_id": "realm_rules"}) or {}
-    return {**DEFAULT_RULES, **{key: row[key] for key in DEFAULT_RULES if key in row}}
+from realm_controls import DEFAULTS as DEFAULT_RULES, RulesSchema, rules
 
 
 async def full_admin(user=Depends(get_user)):
@@ -44,13 +32,15 @@ def _proposal(row, uid):
         "supporters": len(row.get("supporters", [])), "supported": uid in row.get("supporters", []),
         "tally": tally, "total_votes": len(votes), "my_vote": votes.get(str(uid)),
         "created_at": row["created_at"].isoformat(), "closes_at": row["closes_at"].isoformat(),
+        "voting_open": row["status"] == "open" and row["closes_at"] > now(),
         "outcome": row.get("outcome", ""), "quorum_percent": row.get("quorum_percent", 30),
     }
 
 
 async def _player(uid):
     player = await players.find_one({"tg_id": uid})
-    if not player or player.get("is_dead") or player.get("registration_reset"):
+    from character_access import status as character_status
+    if character_status(player) not in ("landed", "landless"):
         raise HTTPException(403, "فقط کاراکتر فعال می‌تواند در سیاست قلمرو شرکت کند")
     return player
 
@@ -112,6 +102,10 @@ async def create_proposal(body: ProposalBody, user=Depends(get_user)):
     if body.scope not in ("realm", "region"):
         raise HTTPException(400, "محدودهٔ پیشنهاد معتبر نیست")
     cfg = await rules()
+    if not cfg['council_enabled']:
+        raise HTTPException(409, 'شورا فعلاً پیشنهاد تازه نمی‌پذیرد')
+    if await proposals.count_documents({'author_id': user['id'], 'status': 'open'}) >= cfg['max_open_proposals']:
+        raise HTTPException(409, 'به سقف پیشنهادهای باز رسیده‌ای')
     identity = ObjectId()
     balance = await adjust_influence(user["id"], -int(cfg["proposal_cost"]), "ثبت پیشنهاد در شورا", source_id=f"proposal:{identity}")
     if balance is None:
@@ -134,13 +128,17 @@ async def create_proposal(body: ProposalBody, user=Depends(get_user)):
 async def support_proposal(proposal_id: str, user=Depends(get_user)):
     if not ObjectId.is_valid(proposal_id):
         raise HTTPException(404, "پیشنهاد پیدا نشد")
-    await _player(user["id"])
+    player = await _player(user["id"])
     row = await proposals.find_one({"_id": ObjectId(proposal_id)})
     if not row or row["status"] != "open" or row["closes_at"] <= now():
         raise HTTPException(409, "این پیشنهاد دیگر برای حمایت باز نیست")
     if user["id"] in row.get("supporters", []):
         raise HTTPException(409, "قبلاً از این پیشنهاد حمایت کرده‌ای")
+    if row['scope'] == 'region' and player.get('region') != row.get('region'):
+        raise HTTPException(403, 'این پیشنهاد برای اقلیم تو نیست')
     cfg = await rules()
+    if not cfg['council_enabled']:
+        raise HTTPException(409, 'حمایت در شورا فعلاً متوقف است')
     balance = await adjust_influence(user["id"], -int(cfg["support_cost"]), "حمایت از پیشنهاد شورا", source_id=f"support:{proposal_id}:{user['id']}")
     if balance is None:
         raise HTTPException(400, f"برای حمایت {int(cfg['support_cost'])} نفوذ سیاسی لازم داری")
@@ -164,6 +162,8 @@ async def vote_proposal(proposal_id: str, body: VoteBody, user=Depends(get_user)
         raise HTTPException(403, "این رأی‌گیری برای اقلیم تو نیست")
     if not 0 <= body.option < len(row["options"]):
         raise HTTPException(400, "گزینهٔ رأی معتبر نیست")
+    if not (await rules())['council_enabled']:
+        raise HTTPException(409, 'رأی‌گیری شورا فعلاً متوقف است')
     first_vote = str(user["id"]) not in row.get("votes", {})
     await proposals.update_one({"_id": row["_id"]}, {"$set": {f"votes.{user['id']}": body.option}})
     if first_vote:
@@ -178,6 +178,8 @@ class FinishBody(BaseModel):
 
 @router.post("/admin/proposals/{proposal_id}/finish")
 async def finish_proposal(proposal_id: str, body: FinishBody, admin=Depends(full_admin)):
+    if len(body.outcome.strip()) < 2:
+        raise HTTPException(400, 'نتیجه و توضیح نهایی را بنویس')
     if not ObjectId.is_valid(proposal_id):
         raise HTTPException(404, "پیشنهاد پیدا نشد")
     row = await proposals.find_one({"_id": ObjectId(proposal_id)})
@@ -197,13 +199,8 @@ async def finish_proposal(proposal_id: str, body: FinishBody, admin=Depends(full
     return {"ok": True, "status": status, "quorum_percent": round(quorum, 1)}
 
 
-class RulesBody(BaseModel):
-    proposal_cost: StrictInt = Field(ge=0, le=1000)
-    support_cost: StrictInt = Field(ge=0, le=1000)
-    voting_hours: StrictInt = Field(ge=1, le=720)
-    quorum_percent: StrictInt = Field(ge=0, le=100)
-    market_fee_percent: StrictInt = Field(ge=0, le=50)
-    cross_region_tariff_percent: StrictInt = Field(ge=0, le=50)
+class RulesBody(RulesSchema):
+    reason: str = Field(min_length=2, max_length=500)
 
 
 @router.get("/admin/rules")
@@ -218,11 +215,93 @@ async def admin_proposals(admin=Depends(full_admin)):
 
 @router.put("/admin/rules")
 async def save_rules(body: RulesBody, admin=Depends(full_admin)):
-    values = body.model_dump()
+    if len(body.reason.strip()) < 2:
+        raise HTTPException(400, 'دلیل تغییر را بنویس')
+    values = body.model_dump(exclude={'reason'})
+    before = await rules()
     await db.game_settings.update_one({"_id": "realm_rules"}, {"$set": values}, upsert=True)
+    await record_event('admin_realm_rules', 'تغییر قواعد شورا و اقتصاد', actor_id=admin['id'], detail=body.reason,
+                       data={'before': before, 'after': values})
     return values
 
 
 async def ensure_indexes():
     await proposals.create_index([("status", 1), ("closes_at", 1)])
     await proposals.create_index([("scope", 1), ("region", 1), ("created_at", -1)])
+
+class InfluenceBody(BaseModel):
+    delta: StrictInt = Field(ge=-1_000_000_000, le=1_000_000_000)
+    reason: str = Field(min_length=2, max_length=500)
+    request_id: str = Field(min_length=16, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
+
+
+@router.post('/admin/players/{uid}/influence')
+async def admin_influence(uid: int, body: InfluenceBody, admin=Depends(full_admin)):
+    if not body.reason.strip() or not body.delta:
+        raise HTTPException(400, 'مقدار تغییر و دلیل آن را بنویس')
+    balance = await adjust_influence(uid, body.delta, body.reason, source_id=f'admin:{admin["id"]}:{body.request_id}')
+    if balance is None:
+        raise HTTPException(409, 'بازیکن پیدا نشد یا نفوذ کافی برای این کاهش ندارد')
+    await record_event('admin_influence', 'اصلاح نفوذ سیاسی', actor_id=admin['id'], target_ids=[uid],
+                       detail=body.reason, data={'requested_delta': body.delta, 'balance': balance},
+                       dedupe_key=f'admin-influence:{admin["id"]}:{body.request_id}:{uid}')
+    return {'ok': True, 'balance': balance}
+
+
+def _safe_json(value):
+    if isinstance(value, dict):
+        return {str(k): _safe_json(v) for k,v in value.items()}
+    if isinstance(value, list):
+        return [_safe_json(v) for v in value]
+    if isinstance(value, ObjectId):
+        return str(value)
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return value
+
+
+@router.get('/admin/overview')
+async def admin_overview(admin=Depends(full_admin)):
+    treasury = await db.realm_treasury.find_one({'_id': 'trade'}) or {}
+    result = {'treasury_gold': treasury.get('gold', 0)}
+    for name, collection, query in [
+        ('open_proposals', proposals, {'status': 'open'}),
+        ('open_orders', db.market_buy_orders, {'status': 'open'}),
+        ('open_contracts', db.supply_contracts, {'status': {'$in': ['pending', 'active']}}),
+    ]:
+        result[name] = await collection.count_documents(query)
+    escrow = 0
+    for collection in (db.market_buy_orders, db.supply_contracts):
+        async for row in collection.find({'status': {'$in': ['open', 'pending', 'active']}}, {'escrow_remaining': 1}):
+            escrow += int(row.get('escrow_remaining', 0))
+    result['escrow_gold'] = escrow
+    return result
+
+
+@router.get('/admin/influence')
+async def admin_influence_players(search: str = '', page: int = 0, admin=Depends(full_admin)):
+    import re
+    query = {}
+    if search.strip():
+        query = {'name': {'$regex': re.escape(search.strip()[:100]), '$options': 'i'}}
+        if search.strip().isdigit():
+            query = {'$or': [query, {'tg_id': int(search.strip())}]}
+    page = max(0, min(page, 100000))
+    cfg = await rules()
+    rows = []
+    async for p in players.find(query).sort('name', 1).skip(page*50).limit(50):
+        rows.append({'uid': p['tg_id'], 'name': p.get('name', 'بازیکن'),
+                     'influence': p.get('political_influence', cfg['influence_start']), 'is_dead': bool(p.get('is_dead'))})
+    return {'rows': rows, 'total': await players.count_documents(query), 'page': page}
+
+
+@router.get('/admin/events')
+async def admin_events(kind: str = '', uid: int = 0, page: int = 0, admin=Depends(full_admin)):
+    query = {}
+    if kind:
+        query['kind'] = kind[:80]
+    if uid:
+        query['$or'] = [{'actor_id': uid}, {'target_ids': uid}]
+    page = max(0, min(page, 100000))
+    rows = [_safe_json(row) async for row in EVENTS.find(query).sort('real_at', -1).skip(page*50).limit(50)]
+    return {'rows': rows, 'total': await EVENTS.count_documents(query), 'page': page}

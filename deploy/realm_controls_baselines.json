@@ -1,0 +1,81 @@
+{
+  "web": {
+    "backend/routers/realm.py": [
+      "c5a47ed24d5205ce0494d88b739e634aa0293e73373913e4e2b68dca7ef0cfcc"
+    ],
+    "backend/realm_state.py": [
+      "ee71050cd1057ab29d71e570d343542b860a4ab55d5e92f563bf7c956836f3c5"
+    ],
+    "backend/routers/economy.py": [
+      "129fa343dbdc33c01acc259357b9c439836788efad761dfe6bcbdc87cd6574bb"
+    ],
+    "backend/routers/war.py": [
+      "e1ad11bd7f02c21a8a159ea7d3e3b24554b75bdc869828c719e74d7715011622"
+    ],
+    "backend/routers/map.py": [
+      "5a909371acdd4cb9d5aa0df9199e5d6ee8d54df40f43f549a23c665cfd78673d"
+    ],
+    "backend/market_rules.py": [
+      "8ade110e377ca9d9edbfd8b74b12d7cdf48c0015a4e1311ab5fefa6462f92dab"
+    ],
+    "frontend/src/api.js": [
+      "4377215f64410f78f32dad3ead44cf288f41d0b4818a6579ea1ab24ad3b1f9ad"
+    ],
+    "frontend/src/components/AdminRealmSystems.jsx": [
+      "666ebd51f64bf7594ae3ea3578ec869f1ab54079589b6059f7ab244c11b53460"
+    ],
+    "frontend/src/components/EconomyNetwork.jsx": [
+      "9ea7bc32a4b702c458675271d5103ab25aae2235741ce8982717d13a2dd4fe4c"
+    ],
+    "frontend/src/components/RealmCouncil.jsx": [
+      "118908a3e1e6d1c998b909dfcd9ffcd2e78a6c27294e8f858e8d2978735a52d9"
+    ],
+    "frontend/src/pages/Admin.jsx": [
+      "f74395c664996552abcd331a3439d5a2ca34a7e5ce1e2678afe4b6f733f68a75"
+    ],
+    "backend/realm_controls.py": null,
+    "backend/tests/test_realm_controls.py": null,
+    "frontend/src/styles/realm-admin.css": null,
+    "docs/REALM_SYSTEMS_FA.md": null
+  },
+  "telegram": {
+    "backend/routers/realm.py": [
+      "c5a47ed24d5205ce0494d88b739e634aa0293e73373913e4e2b68dca7ef0cfcc"
+    ],
+    "backend/realm_state.py": [
+      "ee71050cd1057ab29d71e570d343542b860a4ab55d5e92f563bf7c956836f3c5"
+    ],
+    "backend/routers/economy.py": [
+      "129fa343dbdc33c01acc259357b9c439836788efad761dfe6bcbdc87cd6574bb"
+    ],
+    "backend/routers/war.py": [
+      "2f3c5d7ab2256c0bb4780f40827924dd981ab1973f0e569d9653e9582347b79c"
+    ],
+    "backend/routers/map.py": [
+      "5a909371acdd4cb9d5aa0df9199e5d6ee8d54df40f43f549a23c665cfd78673d",
+      "90fbbbf929326bf04b5666776ca9561c7616e273d9d2ecb164252412ba62e99e"
+    ],
+    "backend/market_rules.py": [
+      "8ade110e377ca9d9edbfd8b74b12d7cdf48c0015a4e1311ab5fefa6462f92dab"
+    ],
+    "frontend/src/api.js": [
+      "c0e8eb8b0c9b956b52f7f8c0235180ca8bbc4546dd45317114b5c224d6af1dce"
+    ],
+    "frontend/src/components/AdminRealmSystems.jsx": [
+      "666ebd51f64bf7594ae3ea3578ec869f1ab54079589b6059f7ab244c11b53460"
+    ],
+    "frontend/src/components/EconomyNetwork.jsx": [
+      "9ea7bc32a4b702c458675271d5103ab25aae2235741ce8982717d13a2dd4fe4c"
+    ],
+    "frontend/src/components/RealmCouncil.jsx": [
+      "118908a3e1e6d1c998b909dfcd9ffcd2e78a6c27294e8f858e8d2978735a52d9"
+    ],
+    "frontend/src/pages/Admin.jsx": [
+      "018cc2806ff8764d905a9c96870d0e11e597934e02e3b1512bb7cc1031b3bb99"
+    ],
+    "backend/realm_controls.py": null,
+    "backend/tests/test_realm_controls.py": null,
+    "frontend/src/styles/realm-admin.css": null,
+    "docs/REALM_SYSTEMS_FA.md": null
+  }
+}
