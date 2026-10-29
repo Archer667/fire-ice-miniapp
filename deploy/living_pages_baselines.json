@@ -18,22 +18,43 @@
       "cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610",
       "78fb066831e19c416939c5e5285ce74bc0c800edcd94789f45f376d20f74be36"
     ],
-    "frontend/src/components/LivingPageHero.jsx": ["cc70032c95243be3278244737f9b245f3988ee23a4b612b466dc161404db5ca1"],
+    "frontend/src/components/LivingPageHero.jsx": [
+      "cc70032c95243be3278244737f9b245f3988ee23a4b612b466dc161404db5ca1",
+      "690c4e2b1e1e90964b0b2d495e19cd0e9eb415afa56a2cf36349ddffdbec2a69"
+    ],
     "frontend/src/components/LivingScreen.jsx": null,
     "frontend/src/components/WesterosMap.jsx": ["bf8f543e518a6964975a0d3c7fb9d3cd665c9819430ea631220bb57a83567dc6"],
     "frontend/src/pages/Admin.jsx": ["9891307a0f32888966cd6aac7017a5fcf0bf3386e21b49b8355ae4192400a871"],
-    "frontend/src/pages/Dashboard.jsx": ["0d87bd08cdde8d8d19be4a6d90eed08b035f033d187e8ff8e6e1c863e4526e0a"],
-    "frontend/src/pages/Buildings.jsx": ["b8686232702e0b6173801ae876e0b31342d67cc5cd882d75658221d9b227ca4c"],
-    "frontend/src/pages/War.jsx": ["296600ff50fdda42130e3c09b747545f29b158a0059d547370787aa7934c7187"],
+    "frontend/src/pages/Dashboard.jsx": ["0d87bd08cdde8d8d19be4a6d90eed08b035f033d187e8ff8e6e1c863e4526e0a", "cc68ef113d676d85eaa4c3ea79cbfde8facd4aa2bc770b7e387a81c751c6b669"],
+    "frontend/src/pages/Buildings.jsx": ["b8686232702e0b6173801ae876e0b31342d67cc5cd882d75658221d9b227ca4c", "03bbe26fb3dfcf12934a5c77a6eed886ebbf2e8d899b10c2952e06144fa31c3d"],
+    "frontend/src/pages/War.jsx": ["296600ff50fdda42130e3c09b747545f29b158a0059d547370787aa7934c7187", "1291bf35f67ffa6d8cee29e048b9bd474c1e08c9e6ac9e7c10d53df5b19a534c"],
     "frontend/src/pages/Leaderboard.jsx": [
       "2fc2dd869db09ccb9fe14849872ffc435b63aab4b13e0599a84fa66a3ac54762",
-      "c061ecd9c4dc17ba26000f0fb656940c4c57a4c7c59027197d66dbf153563354"
+      "c061ecd9c4dc17ba26000f0fb656940c4c57a4c7c59027197d66dbf153563354",
+      "caf873437f8dbeeaa7fa8a8739b4c1299835056b0c76c11311c82dd37405f0a4"
     ],
     "frontend/src/pages/Diplomacy.jsx": [
       "990c16af0fbab18e026707f94428810d2fdb78db95d832e34ab4fa8295370eea",
-      "2f554bce122ae914b7d85e8872299bff4a51c9af4b84f1b8ed3d81ed7644b422"
+      "2f554bce122ae914b7d85e8872299bff4a51c9af4b84f1b8ed3d81ed7644b422",
+      "152be1add326f5e603e0aa461c3305c3f8e5ad832fb064edc2bbe3e14f8f3a70"
     ],
-    "frontend/src/styles/living-pages.css": null,
-    "frontend/src/styles/living-system.css": null
+    "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da"],
+    "frontend/src/styles/living-system.css": null,
+    "frontend/public/living-assets/parchment-texture.webp": null,
+    "frontend/public/living-assets/realm-hero.webp": null,
+    "frontend/public/living-assets/farm-food.webp": null,
+    "frontend/public/living-assets/war-map.webp": null,
+    "frontend/public/living-assets/gold-treasury.webp": null,
+    "frontend/public/living-assets/people-village.webp": null,
+    "frontend/public/living-assets/wood-lumber.webp": null,
+    "frontend/public/living-assets/iron-mine.webp": null,
+    "frontend/public/living-assets/stone-mine.webp": null,
+    "frontend/public/living-assets/castle-wall.webp": null,
+    "frontend/public/living-assets/market.webp": null,
+    "frontend/public/living-assets/barracks-sword.webp": null,
+    "frontend/public/living-assets/barracks-archer.webp": null,
+    "frontend/public/living-assets/armory-sword.webp": null,
+    "frontend/public/living-assets/war-room.webp": null,
+    "frontend/public/living-assets/harbor.webp": null
   }
 }

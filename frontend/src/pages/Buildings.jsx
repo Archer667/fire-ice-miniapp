@@ -98,7 +98,7 @@ export default function Buildings() {
 
   return (
     <div className="living-page living-buildings-page">
-      <LivingPageHero kind="buildings" eyebrow="سنگ، چوب و ارادهٔ یک خاندان" title="ساختمان‌های قلمرو" subtitle="هر ساختمان بخشی از اقتصاد، نیروی نظامی یا دفاع قلعه را زنده نگه می‌دارد." badges={[castleLabel(data.castle), `${rows.filter(row=>row.level>0).length.toLocaleString('fa-IR')} ساختمان فعال`, data.is_port ? 'قلعهٔ بندری' : 'قلعهٔ خشکی']} />
+      <LivingPageHero kind="buildings" art="/living-assets/castle-wall.webp" eyebrow="سنگ بر سنگ، قدرت بر قدرت" title="ساختمان‌های قلمرو" subtitle={`تولید، ظرفیت انبار، توان نظامی و استحکام ${castleLabel(data.castle)} را از همین محوطه گسترش بده.`} badges={[castleLabel(data.castle), `${rows.filter(row=>row.upgrading).length.toLocaleString('fa-IR')} صف ساخت`, data.is_port ? 'قلعهٔ بندری' : 'قلعهٔ خشکی']} />
       <div className="page-title up">ساختمان‌های قلمرو</div>
       <div className="page-sub up">ساختمان‌های قلمرو را ارتقا بده؛ هر سطح، هزینه و زمان ساخت بیشتری دارد.</div>
 

@@ -415,7 +415,7 @@ export default function War() {
 
   return (
     <div className="living-page living-war-page">
-      <LivingPageHero kind="war" eyebrow="هر فرمان، مسیر یک نبرد را عوض می‌کند" title="نیرو و لشکرکشی" subtitle="لشکر را بساز، فرمانده‌اش را مشخص کن، مسیر را ببین و حرکت نیروها را تا میدان دنبال کن." badges={[`${(legions || []).length.toLocaleString('fa-IR')} لشکر`, windowClosed ? 'گسیل تهاجمی بسته' : 'گسیل باز', `${Number(warWindow?.commander_power_bonus_percent ?? 15).toLocaleString('fa-IR')}٪ مزیت فرمانده`]} />
+      <LivingPageHero kind="war" art="/living-assets/war-room.webp" eyebrow="اتاق جنگ و فرماندهی" title="نیرو و لشکرکشی" subtitle="مسیر را روی نقشه ببین، یگان‌ها را بچین، فرمانده را مشخص کن و فرمان حرکت هر لشکر را صادر کن." badges={[`${(legions || []).length.toLocaleString('fa-IR')} لشکر فعال`, windowClosed ? 'گسیل تهاجمی بسته' : 'گسیل باز', `${Number(warWindow?.commander_power_bonus_percent ?? 15).toLocaleString('fa-IR')}٪ مزیت فرمانده`]} />
       <div className="page-title up">نیروها/لشکرکشی</div>
       <div className="page-sub up">قلعه‌ای را در نقشه انتخاب کن تا اطلاعاتش را ببینی و مقصد لشکر را تعیین کنی.</div>
 
@@ -448,12 +448,16 @@ export default function War() {
               در حال حاضر اعزام لشکر تهاجمی مجاز نیست. همچنان می‌توانی لشکر دفاعی تشکیل بدهی.
             </div>
           )}
+          <div className="war-command-stage">
+          <div className="war-stage-map">
           <div className="sect up u2">نقشهٔ وستروس</div>
           <div className="up u2">
             <WesterosMap data={mapData} meCastles={[me.castle, ...(me.castles || [])]} onSelectTarget={(c) => { haptic(); setTarget(c); toast(`${castleLabel(c.name)} به‌عنوان مقصد انتخاب شد`); }}
                          routePath={!sameCastle ? chosenRoute?.path : null} />
           </div>
+          </div>
 
+          <div className="war-stage-orders">
           <div className="sect up u3">ساخت لشکر</div>
           <p className="page-sub">برای تشکیل لشکر، قلعه‌ای آزاد از نبرد و محاصره انتخاب کن. درگیری لشکرها در جای دیگر مانع اعزام از قلعه‌های آزاد نیست.</p>
           <div className="card up u3">
@@ -647,6 +651,8 @@ export default function War() {
             <button className="btn" disabled={!!formIssue || busy} onClick={send}>
               {formIssue || (busy ? 'در حال ارسال...' : movingLegion ? 'صدور فرمان حرکت همین لشکر' : 'مُهر و ارسال فرمان')}
             </button>
+          </div>
+          </div>
           </div>
         </>
       )}

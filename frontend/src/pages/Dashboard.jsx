@@ -107,7 +107,19 @@ export default function Dashboard({ goTo }) {
 
   return (
     <div className="living-page living-realm-page">
-      <LivingPageHero kind="realm" eyebrow="فرمانروایی تو از همین‌جا نفس می‌کشد" title={me.name || 'قلمرو'} subtitle="خزانه، مردم، محبوبیت، خاندان و فرمان‌های روزانهٔ قلمرو را یک‌جا ببین." badges={[me.title, castleLabel(me.castle), `روز ${Number(me.day).toLocaleString('fa-IR')}`]} />
+      <LivingPageHero kind="realm" art="/living-assets/realm-hero.webp" eyebrow={me.rank_label ? (RANK_LABEL_FA[me.rank_label] || me.title || 'فرمانروای قلمرو') : (me.title || 'فرمانروای قلمرو')} title={me.name || 'قلمرو'} subtitle={`${me.house ? `خاندان ${me.house} · ` : ''}${castleLabel(me.castle)} · ${me.region_name || 'وستروس'}`} badges={[me.title, me.is_port ? 'قلعهٔ بندری' : null]}>
+        <div className="realm-hero-identity">
+          {me.profile_image ? <button type="button" className="realm-hero-portrait" onClick={() => setProfileImageOpen(true)} aria-label={`نمایش تصویر ${me.name}`}><img src={me.profile_image} alt="" /></button> : <div className="realm-hero-portrait realm-hero-letter">{me.name?.charAt(0)}</div>}
+          <PlayerFlag src={me.flag_image} name={me.name} className="realm-hero-flag" />
+        </div>
+        <div className="realm-hero-stats">
+          <div><b>{(me.active_campaigns ?? 0).toLocaleString('fa-IR')}</b><span>لشکر در میدان</span></div>
+          <div><b>{me.points.toLocaleString('fa-IR')}</b><span>امتیاز قلمرو</span></div>
+          <div><b>{(me.admin_spectator ? 0 : 1 + (me.castles?.length ?? 0)).toLocaleString('fa-IR')}</b><span>قلعه در فرمان</span></div>
+          <div><b>{(me.alliance_count ?? 0).toLocaleString('fa-IR')}</b><span>پیمان فعال</span></div>
+        </div>
+      </LivingPageHero>
+      <div className="realm-status-rail">
       {daily && (
         <div className={`daily-card up ${daily.claimed_today ? 'done' : ''}`}>
           <div className="daily-ic"><Gift s={22} /></div>
@@ -161,8 +173,9 @@ export default function Dashboard({ goTo }) {
           <div className="t2">روز {me.day.toLocaleString('fa-IR')} از {me.season_length.toLocaleString('fa-IR')}</div>
         </div>
       </div>
+      </div>
 
-      <div className="card up u1">
+      <div className="card up u1 realm-identity-card">
         <div className="me-row">
           <div className="realm-player-identity">
           {me.profile_image ? (
@@ -227,7 +240,7 @@ export default function Dashboard({ goTo }) {
           const cap = me.resource_caps?.[k] ?? m.max;
           const pct = Math.round((v / cap) * 100);
           return (
-            <div className="res resource-status" key={k}>
+            <div className={`res resource-status realm-resource-${k}`} key={k}>
               <div className="ic"><m.Icon s={18} /></div>
               <div className="n">{m.name}<small>{m.d}</small>{me.daily_production && <small className="resource-income">↑ تولید {Number(me.daily_production[k] || 0).toLocaleString('fa-IR', {maximumFractionDigits: 1})} / روز</small>}{k === 'food' && <small className="resource-expense">↓ مصرف مردم: {rebellion ? Number(rebellion.ration_food_per_day || 0).toLocaleString('fa-IR') : '…'} · لشکرها: {Number(me.army_food_per_day || 0).toLocaleString('fa-IR', {maximumFractionDigits: 1})} / روز</small>}</div>
               <div className={`bar ${pct < 35 ? 'low' : ''}`}><i style={{ width: Math.max(0, Math.min(100, pct)) + '%' }} /></div>

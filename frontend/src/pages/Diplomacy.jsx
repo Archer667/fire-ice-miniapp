@@ -262,7 +262,7 @@ export default function Diplomacy() {
 
   return (
     <div className="living-page living-diplomacy-page">
-      <LivingPageHero kind="diplomacy" eyebrow="کلمات گاهی از شمشیر برنده‌ترند" title="دیپلماسی" subtitle="پیمان ببند، در شورا نفوذ کن، خراج را مدیریت کن و آیندهٔ قلمرو را به رأی بگذار." badges={[`${(alliances || []).filter(row=>row.status==='accepted').length.toLocaleString('fa-IR')} پیمان فعال`, `${Number(me.influence || 0).toLocaleString('fa-IR')} نفوذ`, "شورای قلمرو"]} />
+      <LivingPageHero kind="diplomacy" art="/living-assets/market.webp" eyebrow="کلمات گاهی از شمشیر برنده‌ترند" title="دیپلماسی" subtitle="پیمان ببند، در شورا نفوذ کن، خراج را مدیریت کن و آیندهٔ قلمرو را به رأی بگذار." badges={[`${(alliances || []).filter(row=>row.status==='accepted').length.toLocaleString('fa-IR')} پیمان فعال`, `${Number(me.influence || 0).toLocaleString('fa-IR')} نفوذ`, "شورای قلمرو"]} />
       <div className="page-title up">دیپلماسی</div>
       <div className="page-sub up">ضیافت، پیمان و مناسبات خاندان‌های وستروس</div>
 

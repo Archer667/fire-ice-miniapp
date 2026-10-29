@@ -107,7 +107,7 @@ export default function Leaderboard() {
   const pager = <nav className="leader-pager" aria-label="صفحه‌بندی لردها"><button className="rbtn" disabled={lordBusy||lordPage<=1} onClick={()=>setLordPage(p=>p-1)}>قبلی</button><span>صفحهٔ {lordPage.toLocaleString('fa-IR')} از {lordPages.toLocaleString('fa-IR')}</span><button className="rbtn" disabled={lordBusy||lordPage>=lordPages} onClick={()=>setLordPage(p=>p+1)}>بعدی</button></nav>;
   return (
     <div className="living-page living-throne-page">
-      <LivingPageHero kind="throne" eyebrow="نام خاندان‌ها اینجا ماندگار می‌شود" title={seasonBranding.title} subtitle="رتبهٔ اقلیم‌ها و لردها، افتخارات و حرکت قدرت در وستروس را دنبال کن." badges={["اقلیم‌ها", "لردها", "رقابت هفتگی"]} />
+      <LivingPageHero kind="throne" art="/living-assets/gold-treasury.webp" eyebrow="قدرت، افتخار و آوازه" title={seasonBranding.title} subtitle="جایگاه خاندان‌ها، قدرت اقلیم‌ها و مدال‌هایی که تاریخ فصل را ساخته‌اند." badges={["رتبه‌بندی زنده", "حرکت ۲۴ ساعته", "تالار افتخارات"]} />
       <div className="page-title up">{seasonBranding.title}</div>
       <div className="page-sub up">هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</div>
 
