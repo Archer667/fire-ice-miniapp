@@ -4147,7 +4147,7 @@ export default function Admin() {
 
             <AdminFormations toast={toast} canManage={isFull} query={armySearch} onChanged={()=>{loadCampaigns();loadBattles();}}/>
 
-            {campaignsInfo && campaignsInfo.filter(s=>!s.merge_group_id&&`${s.player} ${s.name} ${s.from} ${s.to}`.toLowerCase().includes(armySearch.toLowerCase())).map(s => s.data_issues?.length ? (<div className="card admin-data-warning" key={s.id}><strong>رکورد لشکر نیازمند بررسی است</strong><p>{s.player} · {s.name}</p><p>اطلاعات ثبت‌نشده یا نامعتبر: {s.data_issue_labels.join('، ')}</p><small>شناسهٔ پرونده: <b dir="ltr">{s.id}</b></small><p>این رکورد بدون تغییر نگه‌داری شده است؛ پیش از اجرای فرمان، اطلاعات آن باید بررسی شود.</p></div>) : (
+            {campaignsInfo && campaignsInfo.filter(s=>!s.merge_group_id&&`${s.player} ${s.name} ${s.commander_name || ''} ${s.from} ${s.to}`.toLowerCase().includes(armySearch.toLowerCase())).map(s => s.data_issues?.length ? (<div className="card admin-data-warning" key={s.id}><strong>رکورد لشکر نیازمند بررسی است</strong><p>{s.player} · {s.name}</p><p>اطلاعات ثبت‌نشده یا نامعتبر: {s.data_issue_labels.join('، ')}</p><small>شناسهٔ پرونده: <b dir="ltr">{s.id}</b></small><p>این رکورد بدون تغییر نگه‌داری شده است؛ پیش از اجرای فرمان، اطلاعات آن باید بررسی شود.</p></div>) : (
 
               <div className="card" key={s.id} style={{ marginBottom: 10 }}>
 
@@ -4168,6 +4168,7 @@ export default function Admin() {
                       {s.food_per_day.toLocaleString('fa-IR')} غله/روز ·{' '}
 
                       {s.travel_minutes.toLocaleString('fa-IR')} دقیقه سفر
+                      {' · '}فرمانده: {s.commander_name || 'ندارد'}{s.commander_status === 'pending' ? ' (منتظر پذیرش)' : ''}
 
                     </small>
 
@@ -4187,7 +4188,7 @@ export default function Admin() {
 
                   <div style={{ fontSize: 11, color: 'var(--low)' }}>
 
-                    {s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
+                    {s.commander_status === 'pending' ? 'منتظر پذیرش فرمانده؛ هنوز حرکت نکرده' : s.active ? (s.arrived ? 'رسیده به مقصد' : 'در راه') : 'لغوشده'}
 
                   </div>
 
@@ -4293,7 +4294,7 @@ export default function Admin() {
 
                   {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
 
-                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
+                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_name || army.commander?.name || (army.commander_present ? 'همراه لشکر است' : 'ندارد')}</div>
 
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.attackers?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), attackers: { ...(p[b.campaign_id]?.attackers || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.attackers?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
 
@@ -4309,7 +4310,7 @@ export default function Admin() {
 
                   {!!army.war_items?.length && <div className="page-sub">آیتم‌های همراه: {army.war_items.map(it => it.name).join("، ")}</div>}
 
-                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_present ? 'همراه لشکر است' : 'همراه لشکر نیست'}</div>
+                  <div className="page-sub" style={{ margin: '5px 0 8px' }}>فرمانده: {army.commander_name || army.commander?.name || (army.commander_present ? 'همراه لشکر است' : 'ندارد')}</div>
 
                   {army.troops.map(t => <div className="troop" key={`${army.campaign_id}-${t.id}`}><div className="tn">{t.name}<small>{t.count.toLocaleString('fa-IR')} حاضر</small></div><input type="number" min="0" max={t.count} placeholder="تلفات" value={roleplayLosses[b.campaign_id]?.defenders?.[army.campaign_id]?.[t.id] ?? ''} onChange={e => setRoleplayLosses(p => ({ ...p, [b.campaign_id]: { ...(p[b.campaign_id] || {}), defenders: { ...(p[b.campaign_id]?.defenders || {}), [army.campaign_id]: { ...(p[b.campaign_id]?.defenders?.[army.campaign_id] || {}), [t.id]: Math.max(0, Math.min(t.count, Number(e.target.value) || 0)) } } } }))} /></div>)}
 

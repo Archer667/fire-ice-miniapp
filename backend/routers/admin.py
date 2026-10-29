@@ -376,7 +376,7 @@ async def _admin_castle_defenses(root):
 async def list_campaigns(user: dict = Depends(admin_user)):
     """اطلاعات کامل لشکرکشی‌ها برای ادمین — فقط نمایشی، بدون تایید/رد"""
     out = []
-    cur = campaigns.find({"active": True, "merge_group_id":{"$in":[None, ""]}}).sort("created_at", -1)
+    cur = campaigns.find({"$or": [{"active": True}, {"status": "awaiting_commander"}], "merge_group_id":{"$in":[None, ""]}}).sort("created_at", -1)
     async for s in cur:
         from campaign_integrity import display_issues, issue_view
         issues = display_issues(s)
@@ -399,11 +399,14 @@ async def list_campaigns(user: dict = Depends(admin_user)):
             "target_player": target_owner["name"] if target_owner else None,
             "op_type": s["op_type"], "op_name": OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
             "name": s.get("name") or OP_TYPES.get(s["op_type"], {}).get("name", s["op_type"]),
+            "commander": s.get("commander"), "commander_present": bool(s.get("commander_present")),
+            "commander_name": (s.get("commander") or {}).get("name"),
+            "commander_status": (s.get("commander") or {}).get("status", "none"),
             "troops": troops, **await _admin_army_metrics(s),
             **await _admin_castle_defenses(s),
             "gold_cost": s["gold_cost"], "men_committed": s["men_committed"], "food_per_day": campaign_food(s),
             "travel_minutes": s.get("travel_minutes", 0),
-            "arrived": (now() >= arrival_at) if arrival_at else True,
+            "arrived": (now() >= arrival_at) if arrival_at else s.get("status") != "awaiting_commander",
             "active": s.get("active", False),
             "created_at": s["created_at"].isoformat(),
         })
@@ -865,6 +868,8 @@ async def list_open_battles(user: dict = Depends(admin_user)):
             "campaign_id": a.get("campaign_id") or str(a.get("_id", "")), "name": a.get("name", "لشکر"),
             "tg_id": a.get("tg_id"), "player_name": a.get("player_name", "مهاجم"),
             "commander_present": bool(a.get("commander_present", False)),
+            "commander": a.get("commander"), "commander_name": (a.get("commander") or {}).get("name"),
+            "commander_status": (a.get("commander") or {}).get("status", "none"),
             "men": a.get("men_committed", a.get('men', sum(a.get("troops", {}).values()))),
             **await _admin_army_metrics(a),
             "troops": [{"id": tid, "name": COMMON_TROOPS.get(tid, {}).get("name", tid), "count": n} for tid, n in a.get("troops", {}).items() if n and n > 0],

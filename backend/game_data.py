@@ -199,7 +199,7 @@ GAME_RULES = {
     "level_hours_step": 0.15,
     "default_max_building_level": 8,
     "equipment_slowdown_cap": 1.0,
-    "commander_power_bonus": 0.10,
+    "commander_power_bonus": 0.15,
     "commander_speed_bonus": 0.10,
 }
 

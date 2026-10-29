@@ -8,6 +8,7 @@ import { api } from '../api.js';
 import { haptic } from '../telegram.js';
 import { Swords, Coin, People, Wheat } from '../components/Icons.jsx';
 import WesterosMap from '../components/WesterosMap.jsx';
+import LivingPageHero from '../components/LivingPageHero.jsx';
 import {
   COMMON_TROOPS, SPECIAL_COST, SPECIAL_POWER, REGIONS_STATIC, OP_TYPES,
   TROOP_UNIT_BUILDINGS, FOOD_COST_REGULAR, FOOD_COST_SPECIAL, travelMinutes, campaignPower,
@@ -123,7 +124,9 @@ export default function War() {
   const [opType, setOpType] = useState(OP_TYPES[0].id);
   const [target, setTarget] = useState(null); // { name, region, ... } | null
   const [name, setName] = useState('');
-  const [commanderPresent, setCommanderPresent] = useState(false);
+  const [commanderOptions, setCommanderOptions] = useState([]);
+  const [commanderId, setCommanderId] = useState('');
+  const [commanderRequests, setCommanderRequests] = useState([]);
   const [busy, setBusy] = useState(false);
   const [cancelBusyId, setCancelBusyId] = useState(null);
   const [movingLegion, setMovingLegion] = useState(null);
@@ -164,6 +167,20 @@ export default function War() {
     return () => { cancelled = true; };
   }, [origin]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.commanderOptions(origin).then(data => {
+      if (!cancelled) {
+        setCommanderOptions(data.options || []);
+        setCommanderId(current => (data.options || []).some(row => row.id === current) ? current : '');
+      }
+    }).catch(() => { if (!cancelled) { setCommanderOptions([]); setCommanderId(''); } });
+    return () => { cancelled = true; };
+  }, [origin]);
+
+  const loadCommanderRequests = () => api.commanderRequests().then(setCommanderRequests).catch(() => setCommanderRequests([]));
+  useEffect(() => { loadCommanderRequests(); }, []);
+
   // لیستِ نیروهای قابل‌ساخت با عوض‌شدنِ مبدا فرق می‌کنه (نیروی ویژه/کشتی) — شمارشِ
   // قبلی که ممکنه دیگه معتبر نباشه رو پاک می‌کنیم تا فرمانِ بعدی نیرویِ نامعتبر نداشته باشه
   useEffect(() => {
@@ -194,7 +211,10 @@ export default function War() {
   const chosenRoute = routeOptions && routeOptions[routeChoice];
   const equipmentSlowdown = Math.min(1, SIEGE_EQUIPMENT.reduce((s, e) => s + (equipmentCounts[e.id] || 0) * e.slowdown, 0));
   const baseEta = sameCastle ? 0 : (chosenRoute ? chosenRoute.minutes : travelMinutes(sameCastle, origin, targetName));
-  const eta = Math.round(baseEta * (1 + equipmentSlowdown));
+  const selectedCommander = commanderOptions.find(row => row.id === commanderId);
+  const commanderSpeed = Number(warWindow?.commander_speed_bonus_percent ?? 10) / 100;
+  const commanderPower = Number(warWindow?.commander_power_bonus_percent ?? 15) / 100;
+  const eta = Math.round(baseEta * (1 + equipmentSlowdown) * (selectedCommander ? (1 - commanderSpeed) : 1));
 
   const unlocked = (troop) => {
     if (troop.naval) return builtLevels[NAVAL_CAMP_BUILDING] > 0;
@@ -239,7 +259,7 @@ export default function War() {
     return need;
   }, [counts, allTroops]);
   const shortWeapon = Object.entries(weaponsNeeded).find(([wkey, n]) => n > (me.resources[wkey] ?? 0));
-  const estPower = useMemo(() => campaignPower(counts, builtLevels), [counts, builtLevels]);
+  const estPower = useMemo(() => Math.round(campaignPower(counts, builtLevels) * (selectedCommander ? (1 + commanderPower) : 1)), [counts, builtLevels, selectedCommander, commanderPower]);
   const totalGoldCost = goldCost + (equipmentCost.gold || 0);
   const overGold = totalGoldCost > gold;
   const shortEquipmentResource = Object.entries(equipmentCost).find(([resource, amount]) => resource !== 'gold' && amount + (weaponsNeeded[resource] || 0) > (me.resources[resource] || 0));
@@ -279,7 +299,7 @@ export default function War() {
     : null;
 
   const resetForm = () => {
-    setName(''); setTarget(null); setCommanderPresent(false); setSelectedItems([]);
+    setName(''); setTarget(null); setCommanderId(''); setSelectedItems([]);
     setCounts(Object.fromEntries(allTroops.map(t => [t.id, 0])));
     setEquipmentCounts(Object.fromEntries(SIEGE_EQUIPMENT.map(e => [e.id, 0])));
   };
@@ -317,12 +337,12 @@ export default function War() {
         haptic('medium'); toast('کمین ثبت شد و در انتظار داوری است.');
         api.me().then(setMe); setAmbushScenario(''); resetForm(); loadLegions(); setBusy(false); return;
       }
-      await api.submitCampaign({
+      const result = await api.submitCampaign({
         origin_castle: origin, op_type: opType,
         target_castle: op.needsTarget ? target.name : null,
         name: name.trim(), troops: counts,
         equipment: equipmentCounts,
-        commander_present: commanderPresent, item_ids: selectedItems,
+        commander_id: commanderId || null, commander_present: false, item_ids: selectedItems,
         via: chosenRoute ? chosenRoute.path : undefined,
       });
       haptic('medium');
@@ -334,7 +354,9 @@ export default function War() {
         resources: Object.fromEntries(Object.entries({ ...me.resources, gold: gold - goldCost, men: men - menCommitted, ...weaponUpdates }).map(([k, v]) => [k, v - (equipmentCost[k] || 0)])),
         active_campaigns: (me.active_campaigns ?? 0) + 1,
       });
-      toast(eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
+      toast(result.status === 'awaiting_commander'
+        ? `فرمان ثبت شد؛ لشکر تا پذیرش ${selectedCommander?.name || 'مهمان'} در قلعه می‌ماند`
+        : eta > 0 ? `فرمان مُهر شد — لشکر تا ${eta.toLocaleString('fa-IR')} دقیقه دیگر می‌رسد` : 'فرمان مُهر شد — لشکر همین‌جاست');
       resetForm();
       loadMine(); loadMap(); loadLegions(); loadWarItems();
     } catch (e) { toast(e.message); }
@@ -379,7 +401,7 @@ export default function War() {
   };
 
   if (mapError) return (
-    <>
+    <div className="living-page living-war-page">
       <div className="page-title up">نیروها/لشکرکشی</div>
       <div className="card up u1" style={{ textAlign: 'center', color: 'var(--mid)' }}>
         نقشه دریافت نشد. اتصال اینترنت را بررسی کن و دوباره تلاش کن.
@@ -387,14 +409,26 @@ export default function War() {
           <button className="btn ghost" style={{ padding: 11 }} onClick={loadMap}>تلاش دوباره</button>
         </div>
       </div>
-    </>
+    </div>
   );
   if (!mapData || !buildings || !mine) return <div className="loading">نیروها در راه‌اند...</div>;
 
   return (
-    <>
+    <div className="living-page living-war-page">
+      <LivingPageHero kind="war" eyebrow="هر فرمان، مسیر یک نبرد را عوض می‌کند" title="نیرو و لشکرکشی" subtitle="لشکر را بساز، فرمانده‌اش را مشخص کن، مسیر را ببین و حرکت نیروها را تا میدان دنبال کن." badges={[`${(legions || []).length.toLocaleString('fa-IR')} لشکر`, windowClosed ? 'گسیل تهاجمی بسته' : 'گسیل باز', `${Number(warWindow?.commander_power_bonus_percent ?? 15).toLocaleString('fa-IR')}٪ مزیت فرمانده`]} />
       <div className="page-title up">نیروها/لشکرکشی</div>
       <div className="page-sub up">قلعه‌ای را در نقشه انتخاب کن تا اطلاعاتش را ببینی و مقصد لشکر را تعیین کنی.</div>
+
+      {commanderRequests.length > 0 && <div className="commander-invitations up u1">
+        <div className="sect">درخواست‌های فرماندهی</div>
+        {commanderRequests.map(request => <div className="card commander-invitation" key={request.id}>
+          <div><b>فرماندهی «{request.army_name}»</b><small>{request.owner_name} · {castleLabel(request.origin)} ← {castleLabel(request.target)} · {Number(request.men).toLocaleString('fa-IR')} نفر</small></div>
+          <div className="commander-actions">
+            <button className="btn ghost" onClick={async()=>{try{await api.respondCommanderRequest(request.id,false);toast('درخواست رد شد');loadCommanderRequests();loadLegions();}catch(e){toast(e.message)}}}>رد</button>
+            <button className="btn" onClick={async()=>{try{await api.respondCommanderRequest(request.id,true);toast('فرماندهی را پذیرفتی؛ لشکر حرکت کرد');loadCommanderRequests();loadLegions();}catch(e){toast(e.message)}}}>پذیرش</button>
+          </div>
+        </div>)}
+      </div>}
 
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
@@ -433,10 +467,16 @@ export default function War() {
             )}
             <label className="f" style={{ marginTop: 0 }}>نام لشکر</label>
             <input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="مثلاً «یورش بامداد» — اختیاری" />
-            {!movingLegion && <button type="button" className={`rbtn pick ${commanderPresent ? 'sel' : ''}`} style={{ marginTop: 10, width: '100%', textAlign: 'right' }} onClick={() => setCommanderPresent(v => !v)}>
-              <div className="n">{commanderPresent ? 'فرمانده همراه لشکر می‌رود' : 'فرمانده در قلعه می‌ماند'}</div>
-              <div className="c">حضور کاراکتر: {Number(warWindow?.commander_power_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ قدرت بیشتر و {Number(warWindow?.commander_speed_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ کاهش زمان سفر.</div>
-            </button>}
+            {!movingLegion && <div className="commander-picker">
+              <label className="f">فرماندهٔ لشکر</label>
+              <select value={commanderId} onChange={event => setCommanderId(event.target.value)}>
+                <option value="">بدون فرمانده</option>
+                {commanderOptions.map(row => <option value={row.id} key={row.id}>
+                  {row.name} · {row.kind === 'self' ? 'خودت' : row.kind === 'child' ? 'فرزند بالغ' : 'مهمان'}{row.requires_acceptance ? ' · نیازمند پذیرش' : ''}
+                </option>)}
+              </select>
+              <div className="commander-help">فرماندهٔ پذیرفته‌شده زمان مسیر را {Number(warWindow?.commander_speed_bonus_percent ?? 10).toLocaleString('fa-IR')}٪ کم و توان لشکر را {Number(warWindow?.commander_power_bonus_percent ?? 15).toLocaleString('fa-IR')}٪ زیاد می‌کند. اگر مهمان را انتخاب کنی، لشکر تا پذیرش او حرکت نمی‌کند. سناریوی جنگ همچنان با صاحب لشکر است.</div>
+            </div>}
 
             <label className="f">مبدا</label>
             <select value={origin} disabled={!!movingLegion} onChange={e => setOrigin(e.target.value)}>
@@ -629,6 +669,7 @@ export default function War() {
                   {c.name}
                   {!!c.war_items?.length && <small>آیتم‌ها: {c.war_items.map(it => it.name).join('، ')}</small>}
                   <small>{c.op_name} · توان {c.power.toLocaleString('fa-IR')} · {c.men_committed.toLocaleString('fa-IR')} نفر</small>
+                  <small>فرمانده: {c.commander_name || 'ندارد'}{c.commander_status === 'pending' ? ' · منتظر پذیرش' : ''}</small>
                 </div>
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
@@ -647,7 +688,7 @@ export default function War() {
                 </div>
               )}
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 10 }}>
-                <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />
+                {c.awaiting_commander ? 'منتظر پذیرش فرمانده؛ حرکت و مصرف غله شروع نشده است' : <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />}
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {c.can_move && <button className="btn ghost" onClick={()=>setMergeBase(c.id)}>ادغام لشکر</button>}
@@ -698,6 +739,7 @@ export default function War() {
                   {c.name}
                   {!!c.war_items?.length && <small>آیتم‌ها: {c.war_items.map(it => it.name).join('، ')}</small>}
                   <small>{c.mine ? c.op_name : 'لشکرکشی'} · فرستنده: {c.sender}</small>
+                  <small>فرمانده: {c.commander_name || 'ندارد'}{c.commander_status === 'pending' ? ' · منتظر پذیرش' : ''}</small>
                 </div>
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--mid)', margin: '8px 0' }}>
@@ -713,7 +755,8 @@ export default function War() {
                 </div>
               )}
               <div style={{ fontSize: 11, color: 'var(--low)', marginBottom: 8 }}>
-                {!c.active ? 'لغوشده'
+                {c.commander_status === 'pending' ? 'منتظر پذیرش فرمانده'
+                  : !c.active ? 'لغوشده'
                   : <ArrivalCountdown arrivalAt={c.arrival_at} arrived={c.arrived} />}
               </div>
               {c.active && (
@@ -725,6 +768,6 @@ export default function War() {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }

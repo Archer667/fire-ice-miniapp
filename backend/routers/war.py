@@ -7,7 +7,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from auth import get_user
-from db import players, campaigns, ambushes, map_castles, roleplays, game_settings, alliances
+from db import db, players, campaigns, ambushes, map_castles, roleplays, game_settings, alliances
 from game import now, can_afford, pay, normalize_building_state, add_resources, owned_castles, building_levels_for, normalize_datetime, effective_caps, apply_production, production_fields
 from game_data import (
     COMMON_TROOPS, REGIONS, SPECIAL_TROOP_COST, BUILDINGS, unit_requirements, campaign_power,
@@ -143,7 +143,7 @@ async def war_window(user: dict = Depends(get_user)):
     return {
         "open": w["open"], "updated_at": w["updated_at"].isoformat() if w["updated_at"] else None,
         "commander_speed_bonus_percent": float(rule("movement.commander_speed_bonus_percent", 10)),
-        "commander_power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 10)),
+        "commander_power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 15)),
     }
 
 def _building_levels(player: dict, castle: str | None = None) -> dict:
@@ -161,7 +161,11 @@ class CampaignBody(BaseModel):
     equipment: dict = {}    # {equipment_id: count}
     via: list[str] | None = None   # مسیرِ انتخابیِ بازیکن (اگر چند گزینهٔ مسیر بود) — از /war/routes
     commander_present: bool = False
+    commander_id: str | None = None
     item_ids: list[str] = []
+
+class CommanderResponseBody(BaseModel):
+    accept: bool
 
 class MoveCampaignBody(BaseModel):
     target_castle: str
@@ -173,6 +177,115 @@ class AmbushBody(BaseModel):
     target_castle: str
     troops: dict
     scenario: str
+
+def _commander_view(campaign: dict) -> dict:
+    commander = dict(campaign.get("commander") or {})
+    if not commander and campaign.get("commander_present"):
+        commander = {"kind": "legacy", "name": campaign.get("player_name", "فرمانده"), "status": "accepted"}
+    return {
+        "has_commander": bool(commander and commander.get("status") == "accepted"),
+        "commander_name": commander.get("name"),
+        "commander_kind": commander.get("kind"),
+        "commander_status": commander.get("status", "none") if commander else "none",
+    }
+
+async def _commander_candidates(player: dict, origin: str) -> list[dict]:
+    """فرمانده باید واقعاً در قلعهٔ مبدأ حاضر و آزاد باشد؛ یک نفر هم‌زمان فرمانده دو لشکر نیست."""
+    from family import key
+    from character_travel import locations, state
+    busy = {row.get("commander", {}).get("key") async for row in campaigns.find({
+        "commander.status": {"$in": ["pending", "accepted"]},
+        "status": {"$nin": ["cancelled", "destroyed", "disbanded", "commander_rejected"]},
+    })}
+    result = []
+    own_state = await state(player)
+    own_key = key(player)
+    if own_state.get("place") == origin and not own_state.get("trip") and not own_state.get("captive") and own_key not in busy:
+        result.append({"id": own_key, "kind": "self", "name": player["name"], "requires_acceptance": False})
+    async for child in db.family_children.find({"patron_key": own_key, "status": "alive", "adult_at": {"$lte": now()}}):
+        child_key = "child:" + child["_id"]
+        location = await locations.find_one({"_id": child_key})
+        place = (location or {}).get("place", child.get("residence"))
+        if place == origin and not (location or {}).get("trip") and not (location or {}).get("captive") and child_key not in busy:
+            result.append({"id": child_key, "kind": "child", "name": child.get("name") or child.get("fallback_name", "فرزند خاندان"), "requires_acceptance": False})
+    async for location in locations.find({"place": origin, "tg_id": {"$exists": True, "$ne": player["tg_id"]}, "trip": None, "captive": None}):
+        guest = await players.find_one({"tg_id": location["tg_id"], "is_dead": {"$ne": True}, "registration_reset": {"$ne": True}})
+        if guest and location["_id"] not in busy:
+            result.append({"id": location["_id"], "kind": "guest", "name": guest.get("name", location.get("name", "مهمان")),
+                           "tg_id": guest["tg_id"], "requires_acceptance": True})
+    return result
+
+async def _select_commander(player: dict, origin: str, commander_id: str | None, legacy_present: bool) -> dict | None:
+    candidates = await _commander_candidates(player, origin)
+    if legacy_present and not commander_id:
+        commander_id = next((row["id"] for row in candidates if row["kind"] == "self"), None)
+    if not commander_id:
+        return None
+    selected = next((row for row in candidates if row["id"] == commander_id), None)
+    if not selected:
+        raise HTTPException(409, "فرماندهٔ انتخاب‌شده دیگر در قلعهٔ مبدأ حاضر یا آزاد نیست، یا فرماندهی لشکر دیگری را برعهده دارد")
+    return {"key": selected["id"], "kind": selected["kind"], "name": selected["name"],
+            "tg_id": selected.get("tg_id"), "status": "pending" if selected["requires_acceptance"] else "accepted"}
+
+@router.get("/commander-options")
+async def commander_options(origin_castle: str, user: dict = Depends(get_user)):
+    player = await players.find_one({"tg_id": user["id"]})
+    if not player:
+        raise HTTPException(403, "اول ثبت‌نام کن")
+    if origin_castle not in ({player.get("castle")} | set(player.get("castle_buildings", {})) | await stationed_origins(user["id"])):
+        raise HTTPException(400, "قلعهٔ مبدأ معتبر نیست")
+    return {"options": await _commander_candidates(player, origin_castle),
+            "power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 15)),
+            "speed_bonus_percent": float(rule("movement.commander_speed_bonus_percent", 10))}
+
+@router.get("/commander-requests")
+async def commander_requests(user: dict = Depends(get_user)):
+    rows = []
+    async for campaign in campaigns.find({"status": "awaiting_commander", "commander.tg_id": user["id"], "commander.status": "pending"}).sort("created_at", -1):
+        rows.append({"id": str(campaign["_id"]), "army_name": campaign["name"], "owner_name": campaign["player_name"],
+                     "origin": campaign["origin_castle"], "target": campaign["target_castle"],
+                     "men": campaign["men_committed"], "created_at": campaign["created_at"].isoformat()})
+    return rows
+
+async def _refund_pending_commander_campaign(campaign: dict):
+    cost = campaign.get("reserved_cost") or {}
+    if cost:
+        await players.update_one({"tg_id": campaign["tg_id"]}, {"$inc": {f"resources.{key}": value for key, value in cost.items() if value}})
+
+@router.post("/{campaign_id}/commander-response")
+async def commander_response(campaign_id: str, body: CommanderResponseBody, user: dict = Depends(get_user)):
+    if not ObjectId.is_valid(campaign_id):
+        raise HTTPException(400, "شناسهٔ لشکر نامعتبر است")
+    campaign = await campaigns.find_one({"_id": ObjectId(campaign_id), "status": "awaiting_commander"})
+    commander = (campaign or {}).get("commander") or {}
+    if not campaign or commander.get("tg_id") != user["id"] or commander.get("status") != "pending":
+        raise HTTPException(404, "درخواست فرماندهیِ منتظر پاسخ پیدا نشد")
+    guest = await players.find_one({"tg_id": user["id"], "is_dead": {"$ne": True}, "registration_reset": {"$ne": True}})
+    from character_travel import locations
+    location = await locations.find_one({"_id": commander["key"]})
+    if body.accept and (not guest or not location or location.get("place") != campaign["origin_castle"] or location.get("trip") or location.get("captive")):
+        raise HTTPException(409, "برای پذیرش فرماندهی باید هنوز آزاد و در قلعهٔ مبدأ حاضر باشی")
+    if not body.accept:
+        result = await campaigns.update_one({"_id": campaign["_id"], "status": "awaiting_commander"}, {"$set": {
+            "active": False, "status": "commander_rejected", "commander.status": "rejected", "commander_responded_at": now()}})
+        if result.modified_count:
+            await _refund_pending_commander_campaign(campaign)
+            owner = await players.find_one({"tg_id": campaign["tg_id"]})
+            if owner:
+                await send_system_message(owner["tg_id"], owner["name"], f"درخواست فرماندهی «{campaign['name']}» پذیرفته نشد و تمام منابع رزروشده برگشت.", kind="battle")
+        return {"ok": True, "accepted": False}
+    arrival_at = now() + timedelta(minutes=campaign.get("travel_minutes", 0))
+    result = await campaigns.update_one({"_id": campaign["_id"], "status": "awaiting_commander"}, {"$set": {
+        "active": True, "status": "moving", "commander.status": "accepted", "commander_present": True,
+        "commander_responded_at": now(), "created_at": now(), "last_food_tick": now(), "arrival_at": arrival_at, "arrival_notified": False}})
+    if not result.modified_count:
+        raise HTTPException(409, "وضعیت این درخواست تغییر کرده است")
+    activated = await campaigns.find_one({"_id": campaign["_id"]})
+    await notify_campaign_departure(activated)
+    owner = await players.find_one({"tg_id": campaign["tg_id"]})
+    if owner:
+        await send_system_message(owner["tg_id"], owner["name"], f"{commander['name']} فرماندهی «{campaign['name']}» را پذیرفت؛ لشکر حرکت کرد.", kind="battle")
+    return {"ok": True, "accepted": True, "arrival_at": arrival_at.isoformat()}
 
 async def all_castle_terrain() -> dict:
     """نگاشتِ اسمِ هر قلعه/شهرِ بازی (استاتیک + آنچه ادمین به نقشه اضافه کرده) به نوع
@@ -677,17 +790,19 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
                 raise HTTPException(400, "این مسیر از آب می‌گذرد و کشتی‌های این فرمان ظرفیتِ کافی برای حملِ همهٔ نیروهای زمینی را ندارند — یا کشتی بیشتری اضافه کن، یا مسیرِ زمینیِ دیگری که از /war/routes پیشنهاد می‌شود انتخاب کن")
             raise HTTPException(400, f"این مسیر فقط از راهِ آب ممکن است و کشتی‌های این فرمان فقط {naval_capacity} نفر را جابه‌جا می‌کنند — کشتی بیشتری اضافه کن یا نیروی کمتری بفرست")
         travel, route_path = chosen["minutes"], chosen["path"]
+    commander = await _select_commander(p, body.origin_castle, body.commander_id, body.commander_present)
+    commander_accepted = bool(commander and commander["status"] == "accepted")
     speed_factor = max(.01, float(rule("movement.base_speed_percent", 100)) / 100)
     route_factor = max(0, float(rule("movement.route_time_percent", 100)) / 100)
     slowdown_cap = max(0, float(rule("movement.equipment_slowdown_cap_percent", 100)) / 100)
     travel = round(travel * route_factor / speed_factor)
     travel = max(travel, round(travel * (1 + min(equipment_slowdown, slowdown_cap))))
-    if body.commander_present:
+    if commander:
         commander_speed = float(rule("movement.commander_speed_bonus_percent", float(game_data.GAME_RULES["commander_speed_bonus"]) * 100)) / 100
         travel = max(0, round(travel * (1 - commander_speed)))
-    arrival_at = now() + timedelta(minutes=travel)
+    arrival_at = (now() + timedelta(minutes=travel)) if commander_accepted or not commander else None
     power = campaign_power(body.troops, _building_levels(p, body.origin_castle))
-    if body.commander_present:
+    if commander:
         commander_power = float(rule("movement.commander_power_bonus_percent", float(game_data.GAME_RULES["commander_power_bonus"]) * 100)) / 100
         power = round(power * (1 + commander_power))
 
@@ -712,20 +827,31 @@ async def submit(body: CampaignBody, user: dict = Depends(get_user)):
         "travel_minutes": travel, "arrival_at": arrival_at, "route_path": route_path,
         "route_edge_minutes": [TRAVEL_GRAPH[a][b] for a, b in zip(route_path, route_path[1:])],
         "penalty_charged": penalty_charged,
-        "commander_present": body.commander_present,
+        "commander": commander, "commander_present": commander_accepted,
         "item_ids": [it["id"] for it in war_items], "war_items": war_items,
         "power_building_levels": _building_levels(p, body.origin_castle),
-        "commander_power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 10)),
-        "active": True, "arrival_notified": False,
+        "commander_power_bonus_percent": float(rule("movement.commander_power_bonus_percent", 15)),
+        "commander_speed_bonus_percent": float(rule("movement.commander_speed_bonus_percent", 10)),
+        "reserved_cost": {**combined_cost, "men": men},
+        "active": not bool(commander and commander["status"] == "pending"),
+        "status": "awaiting_commander" if commander and commander["status"] == "pending" else "moving",
+        "arrival_notified": False,
         "created_at": now(), "last_food_tick": now(),
     }
     res = await campaigns.insert_one(doc)
     from season_analytics import archive_row
     await archive_row("campaigns", {**doc,"_id":res.inserted_id})
-    await notify_campaign_departure(doc)
+    if doc["active"]:
+        await notify_campaign_departure(doc)
+    else:
+        guest = await players.find_one({"tg_id": commander["tg_id"]})
+        if guest:
+            await send_system_message(guest["tg_id"], guest["name"],
+                f"{p['name']} از تو خواسته فرماندهی لشکر «{doc['name']}» را از {body.origin_castle} بپذیری. از صفحهٔ نیروها پاسخ بده؛ لشکر تا پاسخ تو حرکت نمی‌کند.", kind="battle")
     return {
         "ok": True, "id": str(res.inserted_id), "naval_material_costs": naval_material_snapshot(body.troops), "gold_cost": gold, "men_committed": men, "power": power,
-        "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat(),
+        "food_per_day": food_per_day, "travel_minutes": travel, "arrival_at": arrival_at.isoformat() if arrival_at else None,
+        "status": doc["status"], "commander": _commander_view(doc),
         "route_path": route_path, "penalty_charged": penalty_charged,
     }
 
@@ -744,6 +870,19 @@ async def cancel(campaign_id: str, user: dict = Depends(get_user)):
     if not c or c["tg_id"] != user["id"]:
         raise HTTPException(404, "لشکر پیدا نشد")
     if c.get('mercenary_contract_id'):raise HTTPException(409,'لشکر قراردادی را از صفحهٔ گروهان طلایی بازگردان؛ هزینه و نیروهایش قابل تبدیل به منابع نیست')
+    if c.get("status") == "awaiting_commander":
+        result = await campaigns.update_one({"_id": c["_id"], "status": "awaiting_commander"}, {"$set": {
+            "active": False, "status": "cancelled", "commander.status": "cancelled", "cancelled_at": now()}})
+        if not result.modified_count:
+            raise HTTPException(409, "وضعیت این درخواست تغییر کرده است")
+        await _refund_pending_commander_campaign(c)
+        commander = c.get("commander") or {}
+        if commander.get("tg_id"):
+            guest = await players.find_one({"tg_id": commander["tg_id"]})
+            if guest:
+                await send_system_message(guest["tg_id"], guest["name"], f"درخواست فرماندهی «{c['name']}» لغو شد.", kind="battle")
+        return {"ok": True, "pending_commander_cancelled": True, "refund_ratio": 1,
+                "men_refunded": c.get("men_committed", 0), "gold_refunded": c.get("gold_cost", 0)}
     if not c.get("active"):
         raise HTTPException(400, "این لشکر دیگر فعال نیست")
     if c.get('route_path') and c.get('created_at'):
@@ -957,7 +1096,7 @@ async def legions(user: dict = Depends(get_user)):
     برخلاف /mine که فقط برای گزارش تهاجمی‌ها و با تأخیر/بازهٔ زمانی محدود است، اینجا
     خودِ صاحبِ لشکرهاست که دارد می‌بیند، پس نه چیزی حذف می‌شود نه پنهان"""
     from battle_passage import status as passage_status
-    cur = campaigns.find({"tg_id": user["id"], "active": True}).sort("created_at", -1).limit(50)
+    cur = campaigns.find({"tg_id": user["id"], "$or": [{"active": True}, {"status": "awaiting_commander"}]}).sort("created_at", -1).limit(50)
     out = []
     async for c in cur:
         from campaign_integrity import display_issues
@@ -965,7 +1104,8 @@ async def legions(user: dict = Depends(get_user)):
             continue
         is_mine = c["tg_id"] == user["id"]
         arrival_at = c.get("arrival_at")
-        arrived = (now() >= arrival_at) if arrival_at else True
+        awaiting_commander = c.get("status") == "awaiting_commander"
+        arrived = (now() >= arrival_at) if arrival_at else not awaiting_commander
         waiting_result = campaign_waiting_for_result(c)
         troops = [
             {"name": troop_name(t), "count": n}
@@ -984,11 +1124,12 @@ async def legions(user: dict = Depends(get_user)):
             "troops": troops, "men_committed": c["men_committed"], "power": c.get("power", 0),
             "equipment": c.get("equipment", {}), "equipment_power": c.get("equipment_power", 0),
             "war_items": c.get("war_items", []),
+            **_commander_view(c), "status": c.get("status"), "awaiting_commander": awaiting_commander,
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
             "arrived": arrived,
             "engagement_locked": bool(c.get("engagement_locked") or waiting_result),
             "waiting_for_result": waiting_result,
-            "can_move": arrived and not c.get("engagement_locked") and not waiting_result,
+            "can_move": not awaiting_commander and arrived and not c.get("engagement_locked") and not waiting_result,
             "stationed_edge": c.get("stationed_edge"),
             "can_attack": c["op_type"] == "siege" and arrived and not c.get("engagement_locked"),
             "created_at": c["created_at"].isoformat(),
@@ -1008,7 +1149,7 @@ async def mine(user: dict = Depends(get_user)):
         if display_issues(c):
             continue
         arrival_at = c.get("arrival_at")
-        arrived = (now() >= arrival_at) if arrival_at else True
+        arrived = (now() >= arrival_at) if arrival_at else c.get("status") != "awaiting_commander"
         if arrived and arrival_at and now() - arrival_at > timedelta(hours=report_visible_hours()):
             continue
         out.append({
@@ -1016,6 +1157,7 @@ async def mine(user: dict = Depends(get_user)):
             "op_type": c["op_type"], "op_name": ("بازگشت از نبرد" if c.get("returning_from_battle") else OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"])),
             "name": c.get("name") or OP_TYPES.get(c["op_type"], {}).get("name", c["op_type"]),
             "sender": c["player_name"],
+            **_commander_view(c), "status": c.get("status"),
             "origin": c["origin_castle"], "target": c["target_castle"],
             "active": c.get("active", False), "war_items": c.get("war_items", []),
             "travel_minutes": c.get("travel_minutes", 0), "route_path": c.get("route_path"),
@@ -1050,6 +1192,7 @@ def battle_army_snapshot(campaign: dict) -> dict:
         "power": campaign.get("power"),
         "origin_castle": campaign.get("origin_castle"),
         "commander_present": campaign.get("commander_present", False),
+        "commander": campaign.get("commander"),
         "power_building_levels": campaign.get("power_building_levels"),
         "commander_power_bonus_percent": campaign.get("commander_power_bonus_percent"),
         "troops": dict(campaign.get("troops", {})),
@@ -1071,7 +1214,7 @@ def battle_army_stats_line(army: dict) -> str:
     men = int(army.get("men_committed", sum(army.get("troops", {}).values())) or 0)
     return (
         f"{titled_name(name=army.get('player_name', 'نامشخص'), gender=army.get('player_gender'))} · «{army.get('name', 'لشکر')}» · {men} نفر\n"
-        f"فرمانده: {'همراه لشکر است' if army.get('commander_present') else 'همراه لشکر نیست'}\n"
+        f"فرمانده: {(army.get('commander') or {}).get('name') or ('همراه لشکر است' if army.get('commander_present') else 'ندارد')}\n"
         f"نیروها: {troops_summary(army.get('troops', {}))}\nادوات: {equipment}\nآیتم‌ها: {war_items_text(army)}"
     )
 

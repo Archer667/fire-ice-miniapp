@@ -39,7 +39,7 @@ DEFAULTS = {
         "pact_costs": {key: int(value.get("wine_cost", 0)) for key, value in ALLIANCE_TYPES.items()},
         "private_multiplier": PRIVATE_ALLIANCE_MULTIPLIER,
         "feast_food_cost": FEAST_COST["food"], "feast_wine_cost": FEAST_COST["wine"],
-        "feast_popularity_gain": FEAST_POPULARITY_GAIN, "feast_cooldown_hours": FEAST_COOLDOWN_HOURS,
+        "feast_gold_cost": 250, "feast_influence_gain": 1, "feast_popularity_gain": 4, "feast_cooldown_hours": FEAST_COOLDOWN_HOURS,
     },
     "war": {
         "road_victory_ratio": 7, "minimum_army_men": 100, "minimum_ambush_men": 50, "roleplay_hours": 6,
@@ -49,7 +49,7 @@ DEFAULTS = {
     "movement": {
         "base_speed_percent": 100, "route_time_percent": 100,
         "equipment_slowdown_cap_percent": 100,
-        "commander_power_bonus_percent": 10, "commander_speed_bonus_percent": 10,
+        "commander_power_bonus_percent": 15, "commander_speed_bonus_percent": 10,
     },
     "scoring": {
         "building_economy": SCORE_W_ECONOMY, "building_military": SCORE_W_MILITARY,
@@ -176,6 +176,14 @@ async def migrate_initial_wine_60():
 
 async def load():
     from db import game_settings
+    await game_settings.update_one({'_id': DOC_ID}, {'$setOnInsert': {'settings': {}}}, upsert=True)
+    await game_settings.update_one({'_id': DOC_ID, 'feast_balance_v2': {'$ne': True}}, {'$set': {
+        'settings.diplomacy.feast_popularity_gain': 4, 'settings.diplomacy.feast_gold_cost': 250,
+        'settings.diplomacy.feast_influence_gain': 1, 'feast_balance_v2': True}})
+    await game_settings.update_one({'_id': DOC_ID, 'named_commanders_v1': {'$ne': True}}, {'$set': {
+        'settings.movement.commander_power_bonus_percent': 15,
+        'settings.movement.commander_speed_bonus_percent': 10,
+        'named_commanders_v1': True}})
     doc = await game_settings.find_one({"_id": DOC_ID}) or {}
     return replace(doc.get("settings") or {})
 

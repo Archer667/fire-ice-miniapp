@@ -75,6 +75,14 @@ async def blocked(place):
         {'target_castle':node,'op_type':{'$in':list(ATTACK_OP_TYPES)},'arrival_at':{'$lte':now()}}
     ]}))
 
+async def commanding(subject):
+    """Return the active army assignment that keeps a character with its troops."""
+    return await campaigns.find_one({
+        'active': True,
+        'commander.key': subject,
+        'commander.status': 'accepted',
+    }, {'_id': 1, 'name': 1})
+
 async def kids(p,s):
     result=[]
     async for c in db.family_children.find({'status':'alive','$or':[{'parent_keys':key(p)},{'patron_key':key(p)}]}):
@@ -120,6 +128,7 @@ async def request(p,target,child_ids,request_id,forced=False,settle=True):
     if settle:await tick()
     s=await state(p)
     if s.get('captive'):raise HTTPException(403,'کاراکتر در اسارت است')
+    if await commanding(key(p)):raise HTTPException(409,'تا وقتی فرماندهٔ یک لشکر هستی، سفر جداگانه ممکن نیست')
     if not s.get('place') and not s.get('trip'):raise HTTPException(400,'ابتدا ادمین محل حضور را تعیین کند')
     dest=await destination(target)
     if s.get('place')==target and not s.get('trip'):raise HTTPException(400,'هم‌اکنون در همین مکان هستی')
@@ -127,6 +136,9 @@ async def request(p,target,child_ids,request_id,forced=False,settle=True):
     selected=list(dict.fromkeys(child_ids))
     available={c['child_id']:c for c in await kids(p,s) if c['available']}
     if any(c not in available for c in selected):raise HTTPException(400,'فرزندان انتخاب‌شده باید زنده، آزاد و همراهت در همین مکان باشند')
+    for child_id in selected:
+        if await commanding('child:'+child_id):
+            raise HTTPException(409,'یکی از فرزندان انتخاب‌شده فرماندهٔ یک لشکر است و نمی‌تواند جداگانه سفر کند')
     old=await trips.find_one({'_id':s['trip']}) if s.get('trip') else None
     if old and old['status']=='held':raise HTTPException(403,'سفر توسط ادمین متوقف شده است')
     if old and set(selected)!=set(old['children']):raise HTTPException(400,'در میانهٔ راه نمی‌توان اعضای گروه را جدا کرد')
@@ -225,6 +237,7 @@ async def capture_request(uid,subject,reason):
     if not s:raise HTTPException(404,'مهمان پیدا نشد')
     await host(uid,s)
     if s.get('captive'):raise HTTPException(409,'این فرد قبلاً اسیر شده است')
+    if await commanding(subject):raise HTTPException(409,'این مهمان همراه یک لشکر و در مأموریت فرماندهی است')
     existing=await captures.find_one({'subject':subject,'status':'pending'})
     if existing:return clean(existing)
     row={'_id':str(uuid4()),'subject':subject,'name':s['name'],'place':s['place'],'host_id':uid,'reason':reason,'status':'pending','at':now()}

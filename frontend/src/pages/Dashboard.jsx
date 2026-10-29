@@ -10,6 +10,7 @@ import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
 import { FamilySummary } from './Family.jsx';
 import ProfileImageModal from '../components/ProfileImageModal.jsx';
 import PlayerFlag from '../components/PlayerFlag.jsx';
+import LivingPageHero from '../components/LivingPageHero.jsx';
 
 const SEASON_ICON = { spring: Blossom, summer: SunIcon, autumn: Leaf, winter: Snowflake };
 
@@ -105,7 +106,8 @@ export default function Dashboard({ goTo }) {
   };
 
   return (
-    <>
+    <div className="living-page living-realm-page">
+      <LivingPageHero kind="realm" eyebrow="فرمانروایی تو از همین‌جا نفس می‌کشد" title={me.name || 'قلمرو'} subtitle="خزانه، مردم، محبوبیت، خاندان و فرمان‌های روزانهٔ قلمرو را یک‌جا ببین." badges={[me.title, castleLabel(me.castle), `روز ${Number(me.day).toLocaleString('fa-IR')}`]} />
       {daily && (
         <div className={`daily-card up ${daily.claimed_today ? 'done' : ''}`}>
           <div className="daily-ic"><Gift s={22} /></div>
@@ -332,6 +334,6 @@ export default function Dashboard({ goTo }) {
         <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(7); }}><div className="qi"><Eye s={19} /></div>جاسوسی</button>
         <button type="button" className="rbtn q" onClick={() => { haptic(); goTo(5); }}><div className="qi"><Heart s={19} /></div>دیپلماسی</button>
       </div>
-    <CharacterTravel guestsOnly /></>
+    <CharacterTravel guestsOnly /></div>
   );
 }

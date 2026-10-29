@@ -6,6 +6,7 @@ import { haptic } from '../telegram.js';
 import { Wine, Heart, Crown, Scroll, Coin } from '../components/Icons.jsx';
 import PlayerPicker from '../components/PlayerPicker.jsx';
 import RealmCouncil from '../components/RealmCouncil.jsx';
+import LivingPageHero from '../components/LivingPageHero.jsx';
 import { REGIONS_STATIC, ALLIANCE_TYPES, PRIVATE_ALLIANCE_MULTIPLIER, WARDEN_GROUPS, FEAST_COST, SMALL_COUNCIL_SEATS } from '../gamedata.js';
 
 const STATUS_FA = {
@@ -50,6 +51,7 @@ export default function Diplomacy() {
   const [invitePact, setInvitePact] = useState(null);
   const [inviteTargets, setInviteTargets] = useState([]);
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [feastRules,setFeastRules]=useState(null);
   const [feastBusy, setFeastBusy] = useState(false);
   const [councilSeat, setCouncilSeat] = useState(Object.keys(SMALL_COUNCIL_SEATS)[0]);
   const [councilTarget, setCouncilTarget] = useState([]);
@@ -63,6 +65,7 @@ export default function Diplomacy() {
   const [kingSalaryDraft, setKingSalaryDraft] = useState('');
 
   const load = () => {
+    api.feastRules().then(setFeastRules).catch(e=>toast(e.message));
     api.titles().then(setTitles).catch(e => toast(e.message));
     api.diplomacyMine().then(setAlliances).catch(e => toast(e.message));
     api.diplomacyPublic().then(setPublicAlliances).catch(e => toast(e.message));
@@ -122,9 +125,10 @@ export default function Diplomacy() {
       setMe({
         ...me,
         popularity: res.popularity,
-        resources: { ...me.resources, wine: me.resources.wine - FEAST_COST.wine, food: me.resources.food - FEAST_COST.food },
+        resources: res.resources || me.resources, political_influence: res.influence,
       });
-      toast('ضیافت برگزار شد — محبوبیت بالا رفت');
+      api.me().then(setMe).catch(()=>{});
+      toast('ضیافت برگزار شد');
     } catch (e) { toast(e.message); }
     setFeastBusy(false);
   };
@@ -257,7 +261,8 @@ export default function Diplomacy() {
   };
 
   return (
-    <>
+    <div className="living-page living-diplomacy-page">
+      <LivingPageHero kind="diplomacy" eyebrow="کلمات گاهی از شمشیر برنده‌ترند" title="دیپلماسی" subtitle="پیمان ببند، در شورا نفوذ کن، خراج را مدیریت کن و آیندهٔ قلمرو را به رأی بگذار." badges={[`${(alliances || []).filter(row=>row.status==='accepted').length.toLocaleString('fa-IR')} پیمان فعال`, `${Number(me.influence || 0).toLocaleString('fa-IR')} نفوذ`, "شورای قلمرو"]} />
       <div className="page-title up">دیپلماسی</div>
       <div className="page-sub up">ضیافت، پیمان و مناسبات خاندان‌های وستروس</div>
 
@@ -280,9 +285,9 @@ export default function Diplomacy() {
       <div className="card up u2">
         <div className="res">
           <div className="ic"><Wine s={18} /></div>
-          <div className="n">برگزاری ضیافت<small>{FEAST_COST.wine.toLocaleString('fa-IR')} شراب + {FEAST_COST.food.toLocaleString('fa-IR')} غذا → محبوبیت بیشتر</small></div>
+          <div className="n">برگزاری ضیافت<small>{Number(feastRules?.cost.gold||0).toLocaleString('fa-IR')} سکه + {Number(feastRules?.cost.wine||0).toLocaleString('fa-IR')} شراب + {Number(feastRules?.cost.food||0).toLocaleString('fa-IR')} غذا → {feastRules?.popularity_gain??'…'} محبوبیت و {feastRules?.influence_gain??'…'} نفوذ · هر {feastRules?.cooldown_hours??'…'} ساعت بازی</small></div>
         </div>
-        <button className="btn ghost bld-btn" disabled={feastBusy} onClick={doFeast}>
+        <button className="btn ghost bld-btn" disabled={feastBusy||!feastRules} onClick={doFeast}>
           {feastBusy ? 'در حال برگزاری...' : 'برگزاری ضیافت'}
         </button>
       </div>
@@ -589,6 +594,6 @@ export default function Diplomacy() {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import {canOpenPage} from './characterAccess.js';
+import './styles/living-pages.css';
 import Notifications from './pages/Notifications.jsx';
 import CharacterProfile from './pages/CharacterProfile.jsx';
 import { lazy, Suspense, useEffect, useState } from 'react';

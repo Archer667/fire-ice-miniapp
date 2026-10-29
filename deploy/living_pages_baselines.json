@@ -1,0 +1,34 @@
+{
+  "web": {
+    "backend/character_travel.py": ["fc65b07ad796572290733801d3cbe19d7c9a3b3b7f72b3205c70dfceb95f8987"],
+    "backend/control_settings.py": [
+      "b30188eb50d3404d0a22382b6226888bd2eda445e657db51c882a79920e10675",
+      "0512ecfed3f35c74aafc2386279e06ad5bc09ce8ff72b92bd47a73b6a683ae9d"
+    ],
+    "backend/game_data.py": ["bc80f434d3c26afd1314ad0be0ef7cf62fa016f2eb3052877275ec3471212118"],
+    "backend/routers/admin.py": ["0bbe55320b1f8efa07d1c80234fd8f9d794391e3ecd192e5cf2f71db378581bf"],
+    "backend/routers/map.py": ["a57d0165ea1b626289215fbdb4367ccfefcc92e9ee3763540d1553a35f2420d9"],
+    "backend/routers/war.py": ["e567c7cf60404e91c90df3724dfe10b4650c15e834638059fad9dce91b91a74a"],
+    "backend/tests/test_named_commanders.py": null,
+    "frontend/src/api.js": [
+      "1fd00bdc164363abc3379f87d1635d3f60dc3253e238449653ff290ef145734a",
+      "f51310a98429c31f28e8304767d9383e485f0ce3cfb745f8821d52db7b89e51c"
+    ],
+    "frontend/src/App.jsx": ["cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610"],
+    "frontend/src/components/LivingPageHero.jsx": null,
+    "frontend/src/components/WesterosMap.jsx": ["bf8f543e518a6964975a0d3c7fb9d3cd665c9819430ea631220bb57a83567dc6"],
+    "frontend/src/pages/Admin.jsx": ["9891307a0f32888966cd6aac7017a5fcf0bf3386e21b49b8355ae4192400a871"],
+    "frontend/src/pages/Dashboard.jsx": ["0d87bd08cdde8d8d19be4a6d90eed08b035f033d187e8ff8e6e1c863e4526e0a"],
+    "frontend/src/pages/Buildings.jsx": ["b8686232702e0b6173801ae876e0b31342d67cc5cd882d75658221d9b227ca4c"],
+    "frontend/src/pages/War.jsx": ["296600ff50fdda42130e3c09b747545f29b158a0059d547370787aa7934c7187"],
+    "frontend/src/pages/Leaderboard.jsx": [
+      "2fc2dd869db09ccb9fe14849872ffc435b63aab4b13e0599a84fa66a3ac54762",
+      "c061ecd9c4dc17ba26000f0fb656940c4c57a4c7c59027197d66dbf153563354"
+    ],
+    "frontend/src/pages/Diplomacy.jsx": [
+      "990c16af0fbab18e026707f94428810d2fdb78db95d832e34ab4fa8295370eea",
+      "2f554bce122ae914b7d85e8872299bff4a51c9af4b84f1b8ed3d81ed7644b422"
+    ],
+    "frontend/src/styles/living-pages.css": null
+  }
+}

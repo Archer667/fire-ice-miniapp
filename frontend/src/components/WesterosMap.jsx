@@ -98,7 +98,8 @@ function ArmyMarker({ campaign, coords, active, onToggle, zoom }) {
       {active && (
         <div className="pin-popup army-popup" style={popupPlacement(xy, zoom)} onClick={(e) => e.stopPropagation()}>
           <div className="pi-name">{campaign.mine ? (campaign.name || 'لشکر تو') : 'لشکر در حرکت'}</div>
-          <div className="pi-owner">فرمانده: {campaign.mine ? 'تو' : (campaign.player_name || 'نامشخص')}</div>
+          <div className="pi-owner">صاحب لشکر: {campaign.mine ? 'تو' : (campaign.player_name || 'نامشخص')}</div>
+          <div className="pi-owner">فرمانده: {campaign.commander_name || 'ندارد'}</div>
           <div className="pi-stats">از {castleLabel(campaign.from)} به {castleLabel(campaign.to)}</div>
           <div className="pi-stats">حدود {minutesLeft.toLocaleString('fa-IR')} دقیقه تا رسیدن</div>
         </div>

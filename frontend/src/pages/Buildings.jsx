@@ -6,6 +6,7 @@ import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
 import { Coin, Pick, Rock, Wood, Wheat, People, Wine, Hammer, Bastion, Market, Farm, Ranch, Winery, Warehouse, Barracks } from '../components/Icons.jsx';
 import { WEAPON_NAMES, castleLabel } from '../gamedata.js';
+import LivingPageHero from '../components/LivingPageHero.jsx';
 
 const RES_ICON = { gold: Coin, iron: Pick, stone: Rock, wood: Wood, food: Wheat, men: People, wine: Wine };
 const RES_NAME = { gold: 'طلا', iron: 'آهن', stone: 'سنگ', wood: 'چوب', food: 'غذا', men: 'نیروی انسانی', wine: 'شراب', ...WEAPON_NAMES };
@@ -96,7 +97,8 @@ export default function Buildings() {
   const items = activeGroup ? rows.filter(r => r.type === activeGroup.key) : [];
 
   return (
-    <>
+    <div className="living-page living-buildings-page">
+      <LivingPageHero kind="buildings" eyebrow="سنگ، چوب و ارادهٔ یک خاندان" title="ساختمان‌های قلمرو" subtitle="هر ساختمان بخشی از اقتصاد، نیروی نظامی یا دفاع قلعه را زنده نگه می‌دارد." badges={[castleLabel(data.castle), `${rows.filter(row=>row.level>0).length.toLocaleString('fa-IR')} ساختمان فعال`, data.is_port ? 'قلعهٔ بندری' : 'قلعهٔ خشکی']} />
       <div className="page-title up">ساختمان‌های قلمرو</div>
       <div className="page-sub up">ساختمان‌های قلمرو را ارتقا بده؛ هر سطح، هزینه و زمان ساخت بیشتری دارد.</div>
 
@@ -125,7 +127,7 @@ export default function Buildings() {
           <BuildingRow key={row.id} row={row} busy={busyId === row.id} isPort={data.is_port} clock={clock} onAct={() => act(row)} />
         ))}
       </div>
-    </>
+    </div>
   );
 }
 

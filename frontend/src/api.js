@@ -1667,6 +1667,9 @@ export const api = {
   warMine:   () => MOCK ? Promise.resolve(M.warMine()) : req('/api/war/mine'),
   legions:   () => MOCK ? Promise.resolve(M.legions()) : req('/api/war/legions'),
   warWindow: () => MOCK ? Promise.resolve(M.warWindow()) : req('/api/war/window'),
+  commanderOptions: (origin) => MOCK ? Promise.resolve({ options: [], power_bonus_percent: 15, speed_bonus_percent: 10 }) : req(`/api/war/commander-options?origin_castle=${encodeURIComponent(origin)}`),
+  commanderRequests: () => MOCK ? Promise.resolve([]) : req('/api/war/commander-requests'),
+  respondCommanderRequest: (id, accept) => MOCK ? Promise.resolve({ ok: true, accepted: accept }) : req(`/api/war/${id}/commander-response`, { method: 'POST', body: JSON.stringify({ accept }) }),
   adminGetWarWindow: () => MOCK ? Promise.resolve(M.adminGetWarWindow()) : req('/api/admin/war-window'),
   adminSetWarWindow: (open) => MOCK ? Promise.resolve(M.adminSetWarWindow(open)) : req('/api/admin/war-window', { method: 'POST', body: JSON.stringify({ open }) }),
   adminAnnounceEvent: (title, description, imageUrl = null) => MOCK ? Promise.resolve(M.adminAnnounceEvent(title, description))
@@ -1835,6 +1838,7 @@ export const api = {
   adminListAlliances: () => MOCK ? Promise.resolve(M.adminListAlliances()) : req('/api/admin/alliances'),
   adminDissolveAlliance: (id) => MOCK ? Promise.resolve(M.adminDissolveAlliance(id))
     : req(`/api/admin/alliances/${id}/dissolve`, { method: 'POST' }),
+  feastRules: () => MOCK ? Promise.resolve({cost:FEAST_COST,popularity_gain:FEAST_POPULARITY_GAIN,influence_gain:1,cooldown_hours:24}) : req('/api/diplomacy/feast'),
   feast: () => MOCK ? Promise.resolve(M.feast()) : req('/api/diplomacy/feast', { method: 'POST' }),
   regionLeaderboard: () => MOCK ? Promise.resolve(M.regionLeaderboard()) : req('/api/leaderboard/regions'),
   polls: () => MOCK ? Promise.resolve(M.polls()) : req('/api/polls'),
