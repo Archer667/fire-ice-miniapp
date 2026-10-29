@@ -1,0 +1,119 @@
+/* Valyria Living UI — shared skin for every player and administration screen. */
+.living-shell{
+  --rank:#b77a4b;--rank-soft:rgba(183,122,75,.22);--rank-glow:rgba(183,122,75,.38);
+  --living-ink:#0a0808;--living-panel:#171210;--living-panel-2:#211815;
+  --living-line:rgba(221,174,88,.2);--living-line-hi:rgba(239,197,112,.48);
+  --living-text:#f0e5d3;--living-muted:#aa9981;--living-gold:#e7bd6c;
+  max-width:none;width:100%;background:
+    radial-gradient(1000px 600px at 78% -10%,rgba(126,13,17,.22),transparent 68%),
+    radial-gradient(820px 580px at 5% 70%,rgba(119,79,36,.1),transparent 72%),
+    repeating-linear-gradient(135deg,rgba(255,255,255,.011) 0 1px,transparent 1px 7px),#0c0a0a;
+}
+.living-shell-war,.living-shell-espionage{--rank:#a31d25;--rank-soft:rgba(163,29,37,.24);--rank-glow:rgba(163,29,37,.42)}
+.living-shell-throne,.living-shell-admin{--rank:#e9c176;--rank-soft:rgba(233,193,118,.2);--rank-glow:rgba(233,193,118,.38)}
+.living-shell-diplomacy,.living-shell-trade{--rank:#4d83c4;--rank-soft:rgba(77,131,196,.2);--rank-glow:rgba(77,131,196,.35)}
+.living-shell-family,.living-shell-castle-life{--rank:#9a5277;--rank-soft:rgba(154,82,119,.2);--rank-glow:rgba(154,82,119,.35)}
+.living-shell-institutions,.living-shell-guide{--rank:#92703f;--rank-soft:rgba(146,112,63,.22);--rank-glow:rgba(146,112,63,.4)}
+.living-view{scrollbar-width:thin;scrollbar-color:#a77832 rgba(8,6,6,.5)}
+.living-view::-webkit-scrollbar{display:block;width:7px}.living-view::-webkit-scrollbar-track{background:rgba(5,4,4,.45)}.living-view::-webkit-scrollbar-thumb{border:1px solid rgba(255,224,158,.2);border-radius:99px;background:linear-gradient(#e8c274,#9f6c2c 52%,#731417)}
+.living-screen{position:relative;width:min(100%,1280px);min-height:100%;margin:0 auto;padding-bottom:28px;isolation:isolate}
+.living-screen:before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;background-image:linear-gradient(180deg,rgba(7,6,6,.8),rgba(7,6,6,.96) 72%),var(--screen-art);background-size:cover;background-position:center;filter:saturate(.58) contrast(1.08);opacity:.15}
+.living-screen:after{content:"";position:absolute;inset:-18px -22px auto;height:220px;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 50% 0,var(--rank-soft),transparent 68%);opacity:.75}
+.living-screen-body{min-width:0}.living-screen-body>*{min-width:0}
+
+/* Shared illuminated page masthead, derived from the approved five-page preview. */
+.living-shell .living-hero{min-height:248px;border-radius:24px;padding:32px 34px;border-color:var(--living-line-hi);background:#100c0b;box-shadow:0 28px 76px rgba(0,0,0,.48),0 0 0 1px rgba(255,225,164,.035) inset}
+.living-shell .living-hero:before{background-image:linear-gradient(90deg,rgba(7,5,5,.98),rgba(9,6,6,.72) 51%,rgba(9,6,6,.12)),linear-gradient(0deg,rgba(8,6,6,.96),transparent 68%),var(--living-art);filter:saturate(.82) contrast(1.1)}
+.living-shell .living-hero:after{background:radial-gradient(600px 250px at 22% 40%,var(--rank-soft),transparent 72%),linear-gradient(120deg,rgba(232,185,94,.13),transparent 38%)}
+.living-shell .living-hero-frame{inset:10px;border-radius:17px;border-color:rgba(239,194,107,.19)}
+.living-shell .living-hero-copy{position:relative;z-index:2}.living-shell .living-hero-eyebrow{color:var(--rank);text-shadow:0 0 18px var(--rank-glow)}
+.living-shell .living-hero h1{color:#f4dfb5;background:linear-gradient(180deg,#fff0c8,#d7a64f);-webkit-background-clip:text;background-clip:text;text-shadow:none}
+.living-shell .living-hero p{color:#c2b29b}.living-shell .living-hero-badges span{border-color:color-mix(in srgb,var(--rank) 48%,transparent);background:rgba(10,7,7,.68);color:#edd09a}
+.living-shell .living-hero-compact{min-height:176px;padding:27px 30px;margin-bottom:18px}.living-shell .living-hero-compact h1{font-size:clamp(27px,4vw,40px)}.living-shell .living-hero-compact p{max-width:700px}
+
+/* One material language for every card, dossier, list, form and admin module. */
+.living-screen :where(.card,.panel,.travel-panel,.spy-dossier,.store-card,.exchange-card,.project-card,.support-ticket,.web-notice,.institution-overview,.institution-detail,.family-child,.family-summary){
+  border-color:var(--living-line);border-radius:16px;background:
+    radial-gradient(circle at 10% 0,var(--rank-soft),transparent 38%),
+    linear-gradient(145deg,rgba(34,25,22,.96),rgba(14,11,11,.985));
+  box-shadow:0 16px 40px rgba(0,0,0,.26),inset 0 1px rgba(255,238,201,.035);color:var(--living-text)
+}
+.living-screen :where(.card,.panel,.travel-panel,.spy-dossier,.store-card,.exchange-card,.project-card,.support-ticket,.web-notice){transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}
+@media(hover:hover){.living-screen :where(.card,.panel,.travel-panel,.spy-dossier,.store-card,.exchange-card,.project-card,.support-ticket,.web-notice):hover{border-color:rgba(232,184,92,.36);box-shadow:0 20px 48px rgba(0,0,0,.34),0 0 24px var(--rank-soft)}}
+.living-screen :where(.page-title,h1,h2,h3,.sect,.store-section-title,.family-heading,.bank-heading){color:#ecd09a;text-wrap:balance}
+.living-screen .page-title{font-size:clamp(22px,4.5vw,32px);margin-bottom:5px}.living-screen .page-sub{color:var(--living-muted);line-height:1.9}
+.living-screen .sect{display:flex;align-items:center;gap:10px;margin-top:25px;font-size:12px;letter-spacing:.03em}.living-screen .sect:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,rgba(222,172,80,.28),transparent)}
+.living-screen :where(.title-tag,.family-tag,.store-status,.support-status,.poll-status,.bank-status){border-radius:99px;border-color:var(--living-line-hi);background:rgba(127,23,24,.16);color:#e8c37e}
+
+/* Controls: carved metal, warm parchment focus, no generic flat UI. */
+.living-shell :where(input,select,textarea){border-color:rgba(193,147,72,.25);border-radius:11px;background:linear-gradient(180deg,rgba(5,5,5,.9),rgba(19,15,14,.96));color:#f1e6d4;box-shadow:inset 0 2px 6px rgba(0,0,0,.68)}
+.living-shell :where(input,select,textarea):focus{border-color:#dcab51;box-shadow:inset 0 2px 6px rgba(0,0,0,.65),0 0 0 2px rgba(220,171,81,.13),0 0 22px rgba(157,29,29,.16)}
+.living-shell label.f{color:#d2aa65;letter-spacing:.025em}.living-shell input[type="checkbox"],.living-shell input[type="radio"]{accent-color:#a91f24}
+.living-shell .btn{border-radius:11px;border-color:rgba(229,177,77,.5);background:linear-gradient(145deg,#aa2026,#731114 58%,#3a090b);color:#ffe2a5;box-shadow:inset 0 1px rgba(255,239,207,.17),inset 0 -4px 8px rgba(0,0,0,.36),0 11px 25px rgba(0,0,0,.28)}
+.living-shell .btn.ghost{border-color:rgba(220,170,77,.34);background:linear-gradient(180deg,rgba(42,33,28,.95),rgba(14,11,10,.98));color:#e3bd77}.living-shell .btn:hover:not(:disabled){border-color:#edc26e;filter:brightness(1.07)}
+.living-shell .rbtn:focus-visible,.living-shell button:focus-visible{outline:2px solid #e2b55f;outline-offset:3px}
+
+/* Tabs become the same illuminated rail on every screen. */
+.living-screen :where(.tabs,.spy-tabs,.exchange-tabs,.trade-nav,.admin-tabs,.sw-tabs){gap:7px;padding:7px;border:1px solid rgba(218,170,79,.2);border-radius:14px;background:rgba(13,10,9,.88);box-shadow:0 12px 30px rgba(0,0,0,.22);backdrop-filter:blur(14px)}
+.living-screen :where(.tab,.spy-tabs button,.exchange-tabs button,.trade-nav button,.admin-tab,.sw-tabs button){min-height:42px;border-radius:9px;color:#9e8d74;transition:.18s ease}
+.living-screen :where(.tab.on,.spy-tabs button.on,.exchange-tabs button.on,.trade-nav button.on,.admin-tab.on,.sw-tabs button.on){color:#ffe0a0;background:linear-gradient(145deg,rgba(139,22,25,.48),rgba(222,174,84,.12));box-shadow:inset 0 0 0 1px rgba(230,181,89,.29),0 6px 18px rgba(0,0,0,.2)}
+
+/* Rows, tables and expandable records. */
+.living-screen :where(.res,.troop,.lbr,.rank-row,.poll-opt,.travel-row,.store-meta,.family-facts,.admin-search-result){border-color:rgba(214,166,80,.14);border-radius:12px;background:rgba(255,244,218,.022)}
+.living-screen table{width:100%;border-collapse:separate;border-spacing:0 7px}.living-screen th{padding:8px 11px;color:#b99a66;font-size:10px;text-align:right}.living-screen td{padding:11px;background:rgba(255,255,255,.022);border-block:1px solid rgba(211,164,77,.1)}.living-screen td:first-child{border-radius:0 10px 10px 0;border-inline-start:1px solid rgba(211,164,77,.1)}.living-screen td:last-child{border-radius:10px 0 0 10px;border-inline-end:1px solid rgba(211,164,77,.1)}
+.living-screen details{border-color:rgba(211,164,77,.17)}.living-screen details>summary{color:#d3b77f}.living-screen progress{accent-color:#b72025}
+.living-screen :where(.empty,.loading){color:#8f806d}.living-screen .loading:before{content:"✦";margin-inline-end:8px;color:#d7aa54;animation:living-pulse 1.4s ease-in-out infinite}@keyframes living-pulse{50%{opacity:.25;transform:scale(.8)}}
+
+/* Header and main navigation now belong to the same world as the approved mockup. */
+.living-shell .header{left:0;right:0;min-height:64px;padding:12px 20px;background:linear-gradient(180deg,rgba(10,8,8,.97),rgba(13,10,9,.78) 78%,transparent);border-bottom:1px solid rgba(217,168,79,.08)}
+.living-shell .hamburger{border-color:rgba(226,177,87,.55);background:radial-gradient(circle at 35% 25%,rgba(145,22,25,.42),#120d0c 72%);color:#edc879;box-shadow:0 0 20px rgba(145,18,20,.2)}
+.living-shell .header-ticker{border-color:rgba(219,170,82,.2);background:rgba(11,9,9,.72);box-shadow:inset 0 1px rgba(255,235,191,.04)}.living-shell .header-ticker span{color:#bbaa8d}.living-shell .ravens-icon{border-color:rgba(218,169,78,.3);background:#130f0e;color:#d9b469}
+.living-shell .nav{border-color:rgba(221,173,82,.32);border-radius:17px;background:linear-gradient(180deg,rgba(34,26,22,.97),rgba(11,9,9,.98));box-shadow:0 22px 55px rgba(0,0,0,.62),inset 0 1px rgba(255,234,189,.05)}
+.living-shell .nv{border:1px solid transparent;border-radius:11px;color:#857865}.living-shell .nv.on{color:#ffe0a0;border-color:rgba(225,173,76,.35);background:linear-gradient(145deg,rgba(134,17,20,.62),rgba(193,139,51,.14));box-shadow:inset 0 1px rgba(255,235,194,.08),0 8px 20px rgba(84,8,10,.32)}
+.web-edition .web-account-bar{width:min(1400px,100%);border-color:rgba(208,159,73,.17);background:rgba(12,9,9,.96);color:#cba861}
+
+/* Page families */
+.living-screen-buildings .bld{border-radius:17px!important}.living-screen-buildings .bld-art{height:clamp(155px,28vw,255px);filter:saturate(.82) contrast(1.04)}
+.living-screen-war :where(.map-wrap,.map-shell,.war-map){border-radius:20px!important;border-color:rgba(222,174,85,.36)!important;box-shadow:0 25px 58px rgba(0,0,0,.42)}
+.living-screen-throne :where(.lbr,.rank-row):nth-child(-n+3){border-color:rgba(233,191,108,.4);background:radial-gradient(circle at 10% 0,rgba(233,193,118,.14),transparent 43%),linear-gradient(145deg,#36251e,#100c0b)}
+.living-screen-diplomacy :where(.alliance-card,.poll){border-color:rgba(220,171,81,.25);border-radius:15px;background:radial-gradient(circle at 8% 0,rgba(139,23,21,.17),transparent 45%),linear-gradient(145deg,#281d19,#0e0b0a)}
+.living-screen-admin .admin-command-bar,.living-screen-admin .admin-active-section{border-radius:16px;border-color:rgba(225,177,84,.25);background:linear-gradient(145deg,rgba(51,34,27,.94),rgba(13,10,10,.98))}.living-screen-admin .admin-section-button{border-radius:13px}.living-screen-admin .admin-section-button.on{border-color:#d6a44d;background:radial-gradient(circle at 15% 20%,rgba(145,19,22,.35),transparent 65%),#201513}
+.living-screen-ravens :where(.thread,.composer),.living-screen-notifications .web-notice{border-radius:15px}.living-screen-ravens .tmsg{border-radius:16px 16px 5px 16px;background:#2b201b;border:1px solid rgba(213,165,78,.16)}.living-screen-ravens .tmsg.mine{border-radius:16px 16px 16px 5px;background:linear-gradient(145deg,#751619,#3f0d0f)}
+.living-screen-trade .trade-hero,.living-screen-travel .travel-hero,.living-screen-espionage .spy-head{border-radius:17px;border-color:rgba(220,171,80,.28);background:radial-gradient(circle at 12% 0,var(--rank-soft),transparent 48%),linear-gradient(145deg,#2d201b,#0d0b0a)}
+.living-screen-institutions .institution-gallery-card,.living-screen-store .store-card{overflow:hidden;border-radius:17px}.living-screen-store .store-picture{border-radius:12px;overflow:hidden}
+.living-screen-contracts .sw-contract,.living-screen-castle-life .sw-panel{border-radius:16px;border-color:rgba(217,167,77,.2);box-shadow:0 15px 35px rgba(0,0,0,.2)}
+.living-screen-newspaper .sw-newspaper,.living-screen-newspaper .newspaper{filter:drop-shadow(0 24px 45px rgba(0,0,0,.48))}
+.living-screen-support .support-thread{border-radius:17px}.living-screen-guide .guide-hero{border-radius:20px;min-height:190px}
+.living-screen-roleplay .notice-guide{border-inline-start:3px solid var(--rank);border-radius:12px;background:linear-gradient(90deg,var(--rank-soft),rgba(17,13,12,.88));color:#d9c5a6}.living-screen-roleplay .poll-status{box-shadow:inset 0 0 0 1px rgba(237,195,112,.14)}
+.living-screen-assets .res{min-height:72px;padding:11px;border:1px solid rgba(218,168,78,.12);border-radius:12px;background:rgba(7,6,6,.3)}.living-screen-assets .res .ic{border:1px solid rgba(222,174,85,.3);background:radial-gradient(circle,var(--rank-soft),rgba(10,8,8,.9))}
+.living-screen-family .family-tabs{padding:7px;border:1px solid var(--living-line);border-radius:15px;background:rgba(12,9,9,.88)}.living-screen-family .family-tabs button{border-radius:10px;color:#aa977b}.living-screen-family .family-tabs button.on{color:#ffe0a5;background:linear-gradient(145deg,rgba(125,20,28,.5),rgba(155,78,113,.18));box-shadow:inset 0 0 0 1px rgba(225,174,91,.23)}.living-screen-family .family-facts>div,.living-screen-family .family-stages>div{border-color:rgba(215,163,78,.17);background:rgba(9,7,7,.42)}
+.living-screen-profile .living-screen-body img{border:1px solid rgba(229,180,89,.34)!important;box-shadow:0 14px 30px rgba(0,0,0,.34)}.living-screen-profile input[type=file]{padding:10px;border-style:dashed}
+.living-screen-notifications .web-notice-filters{padding:9px;border:1px solid rgba(218,169,80,.17);border-radius:13px;background:rgba(12,9,9,.76)}.living-screen-notifications .web-notice.unread{border-inline-start:4px solid var(--rank);box-shadow:0 15px 34px rgba(0,0,0,.28),inset 24px 0 36px -34px var(--rank)}
+.living-screen-castle-life .sw-panel,.living-screen-contracts .sw-contract{background-image:radial-gradient(circle at 12% 0,var(--rank-soft),transparent 45%),linear-gradient(145deg,rgba(39,28,24,.97),rgba(13,10,10,.99))}.living-screen-newspaper .living-hero-compact{--rank:#b58b43}
+
+/* Dialogs and overlays */
+.living-shell :where(dialog,.character-dialog,.project-dialog,.web-modal>.card){border:1px solid rgba(230,181,91,.4);border-radius:18px;background:radial-gradient(circle at 15% 0,rgba(131,19,21,.25),transparent 42%),#120f0e;color:#eee0ca;box-shadow:0 35px 110px rgba(0,0,0,.78)}
+.living-shell dialog::backdrop{background:rgba(4,3,3,.8);backdrop-filter:blur(7px)}
+.living-shell .toast{border-color:rgba(230,179,82,.55);background:rgba(15,11,10,.95);box-shadow:0 18px 48px rgba(0,0,0,.65),0 0 24px rgba(131,17,20,.2)}
+
+/* Registration, pending and authentication are part of the same game, too. */
+.web-auth-shell,.living-shell .view-noheader{background:radial-gradient(circle at 50% 0,rgba(139,20,23,.3),transparent 40%),repeating-linear-gradient(135deg,rgba(255,255,255,.01) 0 1px,transparent 1px 7px),#0a0808}
+.web-auth-card,.living-shell .view-noheader .card{border-radius:20px!important;border-color:rgba(226,176,83,.38)!important;background:radial-gradient(circle at 50% 0,rgba(132,19,22,.22),transparent 40%),linear-gradient(145deg,#241914,#0d0a09)!important}
+.web-login-icon{border-radius:50%!important;outline:5px solid rgba(146,19,21,.18);box-shadow:0 0 45px rgba(154,20,22,.34)!important}
+
+@media(min-width:900px){
+  body{padding:0;background:#080707}.living-shell{min-height:100dvh;border:0;border-radius:0;box-shadow:none}
+  .living-shell .header{left:118px;padding-inline:34px}.web-edition .living-shell .header{top:30px}
+  .living-shell .view{padding:104px 46px 52px 136px}.web-edition .living-shell .view{padding-top:124px}
+  .living-shell .nav{left:20px;top:80px;bottom:24px;width:92px;border-radius:20px;padding:16px 8px}.living-shell .nv{padding:13px 4px}
+  .living-screen-secondary .living-screen-body{padding-inline:4px}
+  .living-screen-assets .living-screen-body>.grid2,.living-screen-family .family-page{gap:15px}
+}
+@media(min-width:1200px){.living-shell .view{padding-inline-end:64px}.living-screen{width:min(100%,1360px)}.living-screen-body>.grid2{gap:15px}.living-screen-admin{width:min(100%,1480px)}}
+@media(max-width:899px){
+  .living-shell .view{padding-inline:15px}.living-screen{padding-bottom:12px}.living-shell .living-hero{min-height:212px;padding:25px 21px;border-radius:19px}.living-shell .living-hero-compact{min-height:155px;padding:22px 19px}.living-shell .living-hero h1{font-size:32px}.living-shell .living-hero p{font-size:11.5px}.living-shell .nav{left:11px;right:11px;bottom:11px;padding:7px;border-radius:15px}.living-shell .nv{padding:8px 2px;font-size:8.5px}
+  .living-screen :where(.card,.panel,.travel-panel,.spy-dossier,.store-card,.exchange-card,.project-card){border-radius:14px}
+  .living-screen table{display:block;overflow-x:auto;white-space:nowrap}.living-screen :where(.tabs,.spy-tabs,.exchange-tabs,.trade-nav,.admin-tabs,.sw-tabs){overflow-x:auto;scrollbar-width:thin}.living-screen :where(.tab,.spy-tabs button,.exchange-tabs button,.trade-nav button,.admin-tab,.sw-tabs button){flex:0 0 auto;min-width:92px}
+}
+@media(max-width:380px){.living-shell .view{padding-inline:12px}.living-shell .living-hero{margin-inline:0;padding:22px 17px}.living-shell .living-hero h1{font-size:28px}.living-shell .living-hero-badges span{font-size:9px}.living-shell :where(.card,.panel){padding:14px}}
+@media(prefers-reduced-motion:reduce){.living-screen *{scroll-behavior:auto!important}.living-screen .loading:before{animation:none}.living-screen :where(.card,.panel,.btn){transition:none!important}}

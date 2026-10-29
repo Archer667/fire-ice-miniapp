@@ -14,8 +14,12 @@
       "1fd00bdc164363abc3379f87d1635d3f60dc3253e238449653ff290ef145734a",
       "f51310a98429c31f28e8304767d9383e485f0ce3cfb745f8821d52db7b89e51c"
     ],
-    "frontend/src/App.jsx": ["cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610"],
-    "frontend/src/components/LivingPageHero.jsx": null,
+    "frontend/src/App.jsx": [
+      "cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610",
+      "78fb066831e19c416939c5e5285ce74bc0c800edcd94789f45f376d20f74be36"
+    ],
+    "frontend/src/components/LivingPageHero.jsx": ["cc70032c95243be3278244737f9b245f3988ee23a4b612b466dc161404db5ca1"],
+    "frontend/src/components/LivingScreen.jsx": null,
     "frontend/src/components/WesterosMap.jsx": ["bf8f543e518a6964975a0d3c7fb9d3cd665c9819430ea631220bb57a83567dc6"],
     "frontend/src/pages/Admin.jsx": ["9891307a0f32888966cd6aac7017a5fcf0bf3386e21b49b8355ae4192400a871"],
     "frontend/src/pages/Dashboard.jsx": ["0d87bd08cdde8d8d19be4a6d90eed08b035f033d187e8ff8e6e1c863e4526e0a"],
@@ -29,6 +33,7 @@
       "990c16af0fbab18e026707f94428810d2fdb78db95d832e34ab4fa8295370eea",
       "2f554bce122ae914b7d85e8872299bff4a51c9af4b84f1b8ed3d81ed7644b422"
     ],
-    "frontend/src/styles/living-pages.css": null
+    "frontend/src/styles/living-pages.css": null,
+    "frontend/src/styles/living-system.css": null
   }
 }

@@ -1,4 +1,4 @@
-"""Publish the living five-page redesign and named commanders after a verified backup."""
+"""Publish the living all-pages redesign and named commanders after a verified backup."""
 import argparse
 import hashlib
 import json
@@ -14,11 +14,13 @@ FILES = {
     'backend/character_travel.py', 'backend/control_settings.py', 'backend/game_data.py',
     'backend/routers/admin.py', 'backend/routers/map.py', 'backend/routers/war.py',
     'backend/tests/test_named_commanders.py', 'frontend/src/api.js', 'frontend/src/App.jsx',
-    'frontend/src/components/LivingPageHero.jsx', 'frontend/src/components/WesterosMap.jsx',
+    'frontend/src/components/LivingPageHero.jsx', 'frontend/src/components/LivingScreen.jsx',
+    'frontend/src/components/WesterosMap.jsx',
     'frontend/src/pages/Admin.jsx', 'frontend/src/pages/Dashboard.jsx',
     'frontend/src/pages/Buildings.jsx', 'frontend/src/pages/War.jsx',
     'frontend/src/pages/Leaderboard.jsx', 'frontend/src/pages/Diplomacy.jsx',
-    'frontend/src/styles/living-pages.css', 'deploy/living_pages_baselines.json',
+    'frontend/src/styles/living-pages.css', 'frontend/src/styles/living-system.css',
+    'deploy/living_pages_baselines.json',
     'deploy/protected_living_pages_update.py',
 }
 
@@ -148,7 +150,7 @@ print('Production isolation verified')
     proof = {'edition': 'web', 'source_sha256': package_sha, 'database_backup': state['archive'],
              'images': {service: image(service, config) for service in ('backend', 'frontend')}}
     (backup_dir / 'living-pages-release.json').write_text(json.dumps(proof, indent=2), encoding='utf-8')
-    print('Five living pages and named commanders activated for the Web App.')
+    print('Living redesign for every Web App page and named commanders activated.')
     print('Verified database and source backups: ' + str(backup_dir))
 
 

@@ -1,5 +1,6 @@
 import {canOpenPage} from './characterAccess.js';
 import './styles/living-pages.css';
+import './styles/living-system.css';
 import Notifications from './pages/Notifications.jsx';
 import CharacterProfile from './pages/CharacterProfile.jsx';
 import { lazy, Suspense, useEffect, useState } from 'react';
@@ -25,6 +26,7 @@ import NavBar from './components/NavBar.jsx';
 import Toast from './components/Toast.jsx';
 import BackgroundMusic from './components/BackgroundMusic.jsx';
 import { syncGameClock } from './gameClock.js';
+import LivingScreen, { presentationFor } from './components/LivingScreen.jsx';
 
 const War = lazy(() => import('./pages/War.jsx'));
 const Diplomacy = lazy(() => import('./pages/Diplomacy.jsx'));
@@ -87,17 +89,18 @@ export default function App() {
     </div><Toast /></div>;
   }
   const Page = !canOpenPage(me, tab) ? CharacterTravel : PAGES[tab];
+  const presentation = presentationFor(tab);
   const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
-    <div className={`shell ${showPauseBanner ? 'game-paused' : ''}`}>
+    <div className={`shell living-shell living-shell-${presentation.slug} ${showPauseBanner ? 'game-paused' : ''}`}>
       {showPauseBanner && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>{tab === 15 ? 'فروشگاه آیتم‌ها و مزایده‌ها با زمان واقعی فعال‌اند. اعتبار زمانی آیتم‌ها همچنان از ساعت بازی پیروی می‌کند.' : 'مشاهدهٔ صفحات آزاد است؛ زمان بازی، تولید، مصرف و محاسبات دوره‌ای متوقف‌اند. فروشگاه آیتم‌ها با زمان واقعی فعال می‌ماند.'}</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
       {!me.registered ? (
         <Onboarding />
       ) : (
         <>
           <Header onOpenMenu={() => setMenuOpen(true)} onOpenRavens={() => setTab(RAVENS_INDEX)} />
-          <div className="view" key={tab}>
-            {me.pending && !me.admin_role && ![ADMIN_INDEX,16].includes(tab) ? <Pending goTo={setTab} /> : <Suspense fallback={<div className="loading">در حال آماده‌کردن صفحه…</div>}><Page goTo={setTab} /></Suspense>}
+          <div className={`view living-view living-view-${presentation.slug}`} key={tab}>
+            {me.pending && !me.admin_role && ![ADMIN_INDEX,16].includes(tab) ? <Pending goTo={setTab} /> : <Suspense fallback={<div className="loading">در حال آماده‌کردن صفحه…</div>}><LivingScreen index={tab}><Page goTo={setTab} /></LivingScreen></Suspense>}
           </div>
           <SideMenu open={menuOpen} tab={tab} onChange={setTab} onClose={() => setMenuOpen(false)} />
           <NavBar tab={tab} onChange={setTab} />

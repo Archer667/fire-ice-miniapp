@@ -1,5 +1,6 @@
-export default function LivingPageHero({ kind, eyebrow, title, subtitle, badges = [] }) {
-  return <header className={`living-hero living-hero-${kind}`}>
+export default function LivingPageHero({ kind, eyebrow, title, subtitle, badges = [], art, compact = false }) {
+  const style = art ? { '--living-art': `url("${art}")` } : undefined;
+  return <header className={`living-hero living-hero-${kind} ${compact ? 'living-hero-compact' : ''}`} style={style}>
     <div className="living-hero-frame" />
     <div className="living-hero-copy">
       <div className="living-hero-eyebrow">{eyebrow}</div>
