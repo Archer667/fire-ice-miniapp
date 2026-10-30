@@ -16,6 +16,8 @@
 .living-screen .living-hero{justify-content:flex-start;text-align:right}
 .living-screen .living-hero-copy{margin-inline:0 auto!important;text-align:right!important}
 .living-screen .living-hero-copy :where(h1,p,.living-hero-eyebrow){text-align:right!important}
+.living-screen-secondary>.living-hero,
+.living-screen-secondary>.living-screen-body{width:min(100%,1240px);margin-inline:auto}
 .living-screen-secondary .living-screen-body{display:grid;align-content:start;gap:var(--ui-space-3)}
 .living-screen-secondary .living-screen-body>.page-title,
 .living-screen-secondary .living-screen-body>.page-title+.page-sub{display:none!important}
@@ -105,14 +107,16 @@
   .living-page>.living-hero p{font-size:12px;line-height:1.75}
   .living-page>.living-hero-badges{margin-top:12px}
   .living-page>.tabs{min-height:54px;margin-bottom:12px}
+  .living-realm-page>.living-hero:before{background-image:linear-gradient(270deg,rgba(7,5,5,.97),rgba(9,6,6,.76) 45%,rgba(9,6,6,.12) 78%),linear-gradient(0deg,rgba(8,6,6,.94),transparent 62%),var(--living-art);background-position:32% 42%}
+  .living-realm-page>.living-hero .living-hero-copy{margin-inline:0 auto!important}
   .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
   .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
-  .living-war-page .war-stage-map{position:relative!important;top:auto!important;align-self:start}
+  .living-war-page .war-stage-map{position:sticky!important;top:112px!important;align-self:start}
   .living-war-page .war-stage-map>div:last-child,.living-war-page .war-stage-map :where(.map-wrap,.map-shell){min-height:clamp(500px,60vh,650px)!important}
   .living-war-page .map3d-frame{height:clamp(500px,60vh,650px)!important;min-height:500px!important}
   .living-war-page .war-stage-map .sect{margin-bottom:8px}
   .living-screen-secondary .living-screen-body{width:min(100%,1240px);gap:18px}
-  .living-screen-admin .living-screen-body{width:100%}
+  .living-screen-admin>.living-hero,.living-screen-admin>.living-screen-body{width:100%}
   .living-screen-secondary .living-screen-body>.page-title+.page-sub{margin-bottom:0}
   .living-screen-body .support-layout{gap:16px}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:18px}

@@ -52,7 +52,8 @@
     "frontend/src/styles/living-responsive.css": ["2da27f5d2b6af96ac920006b4c3358ed54076566540deb5698aae9be8c24aa60"],
     "frontend/src/styles/ui-coherence.css": [
       "33c446ff94a9956e61fd631155974ac26bd993cba065da72e368f202589c4d10",
-      "52c7ae3d0421157066ea72a3d76bde29efd123bcc05ae84b46772e8c95bdad49"
+      "52c7ae3d0421157066ea72a3d76bde29efd123bcc05ae84b46772e8c95bdad49",
+      "51c884937215a343a3f67046fb6a0b8ce73132279cd32e7e66e6f465ef837a36"
     ],
     "frontend/public/living-assets/parchment-texture.webp": null,
     "frontend/public/living-assets/realm-hero.webp": null,
