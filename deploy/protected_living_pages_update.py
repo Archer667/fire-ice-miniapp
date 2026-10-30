@@ -20,7 +20,7 @@ FILES = {
     'frontend/src/pages/Buildings.jsx', 'frontend/src/pages/War.jsx',
     'frontend/src/pages/Leaderboard.jsx', 'frontend/src/pages/Diplomacy.jsx',
     'frontend/src/styles/living-pages.css', 'frontend/src/styles/living-system.css',
-    'frontend/src/styles/living-responsive.css',
+    'frontend/src/styles/living-responsive.css', 'frontend/src/styles/ui-coherence.css',
     'frontend/public/living-assets/parchment-texture.webp',
     'frontend/public/living-assets/realm-hero.webp',
     'frontend/public/living-assets/farm-food.webp',
