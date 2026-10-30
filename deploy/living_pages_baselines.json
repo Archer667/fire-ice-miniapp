@@ -44,12 +44,16 @@
       "990c16af0fbab18e026707f94428810d2fdb78db95d832e34ab4fa8295370eea",
       "2f554bce122ae914b7d85e8872299bff4a51c9af4b84f1b8ed3d81ed7644b422",
       "152be1add326f5e603e0aa461c3305c3f8e5ad832fb064edc2bbe3e14f8f3a70",
-      "6001029add10a350f274f32ad7c01068e4dfcbeeb67f5f5b05b0a308d752ed11"
+      "6001029add10a350f274f32ad7c01068e4dfcbeeb67f5f5b05b0a308d752ed11",
+      "5646b431dd7a5a6eae2dec1d8372941ec64f3270f3b95154bd747f8f1588e1e8"
     ],
     "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da", "98ade28505525c175eaa070f2a4e1f52d2a251fcd87e02692343cd14086f4443"],
     "frontend/src/styles/living-system.css": ["d7fb8a7027c457372baa6ea8c0729acbfad9820be5b85f5e5f6049100067ebff"],
     "frontend/src/styles/living-responsive.css": ["2da27f5d2b6af96ac920006b4c3358ed54076566540deb5698aae9be8c24aa60"],
-    "frontend/src/styles/ui-coherence.css": ["33c446ff94a9956e61fd631155974ac26bd993cba065da72e368f202589c4d10"],
+    "frontend/src/styles/ui-coherence.css": [
+      "33c446ff94a9956e61fd631155974ac26bd993cba065da72e368f202589c4d10",
+      "52c7ae3d0421157066ea72a3d76bde29efd123bcc05ae84b46772e8c95bdad49"
+    ],
     "frontend/public/living-assets/parchment-texture.webp": null,
     "frontend/public/living-assets/realm-hero.webp": null,
     "frontend/public/living-assets/farm-food.webp": null,

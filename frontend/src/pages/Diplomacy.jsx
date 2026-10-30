@@ -420,7 +420,7 @@ export default function Diplomacy() {
       </div>
 
       <div className="sect up u3">شورای کوچک</div>
-      <div className="card up u3">
+      <div className="card up u3 small-council-list">
         {Object.entries(SMALL_COUNCIL_SEATS).map(([seat, label]) => {
           const holder = titles?.small_council?.[seat];
           const rate = titles?.council_salary_rates?.[seat] || 0;

@@ -11,6 +11,11 @@
 
 .living-screen-body,
 .living-screen-body>*{min-width:0;max-width:100%}
+.living-screen{margin-inline:auto;text-align:right}
+.living-screen-body{width:100%;margin-inline:auto;text-align:right}
+.living-screen .living-hero{justify-content:flex-start;text-align:right}
+.living-screen .living-hero-copy{margin-inline:0 auto!important;text-align:right!important}
+.living-screen .living-hero-copy :where(h1,p,.living-hero-eyebrow){text-align:right!important}
 .living-screen-secondary .living-screen-body{display:grid;align-content:start;gap:var(--ui-space-3)}
 .living-screen-secondary .living-screen-body>.page-title,
 .living-screen-secondary .living-screen-body>.page-title+.page-sub{display:none!important}
@@ -43,6 +48,11 @@
 .living-diplomacy-page .power-hierarchy>.res{min-height:72px;margin:0;padding:12px 13px;border:1px solid rgba(218,169,80,.15);background:linear-gradient(145deg,rgba(42,30,26,.82),rgba(15,12,11,.95))}
 .living-diplomacy-page .power-hierarchy>.res .ic{flex:0 0 44px;width:44px;height:44px}
 .living-diplomacy-page .power-hierarchy>.res .n small{margin-top:4px;line-height:1.65}
+.living-diplomacy-page .small-council-list{display:grid;gap:11px;padding:14px}
+.living-diplomacy-page .small-council-list>div{display:grid;gap:8px;min-width:0}
+.living-diplomacy-page .small-council-list>div>.res{min-height:72px;margin:0;padding:12px 13px;border:1px solid rgba(218,169,80,.15);background:linear-gradient(145deg,rgba(42,30,26,.82),rgba(15,12,11,.95))}
+.living-diplomacy-page .small-council-list>div>.res .ic{flex:0 0 44px;width:44px;height:44px}
+.living-diplomacy-page .small-council-list>div>.res .n small{margin-top:4px;line-height:1.65}
 
 .living-buildings-page .bld{border-color:rgba(226,177,86,.3)!important;background:radial-gradient(circle at 90% 100%,rgba(125,24,25,.12),transparent 42%),linear-gradient(155deg,#19110f,#0d0a09)!important}
 .living-buildings-page .bld-art{margin-bottom:0!important;border:0!important;border-bottom:1px solid rgba(226,177,86,.23)!important;border-radius:0!important;box-shadow:none!important}
@@ -65,6 +75,14 @@
 .living-screen-castle-life .sw-heading>div>h1{display:none}
 .living-screen-castle-life .sw-heading{align-items:center;margin-top:0}
 .living-screen-castle-life .sw-heading p{font-size:13px}
+.living-screen-travel .travel-hero{min-height:0;padding:14px 16px}
+.living-screen-travel .travel-hero :where(.travel-eyebrow,h1){display:none!important}
+.living-screen-travel .travel-hero p{margin:0;font-size:14px;font-weight:800;color:#ead3a4}
+.living-screen-travel .travel-hero .travel-chip{margin-top:8px}
+.living-screen-castle-life .sw-castle-hero{height:auto;min-height:210px;padding:20px;align-items:flex-end}
+.living-screen-castle-life .sw-castle-hero>div{width:min(100%,620px);min-width:0;text-align:right}
+.living-screen-castle-life .sw-castle-hero h2{max-width:100%;margin:5px 0;font-size:clamp(25px,3vw,34px);line-height:1.35;overflow-wrap:anywhere;text-align:right}
+.living-screen-castle-life .sw-castle-hero p{max-width:100%;line-height:1.9;text-align:right}
 
 .living-screen-body .social-world :where(.btn,input:not([type="checkbox"]),select,textarea){border-radius:var(--ui-radius-control)!important}
 .living-screen-body .social-world :where(.sw-panel,.sw-castle-hero){border-radius:var(--ui-radius-card)!important}
@@ -89,11 +107,12 @@
   .living-page>.tabs{min-height:54px;margin-bottom:12px}
   .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
   .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
-  .living-war-page .war-stage-map{top:82px}
+  .living-war-page .war-stage-map{position:relative!important;top:auto!important;align-self:start}
   .living-war-page .war-stage-map>div:last-child,.living-war-page .war-stage-map :where(.map-wrap,.map-shell){min-height:clamp(500px,60vh,650px)!important}
   .living-war-page .map3d-frame{height:clamp(500px,60vh,650px)!important;min-height:500px!important}
   .living-war-page .war-stage-map .sect{margin-bottom:8px}
-  .living-screen-secondary .living-screen-body{gap:18px}
+  .living-screen-secondary .living-screen-body{width:min(100%,1240px);gap:18px}
+  .living-screen-admin .living-screen-body{width:100%}
   .living-screen-secondary .living-screen-body>.page-title+.page-sub{margin-bottom:0}
   .living-screen-body .support-layout{gap:16px}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:18px}
@@ -114,6 +133,12 @@
   .living-diplomacy-page .power-hierarchy>.res{min-height:76px;padding:11px 10px}
   .living-diplomacy-page .power-hierarchy>.res .ic{flex-basis:42px;width:42px;height:42px}
   .living-diplomacy-page .power-hierarchy>.res .val{flex:0 0 auto;max-width:28%;margin-inline-start:auto;overflow-wrap:anywhere;text-align:end}
+  .living-diplomacy-page .small-council-list{gap:9px;padding:10px}
+  .living-diplomacy-page .small-council-list>div>.res{min-height:76px;padding:11px 10px}
+  .living-diplomacy-page .small-council-list>div>.res .ic{flex-basis:42px;width:42px;height:42px}
+  .living-screen-castle-life .sw-castle-hero{min-height:190px;padding:16px}
+  .living-screen-castle-life .sw-castle-hero h2{font-size:clamp(22px,7vw,28px);line-height:1.4}
+  .living-screen-castle-life .sw-castle-hero p{font-size:11.5px}
   .living-buildings-page .bld{margin-bottom:0!important}
   .living-buildings-page .bld-art{height:172px!important}
   .living-buildings-page .bld-top{padding:13px 12px 8px!important}
