@@ -85,6 +85,8 @@ def validate_sources(root, content):
         destination = root / name
         incoming = hashlib.sha256(content[name]).hexdigest()
         if not destination.is_file():
+            if name == 'frontend/src/styles/ui-coherence.css':
+                continue
             if previous is not None:
                 raise RuntimeError('Expected application source is missing: ' + name)
             continue

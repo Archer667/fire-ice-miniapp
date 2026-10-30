@@ -38,6 +38,26 @@
 .living-screen-body .web-notice-actions .rbtn{width:auto;min-height:36px;padding:7px 10px;border:1px solid rgba(218,169,80,.2);border-radius:9px}
 .living-screen-body .sect{margin-block:var(--ui-space-4) 10px}
 
+/* Real page corrections found in the desktop/mobile audit. */
+.living-diplomacy-page .power-hierarchy{display:grid;gap:10px;padding:14px}
+.living-diplomacy-page .power-hierarchy>.res{min-height:72px;margin:0;padding:12px 13px;border:1px solid rgba(218,169,80,.15);background:linear-gradient(145deg,rgba(42,30,26,.82),rgba(15,12,11,.95))}
+.living-diplomacy-page .power-hierarchy>.res .ic{flex:0 0 44px;width:44px;height:44px}
+.living-diplomacy-page .power-hierarchy>.res .n small{margin-top:4px;line-height:1.65}
+
+.living-buildings-page .bld{border-color:rgba(226,177,86,.3)!important;background:radial-gradient(circle at 90% 100%,rgba(125,24,25,.12),transparent 42%),linear-gradient(155deg,#19110f,#0d0a09)!important}
+.living-buildings-page .bld-art{margin-bottom:0!important;border:0!important;border-bottom:1px solid rgba(226,177,86,.23)!important;border-radius:0!important;box-shadow:none!important}
+.living-buildings-page .bld-top{gap:10px;padding:14px 15px 9px!important}
+.living-buildings-page .bld-n{font-size:16px;line-height:1.5}.living-buildings-page .bld-n small{margin-top:3px;color:#8f816d}
+.living-buildings-page .bld-lv{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px!important;border-radius:99px!important;white-space:nowrap}
+.living-buildings-page .bld-lv:before{content:"سطح ";margin-inline-end:3px;color:#9e8762;font-size:9px}
+.living-buildings-page .bld>.bar{width:auto;height:6px;margin:0 15px 11px!important}
+.living-buildings-page :where(.bld-yield,.bld-perlevel,.bld-cost,.bld-status){margin:8px 15px 0!important;padding:9px 10px;border:1px solid rgba(215,165,79,.11);border-radius:10px;background:rgba(255,245,218,.025);line-height:1.8}
+.living-buildings-page .bld-yield{display:flex;flex-wrap:wrap;gap:5px 12px;color:#d7b772}
+.living-buildings-page .bld-perlevel{color:#a99a85}
+.living-buildings-page .bld-cost{display:flex;flex-wrap:wrap;gap:7px 13px;align-items:center;color:#d8c7ac}
+.living-buildings-page .bld-cost span{margin:0}.living-buildings-page .bld-cost .tm{margin-inline-start:auto}
+.living-buildings-page .bld-btn{width:calc(100% - 30px)!important;min-height:46px;margin:11px 15px 15px!important;border-color:rgba(231,186,98,.58)!important;background:linear-gradient(145deg,#7d171b,#4b0e11)!important;color:#f5d698!important}
+
 .living-screen-espionage .spy-head{display:none!important}
 .living-screen-institutions .institution-gallery-heading{display:none}
 .living-screen-institutions .institution-gallery-intro{margin-top:0}
@@ -53,6 +73,26 @@
 .living-screen-body .social-world .sw-contract>button{width:100%;margin-inline:0;border-radius:9px}
 
 @media(min-width:900px){
+  body{padding:0!important;overflow:hidden!important}
+  body.web-edition .living-shell{width:100%!important;max-width:none!important;height:100dvh;min-height:100dvh;margin:0!important;overflow:hidden;border:0!important;border-radius:0!important}
+  body.web-edition .web-account-bar{width:min(1400px,100%)!important}
+  .living-shell .header{left:0!important;right:0!important;padding-inline:34px!important}
+  .living-shell .view{padding:112px 42px 126px!important}
+  .web-edition .living-shell .view{padding-top:124px!important}
+  .living-shell .nav{position:absolute;left:50%!important;right:auto!important;top:auto!important;bottom:18px!important;width:min(680px,calc(100% - 40px))!important;height:auto;min-height:76px;flex-direction:row!important;justify-content:space-between!important;gap:7px;padding:8px!important;border-radius:18px!important;transform:translateX(-50%)}
+  .living-shell .nv{flex:1 1 0!important;width:auto!important;min-width:0;padding:10px 5px!important;font-size:9.5px!important}
+  .living-page>.living-hero{min-height:220px;padding:23px 30px;border-radius:21px}
+  .living-page>.living-hero .living-hero-copy{width:min(690px,74%)}
+  .living-page>.living-hero h1{font-size:clamp(32px,3.2vw,42px);line-height:1.1;margin-block:7px}
+  .living-page>.living-hero p{font-size:12px;line-height:1.75}
+  .living-page>.living-hero-badges{margin-top:12px}
+  .living-page>.tabs{min-height:54px;margin-bottom:12px}
+  .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
+  .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
+  .living-war-page .war-stage-map{top:82px}
+  .living-war-page .war-stage-map>div:last-child,.living-war-page .war-stage-map :where(.map-wrap,.map-shell){min-height:clamp(500px,60vh,650px)!important}
+  .living-war-page .map3d-frame{height:clamp(500px,60vh,650px)!important;min-height:500px!important}
+  .living-war-page .war-stage-map .sect{margin-bottom:8px}
   .living-screen-secondary .living-screen-body{gap:18px}
   .living-screen-secondary .living-screen-body>.page-title+.page-sub{margin-bottom:0}
   .living-screen-body .support-layout{gap:16px}
@@ -70,6 +110,16 @@
   .living-screen-body .support-new{width:100%;margin:0}
   .living-screen-body .social-world .sw-heading{gap:10px;margin-bottom:14px;padding-bottom:12px}
   .living-screen-body .social-world .sw-toolbar{gap:10px;margin-block:12px}
+  .living-diplomacy-page .power-hierarchy{gap:9px;padding:10px}
+  .living-diplomacy-page .power-hierarchy>.res{min-height:76px;padding:11px 10px}
+  .living-diplomacy-page .power-hierarchy>.res .ic{flex-basis:42px;width:42px;height:42px}
+  .living-diplomacy-page .power-hierarchy>.res .val{flex:0 0 auto;max-width:28%;margin-inline-start:auto;overflow-wrap:anywhere;text-align:end}
+  .living-buildings-page .bld{margin-bottom:0!important}
+  .living-buildings-page .bld-art{height:172px!important}
+  .living-buildings-page .bld-top{padding:13px 12px 8px!important}
+  .living-buildings-page .bld>.bar{margin-inline:12px!important}
+  .living-buildings-page :where(.bld-yield,.bld-perlevel,.bld-cost,.bld-status){margin-inline:12px!important}
+  .living-buildings-page .bld-btn{width:calc(100% - 24px)!important;margin-inline:12px!important}
 }
 
 @media(max-width:420px){

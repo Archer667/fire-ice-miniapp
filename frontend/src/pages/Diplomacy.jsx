@@ -390,7 +390,7 @@ export default function Diplomacy() {
       </div>
 
       <div className="sect up u3">سلسله‌مراتب قدرت</div>
-      <div className="card up u3">
+      <div className="card up u3 power-hierarchy">
         <div className="res">
           <div className="ic"><Crown s={18} /></div>
           <div className="n">پادشاه/ملکه<small>فقط از بین والی‌ها انتخاب می‌شه · حقوقِ روزانه {titles?.king_salary_gold?.toLocaleString('fa-IR')} سکه</small></div>
