@@ -2,6 +2,7 @@ import {canOpenPage} from './characterAccess.js';
 import './styles/living-pages.css';
 import './styles/living-system.css';
 import './styles/living-responsive.css';
+import './styles/ui-coherence.css';
 import Notifications from './pages/Notifications.jsx';
 import CharacterProfile from './pages/CharacterProfile.jsx';
 import { lazy, Suspense, useEffect, useState } from 'react';

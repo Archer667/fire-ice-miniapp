@@ -19,7 +19,8 @@
     "frontend/src/App.jsx": [
       "cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610",
       "78fb066831e19c416939c5e5285ce74bc0c800edcd94789f45f376d20f74be36",
-      "0f35f5e662c2cc7dac5041b00ae37ab224865480957b5703bee0fc081d27e1ef"
+      "0f35f5e662c2cc7dac5041b00ae37ab224865480957b5703bee0fc081d27e1ef",
+      "bfb9716dd563c471c4129d1641d846005af33e12c359da4044324cb0893c470c"
     ],
     "frontend/src/components/LivingPageHero.jsx": [
       "cc70032c95243be3278244737f9b245f3988ee23a4b612b466dc161404db5ca1",
@@ -48,6 +49,7 @@
     "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da", "98ade28505525c175eaa070f2a4e1f52d2a251fcd87e02692343cd14086f4443"],
     "frontend/src/styles/living-system.css": ["d7fb8a7027c457372baa6ea8c0729acbfad9820be5b85f5e5f6049100067ebff"],
     "frontend/src/styles/living-responsive.css": ["2da27f5d2b6af96ac920006b4c3358ed54076566540deb5698aae9be8c24aa60"],
+    "frontend/src/styles/ui-coherence.css": null,
     "frontend/public/living-assets/parchment-texture.webp": null,
     "frontend/public/living-assets/realm-hero.webp": null,
     "frontend/public/living-assets/farm-food.webp": null,
