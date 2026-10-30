@@ -52,6 +52,27 @@ function MedalChips({ medals, onSelect, player }) {
   </div>;
 }
 
+function StandingsChart({ rows, title }) {
+  if (!rows?.length) return null;
+  const visible = rows.slice(0, 7);
+  const values = visible.map(row => Number(row.total_score ?? row.points ?? 0));
+  const max = Math.max(1, ...values);
+  return <section className="standings-chart up u2" aria-label={title}>
+    <header><div><span>تصویر رقابت</span><h2>{title}</h2></div><small>بر پایهٔ امتیازهای فعلی</small></header>
+    <div className="standings-chart-bars">
+      {visible.map((row, index) => {
+        const value = values[index];
+        return <div className={`standings-chart-row ${row.mine || row.me ? 'mine' : ''}`} key={row.region || row.rank || row.name}>
+          <span className="standings-chart-rank">{(index + 1).toLocaleString('fa-IR')}</span>
+          <span className="standings-chart-name">{row.name}</span>
+          <span className="standings-chart-track"><i style={{ width: `${Math.max(4, value / max * 100)}%` }} /></span>
+          <b>{value.toLocaleString('fa-IR')}</b>
+        </div>;
+      })}
+    </div>
+  </section>;
+}
+
 export default function Leaderboard() {
   const { toast, seasonBranding } = useGame();
   const [tab, setTab] = useState('regions');
@@ -119,6 +140,9 @@ export default function Leaderboard() {
         ))}
       </div>
       <div className="page-sub">تغییر رتبه نسبت به ۲۴ ساعت قبل</div>
+      {tab === 'regions' && <StandingsChart rows={regionRows} title="قدرت اقلیم‌ها" />}
+      {tab === 'lords' && <StandingsChart rows={lordRows} title="رقابت لردها" />}
+      {tab === 'weekly' && <StandingsChart rows={weeklyRows} title="نبض این هفته" />}
       {tab === 'regions' && (
         !regionRows ? <div className="loading">شمارش اقلیم‌ها...</div> : (
           <div className="up u2">

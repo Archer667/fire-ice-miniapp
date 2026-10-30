@@ -268,15 +268,32 @@ export default function Dashboard({ goTo }) {
       </div>
 
       <div className="sect up u2">محبوبیت و مالیات</div>
-      <div className="card up u2">
-        <div className="res">
-          <div className="ic"><Popularity s={18} /></div>
-          <div className="n">محبوبیت<small>با برگزاری ضیافت در دیپلماسی بالا می‌رود</small></div>
-          <div className="bar"><i style={{ width: (me.popularity ?? 0) + '%' }} /></div>
-          <div className="val">{(me.popularity ?? 0).toLocaleString('fa-IR')}٪</div>
+      <div className="card up u2 realm-popularity-panel">
+        <header className="realm-popularity-head">
+          <div>
+            <span className="realm-kicker">حال‌وهوای قلمرو</span>
+            <h2>محبوبیت مردم</h2>
+            <p>مالیات، سهم غله و ضیافت‌ها مستقیماً روی این عدد و خطر شورش اثر می‌گذارند.</p>
+          </div>
+          <div className="popularity-gauge" style={{ '--popularity': `${Math.max(0, Math.min(100, Number(me.popularity || 0)))}%` }}>
+            <div><Popularity s={22} /><b>{Number(me.popularity || 0).toLocaleString('fa-IR')}٪</b><span>{Number(me.popularity || 0) >= 75 ? 'وفادار' : Number(me.popularity || 0) >= 50 ? 'آرام' : Number(me.popularity || 0) >= 30 ? 'ناآرام' : 'بحرانی'}</span></div>
+          </div>
+        </header>
+        <div className="popularity-factors" aria-label="عوامل محبوبیت">
+          <article className={(rebellion?.tax_daily_popularity || 0) < 0 ? 'negative' : 'positive'}><span>اثر مالیات</span><b>{rebellion ? `${rebellion.tax_daily_popularity > 0 ? '+' : ''}${rebellion.tax_daily_popularity.toLocaleString('fa-IR')}` : '…'}</b><small>در هر روز بازی</small></article>
+          <article className={(rebellion?.ration_daily_popularity || 0) < 0 ? 'negative' : 'positive'}><span>اثر سهم غله</span><b>{rebellion ? `${rebellion.ration_daily_popularity > 0 ? '+' : ''}${rebellion.ration_daily_popularity.toLocaleString('fa-IR')}` : '…'}</b><small>در هر روز بازی</small></article>
+          <article className={(rebellion?.combined_daily_popularity || 0) < 0 ? 'negative' : 'positive'}><span>تغییر روزانه</span><b>{rebellion ? `${rebellion.combined_daily_popularity > 0 ? '+' : ''}${rebellion.combined_daily_popularity.toLocaleString('fa-IR')}` : '…'}</b><small>مجموع عوامل فعال</small></article>
+          <article className={(rebellion?.chance || 0) > 0 ? 'negative' : 'positive'}><span>خطر شورش</span><b>{rebellion ? `${rebellion.chance.toLocaleString('fa-IR')}٪` : '…'}</b><small>احتمال روزانه</small></article>
         </div>
+        <div className="popularity-spectrum" aria-label="نمودار وضعیت محبوبیت">
+          <div className="popularity-spectrum-labels"><span>شورش قطعی</span><span>ناحیهٔ امن</span><span>وفاداری کامل</span></div>
+          <div className="popularity-spectrum-track"><i style={{ insetInlineStart: `${Math.max(0, Math.min(100, Number(me.popularity || 0)))}%` }} /></div>
+          {rebellion && <small>مرز امن: {rebellion.safe_popularity.toLocaleString('fa-IR')}٪ · مرز شورش قطعی: {rebellion.guaranteed_popularity.toLocaleString('fa-IR')}٪</small>}
+        </div>
+        <div className="realm-policy-grid">
+        <section className="realm-policy-card">
         <div className="tax-row">
-          <span>نرخ مالیات</span>
+          <span><b>نرخ مالیات</b><small>درآمد بیشتر، فشار بیشتر روی مردم</small></span>
           <div className="tax-stepper">
             <button type="button" aria-label="کاهش نرخ مالیات" disabled={taxBusy || me.tax_rate <= 0} onClick={() => changeTax(-1)}>−</button>
             <b>{me.tax_rate.toLocaleString('fa-IR')}٪</b>
@@ -295,9 +312,10 @@ export default function Dashboard({ goTo }) {
             <p>اثر مالیات بر محبوبیت بر اساس مدتِ فعال‌بودن هر نرخ محاسبه می‌شود؛ تغییر نرخ، اثر ساعت‌های گذشته را پاک نمی‌کند.</p>
           </div>
         )}
+        </section>
         {rebellion && (
-          <>
-            <div style={{ marginTop: 14 }}>
+          <section className="realm-policy-card">
+            <div>
               <label className="f">سهم غله مردم</label>
               <select value={rebellion.ration} disabled={rationBusy} onChange={e => changeRation(e.target.value)}>
                 {Object.entries(rebellion.ration_levels || {}).map(([key, level]) => (
@@ -317,6 +335,11 @@ export default function Dashboard({ goTo }) {
                 احتمال روزانهٔ شورش: {rebellion.chance.toLocaleString('fa-IR')}٪ · حد امن {rebellion.safe_popularity.toLocaleString('fa-IR')} · شورش قطعی زیر {rebellion.guaranteed_popularity.toLocaleString('fa-IR')}
               </div>
             </div>
+          </section>
+        )}
+        </div>
+        {rebellion && (
+          <>
             {rebellion.active && (
               <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: 'rgba(180,35,35,.14)', border: '1px solid rgba(255,90,90,.35)' }}>
                 <div style={{ fontWeight: 900, color: 'var(--danger)' }}>🔥 شورش در قلمرو</div>

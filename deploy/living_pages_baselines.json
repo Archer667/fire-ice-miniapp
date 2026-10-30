@@ -1,45 +1,52 @@
 {
   "web": {
-    "backend/character_travel.py": ["fc65b07ad796572290733801d3cbe19d7c9a3b3b7f72b3205c70dfceb95f8987"],
+    "backend/character_travel.py": ["fc65b07ad796572290733801d3cbe19d7c9a3b3b7f72b3205c70dfceb95f8987", "1c5173844e1ace3d0f4debacebf1ff5a611a9b7926ed2438ca0672c722c3945e"],
     "backend/control_settings.py": [
       "b30188eb50d3404d0a22382b6226888bd2eda445e657db51c882a79920e10675",
-      "0512ecfed3f35c74aafc2386279e06ad5bc09ce8ff72b92bd47a73b6a683ae9d"
+      "0512ecfed3f35c74aafc2386279e06ad5bc09ce8ff72b92bd47a73b6a683ae9d",
+      "0b881f56bdef5f18701885778fd8db105020aa3aeb493e5fff96b42a3f60663c"
     ],
-    "backend/game_data.py": ["bc80f434d3c26afd1314ad0be0ef7cf62fa016f2eb3052877275ec3471212118"],
-    "backend/routers/admin.py": ["0bbe55320b1f8efa07d1c80234fd8f9d794391e3ecd192e5cf2f71db378581bf"],
-    "backend/routers/map.py": ["a57d0165ea1b626289215fbdb4367ccfefcc92e9ee3763540d1553a35f2420d9"],
-    "backend/routers/war.py": ["e567c7cf60404e91c90df3724dfe10b4650c15e834638059fad9dce91b91a74a"],
-    "backend/tests/test_named_commanders.py": null,
+    "backend/game_data.py": ["bc80f434d3c26afd1314ad0be0ef7cf62fa016f2eb3052877275ec3471212118", "e64f0b0f4e626f10a596a0a8a44d45bbb9e1d5713890fab064c1c468c05c38d2"],
+    "backend/routers/admin.py": ["0bbe55320b1f8efa07d1c80234fd8f9d794391e3ecd192e5cf2f71db378581bf", "ff23932107fe38c40beefbb3445bb31e6e6dad78bd2c4857242f7aec79c7a482"],
+    "backend/routers/map.py": ["a57d0165ea1b626289215fbdb4367ccfefcc92e9ee3763540d1553a35f2420d9", "84ad54075b6617e48cf2f9329b866c8203545a5586cbf367d319bff9ffc212d3"],
+    "backend/routers/war.py": ["e567c7cf60404e91c90df3724dfe10b4650c15e834638059fad9dce91b91a74a", "e762026845dc6645f6af5d452a274ea3606e094e29a8b1b5fa61055cc5e0314f"],
+    "backend/tests/test_named_commanders.py": ["37bb6fa6a5456235d3ea194d1f27352dff71b98dc6db298e99c0220ec0990e14"],
     "frontend/src/api.js": [
       "1fd00bdc164363abc3379f87d1635d3f60dc3253e238449653ff290ef145734a",
-      "f51310a98429c31f28e8304767d9383e485f0ce3cfb745f8821d52db7b89e51c"
+      "f51310a98429c31f28e8304767d9383e485f0ce3cfb745f8821d52db7b89e51c",
+      "1d1eff233a3d1421770dbf6c420630b65e689514e91d6c12dba6d2aa54a6d788"
     ],
     "frontend/src/App.jsx": [
       "cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610",
-      "78fb066831e19c416939c5e5285ce74bc0c800edcd94789f45f376d20f74be36"
+      "78fb066831e19c416939c5e5285ce74bc0c800edcd94789f45f376d20f74be36",
+      "0f35f5e662c2cc7dac5041b00ae37ab224865480957b5703bee0fc081d27e1ef"
     ],
     "frontend/src/components/LivingPageHero.jsx": [
       "cc70032c95243be3278244737f9b245f3988ee23a4b612b466dc161404db5ca1",
-      "690c4e2b1e1e90964b0b2d495e19cd0e9eb415afa56a2cf36349ddffdbec2a69"
+      "690c4e2b1e1e90964b0b2d495e19cd0e9eb415afa56a2cf36349ddffdbec2a69",
+      "b4ee00ee6bb4f28339f800f1c0eaf433e5dcb0464db6e3ccd45015fb4fddfbef"
     ],
-    "frontend/src/components/LivingScreen.jsx": null,
-    "frontend/src/components/WesterosMap.jsx": ["bf8f543e518a6964975a0d3c7fb9d3cd665c9819430ea631220bb57a83567dc6"],
-    "frontend/src/pages/Admin.jsx": ["9891307a0f32888966cd6aac7017a5fcf0bf3386e21b49b8355ae4192400a871"],
-    "frontend/src/pages/Dashboard.jsx": ["0d87bd08cdde8d8d19be4a6d90eed08b035f033d187e8ff8e6e1c863e4526e0a", "cc68ef113d676d85eaa4c3ea79cbfde8facd4aa2bc770b7e387a81c751c6b669"],
-    "frontend/src/pages/Buildings.jsx": ["b8686232702e0b6173801ae876e0b31342d67cc5cd882d75658221d9b227ca4c", "03bbe26fb3dfcf12934a5c77a6eed886ebbf2e8d899b10c2952e06144fa31c3d"],
-    "frontend/src/pages/War.jsx": ["296600ff50fdda42130e3c09b747545f29b158a0059d547370787aa7934c7187", "1291bf35f67ffa6d8cee29e048b9bd474c1e08c9e6ac9e7c10d53df5b19a534c"],
+    "frontend/src/components/LivingScreen.jsx": ["4c1e0d592af68003aa2ae8ef5677cf56de008e3b29669dc3ddedb1094a23b308"],
+    "frontend/src/components/WesterosMap.jsx": ["bf8f543e518a6964975a0d3c7fb9d3cd665c9819430ea631220bb57a83567dc6", "214c8cd807beeafee5f9b0999603e26fc417fed3f2d870b82d557df0431d001a"],
+    "frontend/src/pages/Admin.jsx": ["9891307a0f32888966cd6aac7017a5fcf0bf3386e21b49b8355ae4192400a871", "3d95654cac1a761bbb65418086db2510866810affaa2368e2965f8b76d147b04"],
+    "frontend/src/pages/Dashboard.jsx": ["0d87bd08cdde8d8d19be4a6d90eed08b035f033d187e8ff8e6e1c863e4526e0a", "cc68ef113d676d85eaa4c3ea79cbfde8facd4aa2bc770b7e387a81c751c6b669", "60e48a066b5dc63be3d3e1ed5b09fa5963fca60e2fd515fcde1e8e6f31557a16"],
+    "frontend/src/pages/Buildings.jsx": ["b8686232702e0b6173801ae876e0b31342d67cc5cd882d75658221d9b227ca4c", "03bbe26fb3dfcf12934a5c77a6eed886ebbf2e8d899b10c2952e06144fa31c3d", "f5d14f5212712c753457899ee08f465531e3c69ce1c9192cd951fb8f85fd9142"],
+    "frontend/src/pages/War.jsx": ["296600ff50fdda42130e3c09b747545f29b158a0059d547370787aa7934c7187", "1291bf35f67ffa6d8cee29e048b9bd474c1e08c9e6ac9e7c10d53df5b19a534c", "94bcab3ee402f5a52771ef0118ebf350b705f30a74e868fdbd2ad94ee0448c9b"],
     "frontend/src/pages/Leaderboard.jsx": [
       "2fc2dd869db09ccb9fe14849872ffc435b63aab4b13e0599a84fa66a3ac54762",
       "c061ecd9c4dc17ba26000f0fb656940c4c57a4c7c59027197d66dbf153563354",
-      "caf873437f8dbeeaa7fa8a8739b4c1299835056b0c76c11311c82dd37405f0a4"
+      "caf873437f8dbeeaa7fa8a8739b4c1299835056b0c76c11311c82dd37405f0a4",
+      "b956bb8b606bc5606daf73a662a98e309d44eb050e9c311d9e6e16a5476f71c9"
     ],
     "frontend/src/pages/Diplomacy.jsx": [
       "990c16af0fbab18e026707f94428810d2fdb78db95d832e34ab4fa8295370eea",
       "2f554bce122ae914b7d85e8872299bff4a51c9af4b84f1b8ed3d81ed7644b422",
-      "152be1add326f5e603e0aa461c3305c3f8e5ad832fb064edc2bbe3e14f8f3a70"
+      "152be1add326f5e603e0aa461c3305c3f8e5ad832fb064edc2bbe3e14f8f3a70",
+      "6001029add10a350f274f32ad7c01068e4dfcbeeb67f5f5b05b0a308d752ed11"
     ],
-    "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da"],
-    "frontend/src/styles/living-system.css": null,
+    "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da", "98ade28505525c175eaa070f2a4e1f52d2a251fcd87e02692343cd14086f4443"],
+    "frontend/src/styles/living-system.css": ["d7fb8a7027c457372baa6ea8c0729acbfad9820be5b85f5e5f6049100067ebff"],
+    "frontend/src/styles/living-responsive.css": null,
     "frontend/public/living-assets/parchment-texture.webp": null,
     "frontend/public/living-assets/realm-hero.webp": null,
     "frontend/public/living-assets/farm-food.webp": null,

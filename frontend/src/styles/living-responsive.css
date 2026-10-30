@@ -1,0 +1,85 @@
+.living-page,.living-page *{box-sizing:border-box}
+.living-page{display:block;min-width:0;overflow:visible}
+.living-page :where(.card,.tabs,.res,.troop,.bld,.lbr,.poll,.pact-clauses,.realm-policy-card){min-width:0}
+.living-page :where(p,small,.n,.tn,.page-sub){overflow-wrap:anywhere}
+.living-page>.sect{margin:26px 2px 10px}
+
+.realm-popularity-panel{position:relative;overflow:hidden;padding:18px!important;background:radial-gradient(circle at 85% 0,rgba(148,31,28,.22),transparent 38%),linear-gradient(145deg,#211713,#0e0b0a)!important}
+.realm-popularity-panel:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,transparent 60%,rgba(232,185,94,.035))}
+.realm-popularity-panel>*{position:relative;z-index:1}
+.realm-popularity-head{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:center;gap:20px;padding:2px 4px 17px;border-bottom:1px solid rgba(224,174,82,.14)}
+.realm-popularity-head h2{margin:4px 0 5px;color:#f0d29a;font-size:22px}
+.realm-popularity-head p{max-width:580px;margin:0;color:#998b79;font-size:11.5px;line-height:1.9}
+.realm-kicker{color:#c38e3f;font-size:9px;font-weight:800;letter-spacing:.11em}
+.popularity-gauge{display:grid;width:132px;height:132px;place-items:center;margin-inline-start:auto;border-radius:50%;background:conic-gradient(#e1b65f var(--popularity),rgba(255,255,255,.055) 0);box-shadow:0 0 0 1px rgba(224,177,87,.22),0 14px 30px rgba(0,0,0,.34)}
+.popularity-gauge:before{content:"";grid-area:1/1;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#281b16,#0c0909 72%);box-shadow:inset 0 0 0 1px rgba(234,190,104,.13)}
+.popularity-gauge>div{grid-area:1/1;z-index:1;display:grid;place-items:center;color:#cfa452}
+.popularity-gauge b{margin-top:2px;color:#f4d79f;font:800 24px Georgia,serif}.popularity-gauge span{color:#9b8c76;font-size:9px}
+.popularity-factors{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}
+.popularity-factors article{position:relative;display:grid;gap:3px;padding:12px;border:1px solid rgba(214,165,79,.14);border-radius:12px;background:rgba(5,4,4,.28);overflow:hidden}
+.popularity-factors article:before{content:"";position:absolute;inset-block:10px;inset-inline-start:0;width:3px;border-radius:4px;background:#62aa7c}
+.popularity-factors article.negative:before{background:#c64e52}.popularity-factors span{color:#8f806d;font-size:9px}.popularity-factors b{color:#e8c984;font-size:18px}.popularity-factors small{color:#6f6558;font-size:8px}
+.popularity-spectrum{padding:13px 14px;border:1px solid rgba(211,161,72,.13);border-radius:12px;background:rgba(0,0,0,.2)}
+.popularity-spectrum-labels{display:flex;justify-content:space-between;margin-bottom:7px;color:#756959;font-size:8px}.popularity-spectrum-track{position:relative;height:9px;border-radius:99px;background:linear-gradient(90deg,#7e1418,#b16e2a 38%,#b7a54c 58%,#4d9670);box-shadow:inset 0 1px 3px #000;direction:ltr}.popularity-spectrum-track i{position:absolute;top:50%;width:16px;height:16px;border:3px solid #f0d08c;border-radius:50%;background:#421416;transform:translate(-50%,-50%);box-shadow:0 0 0 3px rgba(0,0,0,.5),0 0 15px rgba(239,193,104,.42)}.popularity-spectrum>small{display:block;margin-top:8px;color:#887966;font-size:9px}
+.realm-policy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.realm-policy-card{padding:14px;border:1px solid rgba(214,164,77,.15);border-radius:12px;background:rgba(255,255,255,.018)}
+.realm-policy-card .tax-row{margin:0;padding:0 0 10px;border:0}.realm-policy-card .tax-row>span{display:grid;gap:3px}.realm-policy-card .tax-row small{color:#716657;font-size:8.5px}.realm-policy-card .page-sub{margin:7px 0 0;font-size:10px}.realm-policy-card label.f{margin-top:0}.realm-policy-card select{margin-bottom:0}
+
+.standings-chart{margin:0 0 14px;padding:16px;border:1px solid rgba(226,177,86,.24);border-radius:17px;background:radial-gradient(circle at 88% 0,rgba(155,91,31,.2),transparent 38%),linear-gradient(145deg,#211714,#0e0b0a);box-shadow:0 18px 38px rgba(0,0,0,.26)}
+.standings-chart>header{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:13px}.standings-chart header span{color:#a47c42;font-size:8.5px}.standings-chart h2{margin:3px 0 0;color:#efd19a;font-size:17px}.standings-chart header small{color:#796c5a;font-size:9px}
+.standings-chart-bars{display:grid;gap:7px}.standings-chart-row{display:grid;grid-template-columns:24px minmax(72px,130px) minmax(80px,1fr) auto;align-items:center;gap:8px;min-width:0}.standings-chart-rank{display:grid;width:22px;height:22px;place-items:center;border:1px solid rgba(215,166,80,.17);border-radius:50%;color:#9e8152;font-size:9px}.standings-chart-name{overflow:hidden;color:#cbb996;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.standings-chart-track{height:8px;overflow:hidden;border-radius:99px;background:rgba(0,0,0,.45)}.standings-chart-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#741317,#c68531,#e0b961);box-shadow:0 0 12px rgba(211,161,69,.25)}.standings-chart-row.mine .standings-chart-track i{background:linear-gradient(90deg,#9b1c20,#e0b35b)}.standings-chart-row b{min-width:46px;color:#dfba70;font-size:10px;text-align:end}
+
+.living-buildings-page>.card{align-items:stretch}.living-buildings-page .bld{display:flex;min-width:0;flex-direction:column}.living-buildings-page .bld-btn{margin-top:auto}.living-buildings-page .bld-yield,.living-buildings-page .bld-perlevel,.living-buildings-page .bld-cost,.living-buildings-page .bld-status{line-height:1.75}.living-buildings-page .bld-cost .tm{margin-inline-start:0}
+.living-war-page .war-command-stage{min-width:0}.living-war-page .war-stage-map,.living-war-page .war-stage-orders{min-width:0}.living-war-page .mapview,.living-war-page .mapview-frame,.living-war-page .map3d-frame{max-width:100%;min-width:0}.living-war-page .map3d-view{max-width:100%}.living-war-page .map-region-tabs{overscroll-behavior-inline:contain}.living-war-page .map-legend{min-width:0}.living-war-page .map-legend-toggle{margin-inline-start:0}
+.living-throne-page .lbr{display:grid;grid-template-columns:58px minmax(0,1fr) auto;align-items:center;gap:10px}.living-throne-page .lbr .n{min-width:0}.living-throne-page .lbr .n small{line-height:1.75}.living-throne-page .lbr .p{min-width:58px;text-align:end}
+.living-diplomacy-page .card{min-width:0}.living-diplomacy-page .troop{min-width:0}.living-diplomacy-page .troop .tn{min-width:0}.living-diplomacy-page .grid2>*{min-width:0}.living-diplomacy-page .pact-clauses{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+@media(min-width:900px){
+  .living-page>.living-hero{margin-bottom:16px}
+  .living-realm-page>.card:not(.realm-identity-card):has(.resource-status){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .living-war-page .map3d-frame{height:clamp(520px,65vh,720px);min-height:520px}
+}
+
+@media(max-width:899px){
+  .living-shell .view{padding:76px 14px 118px}
+  .web-edition .living-shell .view{padding-top:94px}
+  .living-screen{width:100%;padding-bottom:14px}
+  .living-screen-body{width:100%}
+  .living-page>.living-hero{width:100%;min-height:260px;margin:0 0 12px;padding:108px 18px 20px;align-items:flex-end;border-radius:18px}
+  .living-page>.living-hero .living-hero-copy{width:100%;max-width:none;margin:0;padding:0}
+  .living-page>.living-hero h1{margin:7px 0 5px;font-size:30px;line-height:1.15}
+  .living-page>.living-hero p{font-size:11px;line-height:1.75}
+  .living-page>.living-hero-badges{gap:5px;margin-top:10px}.living-page>.living-hero .living-hero-badges span{padding:5px 8px;font-size:8.5px}
+  .living-page>.tabs{display:flex;width:100%;min-height:52px;gap:6px;margin-bottom:11px;padding:6px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none}
+  .living-page>.tabs::-webkit-scrollbar{display:none}.living-page>.tabs .tab{flex:0 0 auto;min-width:104px;min-height:39px;padding-inline:11px;scroll-snap-align:start;font-size:10.5px}
+  .living-page>.sect{margin-top:21px}
+  .living-page :where(.card,.panel){max-width:100%}
+
+  .living-realm-page>.living-hero{min-height:385px;padding:144px 16px 18px}
+  .living-realm-page>.living-hero:before{background-position:center top}
+  .living-realm-page>.living-hero .living-hero-copy{padding:0}
+  .realm-hero-identity{inset-inline-end:8px;top:-116px;width:72px;height:92px}.realm-hero-portrait{width:72px;height:87px}.realm-hero-flag{width:29px!important;height:29px!important}
+  .realm-hero-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:14px 0 0}.realm-hero-stats>div{min-height:58px;padding:9px 6px}.realm-hero-stats b{font-size:17px}.realm-hero-stats span{font-size:8px}
+  .realm-status-rail{grid-template-columns:1fr;gap:8px;margin-bottom:10px}.realm-status-rail .daily-card,.realm-status-rail .season{min-height:82px;margin:0;padding:12px}.realm-status-rail .daily-t1{font-size:11px}.realm-status-rail .daily-t2{font-size:9px;line-height:1.65}
+  .living-realm-page>.card:not(.realm-identity-card):has(.resource-status){grid-template-columns:1fr;gap:8px;padding:0}.living-realm-page .resource-status{min-height:105px;padding:13px}.living-realm-page .resource-status:before{inset-inline:45% 0}.living-realm-page .resource-status .n{font-size:11px}.living-realm-page .resource-status .n small{font-size:8.5px}.living-realm-page .resource-status .val{font-size:12px}
+  .realm-popularity-panel{padding:14px!important}.realm-popularity-head{grid-template-columns:minmax(0,1fr) 104px;gap:10px;padding-bottom:13px}.realm-popularity-head h2{font-size:17px}.realm-popularity-head p{font-size:9.5px}.popularity-gauge{width:96px;height:96px}.popularity-gauge:before{width:75px;height:75px}.popularity-gauge svg{width:16px}.popularity-gauge b{font-size:18px}.popularity-factors{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.popularity-factors article{padding:10px}.popularity-factors b{font-size:15px}.realm-policy-grid{grid-template-columns:1fr}.realm-policy-card{padding:12px}.realm-policy-card .tax-row{align-items:center}.tax-stepper{flex-shrink:0}
+
+  .living-buildings-page>.card{grid-template-columns:1fr;gap:10px}.living-buildings-page .bld{min-height:0}.living-buildings-page .bld-art{height:180px}.living-buildings-page .bld-top{padding-inline:12px}.living-buildings-page :where(.bld-yield,.bld-perlevel,.bld-cost,.bld-status){margin-inline:12px}.living-buildings-page .bld-btn{width:calc(100% - 24px);margin-inline:12px}
+
+  .war-command-stage{display:flex!important;flex-direction:column;gap:10px}.war-stage-map{position:relative!important;top:auto!important;width:100%;order:0}.war-stage-orders{width:100%;order:1}.war-stage-map>div:last-child{min-height:0!important}.war-stage-map :where(.map-wrap,.map-shell){min-height:0!important}.living-war-page .map3d-frame{height:clamp(330px,54dvh,470px)!important;min-height:330px!important;border-radius:14px!important}.living-war-page .map3d-minimap{width:36px;height:67px}.living-war-page .map-region-tab{padding:6px 10px;font-size:9.5px}.living-war-page .map-pin-filter .map-region-tab{font-size:9px}.living-war-page .map3d-popup{max-height:170px;padding:9px 10px}.living-war-page .map-legend{gap:6px 9px}.living-war-page .map-legend-item{font-size:8.5px}.war-stage-orders>.card{padding:13px}.war-stage-orders .troop{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:8px}.war-stage-orders .troop input{width:58px}.cost-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+
+  .standings-chart{padding:13px}.standings-chart>header{align-items:start}.standings-chart h2{font-size:15px}.standings-chart-row{grid-template-columns:20px minmax(64px,92px) minmax(65px,1fr) 42px;gap:6px}.standings-chart-name{font-size:9px}.standings-chart-row b{min-width:0;font-size:8.5px}.living-throne-page .lbr{grid-template-columns:45px minmax(0,1fr) auto;gap:8px;min-height:74px;padding:10px}.living-throne-page .lbr .rk{width:43px;height:43px}.living-throne-page .lbr .n{font-size:11px}.living-throne-page .lbr .n small{font-size:8.5px}.living-throne-page .lbr .p{min-width:46px;font-size:13px}.leader-pager{gap:6px;padding:8px}.leader-pager span{font-size:9px}
+
+  .living-diplomacy-page .pact-clauses{grid-template-columns:1fr}.living-diplomacy-page .troop{align-items:flex-start;flex-wrap:wrap}.living-diplomacy-page .troop>.btn,.living-diplomacy-page .troop>div[style*="display: flex"]{width:100%!important}.living-diplomacy-page .troop>div[style*="display: flex"] .btn{flex:1;width:auto!important}.living-diplomacy-page .grid2{gap:7px}
+}
+
+@media(max-width:390px){
+  .living-shell .view{padding-inline:10px}
+  .web-edition .living-shell .view{padding-top:90px}
+  .living-page>.living-hero{min-height:245px;padding-inline:14px}.living-page>.living-hero h1{font-size:27px}.living-page>.living-hero p{font-size:10px}
+  .living-realm-page>.living-hero{min-height:375px;padding-top:140px}.realm-hero-stats>div{min-height:54px}.realm-status-rail .daily-card{gap:8px}.daily-ic{width:34px;height:34px}.daily-btn{padding-inline:8px!important}
+  .realm-popularity-head{grid-template-columns:1fr 88px}.popularity-gauge{width:84px;height:84px}.popularity-gauge:before{width:65px;height:65px}.popularity-gauge b{font-size:16px}.popularity-gauge span{font-size:7.5px}.popularity-factors article{padding:9px 8px}.popularity-spectrum{padding-inline:10px}.popularity-spectrum-labels{font-size:7px}
+  .living-buildings-page .bld-art{height:165px}
+  .living-war-page .map3d-frame{height:330px!important;min-height:330px!important}.war-stage-orders .troop{grid-template-columns:minmax(0,1fr) 52px}.war-stage-orders .troop input{width:52px;padding-inline:4px}
+  .standings-chart-row{grid-template-columns:18px minmax(55px,76px) minmax(54px,1fr) 38px}.living-throne-page .lbr{grid-template-columns:40px minmax(0,1fr) auto;padding-inline:8px}.living-throne-page .lbr .rk{width:38px;height:38px}.living-throne-page .lbr .p{min-width:38px;font-size:11px}
+  .living-diplomacy-page .grid2{grid-template-columns:1fr}
+}
