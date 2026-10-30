@@ -36,7 +36,8 @@
       "2fc2dd869db09ccb9fe14849872ffc435b63aab4b13e0599a84fa66a3ac54762",
       "c061ecd9c4dc17ba26000f0fb656940c4c57a4c7c59027197d66dbf153563354",
       "caf873437f8dbeeaa7fa8a8739b4c1299835056b0c76c11311c82dd37405f0a4",
-      "b956bb8b606bc5606daf73a662a98e309d44eb050e9c311d9e6e16a5476f71c9"
+      "b956bb8b606bc5606daf73a662a98e309d44eb050e9c311d9e6e16a5476f71c9",
+      "25c1867187d1897a510a11a736ffd12b41059153d298c83d94230a4039ab67b8"
     ],
     "frontend/src/pages/Diplomacy.jsx": [
       "990c16af0fbab18e026707f94428810d2fdb78db95d832e34ab4fa8295370eea",
@@ -46,7 +47,7 @@
     ],
     "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da", "98ade28505525c175eaa070f2a4e1f52d2a251fcd87e02692343cd14086f4443"],
     "frontend/src/styles/living-system.css": ["d7fb8a7027c457372baa6ea8c0729acbfad9820be5b85f5e5f6049100067ebff"],
-    "frontend/src/styles/living-responsive.css": null,
+    "frontend/src/styles/living-responsive.css": ["2da27f5d2b6af96ac920006b4c3358ed54076566540deb5698aae9be8c24aa60"],
     "frontend/public/living-assets/parchment-texture.webp": null,
     "frontend/public/living-assets/realm-hero.webp": null,
     "frontend/public/living-assets/farm-food.webp": null,

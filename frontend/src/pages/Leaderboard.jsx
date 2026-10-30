@@ -8,9 +8,10 @@ import PlayerFlag from '../components/PlayerFlag.jsx';
 import LivingPageHero from '../components/LivingPageHero.jsx';
 
 const TABS = [
-  { id: 'regions', label: 'اقلیم‌ها' },
   { id: 'lords', label: 'لردها' },
+  { id: 'regions', label: 'اقلیم‌ها' },
   { id: 'weekly', label: 'این‌هفته' },
+  { id: 'medals', label: 'مدال‌ها' },
 ];
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' };
 const TIER_FA = { bronze: 'برنز', silver: 'نقره', gold: 'طلا' };
@@ -52,26 +53,46 @@ function MedalChips({ medals, onSelect, player }) {
   </div>;
 }
 
-function StandingsChart({ rows, title }) {
+function CompetitionPulse({ rows }) {
   if (!rows?.length) return null;
-  const visible = rows.slice(0, 7);
-  const values = visible.map(row => Number(row.total_score ?? row.points ?? 0));
-  const max = Math.max(1, ...values);
-  return <section className="standings-chart up u2" aria-label={title}>
-    <header><div><span>تصویر رقابت</span><h2>{title}</h2></div><small>بر پایهٔ امتیازهای فعلی</small></header>
-    <div className="standings-chart-bars">
-      {visible.map((row, index) => {
-        const value = values[index];
-        return <div className={`standings-chart-row ${row.mine || row.me ? 'mine' : ''}`} key={row.region || row.rank || row.name}>
-          <span className="standings-chart-rank">{(index + 1).toLocaleString('fa-IR')}</span>
-          <span className="standings-chart-name">{row.name}</span>
-          <span className="standings-chart-track"><i style={{ width: `${Math.max(4, value / max * 100)}%` }} /></span>
-          <b>{value.toLocaleString('fa-IR')}</b>
-        </div>;
-      })}
+  const colors = ['#9f2030', '#527da8', '#927548', '#46745c', '#b77f38', '#714779', '#6e5f55'];
+  const visible = rows.filter(row => Number(row.total_score || 0) > 0).slice(0, 7);
+  const source = visible.length ? visible : rows.slice(0, 7);
+  const totalScore = Math.max(1, source.reduce((sum, row) => sum + Number(row.total_score || 0), 0));
+  const activeHouses = rows.reduce((sum, row) => sum + Number(row.lord_count || 0), 0);
+  let cursor = 0;
+  const segments = source.map((row, index) => {
+    const share = visible.length ? Number(row.total_score || 0) / totalScore * 100 : 100 / Math.max(1, source.length);
+    const start = cursor; cursor += share;
+    return `${colors[index % colors.length]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+  });
+  const top = rows.slice(0, 3);
+  return <section className="competition-pulse up u2" aria-label="نبض رقابت اقلیم‌ها">
+    <header><div><span>قدرت‌های زندهٔ فصل</span><h2>نبض رقابت</h2></div><small>سهم هر اقلیم از قدرت ثبت‌شده</small></header>
+    <div className="competition-pulse-body">
+      <div className="competition-donut" style={{ '--pulse-fill': `conic-gradient(${segments.join(',')})` }}>
+        <div><b>{activeHouses.toLocaleString('fa-IR')}</b><span>خاندان فعال</span></div>
+      </div>
+      <div className="competition-top-regions">
+        {top.map((row, index) => {
+          const share = Number(row.total_score || 0) / totalScore * 100;
+          return <article key={row.region || row.name} style={{ '--region-color': colors[index] }}>
+            <span>{row.name}</span>
+            <b>{Number(row.total_score || 0).toLocaleString('fa-IR')}</b>
+            <small>{share.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪ از قدرت</small>
+          </article>;
+        })}
+      </div>
     </div>
   </section>;
 }
+
+const searchable = value => String(value || '').trim().toLocaleLowerCase('fa-IR');
+const filterLeaderboard = (rows, query) => {
+  const needle = searchable(query);
+  if (!needle) return rows || [];
+  return (rows || []).filter(row => searchable([row.name, row.region, row.title, row.rank_label, castleLabel(row.castle)].filter(Boolean).join(' ')).includes(needle));
+};
 
 export default function Leaderboard() {
   const { toast, seasonBranding } = useGame();
@@ -87,6 +108,7 @@ export default function Leaderboard() {
   const [weeklyRows, setWeeklyRows] = useState(null);
   const [selectedMedal, setSelectedMedal] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [leaderSearch, setLeaderSearch] = useState('');
 
   const openPicture = async r => {
     if (pictureBusy) return;
@@ -126,27 +148,38 @@ export default function Leaderboard() {
     return ()=>{active=false;clearTimeout(timer);controller.abort();};
   },[tab,lordPage,retry]);
   const pager = <nav className="leader-pager" aria-label="صفحه‌بندی لردها"><button className="rbtn" disabled={lordBusy||lordPage<=1} onClick={()=>setLordPage(p=>p-1)}>قبلی</button><span>صفحهٔ {lordPage.toLocaleString('fa-IR')} از {lordPages.toLocaleString('fa-IR')}</span><button className="rbtn" disabled={lordBusy||lordPage>=lordPages} onClick={()=>setLordPage(p=>p+1)}>بعدی</button></nav>;
+  const visibleRegionRows = filterLeaderboard(regionRows, leaderSearch);
+  const visibleLordRows = filterLeaderboard(lordRows, leaderSearch);
+  const visibleWeeklyRows = filterLeaderboard(weeklyRows, leaderSearch);
+  const visibleMedals = MEDAL_GUIDE.filter(medal => !searchable(leaderSearch) || searchable(`${medal.name} ${medal.desc} ${medal.rule}`).includes(searchable(leaderSearch)));
+  const tabMeta = {
+    regions: ['رده‌بندی اقلیم‌ها', 'قدرت هر اقلیم از مجموع امتیاز خاندان‌های آن ساخته می‌شود.'],
+    lords: ['رده‌بندی لردها و لیدی‌ها', 'تغییر رتبه نسبت به ۲۴ ساعت قبل'],
+    weekly: ['رقابت هفتگی', 'امتیازهای تازه‌ای که از آغاز هفته به دست آمده‌اند.'],
+    medals: ['تالار مدال‌ها', 'نشان‌ها و افتخاراتی که در طول فصل به دست می‌آیند.'],
+  }[tab];
   return (
     <div className="living-page living-throne-page">
       <LivingPageHero kind="throne" art="/living-assets/gold-treasury.webp" eyebrow="قدرت، افتخار و آوازه" title={seasonBranding.title} subtitle="جایگاه خاندان‌ها، قدرت اقلیم‌ها و مدال‌هایی که تاریخ فصل را ساخته‌اند." badges={["رتبه‌بندی زنده", "حرکت ۲۴ ساعته", "تالار افتخارات"]} />
       <div className="page-title up">{seasonBranding.title}</div>
       <div className="page-sub up">هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</div>
 
+      {regionRows && <CompetitionPulse rows={regionRows} />}
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
           <button type="button" key={t.id} role="tab" aria-selected={tab === t.id}
                className={`rbtn tab ${tab === t.id ? 'on' : ''}`}
-               onClick={() => { haptic(); setTab(t.id); }}>{t.label}</button>
+               onClick={() => { haptic(); setTab(t.id); setLeaderSearch(''); }}>{t.label}</button>
         ))}
       </div>
-      <div className="page-sub">تغییر رتبه نسبت به ۲۴ ساعت قبل</div>
-      {tab === 'regions' && <StandingsChart rows={regionRows} title="قدرت اقلیم‌ها" />}
-      {tab === 'lords' && <StandingsChart rows={lordRows} title="رقابت لردها" />}
-      {tab === 'weekly' && <StandingsChart rows={weeklyRows} title="نبض این هفته" />}
+      <section className="leaderboard-heading up u2">
+        <div><span>جدول زندهٔ فصل</span><h2>{tabMeta[0]}</h2><p>{tabMeta[1]}</p></div>
+        <label className="leaderboard-search"><input aria-label="جستجو در جدول" value={leaderSearch} onChange={event => setLeaderSearch(event.target.value)} placeholder={tab === 'medals' ? 'جست‌وجوی مدال…' : 'جست‌وجوی این جدول…'} /></label>
+      </section>
       {tab === 'regions' && (
         !regionRows ? <div className="loading">شمارش اقلیم‌ها...</div> : (
-          <div className="up u2">
-            {regionRows.map(r => (
+          <div className="up u2 leaderboard-board">
+            {visibleRegionRows.map(r => (
               <div key={r.region} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.mine ? 'me' : ''}`}>
                 <div className="rk">{MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR')}</div>
                 <div className="n">{r.name}<RankMovement value={r.movement} />{r.mine ? ' — اقلیم تو' : ''}<small>{r.lord_count.toLocaleString('fa-IR')} لرد</small></div>
@@ -162,8 +195,8 @@ export default function Leaderboard() {
         lordError ? <div className="card"><p className="page-sub">{lordError}</p><button className="rbtn" onClick={()=>setRetry(n=>n+1)}>تلاش مجدد</button></div> : lordBusy || lordRows === null ? <div className="loading">شمارش تاج‌ها...</div> : lordRows.length === 0 ? (
           <div className="empty up u2">هنوز لرد تأییدشده‌ای وارد جدول امتیازات نشده است.</div>
         ) : (
-          <div className="up u2">
-            {lordRows.map(r => (
+          <div className="up u2 leaderboard-board">
+            {visibleLordRows.map(r => (
               <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
                 <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
@@ -190,8 +223,8 @@ export default function Leaderboard() {
         ) : (
           <>
             <div className="page-sub up u2" style={{ marginTop: -6 }}>رتبه‌بندی هفتگی بر پایهٔ امتیازهای کسب‌شده از آغاز هفته است.</div>
-            <div className="up u2">
-              {weeklyRows.map(r => (
+            <div className="up u2 leaderboard-board">
+              {visibleWeeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
                   <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
@@ -210,6 +243,17 @@ export default function Leaderboard() {
             </div>
           </>
         )
+      )}
+
+      {tab === 'medals' && (
+        <div className="medal-catalog up u2">
+          {visibleMedals.map(medal => (
+            <button type="button" className="medal-catalog-card" key={medal.key} onClick={() => { haptic(); setSelectedMedal(medal); }}>
+              <span className="medal-catalog-icon">{medal.icon}</span>
+              <span><b>{medal.name}</b><small>{medal.desc}</small><em>{medal.rule}</em></span>
+            </button>
+          ))}
+        </div>
       )}
 
       {selectedMedal && (
