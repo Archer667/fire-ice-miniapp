@@ -161,10 +161,6 @@ export default function Leaderboard() {
   return (
     <div className="living-page living-throne-page">
       <LivingPageHero kind="throne" art="/living-assets/gold-treasury.webp" eyebrow="قدرت، افتخار و آوازه" title={seasonBranding.title} subtitle="جایگاه خاندان‌ها، قدرت اقلیم‌ها و مدال‌هایی که تاریخ فصل را ساخته‌اند." badges={["رتبه‌بندی زنده", "حرکت ۲۴ ساعته", "تالار افتخارات"]} />
-      <div className="page-title up">{seasonBranding.title}</div>
-      <div className="page-sub up">هر تصمیم، یک پیامد . هر انتخاب، یک سرنوشت .</div>
-
-      {regionRows && <CompetitionPulse rows={regionRows} />}
       <div className="tabs up u1" role="tablist">
         {TABS.map(t => (
           <button type="button" key={t.id} role="tab" aria-selected={tab === t.id}
@@ -172,6 +168,8 @@ export default function Leaderboard() {
                onClick={() => { haptic(); setTab(t.id); setLeaderSearch(''); }}>{t.label}</button>
         ))}
       </div>
+      <div className="throne-dashboard">
+      <main className="throne-leaderboard-main">
       <section className="leaderboard-heading up u2">
         <div><span>جدول زندهٔ فصل</span><h2>{tabMeta[0]}</h2><p>{tabMeta[1]}</p></div>
         <label className="leaderboard-search"><input aria-label="جستجو در جدول" value={leaderSearch} onChange={event => setLeaderSearch(event.target.value)} placeholder={tab === 'medals' ? 'جست‌وجوی مدال…' : 'جست‌وجوی این جدول…'} /></label>
@@ -181,6 +179,7 @@ export default function Leaderboard() {
           <div className="up u2 leaderboard-board">
             {visibleRegionRows.map(r => (
               <div key={r.region} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.mine ? 'me' : ''}`}>
+                <div className="leader-rank-number">{r.rank.toLocaleString('fa-IR')}</div>
                 <div className="rk">{MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR')}</div>
                 <div className="n">{r.name}<RankMovement value={r.movement} />{r.mine ? ' — اقلیم تو' : ''}<small>{r.lord_count.toLocaleString('fa-IR')} لرد</small></div>
                 <div className="p">{r.total_score.toLocaleString('fa-IR')}</div>
@@ -199,6 +198,7 @@ export default function Leaderboard() {
             {visibleLordRows.map(r => (
               <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
+                <div className="leader-rank-number">{r.rank.toLocaleString('fa-IR')}</div>
                 <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
                 <div className="n">
                   {r.name}<RankMovement value={r.movement} />{r.me ? ' — تو' : ''}
@@ -227,6 +227,7 @@ export default function Leaderboard() {
               {visibleWeeklyRows.map(r => (
                 <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
+                  <div className="leader-rank-number">{r.rank.toLocaleString('fa-IR')}</div>
                   <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
                   <div className="n">
                     {r.name}<RankMovement value={r.movement} />{r.me ? ' — تو' : ''}
@@ -255,6 +256,9 @@ export default function Leaderboard() {
           ))}
         </div>
       )}
+      </main>
+      {regionRows && <CompetitionPulse rows={regionRows} />}
+      </div>
 
       {selectedMedal && (
         <div role="dialog" aria-modal="true" onClick={() => setSelectedMedal(null)}

@@ -35,6 +35,15 @@
 .living-screen-body :where(.grid2,.grid3){gap:var(--ui-space-2)}
 .living-screen-body .leaderboard-board{gap:var(--ui-space-1)}
 .living-screen-body .leaderboard-board .lbr{margin-bottom:0}
+.throne-dashboard{display:grid;gap:14px;align-items:start}
+.throne-leaderboard-main{display:grid;gap:10px;min-width:0}
+.leaderboard-board .lbr{display:grid!important;grid-template-columns:38px 58px minmax(0,1fr) auto!important;align-items:center;gap:10px}
+.leader-rank-number{display:grid;width:34px;height:34px;place-items:center;border:1px solid rgba(226,177,86,.28);border-radius:10px;background:rgba(7,5,5,.45);color:#d9b66d;font-size:16px;font-weight:900}
+.leaderboard-board .top1 .leader-rank-number{border-color:#e7bb62;background:linear-gradient(145deg,#76521f,#24150e);color:#ffe09b}
+.leaderboard-board .top2 .leader-rank-number{border-color:#bfc4cc;background:linear-gradient(145deg,#55545a,#211d1b);color:#f2f2f4}
+.leaderboard-board .top3 .leader-rank-number{border-color:#bd7842;background:linear-gradient(145deg,#6d3d21,#21130f);color:#f0b77c}
+.leaderboard-board .lbr .n{min-width:0}.leaderboard-board .lbr .n>span[title]{padding:3px 6px;border-radius:99px;background:rgba(255,255,255,.035)}
+.competition-pulse{margin:0!important}.competition-pulse-body{gap:14px}.competition-donut{max-width:100%;aspect-ratio:1/1;height:auto}
 .living-screen-body .mailrow{margin-bottom:var(--ui-space-1)}
 .living-screen-body .mailrow:last-child{margin-bottom:0}
 .living-screen-body .support-list{gap:var(--ui-space-1)}
@@ -81,6 +90,9 @@
 .living-screen-travel .travel-hero :where(.travel-eyebrow,h1){display:none!important}
 .living-screen-travel .travel-hero p{margin:0;font-size:14px;font-weight:800;color:#ead3a4}
 .living-screen-travel .travel-hero .travel-chip{margin-top:8px}
+.living-screen-trade .trade-hero{min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;justify-content:flex-end}
+.living-screen-trade .trade-hero>div:first-child,.living-screen-trade .trade-intro{display:none!important}
+.living-screen-trade .trade-wallet{margin:0 0 2px;min-height:46px;padding:9px 14px;border:1px solid rgba(218,169,80,.22);border-radius:12px;background:linear-gradient(145deg,rgba(42,30,26,.88),rgba(15,12,11,.96))}
 .living-screen-castle-life .sw-castle-hero{height:auto;min-height:210px;padding:20px;align-items:flex-end}
 .living-screen-castle-life .sw-castle-hero>div{width:min(100%,620px);min-width:0;text-align:right}
 .living-screen-castle-life .sw-castle-hero h2{max-width:100%;margin:5px 0;font-size:clamp(25px,3vw,34px);line-height:1.35;overflow-wrap:anywhere;text-align:right}
@@ -107,8 +119,12 @@
   .living-page>.living-hero p{font-size:12px;line-height:1.75}
   .living-page>.living-hero-badges{margin-top:12px}
   .living-page>.tabs{min-height:54px;margin-bottom:12px}
-  .living-realm-page>.living-hero:before{background-image:linear-gradient(270deg,rgba(7,5,5,.97),rgba(9,6,6,.76) 45%,rgba(9,6,6,.12) 78%),linear-gradient(0deg,rgba(8,6,6,.94),transparent 62%),var(--living-art);background-position:32% 42%}
-  .living-realm-page>.living-hero .living-hero-copy{margin-inline:0 auto!important}
+  .living-realm-page>.living-hero{min-height:330px}
+  .living-realm-page>.living-hero:before{background-image:linear-gradient(270deg,rgba(7,5,5,.98),rgba(9,6,6,.76) 40%,rgba(9,6,6,.08) 72%),linear-gradient(0deg,rgba(8,6,6,.92),transparent 64%),var(--living-art);background-position:30% 42%}
+  .living-realm-page>.living-hero .living-hero-copy{display:grid;width:100%!important;max-width:none;grid-template-columns:minmax(320px,1fr) 116px minmax(260px,.8fr);grid-template-rows:auto auto auto auto 1fr;column-gap:22px;margin:0!important;padding:0!important;direction:rtl}
+  .living-realm-page>.living-hero .living-hero-copy>:where(.living-hero-eyebrow,h1,p,.living-hero-badges){grid-column:1;min-width:0}
+  .living-realm-page .realm-hero-identity{position:relative;inset:auto;grid-column:2;grid-row:1/5;align-self:center;justify-self:center}
+  .living-realm-page .realm-hero-stats{grid-column:1/-1;grid-row:5;width:100%;margin:20px 0 0}
   .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
   .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
   .living-war-page .war-stage-map{position:sticky!important;top:112px!important;align-self:start}
@@ -120,6 +136,12 @@
   .living-screen-secondary .living-screen-body>.page-title+.page-sub{margin-bottom:0}
   .living-screen-body .support-layout{gap:16px}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:18px}
+  .living-throne-page .throne-dashboard{grid-template-columns:minmax(0,1fr) 360px;gap:16px}
+  .living-throne-page .competition-pulse{position:sticky;top:112px;padding:16px}
+  .living-throne-page .competition-donut{width:min(238px,100%)}
+  .living-throne-page .competition-top-regions{grid-template-columns:1fr}
+  .living-throne-page .competition-top-regions article{min-height:64px;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-content:stretch;text-align:right}
+  .living-throne-page .competition-top-regions article small{grid-column:1/-1}
 }
 
 @media(max-width:899px){
@@ -127,6 +149,10 @@
   .living-page:not(.living-throne-page)>.tabs .tab{width:auto!important;min-width:108px;flex:0 0 max-content!important}
   .living-page:not(.living-throne-page)>.tabs{scroll-padding-inline:6px}
   .living-throne-page>.tabs .tab{width:auto!important;min-width:0;flex:1 1 0!important}
+  .throne-dashboard{display:flex;flex-direction:column}
+  .throne-dashboard>.competition-pulse{order:-1}
+  .leaderboard-board .lbr{grid-template-columns:32px 45px minmax(0,1fr) auto!important;gap:7px}
+  .leader-rank-number{width:29px;height:29px;border-radius:8px;font-size:13px}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:14px}
   .living-screen-body .web-notice-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(108px,.42fr)}
   .living-screen-body .web-notice-filters>input:first-child{grid-column:1/-1}
