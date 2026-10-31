@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useGame } from '../store.jsx';
 import { haptic } from '../telegram.js';
-import { castleLabel } from '../gamedata.js';
+import { castleLabel, REGION_COLORS, REGIONS_STATIC } from '../gamedata.js';
 import ProfileImageModal from '../components/ProfileImageModal.jsx';
 import PlayerFlag from '../components/PlayerFlag.jsx';
 import LivingPageHero from '../components/LivingPageHero.jsx';
@@ -30,6 +30,7 @@ const MEDAL_GUIDE = [
   { key: 'golden_quill', icon: '✒️', name: 'صاحب قلم زرین', desc: 'افتخار ویژهٔ نویسندگی و روایت', rule: 'اعطای افتخار با تأیید مدیریت' },
   { key: 'crown_enemy', icon: '🗡️', name: 'دشمن تاج', desc: 'افتخار ویژهٔ دشمنان تاج‌وتخت', rule: 'اعطای افتخار با تأیید مدیریت' },
 ];
+const regionColor = region => REGION_COLORS[region] || REGION_COLORS[Object.entries(REGIONS_STATIC).find(([, meta]) => meta.name === region)?.[0]] || '#9b7650';
 
 function RankMovement({ value }) {
   const delta = value?.delta;
@@ -64,7 +65,8 @@ function CompetitionPulse({ rows }) {
   const segments = source.map((row, index) => {
     const share = visible.length ? Number(row.total_score || 0) / totalScore * 100 : 100 / Math.max(1, source.length);
     const start = cursor; cursor += share;
-    return `${colors[index % colors.length]} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+    const color = regionColor(row.region) || colors[index % colors.length];
+    return `${color} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
   });
   const top = rows.slice(0, 3);
   return <section className="competition-pulse up u2" aria-label="نبض رقابت اقلیم‌ها">
@@ -76,7 +78,7 @@ function CompetitionPulse({ rows }) {
       <div className="competition-top-regions">
         {top.map((row, index) => {
           const share = Number(row.total_score || 0) / totalScore * 100;
-          return <article key={row.region || row.name} style={{ '--region-color': colors[index] }}>
+          return <article key={row.region || row.name} style={{ '--region-color': regionColor(row.region) || colors[index] }}>
             <span>{row.name}</span>
             <b>{Number(row.total_score || 0).toLocaleString('fa-IR')}</b>
             <small>{share.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪ از قدرت</small>
@@ -124,7 +126,7 @@ export default function Leaderboard() {
             disabled={pictureBusy} onClick={() => openPicture(r)}>
       <img src={r.profile_image} alt="" loading="lazy" decoding="async" />
     </button>
-  ) : (MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR'));
+  ) : <span className="leader-initial" aria-hidden="true">{String(r.name || '؟').trim().charAt(0) || '؟'}</span>;
 
   useEffect(() => {
     // هر جدول فقط وقتی تب خودش باز می‌شود دریافت می‌شود. قبلاً هر سه جدول با
@@ -178,7 +180,7 @@ export default function Leaderboard() {
         !regionRows ? <div className="loading">شمارش اقلیم‌ها...</div> : (
           <div className="up u2 leaderboard-board">
             {visibleRegionRows.map(r => (
-              <div key={r.region} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.mine ? 'me' : ''}`}>
+              <div key={r.region} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.mine ? 'me' : ''}`} style={{ '--player-region': regionColor(r.region) }}>
                 <div className="leader-rank-number">{r.rank.toLocaleString('fa-IR')}</div>
                 <div className="rk">{MEDAL[r.rank] ? <span className="medal">{MEDAL[r.rank]}</span> : r.rank.toLocaleString('fa-IR')}</div>
                 <div className="n">{r.name}<RankMovement value={r.movement} />{r.mine ? ' — اقلیم تو' : ''}<small>{r.lord_count.toLocaleString('fa-IR')} لرد</small></div>
@@ -196,7 +198,7 @@ export default function Leaderboard() {
         ) : (
           <div className="up u2 leaderboard-board">
             {visibleLordRows.map(r => (
-              <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
+              <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`} style={{ '--player-region': regionColor(r.region) }}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
                 <div className="leader-rank-number">{r.rank.toLocaleString('fa-IR')}</div>
                 <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>
@@ -225,7 +227,7 @@ export default function Leaderboard() {
             <div className="page-sub up u2" style={{ marginTop: -6 }}>رتبه‌بندی هفتگی بر پایهٔ امتیازهای کسب‌شده از آغاز هفته است.</div>
             <div className="up u2 leaderboard-board">
               {visibleWeeklyRows.map(r => (
-                <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`}>
+                <div key={r.rank} className={`lbr ${r.rank <= 3 ? 'top' + r.rank : ''} ${r.me ? 'me' : ''} ${r.is_dead ? 'is-dead' : ''}`} style={{ '--player-region': regionColor(r.region) }}>
                 {r.is_dead && <span className="death-stamp">کشته شد</span>}
                   <div className="leader-rank-number">{r.rank.toLocaleString('fa-IR')}</div>
                   <div className={`rk ${r.profile_image ? 'profile-rk' : ''} ${r.flag_image ? 'flag-rk' : ''}`}>{playerPicture(r)}<PlayerFlag src={r.flag_image} name={r.name} className="leader-player-flag" /></div>

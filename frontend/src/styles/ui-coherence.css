@@ -7,7 +7,16 @@
   --ui-space-2:12px;
   --ui-space-3:16px;
   --ui-space-4:22px;
+  isolation:isolate;
+  background:
+    linear-gradient(180deg,rgba(8,7,7,.86),rgba(8,7,7,.96) 72%),
+    radial-gradient(900px 520px at 80% 0,rgba(125,17,20,.18),transparent 70%),
+    url('/living-assets/realm-hero.webp') center/cover fixed,
+    repeating-linear-gradient(135deg,rgba(255,255,255,.011) 0 1px,transparent 1px 7px),#0b0909;
 }
+.living-shell::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.16;background-image:radial-gradient(circle,rgba(242,179,79,.85) 0 1px,transparent 1.8px),radial-gradient(circle,rgba(155,37,28,.72) 0 1.2px,transparent 2px);background-size:73px 101px,119px 157px;background-position:9px 100vh,47px 84vh;animation:valyria-embers 24s linear infinite;filter:drop-shadow(0 0 4px rgba(224,119,42,.32))}
+.living-shell>.view{z-index:1}
+@keyframes valyria-embers{to{background-position:31px -25vh,83px -40vh}}
 
 .living-screen-body,
 .living-screen-body>*{min-width:0;max-width:100%}
@@ -37,12 +46,15 @@
 .living-screen-body .leaderboard-board .lbr{margin-bottom:0}
 .throne-dashboard{display:grid;gap:14px;align-items:start}
 .throne-leaderboard-main{display:grid;gap:10px;min-width:0}
-.leaderboard-board .lbr{display:grid!important;grid-template-columns:38px 58px minmax(0,1fr) auto!important;align-items:center;gap:10px}
+.leaderboard-board .lbr{position:relative;display:grid!important;grid-template-columns:38px 58px minmax(0,1fr) auto!important;align-items:center;gap:10px;border-color:color-mix(in srgb,var(--player-region) 36%,transparent)!important;background:radial-gradient(circle at 92% 50%,color-mix(in srgb,var(--player-region) 15%,transparent),transparent 42%),linear-gradient(145deg,#211816,#100c0b)!important;overflow:hidden}
+.leaderboard-board .lbr:after{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:4px;background:var(--player-region);box-shadow:0 0 15px color-mix(in srgb,var(--player-region) 72%,transparent)}
 .leader-rank-number{display:grid;width:34px;height:34px;place-items:center;border:1px solid rgba(226,177,86,.28);border-radius:10px;background:rgba(7,5,5,.45);color:#d9b66d;font-size:16px;font-weight:900}
 .leaderboard-board .top1 .leader-rank-number{border-color:#e7bb62;background:linear-gradient(145deg,#76521f,#24150e);color:#ffe09b}
 .leaderboard-board .top2 .leader-rank-number{border-color:#bfc4cc;background:linear-gradient(145deg,#55545a,#211d1b);color:#f2f2f4}
 .leaderboard-board .top3 .leader-rank-number{border-color:#bd7842;background:linear-gradient(145deg,#6d3d21,#21130f);color:#f0b77c}
 .leaderboard-board .lbr .n{min-width:0}.leaderboard-board .lbr .n>span[title]{padding:3px 6px;border-radius:99px;background:rgba(255,255,255,.035)}
+.leaderboard-board .lbr .rk{border-color:color-mix(in srgb,var(--player-region) 68%,#d5ad64)!important;background:radial-gradient(circle at 34% 28%,color-mix(in srgb,var(--player-region) 68%,#815635),#17100e 74%)!important;box-shadow:0 0 0 3px rgba(5,4,4,.42),0 0 18px color-mix(in srgb,var(--player-region) 35%,transparent)}
+.leader-initial{display:grid;width:100%;height:100%;place-items:center;color:#fff0ca;font-size:20px;font-weight:950;text-shadow:0 2px 8px #000}
 .competition-pulse{margin:0!important}.competition-pulse-body{gap:14px}.competition-donut{max-width:100%;aspect-ratio:1/1;height:auto}
 .living-screen-body .mailrow{margin-bottom:var(--ui-space-1)}
 .living-screen-body .mailrow:last-child{margin-bottom:0}
@@ -78,6 +90,11 @@
 .living-buildings-page .bld-cost{display:flex;flex-wrap:wrap;gap:7px 13px;align-items:center;color:#d8c7ac}
 .living-buildings-page .bld-cost span{margin:0}.living-buildings-page .bld-cost .tm{margin-inline-start:auto}
 .living-buildings-page .bld-btn{width:calc(100% - 30px)!important;min-height:46px;margin:11px 15px 15px!important;border-color:rgba(231,186,98,.58)!important;background:linear-gradient(145deg,#7d171b,#4b0e11)!important;color:#f5d698!important}
+
+.living-realm-page .resource-status{isolation:isolate;border-color:rgba(222,174,84,.27)!important;background:linear-gradient(145deg,rgba(31,21,19,.98),rgba(10,8,8,.98))!important}
+.living-realm-page .resource-status:before{inset:0!important;opacity:.7!important;background-image:linear-gradient(90deg,rgba(10,8,8,.08),rgba(11,8,8,.58) 48%,rgba(13,9,8,.97) 88%),var(--resource-art)!important;background-size:cover!important;background-position:center!important;filter:saturate(.78) contrast(1.08)}
+.living-realm-page .resource-status:after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:linear-gradient(180deg,rgba(238,194,109,.06),transparent 34%),radial-gradient(circle at 86% 50%,rgba(226,176,85,.1),transparent 44%)}
+.living-realm-page .resource-status>*{z-index:1}
 
 .living-screen-espionage .spy-head{display:none!important}
 .living-screen-institutions .institution-gallery-heading{display:none}
@@ -127,7 +144,7 @@
   .living-realm-page .realm-hero-stats{grid-column:1/-1;grid-row:5;width:100%;margin:20px 0 0}
   .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
   .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
-  .living-war-page .war-stage-map{position:sticky!important;top:112px!important;align-self:start}
+  .living-war-page .war-stage-map{position:sticky!important;top:96px!important;align-self:start}
   .living-war-page .war-stage-map>div:last-child,.living-war-page .war-stage-map :where(.map-wrap,.map-shell){min-height:clamp(500px,60vh,650px)!important}
   .living-war-page .map3d-frame{height:clamp(500px,60vh,650px)!important;min-height:500px!important}
   .living-war-page .war-stage-map .sect{margin-bottom:8px}
@@ -137,7 +154,7 @@
   .living-screen-body .support-layout{gap:16px}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:18px}
   .living-throne-page .throne-dashboard{grid-template-columns:minmax(0,1fr) 360px;gap:16px}
-  .living-throne-page .competition-pulse{position:sticky;top:112px;padding:16px}
+  .living-throne-page .competition-pulse{position:sticky;top:96px;padding:16px}
   .living-throne-page .competition-donut{width:min(238px,100%)}
   .living-throne-page .competition-top-regions{grid-template-columns:1fr}
   .living-throne-page .competition-top-regions article{min-height:64px;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-content:stretch;text-align:right}
@@ -145,14 +162,17 @@
 }
 
 @media(max-width:899px){
+  .living-screen-throne,.living-throne-page,.living-throne-page>.tabs,.throne-dashboard,.throne-leaderboard-main,.competition-pulse,.leaderboard-heading,.leaderboard-board{width:100%!important;max-width:100%!important;min-width:0!important}
   .living-screen-secondary .living-screen-body{gap:12px}
   .living-page:not(.living-throne-page)>.tabs .tab{width:auto!important;min-width:108px;flex:0 0 max-content!important}
   .living-page:not(.living-throne-page)>.tabs{scroll-padding-inline:6px}
   .living-throne-page>.tabs .tab{width:auto!important;min-width:0;flex:1 1 0!important}
   .throne-dashboard{display:flex;flex-direction:column}
-  .throne-dashboard>.competition-pulse{order:-1}
+  .throne-dashboard>.competition-pulse{position:relative!important;top:auto!important;order:-1}
   .leaderboard-board .lbr{grid-template-columns:32px 45px minmax(0,1fr) auto!important;gap:7px}
   .leader-rank-number{width:29px;height:29px;border-radius:8px;font-size:13px}
+  .leaderboard-board .lbr{overflow:hidden}.leaderboard-board .lbr .p{min-width:0!important;max-width:68px;overflow-wrap:anywhere;text-align:left}
+  .living-realm-page .realm-hero-identity{left:10px!important;right:auto!important;inset-inline:auto 10px!important;top:-116px!important}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:14px}
   .living-screen-body .web-notice-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(108px,.42fr)}
   .living-screen-body .web-notice-filters>input:first-child{grid-column:1/-1}
@@ -186,4 +206,9 @@
   .living-screen-body .social-world .sw-heading{align-items:stretch}
   .living-screen-body .social-world .sw-heading>.btn,
   .living-screen-body .social-world .sw-heading>select{width:100%}
+  .leaderboard-board .lbr{grid-template-columns:27px 38px minmax(0,1fr) 50px!important;gap:5px;padding-inline:7px!important}
+  .leader-rank-number{width:25px;height:25px;font-size:11px}
+  .leaderboard-board .lbr .rk{width:36px!important;height:36px!important}.leader-initial{font-size:15px}
 }
+
+@media(prefers-reduced-motion:reduce){.living-shell::after{animation:none}}
