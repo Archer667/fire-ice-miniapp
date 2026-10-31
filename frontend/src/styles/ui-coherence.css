@@ -9,14 +9,16 @@
   --ui-space-4:22px;
   isolation:isolate;
   background:
-    linear-gradient(180deg,rgba(8,7,7,.86),rgba(8,7,7,.96) 72%),
-    radial-gradient(900px 520px at 80% 0,rgba(125,17,20,.18),transparent 70%),
-    url('/living-assets/realm-hero.webp') center/cover fixed,
-    repeating-linear-gradient(135deg,rgba(255,255,255,.011) 0 1px,transparent 1px 7px),#0b0909;
+    radial-gradient(900px 460px at 73% -5%,rgba(217,166,72,.12),transparent 70%),
+    radial-gradient(700px 520px at -10% 36%,rgba(139,23,21,.18),transparent 68%),
+    linear-gradient(135deg,#090707 0%,#110d0c 48%,#080707 100%);
 }
-.living-shell::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.16;background-image:radial-gradient(circle,rgba(242,179,79,.85) 0 1px,transparent 1.8px),radial-gradient(circle,rgba(155,37,28,.72) 0 1.2px,transparent 2px);background-size:73px 101px,119px 157px;background-position:9px 100vh,47px 84vh;animation:valyria-embers 24s linear infinite;filter:drop-shadow(0 0 4px rgba(224,119,42,.32))}
-.living-shell>.view{z-index:1}
-@keyframes valyria-embers{to{background-position:31px -25vh,83px -40vh}}
+.living-shell::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.14;background-image:url('/living-assets/living-backdrop-texture.webp');background-size:430px;mix-blend-mode:soft-light;filter:grayscale(1) invert(1)}
+.living-shell>.view,.living-shell>header,.living-shell>nav{z-index:1}
+.living-embers{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.living-embers i{position:absolute;width:3px;height:3px;border-radius:50%;background:#d9a648;box-shadow:0 0 9px #d9a648;opacity:0;animation:living-ember-rise 9s linear infinite}
+.living-embers i:nth-child(1){right:8%;bottom:-2%;animation-delay:0s}.living-embers i:nth-child(2){right:23%;bottom:-4%;animation-delay:2.2s}.living-embers i:nth-child(3){right:61%;bottom:-3%;animation-delay:4.6s}.living-embers i:nth-child(4){right:83%;bottom:-1%;animation-delay:6.3s}.living-embers i:nth-child(5){right:44%;bottom:-4%;animation-delay:7.6s}
+@keyframes living-ember-rise{0%{transform:translateY(0) scale(.5);opacity:0}12%{opacity:.65}80%{opacity:.15}100%{transform:translateY(-105vh) translateX(55px) scale(1.5);opacity:0}}
 
 .living-screen-body,
 .living-screen-body>*{min-width:0;max-width:100%}
@@ -54,6 +56,11 @@
 .leaderboard-board .top3 .leader-rank-number{border-color:#bd7842;background:linear-gradient(145deg,#6d3d21,#21130f);color:#f0b77c}
 .leaderboard-board .lbr .n{min-width:0}.leaderboard-board .lbr .n>span[title]{padding:3px 6px;border-radius:99px;background:rgba(255,255,255,.035)}
 .leaderboard-board .lbr .rk{border-color:color-mix(in srgb,var(--player-region) 68%,#d5ad64)!important;background:radial-gradient(circle at 34% 28%,color-mix(in srgb,var(--player-region) 68%,#815635),#17100e 74%)!important;box-shadow:0 0 0 3px rgba(5,4,4,.42),0 0 18px color-mix(in srgb,var(--player-region) 35%,transparent)}
+.leaderboard-board .lbr .rk{position:relative!important;display:grid!important;width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;place-items:center!important;overflow:visible!important;flex:none!important;border-radius:50%!important}
+.leaderboard-board .leader-profile-trigger{display:block!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;padding:0!important;border-radius:50%!important;overflow:hidden!important;aspect-ratio:1/1}
+.leaderboard-board .leader-profile-trigger img{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;aspect-ratio:1/1;object-fit:cover!important;object-position:center!important;border-radius:50%!important}
+.leaderboard-board .leader-player-flag{position:absolute!important;inset-inline-end:-5px!important;inset-block-end:-5px!important;z-index:3!important;display:block!important;width:21px!important;height:21px!important;min-width:21px!important;min-height:21px!important;padding:2px!important;border:2px solid #17100e!important;border-radius:50%!important;background:#241a15!important;box-shadow:0 3px 10px #000b!important;overflow:hidden!important}
+.leaderboard-board .leader-player-flag img{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:center!important;border-radius:50%!important}
 .leader-initial{display:grid;width:100%;height:100%;place-items:center;color:#fff0ca;font-size:20px;font-weight:950;text-shadow:0 2px 8px #000}
 .competition-pulse{margin:0!important}.competition-pulse-body{gap:14px}.competition-donut{max-width:100%;aspect-ratio:1/1;height:auto}
 .living-screen-body .mailrow{margin-bottom:var(--ui-space-1)}
@@ -138,13 +145,13 @@
   .living-page>.tabs{min-height:54px;margin-bottom:12px}
   .living-realm-page>.living-hero{min-height:330px}
   .living-realm-page>.living-hero:before{background-image:linear-gradient(270deg,rgba(7,5,5,.98),rgba(9,6,6,.76) 40%,rgba(9,6,6,.08) 72%),linear-gradient(0deg,rgba(8,6,6,.92),transparent 64%),var(--living-art);background-position:30% 42%}
-  .living-realm-page>.living-hero .living-hero-copy{display:grid;width:100%!important;max-width:none;grid-template-columns:minmax(320px,1fr) 116px minmax(260px,.8fr);grid-template-rows:auto auto auto auto 1fr;column-gap:22px;margin:0!important;padding:0!important;direction:rtl}
-  .living-realm-page>.living-hero .living-hero-copy>:where(.living-hero-eyebrow,h1,p,.living-hero-badges){grid-column:1;min-width:0}
-  .living-realm-page .realm-hero-identity{position:relative;inset:auto;grid-column:2;grid-row:1/5;align-self:center;justify-self:center}
-  .living-realm-page .realm-hero-stats{grid-column:1/-1;grid-row:5;width:100%;margin:20px 0 0}
+  .living-realm-page>.living-hero .living-hero-copy{position:relative;display:block;width:100%!important;max-width:none;margin:0!important;padding:0!important;direction:rtl}
+  .living-realm-page>.living-hero .living-hero-copy>:where(.living-hero-eyebrow,h1,p,.living-hero-badges){width:min(58%,650px);min-width:0}
+  .living-realm-page .realm-hero-identity{position:absolute!important;left:56px!important;right:auto!important;top:0!important;inset-inline:auto!important}
+  .living-realm-page .realm-hero-stats{width:100%;margin:58px 0 0}
   .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
   .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
-  .living-war-page .war-stage-map{position:sticky!important;top:96px!important;align-self:start}
+  .living-war-page .war-stage-map{position:sticky!important;top:68px!important;align-self:start}
   .living-war-page .war-stage-map>div:last-child,.living-war-page .war-stage-map :where(.map-wrap,.map-shell){min-height:clamp(500px,60vh,650px)!important}
   .living-war-page .map3d-frame{height:clamp(500px,60vh,650px)!important;min-height:500px!important}
   .living-war-page .war-stage-map .sect{margin-bottom:8px}
@@ -154,7 +161,7 @@
   .living-screen-body .support-layout{gap:16px}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:18px}
   .living-throne-page .throne-dashboard{grid-template-columns:minmax(0,1fr) 360px;gap:16px}
-  .living-throne-page .competition-pulse{position:sticky;top:96px;padding:16px}
+  .living-throne-page .competition-pulse{position:sticky;top:68px;padding:16px}
   .living-throne-page .competition-donut{width:min(238px,100%)}
   .living-throne-page .competition-top-regions{grid-template-columns:1fr}
   .living-throne-page .competition-top-regions article{min-height:64px;grid-template-columns:minmax(0,1fr) auto;align-items:center;justify-content:stretch;text-align:right}
@@ -208,7 +215,7 @@
   .living-screen-body .social-world .sw-heading>select{width:100%}
   .leaderboard-board .lbr{grid-template-columns:27px 38px minmax(0,1fr) 50px!important;gap:5px;padding-inline:7px!important}
   .leader-rank-number{width:25px;height:25px;font-size:11px}
-  .leaderboard-board .lbr .rk{width:36px!important;height:36px!important}.leader-initial{font-size:15px}
+  .leaderboard-board .lbr .rk{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}.leaderboard-board .leader-player-flag{inset-inline-end:-4px!important;inset-block-end:-4px!important;width:16px!important;height:16px!important;min-width:16px!important;min-height:16px!important;padding:1px!important}.leader-initial{font-size:15px}
 }
 
-@media(prefers-reduced-motion:reduce){.living-shell::after{animation:none}}
+@media(prefers-reduced-motion:reduce){.living-embers i{animation:none}}

@@ -21,6 +21,7 @@ FILES = {
     'frontend/src/pages/Leaderboard.jsx', 'frontend/src/pages/Diplomacy.jsx',
     'frontend/src/styles/living-pages.css', 'frontend/src/styles/living-system.css',
     'frontend/src/styles/living-responsive.css', 'frontend/src/styles/ui-coherence.css',
+    'frontend/public/living-assets/living-backdrop-texture.webp',
     'frontend/public/living-assets/parchment-texture.webp',
     'frontend/public/living-assets/realm-hero.webp',
     'frontend/public/living-assets/farm-food.webp',
@@ -85,7 +86,7 @@ def validate_sources(root, content):
         destination = root / name
         incoming = hashlib.sha256(content[name]).hexdigest()
         if not destination.is_file():
-            if name == 'frontend/src/styles/ui-coherence.css':
+            if name in {'frontend/src/styles/ui-coherence.css', 'frontend/public/living-assets/living-backdrop-texture.webp'}:
                 continue
             if previous is not None:
                 raise RuntimeError('Expected application source is missing: ' + name)

@@ -95,6 +95,9 @@ export default function App() {
   const showPauseBanner = Boolean(pauseState?.paused && me.registered && !me.pending && !me.admin_role && tab !== ADMIN_INDEX);
   return (
     <div className={`shell living-shell living-shell-${presentation.slug} ${showPauseBanner ? 'game-paused' : ''}`}>
+      <div className="living-embers" aria-hidden="true">
+        <i /><i /><i /><i /><i />
+      </div>
       {showPauseBanner && <aside className="game-pause-banner" role="status"><strong>⏸ بازی موقتاً متوقف شده است</strong><p>{tab === 15 ? 'فروشگاه آیتم‌ها و مزایده‌ها با زمان واقعی فعال‌اند. اعتبار زمانی آیتم‌ها همچنان از ساعت بازی پیروی می‌کند.' : 'مشاهدهٔ صفحات آزاد است؛ زمان بازی، تولید، مصرف و محاسبات دوره‌ای متوقف‌اند. فروشگاه آیتم‌ها با زمان واقعی فعال می‌ماند.'}</p><p>دلیل توقف: {pauseState.reason}</p></aside>}
       {!me.registered ? (
         <Onboarding />

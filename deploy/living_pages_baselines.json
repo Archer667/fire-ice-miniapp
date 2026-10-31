@@ -20,7 +20,8 @@
       "cc3d5d3b6be523ba2cd25aec9413f436b924cc968b3b7f48199d8b797d59d610",
       "78fb066831e19c416939c5e5285ce74bc0c800edcd94789f45f376d20f74be36",
       "0f35f5e662c2cc7dac5041b00ae37ab224865480957b5703bee0fc081d27e1ef",
-      "bfb9716dd563c471c4129d1641d846005af33e12c359da4044324cb0893c470c"
+      "bfb9716dd563c471c4129d1641d846005af33e12c359da4044324cb0893c470c",
+      "474a6575caa36c4f5a7512ab1b0a5ac48594f8e812f3cbd816e78bbac14650ad"
     ],
     "frontend/src/components/LivingPageHero.jsx": [
       "cc70032c95243be3278244737f9b245f3988ee23a4b612b466dc161404db5ca1",
@@ -57,8 +58,10 @@
       "52c7ae3d0421157066ea72a3d76bde29efd123bcc05ae84b46772e8c95bdad49",
       "51c884937215a343a3f67046fb6a0b8ce73132279cd32e7e66e6f465ef837a36",
       "ed490cbb65e9c807d8fa5f03570972aa45851fa0358243efb96ed7e06c96885e",
-      "d3005c972c7942b9fca74211b3c87071dbd1a12b38d446c1cddf2675114d1b8b"
+      "d3005c972c7942b9fca74211b3c87071dbd1a12b38d446c1cddf2675114d1b8b",
+      "6f6e65dfa3a148dbc074b117f390474fac7a39ee9bd8641ba89a8aef19250cdf"
     ],
+    "frontend/public/living-assets/living-backdrop-texture.webp": null,
     "frontend/public/living-assets/parchment-texture.webp": null,
     "frontend/public/living-assets/realm-hero.webp": null,
     "frontend/public/living-assets/farm-food.webp": null,
