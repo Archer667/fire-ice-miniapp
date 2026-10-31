@@ -50,6 +50,7 @@
       "6001029add10a350f274f32ad7c01068e4dfcbeeb67f5f5b05b0a308d752ed11",
       "5646b431dd7a5a6eae2dec1d8372941ec64f3270f3b95154bd747f8f1588e1e8"
     ],
+    "frontend/src/pages/PlayerGuide.jsx": ["c407145dd7046fb10e333e87ce10a5b558058dc51a6e4db04044691e139cd086"],
     "frontend/src/styles/living-pages.css": ["bdacf609a85ed3194d92e3a9e66519e1c190e367c53afc5970627279b1d4d0da", "98ade28505525c175eaa070f2a4e1f52d2a251fcd87e02692343cd14086f4443"],
     "frontend/src/styles/living-system.css": ["d7fb8a7027c457372baa6ea8c0729acbfad9820be5b85f5e5f6049100067ebff"],
     "frontend/src/styles/living-responsive.css": ["2da27f5d2b6af96ac920006b4c3358ed54076566540deb5698aae9be8c24aa60"],
@@ -78,6 +79,8 @@
     "frontend/public/living-assets/barracks-archer.webp": null,
     "frontend/public/living-assets/armory-sword.webp": null,
     "frontend/public/living-assets/war-room.webp": null,
-    "frontend/public/living-assets/harbor.webp": null
+    "frontend/public/living-assets/harbor.webp": null,
+    "docs/PLAYER_GUIDE.md": ["c1ea8cc600670c691d23c1a8095727de6921cbfd130a3f19b388d8844c09ec71"],
+    "docs/REALM_SYSTEMS_FA.md": ["74151b31b88bb54bbb3513aee053e44919a044f3700ae15836d3f3a87a746896"]
   }
 }

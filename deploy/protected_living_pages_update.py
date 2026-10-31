@@ -19,6 +19,7 @@ FILES = {
     'frontend/src/pages/Admin.jsx', 'frontend/src/pages/Dashboard.jsx',
     'frontend/src/pages/Buildings.jsx', 'frontend/src/pages/War.jsx',
     'frontend/src/pages/Leaderboard.jsx', 'frontend/src/pages/Diplomacy.jsx',
+    'frontend/src/pages/PlayerGuide.jsx',
     'frontend/src/styles/living-pages.css', 'frontend/src/styles/living-system.css',
     'frontend/src/styles/living-responsive.css', 'frontend/src/styles/ui-coherence.css',
     'frontend/public/living-assets/living-backdrop-texture.webp',
@@ -38,6 +39,7 @@ FILES = {
     'frontend/public/living-assets/armory-sword.webp',
     'frontend/public/living-assets/war-room.webp',
     'frontend/public/living-assets/harbor.webp',
+    'docs/PLAYER_GUIDE.md', 'docs/REALM_SYSTEMS_FA.md',
     'deploy/living_pages_baselines.json',
     'deploy/protected_living_pages_update.py',
 }
