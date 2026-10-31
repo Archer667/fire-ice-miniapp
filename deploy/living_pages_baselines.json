@@ -80,7 +80,11 @@
     "frontend/public/living-assets/armory-sword.webp": null,
     "frontend/public/living-assets/war-room.webp": null,
     "frontend/public/living-assets/harbor.webp": null,
-    "docs/PLAYER_GUIDE.md": ["c1ea8cc600670c691d23c1a8095727de6921cbfd130a3f19b388d8844c09ec71"],
+    "docs/PLAYER_GUIDE.md": [
+      "c1ea8cc600670c691d23c1a8095727de6921cbfd130a3f19b388d8844c09ec71",
+      "7882d9524d124d216a9a4e90e17d0c62ff02ba8492333aaa9b521f92141f2718",
+      "74d52f65bf1ea85589be1744b7c54eb67fc6e6b89d9e2e2570377ee6702a2d30"
+    ],
     "docs/REALM_SYSTEMS_FA.md": ["74151b31b88bb54bbb3513aee053e44919a044f3700ae15836d3f3a87a746896"]
   }
 }
