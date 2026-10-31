@@ -16,7 +16,7 @@
 .living-shell::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.14;background-image:url('/living-assets/living-backdrop-texture.webp');background-size:430px;mix-blend-mode:soft-light;filter:grayscale(1) invert(1)}
 .living-shell>.view,.living-shell>header,.living-shell>nav{z-index:1}
 .living-embers{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
-.living-embers i{position:absolute;width:3px;height:3px;border-radius:50%;background:#d9a648;box-shadow:0 0 9px #d9a648;opacity:0;animation:living-ember-rise 9s linear infinite}
+.living-embers i{position:absolute;width:3px;height:3px;border-radius:50%;background:#d9a648;box-shadow:0 0 9px #d9a648;opacity:0;animation:living-ember-rise 9s linear infinite;will-change:transform,opacity}
 .living-embers i:nth-child(1){right:8%;bottom:-2%;animation-delay:0s}.living-embers i:nth-child(2){right:23%;bottom:-4%;animation-delay:2.2s}.living-embers i:nth-child(3){right:61%;bottom:-3%;animation-delay:4.6s}.living-embers i:nth-child(4){right:83%;bottom:-1%;animation-delay:6.3s}.living-embers i:nth-child(5){right:44%;bottom:-4%;animation-delay:7.6s}
 @keyframes living-ember-rise{0%{transform:translateY(0) scale(.5);opacity:0}12%{opacity:.65}80%{opacity:.15}100%{transform:translateY(-105vh) translateX(55px) scale(1.5);opacity:0}}
 
@@ -147,7 +147,7 @@
   .living-realm-page>.living-hero:before{background-image:linear-gradient(270deg,rgba(7,5,5,.98),rgba(9,6,6,.76) 40%,rgba(9,6,6,.08) 72%),linear-gradient(0deg,rgba(8,6,6,.92),transparent 64%),var(--living-art);background-position:30% 42%}
   .living-realm-page>.living-hero .living-hero-copy{position:relative;display:block;width:100%!important;max-width:none;margin:0!important;padding:0!important;direction:rtl}
   .living-realm-page>.living-hero .living-hero-copy>:where(.living-hero-eyebrow,h1,p,.living-hero-badges){width:min(58%,650px);min-width:0}
-  .living-realm-page .realm-hero-identity{position:absolute!important;left:56px!important;right:auto!important;top:0!important;inset-inline:auto!important}
+  .living-realm-page .realm-hero-identity{position:absolute!important;inset-inline:auto!important;right:auto!important;left:clamp(28px,4vw,56px)!important;top:0!important;margin:0!important;transform:none!important}
   .living-realm-page .realm-hero-stats{width:100%;margin:58px 0 0}
   .living-war-page{width:min(100%,1380px)!important;max-width:none!important}
   .living-war-page .war-command-stage{grid-template-columns:minmax(0,1.55fr) minmax(310px,.72fr);gap:16px}
@@ -169,6 +169,8 @@
 }
 
 @media(max-width:899px){
+  .living-shell::before{position:absolute;opacity:.026;mix-blend-mode:normal;filter:none;background-size:320px}
+  .living-embers{contain:strict}
   .living-screen-throne,.living-throne-page,.living-throne-page>.tabs,.throne-dashboard,.throne-leaderboard-main,.competition-pulse,.leaderboard-heading,.leaderboard-board{width:100%!important;max-width:100%!important;min-width:0!important}
   .living-screen-secondary .living-screen-body{gap:12px}
   .living-page:not(.living-throne-page)>.tabs .tab{width:auto!important;min-width:108px;flex:0 0 max-content!important}
@@ -176,9 +178,9 @@
   .living-throne-page>.tabs .tab{width:auto!important;min-width:0;flex:1 1 0!important}
   .throne-dashboard{display:flex;flex-direction:column}
   .throne-dashboard>.competition-pulse{position:relative!important;top:auto!important;order:-1}
-  .leaderboard-board .lbr{grid-template-columns:32px 45px minmax(0,1fr) auto!important;gap:7px}
+  .leaderboard-board .lbr{grid-template-columns:32px 44px minmax(0,1fr) auto!important;column-gap:12px!important;row-gap:7px;padding-inline:10px!important}
   .leader-rank-number{width:29px;height:29px;border-radius:8px;font-size:13px}
-  .leaderboard-board .lbr{overflow:hidden}.leaderboard-board .lbr .p{min-width:0!important;max-width:68px;overflow-wrap:anywhere;text-align:left}
+  .leaderboard-board .lbr{overflow:hidden}.leaderboard-board .lbr .rk{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}.leaderboard-board .lbr .n{padding-inline:2px}.leaderboard-board .lbr .p{min-width:0!important;max-width:68px;overflow-wrap:anywhere;text-align:left}
   .living-realm-page .realm-hero-identity{left:10px!important;right:auto!important;inset-inline:auto 10px!important;top:-116px!important}
   .living-screen-body :where(.card,.panel,.sw-panel){padding:14px}
   .living-screen-body .web-notice-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(108px,.42fr)}
@@ -213,7 +215,7 @@
   .living-screen-body .social-world .sw-heading{align-items:stretch}
   .living-screen-body .social-world .sw-heading>.btn,
   .living-screen-body .social-world .sw-heading>select{width:100%}
-  .leaderboard-board .lbr{grid-template-columns:27px 38px minmax(0,1fr) 50px!important;gap:5px;padding-inline:7px!important}
+  .leaderboard-board .lbr{grid-template-columns:27px 38px minmax(0,1fr) 46px!important;column-gap:9px!important;row-gap:6px;padding-inline:8px!important}
   .leader-rank-number{width:25px;height:25px;font-size:11px}
   .leaderboard-board .lbr .rk{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important}.leaderboard-board .leader-player-flag{inset-inline-end:-4px!important;inset-block-end:-4px!important;width:16px!important;height:16px!important;min-width:16px!important;min-height:16px!important;padding:1px!important}.leader-initial{font-size:15px}
 }
